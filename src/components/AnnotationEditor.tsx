@@ -76,7 +76,11 @@ export default function AnnotationEditor({
   const editor = useEditor({
     editable: !readOnly,
     extensions: [
-      StarterKit,
+      // trailingNode off: StarterKit otherwise force-appends an empty paragraph
+      // after a terminal block (e.g. an image), creating an undeletable line
+      // under it. With it off, the trailing line can be removed (Backspace —
+      // see ResizableImage's keyboard shortcut).
+      StarterKit.configure({ trailingNode: false }),
       ResizableImage.configure({ inline: false }),
       ImageUploadPlaceholder,
       createMention(mentionItems, noteId),

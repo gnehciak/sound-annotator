@@ -9,6 +9,9 @@ import ResizableImageView from './ResizableImageView'
  * image keeps its size on reload and in the read-only share viewer.
  */
 export const ResizableImage = Image.extend({
+  // Run our keyboard shortcuts (the trailing-line Backspace below) before the
+  // core keymap's default Backspace, which would otherwise just select the image.
+  priority: 1000,
   // Stock images are draggable; that native drag fights the resize handle's
   // pointer gesture. Drag-to-move isn't needed for note screenshots, so drop it.
   draggable: false,

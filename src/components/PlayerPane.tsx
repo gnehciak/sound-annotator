@@ -7,6 +7,7 @@ interface Props {
   source?: ProjectSource
   audioUrl: string | null
   regionSpecs: RegionSpec[]
+  playbackRate: number
   readOnly?: boolean
   onTime: (t: number) => void
   onDuration: (d: number) => void
@@ -27,6 +28,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
       <YouTubePlayer
         ref={ref}
         videoId={source.videoId}
+        playbackRate={props.playbackRate}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}
@@ -39,6 +41,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         ref={ref}
         url={audioUrl}
         regionSpecs={props.regionSpecs}
+        playbackRate={props.playbackRate}
         readOnly={props.readOnly}
         onTime={props.onTime}
         onDuration={props.onDuration}

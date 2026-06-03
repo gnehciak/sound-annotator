@@ -282,7 +282,7 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 2;
-  display: none;
+  display: flex;
   gap: 1px;
   padding: 2px;
   border-radius: 4px;
@@ -290,9 +290,14 @@ body {
   background: rgb(var(--bg-ink) / 0.85);
   backdrop-filter: blur(2px);
   line-height: 0;
+  /* Fade in like the resize handle, rather than snapping via display. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 .ProseMirror-focused .resizable-image:hover .resizable-image__align {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 .ProseMirror .resizable-image__align button {
   display: flex;

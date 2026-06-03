@@ -28,6 +28,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
 
   const playerRef = useRef<PlayerHandle>(null)
   const notesScrollRef = useRef<HTMLDivElement>(null)
@@ -77,6 +78,21 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     },
     [annotations, seek],
+  )
+
+  // Seek to the note before/after the playhead (mirrors the editor's jumpNote).
+  const jumpNote = useCallback(
+    (dir: 1 | -1) => {
+      if (annotations.length === 0) return
+      const sorted = [...annotations].sort((a, b) => a.start - b.start)
+      const eps = 0.3
+      const target =
+        dir === 1
+          ? sorted.find((a) => a.start > currentTime + eps)
+          : [...sorted].reverse().find((a) => a.start < currentTime - eps)
+      if (target) seekToNote(target.id)
+    },
+    [annotations, currentTime, seekToNote],
   )
 
   const regionSpecs = useMemo(
@@ -183,6 +199,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 source={source}
                 audioUrl={audioUrl}
                 regionSpecs={regionSpecs}
+                playbackRate={playbackRate}
                 readOnly
                 onTime={handleTime}
                 onDuration={handleDuration}
@@ -204,11 +221,17 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 currentTime={currentTime}
                 duration={duration}
                 pendingIn={null}
+                playbackRate={playbackRate}
+                hasNotes={annotations.length > 0}
                 readOnly
                 onPlayPause={() => (isPlaying ? pause() : play())}
                 onSeek={seek}
+                onSetRate={setPlaybackRate}
+                onPrevNote={() => jumpNote(-1)}
+                onNextNote={() => jumpNote(1)}
                 onMarkIn={() => {}}
                 onMarkOut={() => {}}
+                onCancelMark={() => {}}
                 onAddNote={() => {}}
               />
             )}

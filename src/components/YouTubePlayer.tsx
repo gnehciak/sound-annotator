@@ -11,6 +11,7 @@ import { loadYouTubeApi } from '../lib/youtube'
 
 interface Props {
   videoId: string
+  playbackRate: number
   onTime: (t: number) => void
   onDuration: (d: number) => void
   onPlayingChange: (playing: boolean) => void
@@ -18,13 +19,17 @@ interface Props {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, onTime, onDuration, onPlayingChange },
+  { videoId, playbackRate, onTime, onDuration, onPlayingChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<any>(null)
   const timeRef = useRef(0)
   const playingRef = useRef(false)
+  // Read inside the (videoId-keyed) onReady closure so a remount picks up the
+  // current rate without re-creating the player on every speed change.
+  const rateRef = useRef(playbackRate)
+  rateRef.current = playbackRate
   // Until the video has started once, we cover it to hide YouTube's poster
   // (title, avatar, share / watch-later buttons, big play button).
   const [started, setStarted] = useState(false)
@@ -55,7 +60,10 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           fs: 0,
         },
         events: {
-          onReady: (e: any) => onDuration(e.target.getDuration() || 0),
+          onReady: (e: any) => {
+            onDuration(e.target.getDuration() || 0)
+            e.target.setPlaybackRate?.(rateRef.current)
+          },
           onStateChange: (e: any) => {
             // 1 = playing, 2 = paused, 0 = ended. Ignore 3 (buffering) so a
             // seek while playing doesn't flip the button to "Play" for ~0.5s.
@@ -95,6 +103,11 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId])
+
+  // Apply live speed changes (onReady handles the initial / post-remount rate).
+  useEffect(() => {
+    playerRef.current?.setPlaybackRate?.(playbackRate)
+  }, [playbackRate])
 
   useImperativeHandle(
     ref,

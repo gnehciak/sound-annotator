@@ -14,6 +14,7 @@ export interface RegionSpec {
 interface Props {
   url: string
   regionSpecs: RegionSpec[]
+  playbackRate: number
   readOnly?: boolean
   onTime: (t: number) => void
   onDuration: (d: number) => void
@@ -103,6 +104,8 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
     ws.on('ready', () => {
       cb.current.onDuration(ws.getDuration())
       readyRef.current = true
+      // preservePitch: slowing the audio keeps it in tune (music analysis).
+      ws.setPlaybackRate(cb.current.playbackRate, true)
       reconcile()
     })
     ws.on('timeupdate', (t: number) => {
@@ -151,6 +154,12 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
     reconcile()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature])
+
+  // Apply live speed changes (the 'ready' handler covers the initial rate and
+  // any url remount). preservePitch keeps slowed-down audio in tune.
+  useEffect(() => {
+    wsRef.current?.setPlaybackRate(props.playbackRate, true)
+  }, [props.playbackRate])
 
   // View-only locks the waveform: no drag-to-create, and existing ranges can't
   // be moved or resized. Re-runs after the player (re)mounts on a url change.

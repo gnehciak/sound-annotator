@@ -58,6 +58,9 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  // Playback speed, applied by the players themselves (prop-driven). Sticky
+  // across tracks — a chosen analysis speed (e.g. 0.75×) carries over.
+  const [playbackRate, setPlaybackRate] = useState(1)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
@@ -860,6 +863,7 @@ export default function App() {
                     source={current.source}
                     audioUrl={audioUrl}
                     regionSpecs={regionSpecs}
+                    playbackRate={playbackRate}
                     readOnly={viewOnly}
                     onTime={handleTime}
                     onDuration={handleDuration}
@@ -886,11 +890,17 @@ export default function App() {
                     currentTime={currentTime}
                     duration={duration}
                     pendingIn={pendingIn}
+                    playbackRate={playbackRate}
+                    hasNotes={(current.annotations.length ?? 0) > 0}
                     readOnly={viewOnly}
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
+                    onSetRate={setPlaybackRate}
+                    onPrevNote={() => jumpNote(-1)}
+                    onNextNote={() => jumpNote(1)}
                     onMarkIn={markIn}
                     onMarkOut={markOut}
+                    onCancelMark={() => setPendingIn(null)}
                     onAddNote={addAnnotationAtCurrent}
                   />
                 </div>
