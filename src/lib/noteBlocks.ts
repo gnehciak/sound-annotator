@@ -47,8 +47,13 @@ export function asTextData(block: NoteBlock | undefined): TextBlockData | undefi
   return typeof data?.html === 'string' ? { html: data.html } : { html: '' }
 }
 
+/** Primary text HTML from a blocks array (first `text` block; '' if none). */
+export function textHtmlOf(blocks: NoteBlock[]): string {
+  return asTextData(blocks.find((b) => b.type === TEXT_BLOCK))?.html ?? ''
+}
+
 /** The note's primary text-block HTML (falls back to legacy `contentHtml`). */
 export function primaryTextHtml(a: Annotation): string {
-  const text = (a.blocks ?? []).find((b) => b.type === TEXT_BLOCK)
-  return asTextData(text)?.html ?? a.contentHtml ?? ''
+  if (a.blocks && a.blocks.length > 0) return textHtmlOf(a.blocks)
+  return a.contentHtml ?? ''
 }

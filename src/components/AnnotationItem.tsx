@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   Play,
   ChevronFirst,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel, formatTime } from '../lib/format'
+import { blocksOf, textHtmlOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { resolveTag } from '../lib/tags'
 import AnnotationEditor from './AnnotationEditor'
 import TagPicker from './TagPicker'
@@ -48,9 +49,23 @@ export default function AnnotationItem({
   mentionItems,
   uploadImage,
 }: Props) {
+  // The note's content blocks (migrating legacy notes on the fly). Memoised on
+  // the annotation so the text block keeps a stable id across renders.
+  const blocks = useMemo(() => blocksOf(annotation), [annotation])
+  const textHtml = textHtmlOf(blocks)
+
+  // Edit a text block: update its block and mirror the primary text into
+  // `contentHtml` so legacy readers (previews, image cleanup) stay in sync.
+  const updateTextBlock = (blockId: string, html: string) => {
+    const next = blocks.map((b) =>
+      b.id === blockId ? { ...b, data: { html } } : b,
+    )
+    onUpdate({ blocks: next, contentHtml: textHtmlOf(next) })
+  }
+
   // New (empty) notes start expanded so you can type right away — never in
   // view-only mode, which has no editing controls to reveal.
-  const [expanded, setExpanded] = useState(() => !readOnly && !annotation.contentHtml)
+  const [expanded, setExpanded] = useState(() => !readOnly && !textHtml)
   const tagInfo = resolveTag(annotation.tag)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -268,18 +283,24 @@ export default function AnnotationItem({
         )}
       </div>
 
-      {/* body */}
+      {/* body — rendered from the note's content blocks (text only for now;
+          window-surfaced plugin blocks land in a later phase) */}
       <div onMouseDown={handleBodyMouseDown} className="pb-1.5 pl-2 pr-1">
-        <AnnotationEditor
-          noteId={annotation.id}
-          mentionItems={mentionItems}
-          uploadImage={uploadImage}
-          showToolbar={expanded}
-          readOnly={readOnly}
-          content={annotation.contentHtml}
-          autofocus={expanded && !annotation.contentHtml}
-          onChange={(html) => onUpdate({ contentHtml: html })}
-        />
+        {blocks.map((block) =>
+          block.type === TEXT_BLOCK ? (
+            <AnnotationEditor
+              key={block.id}
+              noteId={annotation.id}
+              mentionItems={mentionItems}
+              uploadImage={uploadImage}
+              showToolbar={expanded}
+              readOnly={readOnly}
+              content={asTextData(block)?.html ?? ''}
+              autofocus={expanded && !textHtml}
+              onChange={(html) => updateTextBlock(block.id, html)}
+            />
+          ) : null,
+        )}
       </div>
     </div>
   )

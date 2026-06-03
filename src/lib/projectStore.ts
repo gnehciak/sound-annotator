@@ -12,7 +12,8 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Project } from '../types'
+import { withBlocks } from './noteBlocks'
+import type { Annotation, Project } from '../types'
 
 const projectsCol = () => collection(db, 'projects')
 
@@ -22,7 +23,10 @@ function toProject(id: string, data: Record<string, unknown>): Project {
     id,
     title: typeof data.title === 'string' ? data.title : 'Untitled track',
     source: data.source as Project['source'],
-    annotations: Array.isArray(data.annotations) ? data.annotations : [],
+    // Migrate legacy notes (contentHtml only) to the block model on read.
+    annotations: Array.isArray(data.annotations)
+      ? (data.annotations as Annotation[]).map(withBlocks)
+      : [],
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,
   }

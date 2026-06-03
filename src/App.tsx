@@ -18,6 +18,7 @@ import {
   reconcileProjectImages,
 } from './lib/imageCloud'
 import { parseVideoId } from './lib/youtube'
+import { makeTextBlock } from './lib/noteBlocks'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import {
@@ -345,6 +346,7 @@ export default function App() {
       id: uid(),
       start: Math.max(0, Math.floor(t)),
       contentHtml: '',
+      blocks: [makeTextBlock('')],
       createdAt: now(),
     }
     patchProject(current.id, { annotations: [...current.annotations, ann] })
@@ -404,7 +406,14 @@ export default function App() {
     patchProject(current.id, {
       annotations: [
         ...current.annotations,
-        { id, start: s, end: e, contentHtml: '', createdAt: now() },
+        {
+          id,
+          start: s,
+          end: e,
+          contentHtml: '',
+          blocks: [makeTextBlock('')],
+          createdAt: now(),
+        },
       ],
     })
   }
