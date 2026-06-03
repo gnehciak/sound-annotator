@@ -17,6 +17,26 @@ npm run dev      # http://localhost:5173
 
 Build for production: `npm run build` then `npm run preview`.
 
+## Deploying security rules
+
+`firestore.rules` and `storage.rules` are checked into the repo but only take
+effect once published to Firebase — editing the files (or merging a PR) does
+**not** change the live project. `firebase.json` / `.firebaserc` wire them up so
+a one-liner publishes both straight from the checked-in files:
+
+```bash
+npm i -g firebase-tools   # first time only
+firebase login            # first time only — interactive
+firebase deploy --only firestore:rules,storage
+```
+
+The project is pinned to `sound-annotator` in `.firebaserc`. No composite
+indexes are needed (`fetchProjects` filters by a single field and sorts
+client-side), so `firestore.indexes.json` is intentionally empty.
+
+> If you change `firestore.rules` (e.g. the read-only share gate), the change is
+> live for users only after this deploy runs.
+
 ## How to use
 
 1. Click **+ New track**.
