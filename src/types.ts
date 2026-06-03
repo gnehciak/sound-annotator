@@ -11,6 +11,20 @@ export interface ProjectSource {
   audioUrl?: string
 }
 
+/**
+ * A typed content block within a note (the plugin model). Each block is
+ * rendered and edited by the plugin registered for its `type`
+ * (see lib/notePlugins.ts). e.g. `{ type: "text", data: { html } }` or
+ * `{ type: "elements", data: { layer, fields } }`.
+ */
+export interface NoteBlock {
+  id: string
+  /** Plugin type key — see lib/notePlugins.ts (e.g. "text" | "elements"). */
+  type: string
+  /** Plugin-specific payload; each plugin narrows and validates this. */
+  data: unknown
+}
+
 export interface Annotation {
   id: string
   /** seconds into the track */
@@ -21,8 +35,17 @@ export interface Annotation {
   tag?: string
   /** custom colour override; falls back to a color derived from the id */
   color?: string
-  /** TipTap HTML */
+  /**
+   * TipTap HTML for the note's text. Legacy/primary field; mirrors the built-in
+   * `text` block while the block model rolls out (see lib/noteBlocks.ts).
+   */
   contentHtml: string
+  /**
+   * Typed content blocks (the plugin model). Optional during migration: older
+   * notes carry only `contentHtml`, which lib/noteBlocks.ts normalises to a
+   * single `text` block on read.
+   */
+  blocks?: NoteBlock[]
   createdAt: number
 }
 
