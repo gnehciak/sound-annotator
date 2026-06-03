@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { AuthProvider } from './lib/auth'
 import Gate from './components/Gate'
 import ShareViewer from './components/ShareViewer'
+import './plugins/register' // registers note plugins (side effect)
 
 // A `?view={id}` link opens the read-only share viewer, which needs no auth —
 // render it before (and instead of) the signed-in app and its Gate.
