@@ -44,6 +44,20 @@ export default function Transport({
 
   const frac = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
 
+  // Quick-reference shortcut hints shown along the bottom of the transport.
+  // Note actions (N / I·O) only apply when editing, so drop them in view-only.
+  const hints: { keys: string[]; label: string }[] = [
+    { keys: ['Space'], label: 'Play' },
+    { keys: ['←', '→'], label: 'Seek' },
+    ...(readOnly
+      ? []
+      : [
+          { keys: ['N'], label: 'Note' },
+          { keys: ['I', 'O'], label: 'Mark' },
+        ]),
+    { keys: ['?'], label: 'All' },
+  ]
+
   const seekFromX = (clientX: number) => {
     const el = barRef.current
     if (!el || duration <= 0) return
@@ -59,6 +73,7 @@ export default function Transport({
   }
 
   return (
+    <>
     <div className="space-y-2 rounded border border-line bg-panel p-2">
       {/* progress / seek bar, flanked by the (editable) current time and total */}
       <div className="flex items-center gap-2 px-0.5">
@@ -206,5 +221,24 @@ export default function Transport({
       </div>
       )}
     </div>
+
+    {/* keyboard shortcuts — beneath the panel, on the bare app background */}
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 opacity-60">
+      {hints.map((h) => (
+        <span key={h.label} className="flex items-center gap-1">
+          <span className="flex items-center gap-0.5">
+            {h.keys.map((k) => (
+              <kbd key={k} className="kbd-cap">
+                {k}
+              </kbd>
+            ))}
+          </span>
+          <span className="font-mono text-[10px] uppercase leading-none tracking-wider text-muted/70">
+            {h.label}
+          </span>
+        </span>
+      ))}
+    </div>
+    </>
   )
 }

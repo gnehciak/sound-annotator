@@ -111,6 +111,27 @@ body {
   }
 }
 
+/* Tiny keycap for inline shortcut hints. Squared (2px) with a 1px lip — a
+   darker bottom edge so it reads as a physical key, no gloss (DESIGN.md §4). */
+.kbd-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  padding: 2px 4px;
+  border: 1px solid rgb(var(--border-strong));
+  border-radius: 2px;
+  background: rgb(var(--bg-raised));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 1px 0 rgb(0 0 0 / 0.45);
+  color: rgb(var(--text-muted));
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Inset bevel for readouts/screens; raised bevel for primary buttons */
 .bevel-inset {
   box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.6);

@@ -6,6 +6,8 @@ import {
   DEFAULT_PLAYER_WIDTH,
   loadViewOnly,
   saveViewOnly,
+  loadSidebarOpen,
+  saveSidebarOpen,
 } from './lib/storage'
 import { fetchProjects, saveProject, deleteProjectDoc } from './lib/projectStore'
 import { deleteAudio } from './lib/audioStore'
@@ -53,7 +55,7 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   const [pendingIn, setPendingIn] = useState<number | null>(null)
   const [notesPad, setNotesPad] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
@@ -61,6 +63,10 @@ export default function App() {
   const [draggingSplit, setDraggingSplit] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
 
+  function setViewMode(view: boolean) {
+    saveViewOnly(view)
+    setViewOnly(view)
+  }
   function toggleViewOnly() {
     setViewOnly((on) => {
       const next = !on
@@ -68,6 +74,12 @@ export default function App() {
       return next
     })
   }
+
+  // Remember the track rack open/closed across sessions. An effect (rather than
+  // saving at each toggle site) keeps every setSidebarOpen caller in sync.
+  useEffect(() => {
+    saveSidebarOpen(sidebarOpen)
+  }, [sidebarOpen])
 
   const playerRef = useRef<PlayerHandle>(null)
   const splitRef = useRef<HTMLDivElement>(null)
@@ -302,6 +314,21 @@ export default function App() {
     setCurrentTime(t)
   }
 
+  // Optimistic transport: flip the playing state immediately so Play/Pause
+  // feels instant, then let the player's own state-change events
+  // (handlePlaying) reconcile — e.g. snap back to paused if playback never
+  // actually started. Without this the YouTube iframe takes ~0.5s (buffering)
+  // to report "playing", which makes the button feel sticky. Audio reports
+  // instantly, so this just matches that responsiveness everywhere.
+  function play() {
+    setIsPlaying(true)
+    playerRef.current?.play()
+  }
+  function pause() {
+    setIsPlaying(false)
+    playerRef.current?.pause()
+  }
+
   // Jump to a mentioned note: seek to it and scroll it into view.
   function seekToNote(id: string) {
     const a = annotationsRef.current.find((x) => x.id === id)
@@ -394,8 +421,8 @@ export default function App() {
     switch (e.key) {
       case ' ':
         e.preventDefault()
-        if (isPlaying) playerRef.current?.pause()
-        else playerRef.current?.play()
+        if (isPlaying) pause()
+        else play()
         break
       case 'ArrowLeft':
         e.preventDefault()
@@ -521,19 +548,37 @@ export default function App() {
           </span>
         )}
         <div className="flex-1" />
-        <button
-          onClick={toggleViewOnly}
-          aria-pressed={viewOnly}
-          title={
-            viewOnly ? 'Switch to edit mode (V)' : 'Switch to view-only mode (V)'
-          }
-          aria-label={viewOnly ? 'Switch to edit mode' : 'Switch to view-only mode'}
-          className={`press rounded p-1.5 hover:bg-raised hover:text-fg ${
-            viewOnly ? 'text-accent' : 'text-muted'
-          }`}
+        {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
+            fill keeps amber pure; the active View segment carries amber text to
+            echo the view-only state. The 'V' key still flips it. */}
+        <div
+          role="group"
+          aria-label="Editing mode"
+          className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
         >
-          {viewOnly ? <Eye size={16} /> : <Pencil size={16} />}
-        </button>
+          <button
+            type="button"
+            onClick={() => setViewMode(false)}
+            aria-pressed={!viewOnly}
+            title="Edit mode (V)"
+            className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+              viewOnly ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
+            }`}
+          >
+            <Pencil size={12} /> Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode(true)}
+            aria-pressed={viewOnly}
+            title="View-only mode (V)"
+            className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+              viewOnly ? 'bg-raised text-accent' : 'text-muted hover:text-fg'
+            }`}
+          >
+            <Eye size={12} /> View
+          </button>
+        </div>
         <button
           onClick={() => setShowHelp(true)}
           title="Keyboard shortcuts (?)"
@@ -589,7 +634,8 @@ export default function App() {
           }`}
         >
           <div className="flex h-full w-60 flex-col">
-            <div className="flex items-center justify-between border-b border-line px-3 py-2">
+            {/* Same fixed height as the main sub-bar so their bottom borders align. */}
+            <div className="flex h-11 items-center justify-between border-b border-line px-3">
               <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
                 Tracks
               </span>
@@ -668,8 +714,10 @@ export default function App() {
 
         {/* ---- Main ---- */}
         <main className="flex min-w-0 flex-1 flex-col">
-          {/* Sub-bar: toggle + track title + source badge */}
-          <div className="flex items-center gap-2 border-b border-line bg-ink/60 px-3 py-2">
+          {/* Sub-bar: toggle + track title + source badge. Fixed height so the
+              row doesn't grow/shrink as the sidebar toggle (only shown when the
+              sidebar is collapsed) appears and disappears. */}
+          <div className="flex h-11 items-center gap-2 border-b border-line bg-ink/60 px-3">
             {!sidebarOpen && (
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -790,11 +838,7 @@ export default function App() {
                     duration={duration}
                     pendingIn={pendingIn}
                     readOnly={viewOnly}
-                    onPlayPause={() =>
-                      isPlaying
-                        ? playerRef.current?.pause()
-                        : playerRef.current?.play()
-                    }
+                    onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
                     onMarkIn={markIn}
                     onMarkOut={markOut}
@@ -832,7 +876,7 @@ export default function App() {
                     readOnly={viewOnly}
                     scrollRef={notesScrollRef}
                     onSeek={seek}
-                    onPlay={() => playerRef.current?.play()}
+                    onPlay={play}
                     onUpdate={updateAnnotation}
                     onDelete={deleteAnnotation}
                     onSeekNote={seekToNote}

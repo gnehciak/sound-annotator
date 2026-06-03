@@ -63,3 +63,23 @@ export function saveViewOnly(on: boolean): void {
     /* ignore */
   }
 }
+
+// Track-rack (sidebar) open/closed — a workspace preference remembered across
+// sessions. Defaults to open for a first visit.
+const SIDEBAR_KEY = 'sound-annotator:sidebar-open'
+
+export function loadSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+export function saveSidebarOpen(open: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
