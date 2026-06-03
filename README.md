@@ -38,11 +38,15 @@ src/
   types.ts                 Project / Annotation / PlayerHandle types
   App.tsx                  State + persistence orchestrator, sidebar, transport
   lib/
+    firebase.ts            Firebase app + Auth / Firestore / Storage singletons
+    auth.tsx               Google sign-in context (useAuth)
     youtube.ts             Parse video id from any YT URL + load the IFrame API
     format.ts              seconds -> "m:ss"
-    image.ts               Downscale pasted images so they fit in localStorage
-    storage.ts             Projects + notes  -> localStorage
-    audioStore.ts          Audio file blobs  -> IndexedDB (too big for localStorage)
+    image.ts               Downscale a pasted image to a small JPEG blob
+    projectStore.ts        Projects + notes  <-> Firestore (incl. shared-link read)
+    audioCloud.ts          Audio file blobs  <-> Cloud Storage (download URLs)
+    imageCloud.ts          Note image blobs  <-> Cloud Storage (download URLs)
+    storage.ts             Local UI prefs (panel width, view mode) -> localStorage
   components/
     PlayerPane.tsx         Chooses the right player, forwards the imperative ref
     YouTubePlayer.tsx      YouTube IFrame API  -> PlayerHandle
@@ -51,32 +55,48 @@ src/
     AnnotationEditor.tsx   TipTap rich-text editor + image paste/upload
     AnnotationItem.tsx     One timestamped note (seek / re-anchor / delete)
     AnnotationList.tsx     Sorts notes by time, highlights the active one
+    SharePanel.tsx         Toggle read-only sharing + copy the ?view= link
+    ShareViewer.tsx        Read-only viewer rendered for a ?view= share link
+    Gate.tsx               Auth gate: setup notice / sign-in / app
 ```
 
 **Persistence model**
 
-- Project metadata + note HTML → `localStorage` (debounced on every keystroke).
-- Audio files → `IndexedDB`, keyed by project id (survives reload). If the file
-  is ever missing, the notes are kept and the app asks you to re-open the file.
-- Pasted images are stored as downscaled data URLs inline in the note HTML.
+- **Firebase** backend, per user (Google sign-in via Auth). The browser talks
+  straight to Firebase — no server of our own.
+- Project metadata + note HTML → **Firestore**, one document per project (notes
+  inline), saved debounced on change. An offline cache keeps it working without
+  a connection.
+- Audio files → **Cloud Storage** at `users/{uid}/audio/{projectId}`, streamed
+  back via their download URL. If the file is missing, the notes are kept and
+  the app asks you to re-open the file.
+- Pasted/inserted note images are downscaled, uploaded to **Cloud Storage**
+  (`users/{uid}/images/{projectId}/…`), and referenced by download URL in the
+  note HTML — keeping the base64 bytes out of the Firestore doc. (If an upload
+  fails it falls back to an inline data URL so the image isn't lost.) Images are
+  **resizable** by dragging a corner handle; the width persists in the note HTML.
+- **Read-only sharing.** A project can be flagged shared, which mints a
+  `?view={id}` link anyone can open read-only with no sign-in (the random doc id
+  is the share token). `firestore.rules` only serves a doc to a stranger when
+  it's flagged shared; only the owner can flip that flag. Audio rides along on
+  its tokenized Storage download URL, so shared audio tracks play too.
 
-## Known limitations (by design, for the MVP)
+## Known limitations (by design)
 
 - **No YouTube frame capture.** Browsers can't read pixels from a cross-origin
   YouTube iframe, so "screenshots" means paste/upload an image — not auto-grab a
   video frame.
-- **localStorage is ~5 MB.** Lots of large pasted images can fill it; images are
-  downscaled to help, but heavy use wants real file storage (see roadmap).
-- Single-user, single-browser. No sharing or login yet.
+- **Sharing is read-only.** A link lets others view and seek a track, not edit
+  it — there's no live multi-user co-editing.
 
 ## Roadmap
 
 - **Time-range notes** ("1:10–1:35") with draggable **wavesurfer regions**.
 - **Export to PDF** (timestamps + notes + screenshots) for handouts.
 - **Note templates** (form analysis, instrumentation, dynamics map).
-- **Supabase** backend: logins, saved projects, image upload, teacher/student
-  roles, share-by-link — the natural "classroom-ready" next step.
-- Optional migration to **Next.js** once there's a backend.
+- **Teacher/student roles** on top of the existing Firebase backend (named
+  collaborators, not just an unlisted read-only link).
+- Optional migration to **Next.js** for server-rendered share pages.
 
 ## Theming
 

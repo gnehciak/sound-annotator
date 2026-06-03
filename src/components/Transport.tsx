@@ -185,9 +185,12 @@ export default function Transport({
           30s <ChevronsRight size={13} />
         </button>
       </div>
+    </div>
 
-      {/* row 2: note actions (hidden in view-only mode) */}
-      {!readOnly && (
+    {/* Note actions get their own panel, set apart from the playback transport
+       above so the primary "Add note" action reads as a distinct step. */}
+    {!readOnly && (
+    <div className="rounded border border-line bg-panel p-2">
       <div className="flex items-stretch gap-1.5">
         <button
           onClick={onMarkIn}
@@ -219,8 +222,8 @@ export default function Transport({
           Mark end <ChevronLast size={13} />
         </button>
       </div>
-      )}
     </div>
+    )}
 
     {/* keyboard shortcuts — beneath the panel, on the bare app background */}
     <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 opacity-60">

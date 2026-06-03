@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   setDoc,
@@ -15,22 +16,41 @@ import type { Project } from '../types'
 
 const projectsCol = () => collection(db, 'projects')
 
+/** Shape a raw Firestore document into a Project (shared by both fetchers). */
+function toProject(id: string, data: Record<string, unknown>): Project {
+  return {
+    id,
+    title: typeof data.title === 'string' ? data.title : 'Untitled track',
+    source: data.source as Project['source'],
+    annotations: Array.isArray(data.annotations) ? data.annotations : [],
+    updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
+    shared: data.shared === true,
+  }
+}
+
 /** Load every project owned by this user, newest first. */
 export async function fetchProjects(uid: string): Promise<Project[]> {
   // Filter by owner only (no composite index needed); sort client-side.
   const snap = await getDocs(query(projectsCol(), where('ownerId', '==', uid)))
   return snap.docs
-    .map((d) => {
-      const data = d.data()
-      return {
-        id: d.id,
-        title: data.title ?? 'Untitled track',
-        source: data.source,
-        annotations: Array.isArray(data.annotations) ? data.annotations : [],
-        updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
-      } as Project
-    })
+    .map((d) => toProject(d.id, d.data()))
     .sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/**
+ * Load a single project by id for the read-only share viewer. No owner filter
+ * and no auth required — firestore.rules only returns the doc if it's `shared`.
+ * Returns null when the project is missing or not shared (read denied).
+ */
+export async function fetchSharedProject(id: string): Promise<Project | null> {
+  try {
+    const snap = await getDoc(doc(projectsCol(), id))
+    if (!snap.exists()) return null
+    return toProject(snap.id, snap.data())
+  } catch {
+    // Permission denied (not shared) surfaces as an error — treat as "missing".
+    return null
+  }
 }
 
 /** Create or overwrite a single project document. */
@@ -41,6 +61,7 @@ export async function saveProject(uid: string, p: Project): Promise<void> {
     source: p.source,
     annotations: p.annotations,
     updatedAt: p.updatedAt,
+    shared: p.shared === true,
   })
 }
 

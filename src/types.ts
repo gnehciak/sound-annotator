@@ -32,6 +32,12 @@ export interface Project {
   source?: ProjectSource
   annotations: Annotation[]
   updatedAt: number
+  /**
+   * When true, anyone holding the project's `?view={id}` link can open it
+   * read-only (no sign-in required). Off by default; toggled from the Share
+   * panel. See firestore.rules — shared docs are world-readable by id.
+   */
+  shared?: boolean
 }
 
 /** Imperative API every player implementation exposes to the rest of the app. */

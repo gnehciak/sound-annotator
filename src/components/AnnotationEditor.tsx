@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
-import { Bold, Italic, Heading2, List, Quote, ImagePlus } from 'lucide-react'
-import { fileToScaledDataUrl } from '../lib/image'
+import { Bold, Italic, Heading2, List, Quote, ImagePlus, Loader2 } from 'lucide-react'
+import { fileToScaledBlob, blobToDataUrl } from '../lib/image'
+import { ResizableImage } from './resizableImage'
+import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
 import { createMention } from './noteMention'
 import type { MentionItem } from './MentionList'
 
@@ -16,6 +17,16 @@ interface Props {
   readOnly?: boolean
   noteId: string
   mentionItems: (query: string) => MentionItem[]
+  /**
+   * Upload a (downscaled) image blob to Cloud Storage and resolve with its
+   * download URL, which is what gets stored in the note HTML. `onProgress`
+   * receives a 0–1 fraction. When omitted, the image falls back to an inline
+   * data URL (legacy / signed-out behaviour).
+   */
+  uploadImage?: (
+    blob: Blob,
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string>
 }
 
 export default function AnnotationEditor({
@@ -26,13 +37,34 @@ export default function AnnotationEditor({
   readOnly = false,
   noteId,
   mentionItems,
+  uploadImage,
 }: Props) {
   const editorRef = useRef<Editor | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(0)
 
   const insertImageFile = async (file: File) => {
-    const src = await fileToScaledDataUrl(file)
-    editorRef.current?.chain().focus().setImage({ src }).run()
+    const ed = editorRef.current
+    if (!ed) return
+    // No uploader available → keep the old inline-data-URL behaviour.
+    if (!uploadImage) {
+      try {
+        const blob = await fileToScaledBlob(file)
+        ed.chain().focus().setImage({ src: await blobToDataUrl(blob) }).run()
+      } catch (err) {
+        console.error('Could not read image:', err)
+      }
+      return
+    }
+    // Cloud upload: an "Uploading…" placeholder shows in the note until the
+    // download URL is ready, then the real image swaps in. (setUploading also
+    // drives the toolbar chip.)
+    setUploading((n) => n + 1)
+    try {
+      await uploadImageWithPlaceholder(ed, file, uploadImage)
+    } finally {
+      setUploading((n) => Math.max(0, n - 1))
+    }
   }
 
   const insertImageFiles = (files: FileList) => {
@@ -45,7 +77,8 @@ export default function AnnotationEditor({
     editable: !readOnly,
     extensions: [
       StarterKit,
-      Image.configure({ inline: false }),
+      ResizableImage.configure({ inline: false }),
+      ImageUploadPlaceholder,
       createMention(mentionItems, noteId),
     ],
     content,
@@ -124,9 +157,16 @@ export default function AnnotationEditor({
             title="Insert image"
             onClick={() => fileInputRef.current?.click()}
           />
-          <span className="ml-1 font-mono text-[10px] text-muted">
-            type @ to link a note
-          </span>
+          {uploading > 0 ? (
+            <span className="ml-1 flex items-center gap-1 font-mono text-[10px] text-accent">
+              <Loader2 size={11} className="animate-spin" />
+              Uploading image…
+            </span>
+          ) : (
+            <span className="ml-1 font-mono text-[10px] text-muted">
+              type @ to link a note
+            </span>
+          )}
           <input
             ref={fileInputRef}
             type="file"

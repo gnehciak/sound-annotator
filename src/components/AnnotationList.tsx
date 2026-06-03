@@ -17,6 +17,10 @@ interface Props {
   onDelete: (id: string) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
+  uploadImage?: (
+    blob: Blob,
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string>
 }
 
 const endOf = (a: Annotation) => (a.end != null ? a.end : a.start + 3)
@@ -33,6 +37,7 @@ export default function AnnotationList({
   onDelete,
   onSeekNote,
   mentionItems,
+  uploadImage,
 }: Props) {
   const activeIds = useMemo(() => {
     const ids = new Set<string>()
@@ -265,6 +270,7 @@ export default function AnnotationList({
           annotation={a}
           color={a.color ?? colorForId(a.id)}
           active={activeIds.has(a.id)}
+          isPlaying={isPlaying}
           currentTime={currentTime}
           readOnly={readOnly}
           onPlay={() => playNote(a.start)}
@@ -272,6 +278,7 @@ export default function AnnotationList({
           onDelete={() => onDelete(a.id)}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
+          uploadImage={uploadImage}
         />
       ))}
     </div>

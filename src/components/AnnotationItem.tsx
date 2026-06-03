@@ -20,6 +20,7 @@ interface Props {
   annotation: Annotation
   color: string
   active: boolean
+  isPlaying: boolean
   currentTime: number
   readOnly?: boolean
   onPlay: () => void
@@ -27,12 +28,17 @@ interface Props {
   onDelete: () => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
+  uploadImage?: (
+    blob: Blob,
+    onProgress?: (fraction: number) => void,
+  ) => Promise<string>
 }
 
 export default function AnnotationItem({
   annotation,
   color,
   active,
+  isPlaying,
   currentTime,
   readOnly = false,
   onPlay,
@@ -40,6 +46,7 @@ export default function AnnotationItem({
   onDelete,
   onSeekNote,
   mentionItems,
+  uploadImage,
 }: Props) {
   // New (empty) notes start expanded so you can type right away — never in
   // view-only mode, which has no editing controls to reveal.
@@ -104,7 +111,7 @@ export default function AnnotationItem({
         enterAnim ? 'animate-note-in' : ''
       } ${active ? 'z-20 bg-raised' : 'hover:bg-raised/25'} ${
         readOnly ? 'cursor-pointer' : ''
-      } ${!active && !expanded ? 'opacity-50' : ''}`}
+      } ${isPlaying && !active && !expanded ? 'opacity-50' : ''}`}
     >
       {/* progress bar along the top border */}
       <div
@@ -266,6 +273,7 @@ export default function AnnotationItem({
         <AnnotationEditor
           noteId={annotation.id}
           mentionItems={mentionItems}
+          uploadImage={uploadImage}
           showToolbar={expanded}
           readOnly={readOnly}
           content={annotation.contentHtml}

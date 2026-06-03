@@ -12,6 +12,11 @@ import {
 import { fetchProjects, saveProject, deleteProjectDoc } from './lib/projectStore'
 import { deleteAudio } from './lib/audioStore'
 import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
+import {
+  uploadNoteImage,
+  deleteProjectImages,
+  reconcileProjectImages,
+} from './lib/imageCloud'
 import { parseVideoId } from './lib/youtube'
 import { formatTime, noteLabel } from './lib/format'
 import { colorForId } from './lib/noteColors'
@@ -31,6 +36,7 @@ import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
 import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
+import SharePanel from './components/SharePanel'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import { useHotkeys } from './lib/useHotkeys'
 
@@ -86,6 +92,8 @@ export default function App() {
   const audioUrlRef = useRef<string | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
+  // Projects whose orphaned images have already been swept this session.
+  const sweptImagesRef = useRef<Set<string>>(new Set())
 
   // Pad the bottom of the notes panel so the playing note can scroll to the top
   // even when the notes don't fill the panel.
@@ -130,6 +138,18 @@ export default function App() {
           (it.tag ?? '').includes(q),
       )
   }, [])
+
+  // Upload a pasted/inserted note image to Cloud Storage (scoped to this user
+  // and the open project) and resolve with its download URL for inlining in the
+  // note HTML. Rejecting leaves the editor to fall back to an inline data URL.
+  const handleUploadImage = useCallback(
+    (blob: Blob, onProgress?: (fraction: number) => void): Promise<string> => {
+      if (!user || !currentId)
+        return Promise.reject(new Error('No active project for the image'))
+      return uploadNoteImage(user.uid, currentId, blob, onProgress)
+    },
+    [user, currentId],
+  )
 
   // Load this user's projects from Firestore once on sign-in.
   useEffect(() => {
@@ -199,6 +219,23 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId])
 
+  // Garbage-collect orphaned note images the first time a project is opened this
+  // session. Reconciling against the just-loaded (persisted) note HTML keeps it
+  // safe from editor undo — an image is only deleted once it's truly gone from
+  // the saved notes. Runs in the background; failures are non-fatal.
+  useEffect(() => {
+    if (!user || !current) return
+    if (sweptImagesRef.current.has(current.id)) return
+    sweptImagesRef.current.add(current.id)
+    const html = current.annotations.map((a) => a.contentHtml)
+    reconcileProjectImages(user.uid, current.id, html)
+      .then((n) => {
+        if (n) console.info(`Swept ${n} orphaned image(s) from this project.`)
+      })
+      .catch((err) => console.error('Image cleanup failed:', err))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, user])
+
   // ---- project mutations -------------------------------------------------
   const patchProject = useCallback((id: string, patch: Partial<Project>) => {
     setProjects((ps) =>
@@ -219,10 +256,14 @@ export default function App() {
 
   function removeProject(id: string) {
     void deleteAudio(id) // legacy local copy, if any
-    if (user)
+    if (user) {
       void deleteAudioCloud(user.uid, id).catch((err) =>
         console.error('Failed to delete cloud audio:', err),
       )
+      void deleteProjectImages(user.uid, id).catch((err) =>
+        console.error('Failed to delete cloud images:', err),
+      )
+    }
     void deleteProjectDoc(id).catch((err) =>
       console.error('Failed to delete project:', err),
     )
@@ -749,6 +790,14 @@ export default function App() {
                     {current.source.type === 'youtube' ? '▶ YouTube' : '♪ Audio file'}
                   </span>
                 )}
+                {current.source && (
+                  <SharePanel
+                    project={current}
+                    onToggleShare={(shared) =>
+                      patchProject(current.id, { shared })
+                    }
+                  />
+                )}
               </>
             ) : (
               <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
@@ -794,7 +843,7 @@ export default function App() {
             /* Two columns: resizable player on the left, notes scroll on the right */
             <div
               ref={splitRef}
-              className={`flex min-h-0 flex-1 animate-panel-in flex-col ${splitVariant.row}`}
+              className={`flex min-h-0 flex-1 animate-fade-in flex-col ${splitVariant.row}`}
               style={{ ['--player-w' as string]: `${playerWidth}px` }}
             >
               {/* Viewer panel */}
@@ -881,6 +930,7 @@ export default function App() {
                     onDelete={deleteAnnotation}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
+                    uploadImage={handleUploadImage}
                   />
                   {current.annotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />

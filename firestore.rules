@@ -3,10 +3,24 @@ rules_version = '2';
 // Each project document is private to its owner. The app queries projects with
 // `where('ownerId', '==', uid)`, which these rules permit; any attempt to read
 // or write someone else's project is denied.
+//
+// Exception: a project flagged `shared == true` can be fetched *by its id* by
+// anyone holding the link (the unguessable random doc id is the share token),
+// with no sign-in. This powers the read-only `?view={id}` link. Only the owner
+// can flip `shared` (see the update rule), so a project is never exposed without
+// its owner's say.
+//
+// `get` and `list` are split on purpose: a stranger may fetch a single shared
+// doc by id, but only the owner may *query* the collection. Without this split a
+// `where('shared','==',true)` query would let anyone enumerate every shared
+// project — turning unlisted links into a public directory.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /projects/{projectId} {
-      allow read: if request.auth != null
+      allow get: if resource.data.shared == true
+        || (request.auth != null && resource.data.ownerId == request.auth.uid);
+
+      allow list: if request.auth != null
         && resource.data.ownerId == request.auth.uid;
 
       allow create: if request.auth != null
