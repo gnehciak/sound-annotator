@@ -18,7 +18,7 @@ import {
   reconcileProjectImages,
 } from './lib/imageCloud'
 import { parseVideoId } from './lib/youtube'
-import { formatTime, noteLabel } from './lib/format'
+import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import {
   Plus,
@@ -29,6 +29,7 @@ import {
   LogOut,
   Eye,
   Pencil,
+  Check,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
@@ -54,6 +55,8 @@ export default function App() {
   // changed project's object, so reference inequality means "dirty").
   const persistedRef = useRef<Map<string, Project>>(new Map())
   const hydratedRef = useRef(false)
+  const [saveStatus, setSaveStatus] =
+    useState<'idle' | 'editing' | 'saving' | 'saved' | 'error'>('idle')
 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -133,12 +136,14 @@ export default function App() {
         label: noteLabel(a.start, a.end),
         color: a.color ?? colorForId(a.id),
         tag: a.tag,
+        preview: notePreview(a.contentHtml),
       }))
       .filter(
         (it) =>
           !q ||
           it.label.toLowerCase().includes(q) ||
-          (it.tag ?? '').includes(q),
+          (it.tag ?? '').includes(q) ||
+          it.preview.toLowerCase().includes(q),
       )
   }, [])
 
@@ -181,19 +186,27 @@ export default function App() {
 
   // Persist changed projects (debounced — TipTap fires onUpdate on every
   // keystroke). Only projects whose object reference changed are written.
+  // Drives the header save indicator: editing… → saving… → saved.
   useEffect(() => {
     if (!hydratedRef.current || !user) return
     const uid = user.uid
+    const dirty = projects.filter((p) => persistedRef.current.get(p.id) !== p)
+    if (dirty.length === 0) return
+    setSaveStatus('editing')
     const t = setTimeout(() => {
-      for (const p of projects) {
-        if (persistedRef.current.get(p.id) !== p) {
+      setSaveStatus('saving')
+      Promise.all(
+        dirty.map((p) => {
           persistedRef.current.set(p.id, p)
-          saveProject(uid, p).catch((err) =>
-            console.error('Failed to save project:', err),
-          )
-        }
-      }
-    }, 400)
+          return saveProject(uid, p)
+        }),
+      )
+        .then(() => setSaveStatus('saved'))
+        .catch((err) => {
+          console.error('Failed to save project:', err)
+          setSaveStatus('error')
+        })
+    }, 888)
     return () => clearTimeout(t)
   }, [projects, user])
 
@@ -592,6 +605,36 @@ export default function App() {
           </span>
         )}
         <div className="flex-1" />
+        {/* Save indicator: editing… (dirty, debouncing) → saving… (write in
+            flight) → saved. Driven by the persistence effect above. */}
+        {saveStatus !== 'idle' && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted"
+          >
+            {saveStatus === 'editing' && (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+                Editing…
+              </>
+            )}
+            {saveStatus === 'saving' && (
+              <>
+                <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
+                Saving…
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="flex items-center gap-1 text-meter">
+                <Check size={12} /> Saved
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="text-accent">Save failed</span>
+            )}
+          </div>
+        )}
         {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
             fill keeps amber pure; the active View segment carries amber text to
             echo the view-only state. The 'V' key still flips it. */}

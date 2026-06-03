@@ -17,6 +17,13 @@ export function noteLabel(start: number, end?: number): string {
     : formatTime(start)
 }
 
+/** A short plain-text snippet of a note's TipTap HTML, for previews/labels. */
+export function notePreview(contentHtml: string, max = 80): string {
+  const doc = new DOMParser().parseFromString(contentHtml, 'text/html')
+  const text = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
+}
+
 /** Parse "m:ss" / "h:mm:ss" / plain seconds into seconds. null if invalid. */
 export function parseTime(input: string): number | null {
   const s = input.trim()

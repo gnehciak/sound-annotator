@@ -6,6 +6,8 @@ export interface MentionItem {
   label: string
   color: string
   tag?: string
+  /** plain-text snippet of the note body, to identify it in the list */
+  preview?: string
 }
 
 interface Props {
@@ -54,7 +56,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
   )
 
   return (
-    <div className="max-h-56 w-56 origin-top animate-pop-in overflow-y-auto rounded border border-line bg-panel py-1 shadow-lg">
+    <div className="max-h-56 w-64 origin-top animate-pop-in overflow-y-auto rounded border border-line bg-panel py-1 shadow-lg">
       {items.length === 0 ? (
         <div className="px-3 py-2 text-xs text-muted">No notes to mention</div>
       ) : (
@@ -69,23 +71,28 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                 e.preventDefault()
                 choose(i)
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+              className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left text-xs ${
                 i === selected ? 'bg-raised text-fg' : 'text-muted'
               }`}
             >
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: item.color }}
-              />
-              <span className="font-mono text-fg">@{item.label}</span>
-              {tag && (
+              <span className="flex w-full items-center gap-2">
                 <span
-                  className="ml-auto font-mono text-[10px] uppercase tracking-wider"
-                  style={{ color: tag.color }}
-                >
-                  {tag.label}
-                </span>
-              )}
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: item.color }}
+                />
+                <span className="font-mono text-fg">@{item.label}</span>
+                {tag && (
+                  <span
+                    className="ml-auto font-mono text-[10px] uppercase tracking-wider"
+                    style={{ color: tag.color }}
+                  >
+                    {tag.label}
+                  </span>
+                )}
+              </span>
+              <span className="block truncate pl-4 text-[11px] leading-snug text-muted">
+                {item.preview || 'Empty note'}
+              </span>
             </button>
           )
         })

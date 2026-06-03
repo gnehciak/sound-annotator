@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Play } from 'lucide-react'
+import { Loader2, Play } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 import { loadYouTubeApi } from '../lib/youtube'
 
@@ -33,9 +33,15 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   // Until the video has started once, we cover it to hide YouTube's poster
   // (title, avatar, share / watch-later buttons, big play button).
   const [started, setStarted] = useState(false)
+  // The iframe API + player are still initializing (no playVideo yet).
+  const [ready, setReady] = useState(false)
+  // A play has been requested but the video hasn't begun (still buffering).
+  const [buffering, setBuffering] = useState(false)
 
   useEffect(() => {
     setStarted(false)
+    setReady(false)
+    setBuffering(false)
     playingRef.current = false
     let cancelled = false
     let poll: number | undefined
@@ -61,19 +67,25 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
         },
         events: {
           onReady: (e: any) => {
+            setReady(true)
             onDuration(e.target.getDuration() || 0)
             e.target.setPlaybackRate?.(rateRef.current)
           },
           onStateChange: (e: any) => {
-            // 1 = playing, 2 = paused, 0 = ended. Ignore 3 (buffering) so a
-            // seek while playing doesn't flip the button to "Play" for ~0.5s.
+            // 1 = playing, 2 = paused, 0 = ended, 3 = buffering. Ignore 3 for
+            // the play/pause button so a seek while playing doesn't flip it to
+            // "Play" for ~0.5s; it does drive the pre-start loading overlay.
             if (e.data === 1) {
               onPlayingChange(true)
               playingRef.current = true
               setStarted(true)
+              setBuffering(false)
+            } else if (e.data === 3) {
+              setBuffering(true)
             } else if (e.data === 2 || e.data === 0) {
               onPlayingChange(false)
               playingRef.current = false
+              setBuffering(false)
             }
             const d = e.target.getDuration?.() || 0
             if (d) onDuration(d)
@@ -135,11 +147,24 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
               : playerRef.current?.playVideo?.()
           }
         />
+      ) : !ready || buffering ? (
+        // Player still initializing, or buffering after a play press: cover the
+        // poster and show a loading spinner instead of the play button.
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-ink"
+          aria-label="Loading video"
+          aria-busy="true"
+        >
+          <Loader2 size={44} className="animate-spin text-accent" />
+        </div>
       ) : (
-        // Opaque cover hiding YouTube's poster until the first play.
+        // Ready and idle: opaque cover with our play button, hiding YT's poster.
         <button
           type="button"
-          onClick={() => playerRef.current?.playVideo?.()}
+          onClick={() => {
+            setBuffering(true)
+            playerRef.current?.playVideo?.()
+          }}
           aria-label="Play video"
           className="absolute inset-0 flex items-center justify-center bg-ink transition-colors hover:bg-ink/90"
         >

@@ -39,7 +39,13 @@ export function createMention(
           popup.style.left = `${rect.left}px`
           popup.style.top = `${rect.bottom + 4}px`
         }
+        // Dismiss when the user clicks/taps anywhere outside the popup.
+        const onPointerDown = (event: PointerEvent) => {
+          const target = event.target as Node | null
+          if (popup && target && !popup.contains(target)) teardown()
+        }
         const teardown = () => {
+          document.removeEventListener('pointerdown', onPointerDown, true)
           popup?.remove()
           component?.destroy()
           popup = null
@@ -61,6 +67,7 @@ export function createMention(
             document.body.appendChild(popup)
             popup.appendChild(component.element)
             place(props.clientRect)
+            document.addEventListener('pointerdown', onPointerDown, true)
           },
           onUpdate: (props) => {
             component?.updateProps(props)

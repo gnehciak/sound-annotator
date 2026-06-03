@@ -4,7 +4,7 @@ import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
 import { colorForId } from '../lib/noteColors'
-import { noteLabel } from '../lib/format'
+import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
 import Transport from './Transport'
 import AnnotationList from './AnnotationList'
@@ -115,10 +115,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           label: noteLabel(a.start, a.end),
           color: a.color ?? colorForId(a.id),
           tag: a.tag,
+          preview: notePreview(a.contentHtml),
         }))
         .filter(
           (it) =>
-            !q || it.label.toLowerCase().includes(q) || (it.tag ?? '').includes(q),
+            !q ||
+            it.label.toLowerCase().includes(q) ||
+            (it.tag ?? '').includes(q) ||
+            it.preview.toLowerCase().includes(q),
         )
     },
     [annotations],
