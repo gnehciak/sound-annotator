@@ -1,0 +1,249 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — "Console" theme (warm-dark studio gear).
+   Values are space-separated RGB channels so Tailwind's
+   rgb(var(--x) / <alpha-value>) can apply opacity.
+   ============================================================ */
+:root {
+  --bg-ink: 26 24 19; /* #1a1813 base */
+  --bg-panel: 33 31 24; /* #211f18 panel */
+  --bg-raised: 42 39 31; /* #2a271f raised control */
+  --bg-inset: 19 18 16; /* #131210 inset readouts/editor */
+  --border: 56 52 43; /* #38342b hairlines */
+  --border-strong: 77 71 58; /* #4d473a */
+  --text: 233 228 216; /* #e9e4d8 */
+  --text-muted: 168 158 138; /* #a89e8a — lifted for AA contrast on raised + projector legibility */
+  --accent: 245 166 35; /* #f5a623 amber */
+  --meter: 156 203 99; /* #9ccb63 level-meter green */
+
+  /* House motion curve — expo-ish decel, no overshoot (see DESIGN.md §motion). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: rgb(var(--bg-ink));
+  color: rgb(var(--text));
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* LED-style readout (the transport/header clock) */
+.led {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  letter-spacing: 0.08em;
+  color: rgb(var(--accent));
+  text-shadow: 0 0 8px rgb(var(--accent) / 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animated level meter bars (header) */
+@keyframes meterPulse {
+  0% {
+    transform: scaleY(0.22);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+.meter-bar {
+  transform-origin: bottom;
+  animation: meterPulse 0.45s ease-in-out infinite alternate;
+}
+
+/* Segmented LED level meter (header) */
+@keyframes segFlicker {
+  0% {
+    opacity: 0.18;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.28;
+  }
+}
+.meter-seg {
+  animation: segFlicker 0.85s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------
+   Interaction motion. Hover/focus state changes on controls ease in
+   instead of snapping; a press dips the control a hair (tactile, like
+   a hardware key). Both are gated on no-preference so reduced-motion
+   users get instant, motionless feedback. Component-level transition
+   utilities (e.g. `transition-[width]`) override these via specificity.
+   ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a,
+  input,
+  select,
+  summary,
+  label,
+  [role='button'] {
+    transition-property: background-color, border-color, color, opacity,
+      box-shadow, filter;
+    transition-duration: 140ms;
+    transition-timing-function: var(--ease-out);
+  }
+  .press {
+    transition:
+      transform 90ms var(--ease-out),
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      filter 140ms var(--ease-out);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Inset bevel for readouts/screens; raised bevel for primary buttons */
+.bevel-inset {
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.bevel-raised {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    inset 0 -2px 3px rgb(0 0 0 / 0.32);
+}
+
+/* Dark scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong)) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border: 2px solid rgb(var(--bg-ink));
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-muted));
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::selection {
+  background: rgb(var(--accent) / 0.3);
+}
+
+/* Visible keyboard focus everywhere (the editor uses its caret instead). */
+:where(button, a, [role='button'], input, textarea, select, [tabindex]):not(
+    .ProseMirror
+  ):focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Reduced motion is not optional: still the level meter and any transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .meter-bar,
+  .meter-seg {
+    animation: none !important;
+    opacity: 0.5;
+  }
+}
+
+/* ============================================================
+   TipTap rich-text content (dark)
+   ============================================================ */
+.ProseMirror {
+  outline: none;
+  min-height: 2.25rem;
+  color: rgb(var(--text));
+}
+.ProseMirror:focus {
+  outline: none;
+}
+.ProseMirror p {
+  margin: 0.25rem 0;
+}
+.ProseMirror h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem;
+  color: #fff;
+}
+.ProseMirror h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.25rem;
+  color: rgb(var(--text));
+}
+.ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.ProseMirror blockquote {
+  border-left: 2px solid rgb(var(--border-strong));
+  padding-left: 0.75rem;
+  color: rgb(var(--text-muted));
+  margin: 0.5rem 0;
+}
+.ProseMirror img {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+  display: block;
+  border: 1px solid rgb(var(--border));
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid rgb(var(--accent));
+}
+.ProseMirror code {
+  background: rgb(var(--bg-raised));
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+  color: rgb(var(--accent));
+}
+.ProseMirror a {
+  color: rgb(var(--accent));
+  text-decoration: underline;
+}
+
+/* @-mention chip referencing another note */
+.note-mention {
+  color: rgb(var(--accent));
+  background: rgb(var(--accent) / 0.12);
+  border: 1px solid rgb(var(--accent) / 0.35);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.85em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.note-mention:hover {
+  background: rgb(var(--accent) / 0.2);
+}
