@@ -64,6 +64,14 @@ export default function AnnotationList({
   const prevTops = useRef<Map<string, number>>(new Map())
   const prevSig = useRef('')
   const prevPrimary = useRef<string | null>(null)
+  // The scrollTop the auto-scroll logic last *intended*. The pin trusts this
+  // rather than the live scrollTop, because the browser sometimes mutates the
+  // live value out from under us during a reorder commit (e.g. scrolling a
+  // focused control into view) — reading it back would make the pin compute
+  // from a clobbered baseline and the playing note would jump. null means "no
+  // intent yet / defer to the live value" (initial mount, or after the user
+  // scrolls). Kept in sync by followToTop and reset on user scroll.
+  const pinnedScroll = useRef<number | null>(null)
   const userScrolling = useRef(false)
   const returnTimer = useRef<number | null>(null)
   const followRaf = useRef<number | null>(null)
@@ -80,32 +88,43 @@ export default function AnnotationList({
     }
   }
 
-  // Smoothly glide a note to the top, re-reading its position every frame so it
-  // keeps tracking the note even as the list reorders underneath it.
-  const followToTop = (id: string | null) => {
+  // Smoothly glide the *current* playing note to the top. We re-read the live
+  // primary (primaryRef) and its position every frame, so the glide always
+  // tracks whatever is playing now — never a note captured at trigger time that
+  // has since finished and drifted to the top of the list (which would drag the
+  // scroll to the very top and fight the reorder pin).
+  const liveTargetEl = () => {
+    const id = primaryRef.current
+    return id ? document.getElementById(`note-${id}`) : null
+  }
+  const followToTop = () => {
     cancelFollow()
-    if (!id || !scrollRef.current) return
+    const sc = scrollRef.current
+    if (!sc) return
     // Reduced motion: jump straight to the target, no glide.
     if (prefersReducedMotion()) {
-      const el = document.getElementById(`note-${id}`)
-      if (el) scrollRef.current.scrollTop = Math.max(0, el.offsetTop)
+      const el = liveTargetEl()
+      if (el) sc.scrollTop = Math.max(0, el.offsetTop)
+      pinnedScroll.current = sc.scrollTop
       return
     }
     const step = () => {
-      const sc = scrollRef.current
-      const el = document.getElementById(`note-${id}`)
-      if (!sc || !el) {
+      const scr = scrollRef.current
+      const el = liveTargetEl()
+      if (!scr || !el) {
         followRaf.current = null
         return
       }
       const target = Math.max(0, el.offsetTop)
-      const diff = target - sc.scrollTop
+      const diff = target - scr.scrollTop
       if (Math.abs(diff) < 0.5) {
-        sc.scrollTop = target
+        scr.scrollTop = target
+        pinnedScroll.current = scr.scrollTop
         followRaf.current = null
         return
       }
-      sc.scrollTop += diff * 0.22
+      scr.scrollTop += diff * 0.22
+      pinnedScroll.current = scr.scrollTop
       followRaf.current = requestAnimationFrame(step)
     }
     followRaf.current = requestAnimationFrame(step)
@@ -119,11 +138,12 @@ export default function AnnotationList({
     if (!el) return
     const onUserScroll = () => {
       userScrolling.current = true
+      pinnedScroll.current = null // defer to the user's scroll position
       cancelFollow()
       if (returnTimer.current) clearTimeout(returnTimer.current)
       returnTimer.current = window.setTimeout(() => {
         userScrolling.current = false
-        if (playingRef.current) followToTop(primaryRef.current)
+        if (playingRef.current) followToTop()
       }, 3000)
     }
     el.addEventListener('wheel', onUserScroll, { passive: true })
@@ -164,7 +184,13 @@ export default function AnnotationList({
       const newA = newTops.get(primaryActiveId)
       if (oldA != null && newA != null && oldA !== newA) {
         pinShift = newA - oldA
-        scroller.scrollTop += pinShift
+        // Pin relative to the scroll we last *intended*, not the live value
+        // (the browser may have clobbered it during this commit). base + pinShift
+        // keeps the playing note at the same on-screen spot; the FLIP offsets
+        // below use the same pinShift, so they stay consistent.
+        const base = pinnedScroll.current ?? scroller.scrollTop
+        scroller.scrollTop = base + pinShift
+        pinnedScroll.current = scroller.scrollTop
       }
     }
 
@@ -185,11 +211,16 @@ export default function AnnotationList({
       el.style.transform = ''
     }
 
-    // When the playing note itself changes, bring the new one to the top
-    // (unless the user is scrolling around, or playback is paused — while paused
-    // the user is editing and the list shouldn't jump on its own).
+    // When the playing note itself changes, our previous scroll intent no longer
+    // applies to the new note — re-sync to the live value (followToTop will then
+    // glide it to the top and keep pinnedScroll updated).
+    if (activeChanged) pinnedScroll.current = null
+
+    // Bring the new playing note to the top (unless the user is scrolling around,
+    // or playback is paused — while paused the user is editing and the list
+    // shouldn't jump on its own).
     if (activeChanged && primaryActiveId && !userScrolling.current && isPlaying) {
-      followToTop(primaryActiveId)
+      followToTop()
     }
 
     prevTops.current = newTops
@@ -200,12 +231,12 @@ export default function AnnotationList({
   // Clicking a note's play button: seek there, start playback, then pin the
   // *first* playing note to the top. A longer note that started earlier keeps
   // the top spot.
-  const playNote = (id: string, start: number) => {
+  const playNote = (start: number) => {
     userScrolling.current = false
     if (returnTimer.current) clearTimeout(returnTimer.current)
     onSeek(start)
     onPlay()
-    requestAnimationFrame(() => followToTop(primaryRef.current ?? id))
+    requestAnimationFrame(() => followToTop())
   }
 
   if (sorted.length === 0) {
@@ -236,7 +267,7 @@ export default function AnnotationList({
           active={activeIds.has(a.id)}
           currentTime={currentTime}
           readOnly={readOnly}
-          onPlay={() => playNote(a.id, a.start)}
+          onPlay={() => playNote(a.start)}
           onUpdate={(patch) => onUpdate(a.id, patch)}
           onDelete={() => onDelete(a.id)}
           onSeekNote={onSeekNote}

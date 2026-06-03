@@ -132,6 +132,13 @@ export default function AnnotationItem({
       >
         <button
           type="button"
+          // Don't take focus on click: a focused button inside the list gets
+          // re-asserted by the browser every time notes reorder, and the native
+          // "scroll focused element into view" snaps the panel to the top,
+          // fighting the playing-note pin (it lands one row low). Keyboard users
+          // can still Tab to it. preventDefault on mousedown blocks the focus
+          // without blocking the click.
+          onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             stop(e)
             onPlay()
