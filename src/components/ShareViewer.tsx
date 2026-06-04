@@ -251,9 +251,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               scrollRef={notesScrollRef}
               onSeek={seek}
               onPlay={play}
-              onUpdate={() => {}}
-              onDelete={() => {}}
-              onReorder={() => {}}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
             />

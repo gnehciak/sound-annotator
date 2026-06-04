@@ -13,26 +13,16 @@ interface Props {
   scrollRef: RefObject<HTMLDivElement | null>
   /** When paused, sort by timeline (start) order rather than playhead order. */
   resetOnPause?: boolean
-  /** A just-created note to focus + scroll into view, or null. */
-  focusNoteId?: string | null
-  /** Called once the focus note has been handled, so the parent can clear it. */
-  onFocusHandled?: () => void
+  /** Editor: the note currently open in the inspector. */
+  selectedId?: string | null
+  /** Editor: select a note (opens it in the inspector). */
+  onSelect?: (id: string) => void
   onSeek: (t: number) => void
   onPlay: () => void
-  onUpdate: (id: string, patch: Partial<Annotation>) => void
-  onDelete: (id: string) => void
   /** Persist a new top-to-bottom order for a group of same-time notes. */
-  onReorder: (orderedIds: string[]) => void
+  onReorder?: (orderedIds: string[]) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
-  uploadImage?: (
-    blob: Blob,
-    onProgress?: (fraction: number) => void,
-  ) => Promise<string>
-  /** Open a block's editor window (noteId + blockId). */
-  onOpenBlock?: (noteId: string, blockId: string) => void
-  /** Which block is currently open in the window, if any. */
-  openWindow?: { noteId: string; blockId: string } | null
 }
 
 const endOf = (a: Annotation) => (a.end != null ? a.end : a.start + 3)
@@ -44,18 +34,13 @@ export default function AnnotationList({
   readOnly = false,
   scrollRef,
   resetOnPause = false,
-  focusNoteId,
-  onFocusHandled,
+  selectedId,
+  onSelect,
   onSeek,
   onPlay,
-  onUpdate,
-  onDelete,
   onReorder,
   onSeekNote,
   mentionItems,
-  uploadImage,
-  onOpenBlock,
-  openWindow,
 }: Props) {
   const activeIds = useMemo(() => {
     const ids = new Set<string>()
@@ -305,7 +290,7 @@ export default function AnnotationList({
     const pi = i - lo
     const pj = j - lo
     ;[run[pi], run[pj]] = [run[pj], run[pi]]
-    onReorder(run)
+    onReorder?.(run)
   }
 
   if (sorted.length === 0) {
@@ -337,24 +322,15 @@ export default function AnnotationList({
           isPlaying={isPlaying}
           currentTime={currentTime}
           readOnly={readOnly}
-          autoFocusNew={focusNoteId === a.id}
-          onFocusHandled={onFocusHandled}
+          selected={selectedId === a.id}
+          onSelect={onSelect ? () => onSelect(a.id) : undefined}
           canMoveUp={idx > 0 && sameSlot(sorted[idx - 1], a)}
           canMoveDown={idx < sorted.length - 1 && sameSlot(a, sorted[idx + 1])}
           onMoveUp={() => moveNote(a.id, -1)}
           onMoveDown={() => moveNote(a.id, 1)}
           onPlay={() => playNote(a.start)}
-          onUpdate={(patch) => onUpdate(a.id, patch)}
-          onDelete={() => onDelete(a.id)}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
-          uploadImage={uploadImage}
-          onOpenBlock={
-            onOpenBlock ? (blockId) => onOpenBlock(a.id, blockId) : undefined
-          }
-          openBlockId={
-            openWindow?.noteId === a.id ? openWindow.blockId : undefined
-          }
         />
       ))}
     </div>

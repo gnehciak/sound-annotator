@@ -37,6 +37,8 @@ export default function PluginWindow({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Let an open @-mention popup take Escape first (it closes itself).
+        if (document.querySelector('[data-mention-popup]')) return
         e.stopPropagation()
         onClose()
       }

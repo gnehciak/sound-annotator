@@ -22,8 +22,7 @@ import {
   reconcileProjectImages,
 } from './lib/imageCloud'
 import { parseVideoId } from './lib/youtube'
-import { makeTextBlock, blocksOf } from './lib/noteBlocks'
-import { getPlugin } from './lib/notePlugins'
+import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
@@ -50,6 +49,7 @@ import AnnotationList from './components/AnnotationList'
 import SharePanel from './components/SharePanel'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
+import NoteInspector from './components/NoteInspector'
 import { useHotkeys } from './lib/useHotkeys'
 
 const uid = () => crypto.randomUUID()
@@ -92,10 +92,7 @@ export default function App() {
   const [resetOnPause, setResetOnPause] = useState(loadResetOnPause)
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
-  const [openWindow, setOpenWindow] = useState<{
-    noteId: string
-    blockId: string
-  } | null>(null)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [windowMode, setWindowMode] = useState<WindowMode>(loadWindowMode)
   const wideForDock = useMediaQuery('(min-width: 1100px)')
 
@@ -153,24 +150,20 @@ export default function App() {
   const annotationsRef = useRef<Annotation[]>([])
   annotationsRef.current = current?.annotations ?? []
 
-  // ---- plugin editor window (dock 3rd column or modal) ------------------
+  // ---- note inspector (dock 3rd column or modal) ------------------------
   const effectiveWindowMode: WindowMode =
     windowMode === 'dock' && wideForDock ? 'dock' : 'modal'
-  const openNote =
-    openWindow && current
-      ? current.annotations.find((a) => a.id === openWindow.noteId) ?? null
+  const selectedNote =
+    selectedNoteId && current
+      ? current.annotations.find((a) => a.id === selectedNoteId) ?? null
       : null
-  const openBlock =
-    openNote?.blocks?.find((b) => b.id === openWindow?.blockId) ?? null
-  const openPlugin = openBlock ? getPlugin(openBlock.type) : undefined
-  const WindowEditor = openPlugin?.Editor
-  const windowOpen = !!(openNote && openBlock && WindowEditor)
-  const transportLocked = windowOpen && effectiveWindowMode === 'modal'
-  const showDock = windowOpen && effectiveWindowMode === 'dock'
-  const showModal = windowOpen && effectiveWindowMode === 'modal'
-  const windowTitle = openPlugin?.label ?? ''
-  const windowSubtitle = openNote
-    ? noteLabel(openNote.start, openNote.end)
+  // The inspector is for editing only; never shown in view-only mode.
+  const inspectorOpen = !!selectedNote && !viewOnly
+  const transportLocked = inspectorOpen && effectiveWindowMode === 'modal'
+  const showDock = inspectorOpen && effectiveWindowMode === 'dock'
+  const showModal = inspectorOpen && effectiveWindowMode === 'modal'
+  const inspectorSubtitle = selectedNote
+    ? noteLabel(selectedNote.start, selectedNote.end)
     : undefined
 
   // Stable callbacks so the players aren't torn down on every time tick.
@@ -303,6 +296,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, user])
 
+  // Bring a just-created note's preview into view (the inspector focuses its
+  // editor and clears the target). No state changes here — pure scroll.
+  useEffect(() => {
+    if (!focusNoteId) return
+    const raf = requestAnimationFrame(() => {
+      document
+        .getElementById(`note-${focusNoteId}`)
+        ?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [focusNoteId])
+
   // ---- project mutations -------------------------------------------------
   const patchProject = useCallback((id: string, patch: Partial<Project>) => {
     setProjects((ps) =>
@@ -400,6 +405,7 @@ export default function App() {
       createdAt: now(),
     }
     patchProject(current.id, { annotations: [...current.annotations, ann] })
+    selectNote(ann.id)
     setFocusNoteId(ann.id)
   }
 
@@ -427,7 +433,7 @@ export default function App() {
 
   function deleteAnnotation(annId: string) {
     if (!current) return
-    if (openWindow?.noteId === annId) setOpenWindow(null)
+    if (selectedNoteId === annId) setSelectedNoteId(null)
     patchProject(current.id, {
       annotations: current.annotations.filter((a) => a.id !== annId),
     })
@@ -453,10 +459,10 @@ export default function App() {
     playerRef.current?.pause()
   }
 
-  // ---- plugin window controls -------------------------------------------
-  function openBlockWindow(noteId: string, blockId: string) {
-    setOpenWindow({ noteId, blockId })
-    // A modal window covers the transport, so pause when it'll open as one.
+  // ---- note inspector controls ------------------------------------------
+  function selectNote(id: string) {
+    setSelectedNoteId(id)
+    // A modal inspector covers the transport, so pause when it'll open as one.
     if (effectiveWindowMode === 'modal') pause()
   }
   function changeWindowMode(mode: WindowMode) {
@@ -464,21 +470,6 @@ export default function App() {
     setWindowMode(mode)
     // Switching to modal (or to dock where it can't fit) covers the transport.
     if (!(mode === 'dock' && wideForDock)) pause()
-  }
-  function updateBlockData(noteId: string, blockId: string, data: unknown) {
-    if (!current) return
-    patchProject(current.id, {
-      annotations: current.annotations.map((a) =>
-        a.id !== noteId
-          ? a
-          : {
-              ...a,
-              blocks: blocksOf(a).map((b) =>
-                b.id === blockId ? { ...b, data } : b,
-              ),
-            },
-      ),
-    })
   }
 
   // Jump to a mentioned note: seek to it and scroll it into view.
@@ -509,6 +500,7 @@ export default function App() {
         },
       ],
     })
+    selectNote(id)
     setFocusNoteId(id)
   }
 
@@ -1120,18 +1112,13 @@ export default function App() {
                     readOnly={viewOnly}
                     scrollRef={notesScrollRef}
                     resetOnPause={resetOnPause}
-                    focusNoteId={focusNoteId}
-                    onFocusHandled={() => setFocusNoteId(null)}
+                    selectedId={selectedNoteId}
+                    onSelect={selectNote}
                     onSeek={seek}
                     onPlay={play}
-                    onUpdate={updateAnnotation}
-                    onDelete={deleteAnnotation}
                     onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
-                    uploadImage={handleUploadImage}
-                    onOpenBlock={openBlockWindow}
-                    openWindow={openWindow}
                   />
                   {current.annotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />
@@ -1139,24 +1126,30 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Plugin editor window — docked 3rd column (wide screens only) */}
-              {showDock && WindowEditor && openNote && openBlock && (
+              {/* Note inspector — docked 3rd column (wide screens) */}
+              {showDock && selectedNote && (
                 <div className="w-[22rem] shrink-0">
                   <PluginWindow
-                    title={windowTitle}
-                    subtitle={windowSubtitle}
+                    title="Note"
+                    subtitle={inspectorSubtitle}
                     mode="dock"
                     onSetMode={changeWindowMode}
-                    onClose={() => setOpenWindow(null)}
+                    onClose={() => setSelectedNoteId(null)}
                   >
-                    <WindowEditor
-                      key={openBlock.id}
-                      data={openBlock.data}
-                      onChange={(d) =>
-                        updateBlockData(openNote.id, openBlock.id, d)
-                      }
+                    <NoteInspector
+                      key={selectedNote.id}
+                      annotation={selectedNote}
+                      color={selectedNote.color ?? colorForId(selectedNote.id)}
                       currentTime={currentTime}
-                      readOnly={viewOnly}
+                      autoFocus={focusNoteId === selectedNote.id}
+                      onFocusHandled={() => setFocusNoteId(null)}
+                      onUpdate={(patch) =>
+                        updateAnnotation(selectedNote.id, patch)
+                      }
+                      onDelete={() => deleteAnnotation(selectedNote.id)}
+                      onSeekNote={seekToNote}
+                      mentionItems={getMentionItems}
+                      uploadImage={handleUploadImage}
                     />
                   </PluginWindow>
                 </div>
@@ -1166,21 +1159,27 @@ export default function App() {
         </main>
       </div>
 
-      {/* Plugin editor window — modal overlay (narrow screens or chosen mode) */}
-      {showModal && WindowEditor && openNote && openBlock && (
+      {/* Note inspector — modal overlay (narrow screens or chosen mode) */}
+      {showModal && selectedNote && (
         <PluginWindow
-          title={windowTitle}
-          subtitle={windowSubtitle}
+          title="Note"
+          subtitle={inspectorSubtitle}
           mode="modal"
           onSetMode={changeWindowMode}
-          onClose={() => setOpenWindow(null)}
+          onClose={() => setSelectedNoteId(null)}
         >
-          <WindowEditor
-            key={openBlock.id}
-            data={openBlock.data}
-            onChange={(d) => updateBlockData(openNote.id, openBlock.id, d)}
+          <NoteInspector
+            key={selectedNote.id}
+            annotation={selectedNote}
+            color={selectedNote.color ?? colorForId(selectedNote.id)}
             currentTime={currentTime}
-            readOnly={viewOnly}
+            autoFocus={focusNoteId === selectedNote.id}
+            onFocusHandled={() => setFocusNoteId(null)}
+            onUpdate={(patch) => updateAnnotation(selectedNote.id, patch)}
+            onDelete={() => deleteAnnotation(selectedNote.id)}
+            onSeekNote={seekToNote}
+            mentionItems={getMentionItems}
+            uploadImage={handleUploadImage}
           />
         </PluginWindow>
       )}

@@ -142,6 +142,16 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     editor?.setEditable(!readOnly)
   }, [editor, readOnly])
 
+  // Read-only previews: mirror external content changes (e.g. while the same
+  // note is being edited in the inspector). `content` is otherwise only applied
+  // once at mount. Skipped for editable instances so it never clobbers the caret.
+  useEffect(() => {
+    if (!editor || !readOnly) return
+    if (content !== editor.getHTML()) {
+      editor.commands.setContent(content)
+    }
+  }, [editor, readOnly, content])
+
   return (
     <div>
       {editor && showToolbar && !readOnly && (
