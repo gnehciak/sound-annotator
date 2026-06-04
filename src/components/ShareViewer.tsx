@@ -224,7 +224,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 isPlaying={isPlaying}
                 currentTime={currentTime}
                 duration={duration}
-                pendingIn={null}
                 playbackRate={playbackRate}
                 hasNotes={annotations.length > 0}
                 readOnly
@@ -233,10 +232,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 onSetRate={setPlaybackRate}
                 onPrevNote={() => jumpNote(-1)}
                 onNextNote={() => jumpNote(1)}
-                onMarkIn={() => {}}
-                onMarkOut={() => {}}
-                onCancelMark={() => {}}
-                onAddNote={() => {}}
               />
             )}
           </div>

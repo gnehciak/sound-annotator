@@ -64,6 +64,26 @@ export function saveViewOnly(on: boolean): void {
   }
 }
 
+// Plugin window presentation — 'dock' (3rd column) or 'modal' (focused
+// overlay). A workspace preference remembered across sessions. Defaults to dock.
+const WINDOW_MODE_KEY = 'sound-annotator:window-mode'
+
+export function loadWindowMode(): 'dock' | 'modal' {
+  try {
+    return localStorage.getItem(WINDOW_MODE_KEY) === 'modal' ? 'modal' : 'dock'
+  } catch {
+    return 'dock'
+  }
+}
+
+export function saveWindowMode(mode: 'dock' | 'modal'): void {
+  try {
+    localStorage.setItem(WINDOW_MODE_KEY, mode)
+  } catch {
+    /* ignore */
+  }
+}
+
 // Track-rack (sidebar) open/closed — a workspace preference remembered across
 // sessions. Defaults to open for a first visit.
 const SIDEBAR_KEY = 'sound-annotator:sidebar-open'

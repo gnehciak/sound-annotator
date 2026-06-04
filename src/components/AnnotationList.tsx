@@ -21,6 +21,10 @@ interface Props {
     blob: Blob,
     onProgress?: (fraction: number) => void,
   ) => Promise<string>
+  /** Open a block's editor window (noteId + blockId). */
+  onOpenBlock?: (noteId: string, blockId: string) => void
+  /** Which block is currently open in the window, if any. */
+  openWindow?: { noteId: string; blockId: string } | null
 }
 
 const endOf = (a: Annotation) => (a.end != null ? a.end : a.start + 3)
@@ -38,6 +42,8 @@ export default function AnnotationList({
   onSeekNote,
   mentionItems,
   uploadImage,
+  onOpenBlock,
+  openWindow,
 }: Props) {
   const activeIds = useMemo(() => {
     const ids = new Set<string>()
@@ -279,6 +285,12 @@ export default function AnnotationList({
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
           uploadImage={uploadImage}
+          onOpenBlock={
+            onOpenBlock ? (blockId) => onOpenBlock(a.id, blockId) : undefined
+          }
+          openBlockId={
+            openWindow?.noteId === a.id ? openWindow.blockId : undefined
+          }
         />
       ))}
     </div>

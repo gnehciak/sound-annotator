@@ -7,10 +7,13 @@ import {
   ChevronRight,
   X,
   Trash2,
+  Plus,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel, formatTime } from '../lib/format'
-import { blocksOf, textHtmlOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
+import { blocksOf, textHtmlOf, asTextData, makeBlock, TEXT_BLOCK } from '../lib/noteBlocks'
+import { getPlugin, addablePlugins } from '../lib/notePlugins'
+import { usePresence } from '../lib/usePresence'
 import { resolveTag } from '../lib/tags'
 import AnnotationEditor from './AnnotationEditor'
 import TagPicker from './TagPicker'
@@ -33,6 +36,10 @@ interface Props {
     blob: Blob,
     onProgress?: (fraction: number) => void,
   ) => Promise<string>
+  /** Open a (window-surfaced) block's editor. */
+  onOpenBlock?: (blockId: string) => void
+  /** Which of this note's blocks is currently open in the window, if any. */
+  openBlockId?: string
 }
 
 export default function AnnotationItem({
@@ -48,6 +55,8 @@ export default function AnnotationItem({
   onSeekNote,
   mentionItems,
   uploadImage,
+  onOpenBlock,
+  openBlockId,
 }: Props) {
   // The note's content blocks (migrating legacy notes on the fly). Memoised on
   // the annotation so the text block keeps a stable id across renders.
@@ -62,6 +71,18 @@ export default function AnnotationItem({
     )
     onUpdate({ blocks: next, contentHtml: textHtmlOf(next) })
   }
+
+  // Add a window-surfaced property block (e.g. musical elements) and open it.
+  const addBlock = (type: string) => {
+    const plugin = getPlugin(type)
+    if (!plugin) return
+    const block = makeBlock(type, plugin.createData())
+    onUpdate({ blocks: [...blocks, block] })
+    onOpenBlock?.(block.id)
+  }
+
+  const removeBlock = (blockId: string) =>
+    onUpdate({ blocks: blocks.filter((b) => b.id !== blockId) })
 
   // New (empty) notes start expanded so you can type right away — never in
   // view-only mode, which has no editing controls to reveal.
@@ -283,25 +304,141 @@ export default function AnnotationItem({
         )}
       </div>
 
-      {/* body — rendered from the note's content blocks (text only for now;
-          window-surfaced plugin blocks land in a later phase) */}
+      {/* body — rendered from the note's content blocks: the text block edits
+          inline; other (window-surfaced) blocks show a read-only summary line
+          and open their editor window on click. */}
       <div onMouseDown={handleBodyMouseDown} className="pb-1.5 pl-2 pr-1">
-        {blocks.map((block) =>
-          block.type === TEXT_BLOCK ? (
-            <AnnotationEditor
+        {blocks.map((block) => {
+          if (block.type === TEXT_BLOCK) {
+            return (
+              <AnnotationEditor
+                key={block.id}
+                noteId={annotation.id}
+                mentionItems={mentionItems}
+                uploadImage={uploadImage}
+                showToolbar={expanded}
+                readOnly={readOnly}
+                content={asTextData(block)?.html ?? ''}
+                autofocus={expanded && !textHtml}
+                onChange={(html) => updateTextBlock(block.id, html)}
+              />
+            )
+          }
+          const plugin = getPlugin(block.type)
+          if (!plugin) return null
+          const Summary = plugin.Summary
+          const Icon = plugin.icon
+          const isOpen = openBlockId === block.id
+          return (
+            <div
               key={block.id}
-              noteId={annotation.id}
-              mentionItems={mentionItems}
-              uploadImage={uploadImage}
-              showToolbar={expanded}
-              readOnly={readOnly}
-              content={asTextData(block)?.html ?? ''}
-              autofocus={expanded && !textHtml}
-              onChange={(html) => updateTextBlock(block.id, html)}
-            />
-          ) : null,
+              className={`group/blk flex items-center gap-2 border-t border-line/60 px-1 py-1.5 ${
+                isOpen ? 'bg-raised' : ''
+              }`}
+            >
+              {readOnly ? (
+                <span className="flex min-w-0 flex-1 items-center gap-2 px-1">
+                  <Icon size={12} className="shrink-0 text-muted" />
+                  <span className="min-w-0 flex-1">
+                    <Summary data={block.data} />
+                  </span>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      stop(e)
+                      onOpenBlock?.(block.id)
+                    }}
+                    title={`Edit ${plugin.label}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 px-1 text-left"
+                  >
+                    <Icon
+                      size={12}
+                      className={`shrink-0 ${isOpen ? 'text-accent' : 'text-muted'}`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <Summary data={block.data} />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      stop(e)
+                      removeBlock(block.id)
+                    }}
+                    title={`Remove ${plugin.label}`}
+                    aria-label={`Remove ${plugin.label}`}
+                    className="shrink-0 px-1 text-muted opacity-0 hover:text-rose-400 group-hover/blk:opacity-100"
+                  >
+                    <X size={13} />
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })}
+
+        {!readOnly && expanded && addablePlugins().length > 0 && (
+          <AddPropertyMenu onAdd={addBlock} />
         )}
       </div>
+    </div>
+  )
+}
+
+/** "+ Property" menu — lists the addable plugins and adds the chosen block. */
+function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const pop = usePresence(open)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: globalThis.MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative mt-1.5 px-1" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={() => setOpen((o) => !o)}
+        className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent"
+      >
+        <Plus size={12} /> Property
+      </button>
+      {pop.mounted && (
+        <div
+          className={`absolute left-1 top-full z-20 mt-1 w-48 origin-top-left rounded border border-line bg-panel py-1 shadow-lg ${
+            pop.closing ? 'animate-pop-out' : 'animate-pop-in'
+          }`}
+        >
+          {addablePlugins().map((p) => {
+            const Icon = p.icon
+            return (
+              <button
+                key={p.type}
+                type="button"
+                onClick={() => {
+                  onAdd(p.type)
+                  setOpen(false)
+                }}
+                className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
+              >
+                <Icon size={13} className="shrink-0" /> {p.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

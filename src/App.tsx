@@ -8,6 +8,8 @@ import {
   saveViewOnly,
   loadSidebarOpen,
   saveSidebarOpen,
+  loadWindowMode,
+  saveWindowMode,
 } from './lib/storage'
 import { fetchProjects, saveProject, deleteProjectDoc } from './lib/projectStore'
 import { deleteAudio } from './lib/audioStore'
@@ -18,7 +20,9 @@ import {
   reconcileProjectImages,
 } from './lib/imageCloud'
 import { parseVideoId } from './lib/youtube'
-import { makeTextBlock } from './lib/noteBlocks'
+import { makeTextBlock, blocksOf } from './lib/noteBlocks'
+import { getPlugin } from './lib/notePlugins'
+import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import {
@@ -36,10 +40,12 @@ import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
+import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
 import SharePanel from './components/SharePanel'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
+import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import { useHotkeys } from './lib/useHotkeys'
 
 const uid = () => crypto.randomUUID()
@@ -75,6 +81,14 @@ export default function App() {
   const [playerWidth, setPlayerWidth] = useState(loadPlayerWidth)
   const [draggingSplit, setDraggingSplit] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
+  // Which note block (if any) is open in the plugin editor window, and how it's
+  // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
+  const [openWindow, setOpenWindow] = useState<{
+    noteId: string
+    blockId: string
+  } | null>(null)
+  const [windowMode, setWindowMode] = useState<WindowMode>(loadWindowMode)
+  const wideForDock = useMediaQuery('(min-width: 1100px)')
 
   function setViewMode(view: boolean) {
     saveViewOnly(view)
@@ -122,6 +136,26 @@ export default function App() {
   // Latest notes of the current project, read by the mention suggestion.
   const annotationsRef = useRef<Annotation[]>([])
   annotationsRef.current = current?.annotations ?? []
+
+  // ---- plugin editor window (dock 3rd column or modal) ------------------
+  const effectiveWindowMode: WindowMode =
+    windowMode === 'dock' && wideForDock ? 'dock' : 'modal'
+  const openNote =
+    openWindow && current
+      ? current.annotations.find((a) => a.id === openWindow.noteId) ?? null
+      : null
+  const openBlock =
+    openNote?.blocks?.find((b) => b.id === openWindow?.blockId) ?? null
+  const openPlugin = openBlock ? getPlugin(openBlock.type) : undefined
+  const WindowEditor = openPlugin?.Editor
+  const windowOpen = !!(openNote && openBlock && WindowEditor)
+  const transportLocked = windowOpen && effectiveWindowMode === 'modal'
+  const showDock = windowOpen && effectiveWindowMode === 'dock'
+  const showModal = windowOpen && effectiveWindowMode === 'modal'
+  const windowTitle = openPlugin?.label ?? ''
+  const windowSubtitle = openNote
+    ? noteLabel(openNote.start, openNote.end)
+    : undefined
 
   // Stable callbacks so the players aren't torn down on every time tick.
   const handleTime = useCallback((t: number) => setCurrentTime(t), [])
@@ -363,6 +397,7 @@ export default function App() {
 
   function deleteAnnotation(annId: string) {
     if (!current) return
+    if (openWindow?.noteId === annId) setOpenWindow(null)
     patchProject(current.id, {
       annotations: current.annotations.filter((a) => a.id !== annId),
     })
@@ -386,6 +421,34 @@ export default function App() {
   function pause() {
     setIsPlaying(false)
     playerRef.current?.pause()
+  }
+
+  // ---- plugin window controls -------------------------------------------
+  function openBlockWindow(noteId: string, blockId: string) {
+    setOpenWindow({ noteId, blockId })
+    // A modal window covers the transport, so pause when it'll open as one.
+    if (effectiveWindowMode === 'modal') pause()
+  }
+  function changeWindowMode(mode: WindowMode) {
+    saveWindowMode(mode)
+    setWindowMode(mode)
+    // Switching to modal (or to dock where it can't fit) covers the transport.
+    if (!(mode === 'dock' && wideForDock)) pause()
+  }
+  function updateBlockData(noteId: string, blockId: string, data: unknown) {
+    if (!current) return
+    patchProject(current.id, {
+      annotations: current.annotations.map((a) =>
+        a.id !== noteId
+          ? a
+          : {
+              ...a,
+              blocks: blocksOf(a).map((b) =>
+                b.id === blockId ? { ...b, data } : b,
+              ),
+            },
+      ),
+    })
   }
 
   // Jump to a mentioned note: seek to it and scroll it into view.
@@ -472,6 +535,7 @@ export default function App() {
       return
     }
     if (showHelp) return // modal open — swallow the rest
+    if (transportLocked) return // a modal plugin window owns the keyboard
     if (e.key === '[') {
       e.preventDefault()
       setSidebarOpen((s) => !s)
@@ -941,7 +1005,6 @@ export default function App() {
                     isPlaying={isPlaying}
                     currentTime={currentTime}
                     duration={duration}
-                    pendingIn={pendingIn}
                     playbackRate={playbackRate}
                     hasNotes={(current.annotations.length ?? 0) > 0}
                     readOnly={viewOnly}
@@ -950,10 +1013,6 @@ export default function App() {
                     onSetRate={setPlaybackRate}
                     onPrevNote={() => jumpNote(-1)}
                     onNextNote={() => jumpNote(1)}
-                    onMarkIn={markIn}
-                    onMarkOut={markOut}
-                    onCancelMark={() => setPendingIn(null)}
-                    onAddNote={addAnnotationAtCurrent}
                   />
                 </div>
               </div>
@@ -979,6 +1038,15 @@ export default function App() {
                     current.annotations.length === 1 ? 'note' : 'notes'
                   }`}
                 />
+                {!viewOnly && (
+                  <NoteActions
+                    pendingIn={pendingIn}
+                    onMarkIn={markIn}
+                    onMarkOut={markOut}
+                    onCancelMark={() => setPendingIn(null)}
+                    onAddNote={addAnnotationAtCurrent}
+                  />
+                )}
                 <div ref={setNotesScroll} className="relative flex-1 overflow-y-auto">
                   <AnnotationList
                     annotations={current.annotations}
@@ -993,16 +1061,60 @@ export default function App() {
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
                     uploadImage={handleUploadImage}
+                    onOpenBlock={openBlockWindow}
+                    openWindow={openWindow}
                   />
                   {current.annotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />
                   )}
                 </div>
               </div>
+
+              {/* Plugin editor window — docked 3rd column (wide screens only) */}
+              {showDock && WindowEditor && openNote && openBlock && (
+                <div className="w-[22rem] shrink-0">
+                  <PluginWindow
+                    title={windowTitle}
+                    subtitle={windowSubtitle}
+                    mode="dock"
+                    onSetMode={changeWindowMode}
+                    onClose={() => setOpenWindow(null)}
+                  >
+                    <WindowEditor
+                      key={openBlock.id}
+                      data={openBlock.data}
+                      onChange={(d) =>
+                        updateBlockData(openNote.id, openBlock.id, d)
+                      }
+                      currentTime={currentTime}
+                      readOnly={viewOnly}
+                    />
+                  </PluginWindow>
+                </div>
+              )}
             </div>
           )}
         </main>
       </div>
+
+      {/* Plugin editor window — modal overlay (narrow screens or chosen mode) */}
+      {showModal && WindowEditor && openNote && openBlock && (
+        <PluginWindow
+          title={windowTitle}
+          subtitle={windowSubtitle}
+          mode="modal"
+          onSetMode={changeWindowMode}
+          onClose={() => setOpenWindow(null)}
+        >
+          <WindowEditor
+            key={openBlock.id}
+            data={openBlock.data}
+            onChange={(d) => updateBlockData(openNote.id, openBlock.id, d)}
+            currentTime={currentTime}
+            readOnly={viewOnly}
+          />
+        </PluginWindow>
+      )}
 
       {help.mounted && (
         <ShortcutsOverlay
