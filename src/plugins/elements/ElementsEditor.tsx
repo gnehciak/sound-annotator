@@ -101,7 +101,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
             ref={addBtnRef}
             type="button"
             onClick={() => setAddOpen((o) => !o)}
-            className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent"
+            className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accentink"
           >
             <Plus size={12} /> Add element
           </button>

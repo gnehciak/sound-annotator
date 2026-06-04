@@ -65,7 +65,7 @@ export default function NoteActions({
             aria-label="Mark section start"
             className={`press inline-flex min-w-0 flex-1 items-center justify-center gap-1 border px-2 py-1.5 font-mono text-[11px] uppercase ${
               pendingIn != null
-                ? 'border-accent/70 bg-accent/10 text-accent'
+                ? 'border-accent/70 bg-accent/10 text-accentink'
                 : 'border-line text-muted hover:border-line-strong hover:text-fg'
             }`}
           >
@@ -79,7 +79,7 @@ export default function NoteActions({
               onClick={onCancelMark}
               aria-label="Cancel the marked start"
               title="Clear the pending start mark"
-              className="press inline-flex shrink-0 items-center justify-center border border-l-0 border-accent/70 bg-accent/10 px-1.5 py-1.5 text-accent hover:bg-accent/20"
+              className="press inline-flex shrink-0 items-center justify-center border border-l-0 border-accent/70 bg-accent/10 px-1.5 py-1.5 text-accentink hover:bg-accent/20"
             >
               <X size={13} />
             </button>
@@ -90,7 +90,7 @@ export default function NoteActions({
           ref={addRef}
           onClick={() => (open ? setOpen(false) : openMenu())}
           title="Add a note — at the current moment (N) or a custom time"
-          className="press inline-flex min-w-0 items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20"
+          className="press inline-flex min-w-0 items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accentink hover:bg-accent/20"
         >
           <Plus size={13} className="shrink-0" />
           <span className="truncate">Add note</span>
@@ -123,7 +123,7 @@ export default function NoteActions({
             onAddNote()
             setOpen(false)
           }}
-          className="press flex w-full items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20"
+          className="press flex w-full items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accentink hover:bg-accent/20"
         >
           <Plus size={13} /> Add at {formatTime(currentTime)}
           <span className="font-mono tracking-normal opacity-70">(now)</span>
@@ -169,7 +169,7 @@ export default function NoteActions({
           <button
             type="submit"
             disabled={!customValid}
-            className="press shrink-0 rounded border border-line px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
+            className="press shrink-0 rounded border border-line px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accentink disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
           >
             Add
           </button>

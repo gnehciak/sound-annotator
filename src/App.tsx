@@ -8,9 +8,6 @@ import {
 } from 'react'
 import type { Annotation, PlayerHandle, Project } from './types'
 import {
-  loadPlayerWidth,
-  savePlayerWidth,
-  DEFAULT_PLAYER_WIDTH,
   loadInspectorWidth,
   saveInspectorWidth,
   loadVolume,
@@ -18,13 +15,6 @@ import {
   DEFAULT_VOLUME,
   loadViewOnly,
   saveViewOnly,
-  loadNoteOrder,
-  saveNoteOrder,
-  type NoteOrder,
-  loadAutoPin,
-  saveAutoPin,
-  loadAutoSeek,
-  saveAutoSeek,
   loadSidebarOpen,
   saveSidebarOpen,
   loadWindowMode,
@@ -43,7 +33,7 @@ import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
-import { customTagsUsedIn, tagsUsedIn, tagsOf } from './lib/tags'
+import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Plus,
   Trash2,
@@ -54,20 +44,26 @@ import {
   Eye,
   Pencil,
   Check,
-  Pin,
-  PinOff,
-  Crosshair,
+  Play,
+  Music,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
+import { useTheme } from './lib/theme'
+import ThemeToggle from './components/ThemeToggle'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
-import TagFilter from './components/TagFilter'
+import TitleBar from './components/TitleBar'
+import NotesHeaderControls from './components/NotesHeaderControls'
+import SplitHandle from './components/SplitHandle'
+import { useNotesView } from './lib/useNotesView'
+import { useNotesSplit, NOTES_SPLIT_660, NOTES_SPLIT_900 } from './lib/notesSplit'
 import SharePanel from './components/SharePanel'
+import ExportPdfButton from './components/ExportPdfButton'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
@@ -76,8 +72,15 @@ import { useHotkeys } from './lib/useHotkeys'
 const uid = () => crypto.randomUUID()
 const now = () => Date.now()
 
+// How long consecutive ±step seeks keep accumulating against the same target
+// before the next one re-anchors to the live playhead (see `step`).
+const STEP_WINDOW = 1200
+
 export default function App() {
   const { user, signOut } = useAuth()
+  // Color theme controller (System / Light / Dark). Owns <html data-theme>.
+  const { pref: themePref, setPref: setThemePref, resolved: resolvedTheme } =
+    useTheme()
   const [projects, setProjects] = useState<Project[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [loadingProjects, setLoadingProjects] = useState(true)
@@ -106,24 +109,22 @@ export default function App() {
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null)
   const [notesPad, setNotesPad] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
-  const [playerWidth, setPlayerWidth] = useState(loadPlayerWidth)
+  // The resizable player|notes split (notes-fixed / player-flex; persisted).
+  const {
+    splitRef,
+    dragging: draggingNotes,
+    startSplitDrag,
+    resetSplit,
+    style: splitStyle,
+  } = useNotesSplit()
   const [inspectorWidth, setInspectorWidth] = useState(loadInspectorWidth)
-  const [draggingSplit, setDraggingSplit] = useState(false)
+  // Dragging state for the inspector|notes handle (the player|notes handle owns
+  // its own, inside `split`).
+  const [draggingInspector, setDraggingInspector] = useState(false)
   // Player volume (0–1, sticky) and a separate mute that remembers the level.
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
-  // How the notes list is ordered: timeline / auto / live (see AnnotationList).
-  const [noteOrder, setNoteOrder] = useState<NoteOrder>(loadNoteOrder)
-  // When on, the playing note auto-scrolls to the top of the notes list (and
-  // re-pins on click / after a scroll cooldown). Off keeps the list still.
-  const [autoPin, setAutoPin] = useState(loadAutoPin)
-  // When on, clicking a note in the list cues the playhead to it. Off leaves the
-  // playhead put (⌘/Ctrl-click still cues). Defaults off — see selectNote.
-  const [autoSeek, setAutoSeek] = useState(loadAutoSeek)
-  // Tags the notes list is filtered to (empty = show all). A note is shown if
-  // its tag is in the set. Reset when switching tracks (tags differ per track).
-  const [tagFilter, setTagFilter] = useState<Set<string>>(() => new Set())
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -138,24 +139,6 @@ export default function App() {
     setViewOnly((on) => {
       const next = !on
       saveViewOnly(next)
-      return next
-    })
-  }
-  function changeNoteOrder(mode: NoteOrder) {
-    saveNoteOrder(mode)
-    setNoteOrder(mode)
-  }
-  function toggleAutoPin() {
-    setAutoPin((on) => {
-      const next = !on
-      saveAutoPin(next)
-      return next
-    })
-  }
-  function toggleAutoSeek() {
-    setAutoSeek((on) => {
-      const next = !on
-      saveAutoSeek(next)
       return next
     })
   }
@@ -193,7 +176,6 @@ export default function App() {
   }, [volume])
 
   const playerRef = useRef<PlayerHandle>(null)
-  const splitRef = useRef<HTMLDivElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
@@ -233,26 +215,20 @@ export default function App() {
     () => customTagsUsedIn(current?.annotations ?? []),
     [current?.annotations],
   )
-  // Every tag in use across this track's notes — the filter's menu.
-  const filterTags = useMemo(
-    () => tagsUsedIn(current?.annotations ?? []),
-    [current?.annotations],
-  )
-  // The selection narrowed to tags still in use: a tag whose last note was
-  // retagged or deleted silently drops out, so the filter never gets stuck
-  // hiding everything by a ghost tag. Derived (not stored) to stay in sync.
-  const activeFilter = useMemo(() => {
-    if (tagFilter.size === 0) return tagFilter
-    const avail = new Set(filterTags)
-    const next = new Set([...tagFilter].filter((t) => avail.has(t)))
-    return next.size === tagFilter.size ? tagFilter : next
-  }, [tagFilter, filterTags])
-  // Notes shown in the list: all of them, or those carrying any selected tag.
-  const visibleAnnotations = useMemo(() => {
-    const all = current?.annotations ?? []
-    if (activeFilter.size === 0) return all
-    return all.filter((a) => tagsOf(a).some((t) => activeFilter.has(t)))
-  }, [current?.annotations, activeFilter])
+  // Notes-list view state (tag filter, order, auto-pin, auto-cue) — shared with
+  // the read-only ShareViewer; none of it mutates notes.
+  const {
+    noteOrder,
+    changeNoteOrder,
+    autoPin,
+    toggleAutoPin,
+    autoSeek,
+    toggleAutoSeek,
+    setTagFilter,
+    filterTags,
+    activeFilter,
+    visibleAnnotations,
+  } = useNotesView(current?.annotations ?? [], viewOnly)
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
@@ -285,6 +261,14 @@ export default function App() {
   // optimistic time and flash back. Ignore reports until it reaches the target
   // (within 0.6s) or a short deadline passes.
   const seekGuardRef = useRef<{ target: number; deadline: number } | null>(null)
+
+  // Relative ±step seeks (the 1s/5s buttons and ←/→) accumulate against a
+  // short-lived target instead of the live, advancing playhead. Without this,
+  // tapping "back 1s" while playing is eaten by the ≥1s that elapses between
+  // presses, so slow taps never actually move back. After STEP_WINDOW of no
+  // stepping, the next step re-anchors to the real playhead.
+  const seekTargetRef = useRef<number | null>(null)
+  const lastStepRef = useRef(0)
 
   // Stable callbacks so the players aren't torn down on every time tick.
   const handleTime = useCallback((t: number) => {
@@ -590,6 +574,20 @@ export default function App() {
     playerRef.current?.seekTo(t)
   }
 
+  function step(delta: number) {
+    const recent = now() - lastStepRef.current < STEP_WINDOW
+    const base =
+      recent && seekTargetRef.current != null
+        ? seekTargetRef.current
+        : playerRef.current?.getCurrentTime?.() ?? currentTime
+    let target = base + delta
+    if (duration > 0) target = Math.min(target, duration)
+    target = Math.max(0, target)
+    seekTargetRef.current = target
+    lastStepRef.current = now()
+    seek(target)
+  }
+
   // Optimistic transport: flip the playing state immediately so Play/Pause
   // feels instant, then let the player's own state-change events
   // (handlePlaying) reconcile — e.g. snap back to paused if playback never
@@ -738,11 +736,11 @@ export default function App() {
         break
       case 'ArrowLeft':
         e.preventDefault()
-        seek(Math.max(0, currentTime - (e.shiftKey ? 5 : 1)))
+        step(e.shiftKey ? -5 : -1)
         break
       case 'ArrowRight':
         e.preventDefault()
-        seek(currentTime + (e.shiftKey ? 5 : 1))
+        step(e.shiftKey ? 5 : 1)
         break
       case 'ArrowUp':
         e.preventDefault()
@@ -775,49 +773,18 @@ export default function App() {
     }
   })
 
-  // ---- resizable player|notes split -------------------------------------
-  // Width is clamped in CSS (min-w / max-w on the pane) so it stays valid on
-  // window resize; the JS clamp here just mirrors that range while dragging.
-  function startSplitDrag(e: React.PointerEvent) {
-    e.preventDefault()
-    const container = splitRef.current
-    if (!container) return
-    const rect = container.getBoundingClientRect()
-    let last = playerWidth
-    setDraggingSplit(true)
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
-    const move = (ev: PointerEvent) => {
-      const max = Math.max(360, rect.width - 340)
-      last = Math.min(max, Math.max(360, ev.clientX - rect.left))
-      setPlayerWidth(last)
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      setDraggingSplit(false)
-      savePlayerWidth(last)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  function resetSplit() {
-    setPlayerWidth(DEFAULT_PLAYER_WIDTH)
-    savePlayerWidth(DEFAULT_PLAYER_WIDTH)
-  }
-
-  // Resize the docked inspector (3rd column). It hugs the right edge, so its
-  // width grows as you drag the handle left; the notes panel takes the rest.
+  // ---- docked inspector (3rd column) resize -----------------------------
+  // The player|notes split itself lives in `useNotesSplit` (shared with the
+  // ShareViewer). Resize the docked inspector here: it hugs the right edge, so
+  // its width grows as you drag the handle left; the player panel (the flex
+  // column) takes the rest, leaving the notes column untouched.
   function startInspectorDrag(e: React.PointerEvent) {
     e.preventDefault()
     const container = splitRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
     let last = inspectorWidth
-    setDraggingSplit(true)
+    setDraggingInspector(true)
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'col-resize'
     const move = (ev: PointerEvent) => {
@@ -830,7 +797,7 @@ export default function App() {
       window.removeEventListener('pointerup', up)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
-      setDraggingSplit(false)
+      setDraggingInspector(false)
       saveInspectorWidth(last)
     }
     window.addEventListener('pointermove', move)
@@ -840,19 +807,7 @@ export default function App() {
   // The player|notes split goes side-by-side once its container is wide enough.
   // Usable space depends on the sidebar: open it eats 240px, so we require a
   // 900px viewport; collapsed we only need 660px (240px less) for the same fit.
-  // Arbitrary min-[…] variants (full literals, no string concat) so Tailwind's
-  // scanner generates both — and they need no tailwind.config screens.
-  const splitVariant = sidebarOpen
-    ? {
-        row: 'min-[900px]:flex-row',
-        pane: 'min-[900px]:w-[var(--player-w)] min-[900px]:min-w-[360px] min-[900px]:max-w-[calc(100%-340px)] min-[900px]:border-b-0',
-        handle: 'min-[900px]:block',
-      }
-    : {
-        row: 'min-[660px]:flex-row',
-        pane: 'min-[660px]:w-[var(--player-w)] min-[660px]:min-w-[360px] min-[660px]:max-w-[calc(100%-340px)] min-[660px]:border-b-0',
-        handle: 'min-[660px]:block',
-      }
+  const splitVariant = sidebarOpen ? NOTES_SPLIT_900 : NOTES_SPLIT_660
 
   const regionSpecs = current
     ? current.annotations.map((a) => ({
@@ -866,7 +821,7 @@ export default function App() {
   if (loadingProjects) {
     return (
       <div className="flex h-full animate-fade-in flex-col items-center justify-center gap-3 bg-ink text-muted">
-        <span className="animate-now-pulse text-2xl text-accent">◉</span>
+        <span className="animate-now-pulse text-2xl text-accentink">◉</span>
         <span className="font-mono text-xs uppercase tracking-[0.2em]">
           Loading your tracks…
         </span>
@@ -878,12 +833,12 @@ export default function App() {
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* ---- Global header ---- */}
       <header className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 sm:gap-3 sm:px-4">
-        <span className="text-accent">◉</span>
+        <span className="text-accentink">◉</span>
         <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
           Sound&nbsp;Annotator
         </span>
         {viewOnly && (
-          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent">
+          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
             <Eye size={11} /> View only
           </span>
         )}
@@ -914,7 +869,7 @@ export default function App() {
               </span>
             )}
             {saveStatus === 'error' && (
-              <span className="text-accent">Save failed</span>
+              <span className="text-accentink">Save failed</span>
             )}
           </div>
         )}
@@ -943,7 +898,7 @@ export default function App() {
             aria-pressed={viewOnly}
             title="View-only mode (V)"
             className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-              viewOnly ? 'bg-raised text-accent' : 'text-muted hover:text-fg'
+              viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
             }`}
           >
             <Eye size={12} /> View
@@ -957,6 +912,11 @@ export default function App() {
         >
           <Keyboard size={16} />
         </button>
+        <ThemeToggle
+          pref={themePref}
+          resolved={resolvedTheme}
+          onChange={setThemePref}
+        />
         <span className="hidden min-[860px]:block">
           <LevelMeter active={isPlaying} />
         </span>
@@ -1024,7 +984,7 @@ export default function App() {
               <div className="p-2">
                 <button
                   onClick={createProject}
-                  className="press inline-flex w-full items-center justify-center gap-1.5 rounded border border-line bg-raised px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg hover:border-accent hover:text-accent"
+                  className="press inline-flex w-full items-center justify-center gap-1.5 rounded border border-line bg-raised px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
                 >
                   <Plus size={14} /> New track
                 </button>
@@ -1047,7 +1007,7 @@ export default function App() {
                         : 'border-l-transparent text-muted hover:bg-raised/50 hover:text-fg'
                     }`}
                   >
-                    <span className="font-mono text-xs text-accent/70">
+                    <span className="font-mono text-xs text-accentink/70">
                       {p.source?.type === 'youtube'
                         ? '▶'
                         : p.source?.type === 'audio'
@@ -1067,7 +1027,7 @@ export default function App() {
                           if (confirm(`Delete “${p.title}” and its notes?`))
                             removeProject(p.id)
                         }}
-                        className="rounded px-1 text-muted opacity-0 hover:text-rose-400 group-hover:opacity-100"
+                        className="rounded px-1 text-muted opacity-0 hover:text-danger group-hover:opacity-100"
                         title="Delete track"
                         aria-label={`Delete track ${p.title}`}
                       >
@@ -1116,11 +1076,30 @@ export default function App() {
                     className="min-w-0 flex-1 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg"
                   />
                 )}
-                {current.source && (
-                  <span className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">
-                    {current.source.type === 'youtube' ? '▶ YouTube' : '♪ Audio file'}
-                  </span>
-                )}
+                {current.source &&
+                  (current.source.type === 'youtube' ? (
+                    <a
+                      href={
+                        current.source.youtubeUrl ??
+                        (current.source.videoId
+                          ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                          : undefined)
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open the original video on YouTube (new tab)"
+                      className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                    >
+                      <Play size={12} />
+                      YouTube
+                    </a>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+                      <Music size={12} />
+                      Audio file
+                    </span>
+                  ))}
+                {current.source && <ExportPdfButton project={current} />}
                 {current.source && (
                   <SharePanel
                     project={current}
@@ -1175,11 +1154,12 @@ export default function App() {
             <div
               ref={splitRef}
               className={`flex min-h-0 flex-1 animate-fade-in flex-col ${splitVariant.row}`}
-              style={{ ['--player-w' as string]: `${playerWidth}px` }}
+              style={splitStyle}
             >
-              {/* Viewer panel */}
+              {/* Viewer panel — the flex column: absorbs window resize so the
+                  notes column keeps its width. */}
               <div
-                className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${splitVariant.pane}`}
+                className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${splitVariant.player}`}
               >
                 <TitleBar
                   left="Player"
@@ -1225,6 +1205,7 @@ export default function App() {
                     readOnly={viewOnly}
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
+                    onStep={step}
                     onSetRate={setPlaybackRate}
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
@@ -1249,21 +1230,23 @@ export default function App() {
                 />
               </div>
 
-              {/* Drag handle — resize the split (double-click to reset) */}
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize player and notes panels"
-                onPointerDown={startSplitDrag}
+              {/* Drag handle — resize the split (double-click to reset). The
+                  player (flex) absorbs it; the docked inspector width (when
+                  present) is reserved so the notes column hugs its right edge. */}
+              <SplitHandle
+                variantClass={splitVariant.handle}
+                dragging={draggingNotes}
+                onPointerDown={(e) =>
+                  startSplitDrag(e, showDock ? inspectorWidth : 0)
+                }
                 onDoubleClick={resetSplit}
-                title="Drag to resize · double-click to reset"
-                className={`hidden w-1 shrink-0 cursor-col-resize touch-none transition-colors ${splitVariant.handle} ${
-                  draggingSplit ? 'bg-accent' : 'bg-line hover:bg-accent/60'
-                }`}
               />
 
-              {/* Notes panel */}
-              <div className="flex min-w-0 flex-1 flex-col">
+              {/* Notes panel — the fixed-width column (pinned to --notes-w on
+                  wide screens; fills height when stacked). */}
+              <div
+                className={`flex min-w-0 flex-1 flex-col ${splitVariant.notes}`}
+              >
                 <TitleBar
                   left="Notes"
                   right={
@@ -1274,53 +1257,18 @@ export default function App() {
                         }`
                   }
                   actions={
-                    <div className="flex items-center gap-1.5">
-                      <TagFilter
-                        tags={filterTags}
-                        selected={activeFilter}
-                        onChange={setTagFilter}
-                      />
-                      <NoteOrderControl
-                        value={noteOrder}
-                        onChange={changeNoteOrder}
-                      />
-                      <button
-                        type="button"
-                        onClick={toggleAutoPin}
-                        aria-pressed={autoPin}
-                        title={
-                          autoPin
-                            ? 'Auto-pin on: the playing note scrolls to the top — click to turn off'
-                            : 'Auto-pin off: the notes list stays put — click to turn on'
-                        }
-                        aria-label="Auto-pin the playing note to the top"
-                        className={`press rounded-sm p-1 ${
-                          autoPin
-                            ? 'bg-raised text-accent'
-                            : 'text-muted hover:bg-raised hover:text-fg'
-                        }`}
-                      >
-                        {autoPin ? <Pin size={14} /> : <PinOff size={14} />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={toggleAutoSeek}
-                        aria-pressed={autoSeek}
-                        title={
-                          autoSeek
-                            ? 'Auto-cue on: clicking a note moves the playhead to it — click to turn off (⌘-click still cues)'
-                            : 'Auto-cue off: clicking a note just opens it — ⌘-click to cue the playhead, or click to turn on'
-                        }
-                        aria-label="Move the playhead to a note when you click it"
-                        className={`press rounded-sm p-1 ${
-                          autoSeek
-                            ? 'bg-raised text-accent'
-                            : 'text-muted hover:bg-raised hover:text-fg'
-                        }`}
-                      >
-                        <Crosshair size={14} />
-                      </button>
-                    </div>
+                    <NotesHeaderControls
+                      filterTags={filterTags}
+                      activeFilter={activeFilter}
+                      onTagFilter={setTagFilter}
+                      noteOrder={noteOrder}
+                      onNoteOrder={changeNoteOrder}
+                      autoPin={autoPin}
+                      onToggleAutoPin={toggleAutoPin}
+                      autoSeek={autoSeek}
+                      onToggleAutoSeek={toggleAutoSeek}
+                      viewOnly={viewOnly}
+                    />
                   }
                 />
                 {!viewOnly && (
@@ -1334,11 +1282,15 @@ export default function App() {
                     onAddNoteAt={addNoteAt}
                   />
                 )}
-                <div ref={setNotesScroll} className="relative flex-1 overflow-y-auto">
+                <div
+                  ref={setNotesScroll}
+                  className="relative flex-1 overflow-y-auto bg-note"
+                >
                   <AnnotationList
                     annotations={visibleAnnotations}
                     currentTime={currentTime}
                     isPlaying={isPlaying}
+                    playbackRate={playbackRate}
                     readOnly={viewOnly}
                     filtered={activeFilter.size > 0}
                     scrollRef={notesScrollRef}
@@ -1367,7 +1319,7 @@ export default function App() {
                   onPointerDown={startInspectorDrag}
                   title="Drag to resize"
                   className={`w-1 shrink-0 cursor-col-resize touch-none transition-colors ${
-                    draggingSplit ? 'bg-accent' : 'bg-line hover:bg-accent/60'
+                    draggingInspector ? 'bg-accent' : 'bg-line hover:bg-accent/60'
                   }`}
                 />
               )}
@@ -1390,6 +1342,11 @@ export default function App() {
                       subtitle={inspectorSubtitle}
                       mode="dock"
                       onSetMode={changeWindowMode}
+                      // The dock is persistent; ✕ just deselects (→ empty state).
+                      // Only shown when there's a note to deselect.
+                      onClose={
+                        selectedNote ? () => setSelectedNoteId(null) : undefined
+                      }
                     >
                       {selectedNote ? (
                         <NoteInspector
@@ -1398,12 +1355,15 @@ export default function App() {
                           color={selectedNote.color ?? colorForId(selectedNote.id)}
                           projectTags={projectTags}
                           currentTime={currentTime}
+                          isPlaying={isPlaying}
+                          playbackRate={playbackRate}
                           autoFocus={focusNoteId === selectedNote.id}
                           onFocusHandled={() => setFocusNoteId(null)}
                           onUpdate={(patch) =>
                             updateAnnotation(selectedNote.id, patch)
                           }
                           onDelete={() => deleteAnnotation(selectedNote.id)}
+                          onSeek={seek}
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
@@ -1444,10 +1404,13 @@ export default function App() {
             color={selectedNote.color ?? colorForId(selectedNote.id)}
             projectTags={projectTags}
             currentTime={currentTime}
+            isPlaying={isPlaying}
+            playbackRate={playbackRate}
             autoFocus={focusNoteId === selectedNote.id}
             onFocusHandled={() => setFocusNoteId(null)}
             onUpdate={(patch) => updateAnnotation(selectedNote.id, patch)}
             onDelete={() => deleteAnnotation(selectedNote.id)}
+            onSeek={seek}
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
@@ -1475,7 +1438,11 @@ function LevelMeter({ active }: { active: boolean }) {
     >
       {Array.from({ length: SEGS }, (_, i) => {
         const color =
-          i >= 14 ? '#ef6f6f' : i >= 11 ? 'rgb(var(--accent))' : 'rgb(var(--meter))'
+          i >= 14
+            ? 'rgb(var(--peak))'
+            : i >= 11
+              ? 'rgb(var(--accent))'
+              : 'rgb(var(--meter))'
         return (
           <span
             key={i}
@@ -1488,92 +1455,6 @@ function LevelMeter({ active }: { active: boolean }) {
               animationDuration: active ? `${700 + (i % 5) * 90}ms` : undefined,
             }}
           />
-        )
-      })}
-    </div>
-  )
-}
-
-function TitleBar({
-  left,
-  right,
-  actions,
-}: {
-  left: string
-  right?: string
-  actions?: ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-line bg-raised/60 px-3 py-1.5">
-      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
-        {left}
-      </span>
-      <div className="flex min-w-0 items-center gap-3">
-        {actions}
-        {right && (
-          <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-muted">
-            {right}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// The notes list ordering, as a squared segmented switch (Timeline · Auto ·
-// Live) — one stability↔liveness dial, not a matrix of when/which permutations.
-// Mirrors the Edit | View switch; stays neutral (no amber) since none of the
-// modes mean "now". Lives in the Notes title bar.
-const NOTE_ORDER_OPTIONS: {
-  value: NoteOrder
-  label: string
-  title: string
-}[] = [
-  {
-    value: 'timeline',
-    label: 'Timeline',
-    title: 'Timeline — always in chronological (start-time) order',
-  },
-  {
-    value: 'auto',
-    label: 'Auto',
-    title: 'Auto — live order while playing, timeline order when paused',
-  },
-  {
-    value: 'live',
-    label: 'Live',
-    title: 'Live — always reorders around the playhead',
-  },
-]
-
-function NoteOrderControl({
-  value,
-  onChange,
-}: {
-  value: NoteOrder
-  onChange: (mode: NoteOrder) => void
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Note order"
-      className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
-    >
-      {NOTE_ORDER_OPTIONS.map((opt) => {
-        const active = value === opt.value
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            aria-pressed={active}
-            title={opt.title}
-            className={`press rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-              active ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
-            }`}
-          >
-            {opt.label}
-          </button>
         )
       })}
     </div>
@@ -1601,7 +1482,7 @@ function EmptyState({
       {!readOnly && (
         <button
           onClick={onCreate}
-          className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accent hover:bg-accent/20"
+          className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
         >
           <Plus size={14} /> New track
         </button>
@@ -1649,7 +1530,7 @@ function ReattachAudio({
         The audio file{fileName ? ` (${fileName})` : ''} for this track isn't
         loaded. Re-open or drag it in to keep annotating. Your notes are safe.
       </p>
-      <label className="mt-3 inline-flex cursor-pointer rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accent hover:bg-accent/20">
+      <label className="mt-3 inline-flex cursor-pointer rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20">
         <input
           type="file"
           accept="audio/*"

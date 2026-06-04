@@ -3,26 +3,90 @@
 @tailwind utilities;
 
 /* ============================================================
-   Design tokens — "Console" theme (warm-dark studio gear).
+   Design tokens — two themes off one set of CSS variables.
    Values are space-separated RGB channels so Tailwind's
-   rgb(var(--x) / <alpha-value>) can apply opacity.
+   rgb(var(--x) / <alpha-value>) can apply opacity. The theme is
+   chosen by `data-theme` on <html> (System resolves to one of
+   these in JS; see lib/theme.ts). Shadows/glows are full
+   box-shadow strings so each theme can tune its own bevels.
+
+   Two-amber rule: `--accent` is the bright signal for FILLS and
+   graphics (Play, spines, dots, progress); `--accent-ink` is the
+   contrast-safe amber for TEXT, the LED readout, links, and the
+   focus ring. They are IDENTICAL in dark (so dark is unchanged and
+   text/fill share one amber); they diverge only in light, where
+   bright amber on a pale surface fails AA as text.
+
+   DARK — "The Listening Station" (warm-dark studio gear). Default.
    ============================================================ */
-:root {
+:root,
+[data-theme='dark'] {
   --bg-ink: 26 24 19; /* #1a1813 base */
   --bg-panel: 33 31 24; /* #211f18 panel */
   --bg-raised: 42 39 31; /* #2a271f raised control */
   --bg-inset: 19 18 16; /* #131210 inset readouts/editor */
+  --surface-note: 26 24 19; /* notes page — = ink in dark */
   --border: 56 52 43; /* #38342b hairlines */
   --border-strong: 77 71 58; /* #4d473a */
   --text: 233 228 216; /* #e9e4d8 */
+  --text-strong: 255 255 255; /* #fff — h1 / emphasis */
   --text-muted: 168 158 138; /* #a89e8a — lifted for AA contrast on raised + projector legibility */
-  --accent: 245 166 35; /* #f5a623 amber */
+  --accent: 245 166 35; /* #f5a623 amber — fills/graphics */
+  --accent-ink: 245 166 35; /* = accent in dark; text/LED/focus amber */
   --meter: 156 203 99; /* #9ccb63 level-meter green */
+  --peak: 239 111 111; /* #ef6f6f meter peak (was hardcoded) */
+  --danger: 251 113 133; /* #fb7185 rose-400 — delete affordances */
+  --on-bright: 26 24 19; /* text that sits ON an amber/hue fill — dark in both themes */
+  --row-sel: 42 39 31; /* selected/active note row — = raised in dark */
+
+  /* Theme-tuned bevels/glows (see DESIGN.md §4). */
+  --bevel-inset: inset 0 1px 3px rgb(0 0 0 / 0.6);
+  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.25),
+    inset 0 -2px 3px rgb(0 0 0 / 0.32);
+  --led-glow: 0 0 8px rgb(var(--accent-ink) / 0.5);
+  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 1px 0 rgb(0 0 0 / 0.45);
 
   /* House motion curve — expo-ish decel, no overshoot (see DESIGN.md §motion). */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: dark;
+}
+
+/* ============================================================
+   LIGHT — "Daylit Station": warm-paper instrument chrome framing
+   a pure-white note page. Same doctrines, lights on. Surface ramp
+   keeps its relative order (inset < ink < panel < raised) so
+   "raised = lifted / inset = recessed" still reads. Body, muted,
+   placeholder, and amber-ink are AA-verified on every surface.
+   ============================================================ */
+[data-theme='light'] {
+  --bg-ink: 234 228 216; /* #eae4d8 warm base canvas */
+  --bg-panel: 242 238 229; /* #f2eee5 panels (sidebar/header/transport) */
+  --bg-raised: 251 248 242; /* #fbf8f2 controls / title bars (lightest) */
+  --bg-inset: 222 215 199; /* #ded7c7 recessed wells / inputs */
+  --surface-note: 234 228 216; /* #eae4d8 warm note page (= base); not stark white */
+  --border: 210 201 182; /* #d2c9b6 hairlines */
+  --border-strong: 184 174 152; /* #b8ae98 hover/active edges */
+  --text: 42 38 32; /* #2a2620 warm near-black */
+  --text-strong: 28 26 22; /* #1c1a16 h1 / emphasis */
+  --text-muted: 95 86 70; /* #5f5646 labels/placeholder — AA on every surface incl. inset */
+  --accent: 204 122 10; /* #cc7a0a deep signal amber — fills/graphics, ≥3:1 on white */
+  --accent-ink: 135 78 5; /* #874e05 AA amber — text/LED/focus, ≥4.5:1 incl. on inset */
+  --meter: 79 125 38; /* #4f7d26 light-safe meter green */
+  --peak: 194 67 59; /* #c2433b meter peak */
+  --danger: 190 18 60; /* #be123c rose-700 — delete affordances, AA on chrome */
+  --on-bright: 26 24 19; /* text on amber/hue fills stays dark on light too */
+  --row-sel: 243 232 205; /* #f3e8cd warm highlight — reads on the white note page */
+
+  --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.09);
+  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -2px 3px rgb(0 0 0 / 0.14);
+  --led-glow: none;
+  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 1px 0 rgb(0 0 0 / 0.12);
+
+  color-scheme: light;
 }
 
 html,
@@ -43,8 +107,8 @@ body {
 .led {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   letter-spacing: 0.08em;
-  color: rgb(var(--accent));
-  text-shadow: 0 0 8px rgb(var(--accent) / 0.5);
+  color: rgb(var(--accent-ink));
+  text-shadow: var(--led-glow);
   font-variant-numeric: tabular-nums;
 }
 
@@ -171,9 +235,7 @@ body {
   border: 1px solid rgb(var(--border-strong));
   border-radius: 2px;
   background: rgb(var(--bg-raised));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.05),
-    0 1px 0 rgb(0 0 0 / 0.45);
+  box-shadow: var(--kbd-shadow);
   color: rgb(var(--text-muted));
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 10px;
@@ -181,14 +243,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Inset bevel for readouts/screens; raised bevel for primary buttons */
+/* Inset bevel for readouts/screens; raised bevel for primary buttons.
+   Both are theme-tuned (see :root tokens): heavy on dark, whisper-soft
+   on light so a black inset shadow never dirties a pale surface. */
 .bevel-inset {
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.6);
+  box-shadow: var(--bevel-inset);
 }
 .bevel-raised {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.25),
-    inset 0 -2px 3px rgb(0 0 0 / 0.32);
+  box-shadow: var(--bevel-raised);
 }
 
 /* Dark scrollbars */
@@ -219,7 +281,7 @@ body {
 :where(button, a, [role='button'], input, textarea, select, [tabindex]):not(
     .ProseMirror
   ):focus-visible {
-  outline: 2px solid rgb(var(--accent));
+  outline: 2px solid rgb(var(--accent-ink));
   outline-offset: 1px;
   border-radius: 2px;
 }
@@ -258,7 +320,7 @@ body {
   font-size: 1.2rem;
   font-weight: 700;
   margin: 0.5rem 0 0.25rem;
-  color: #fff;
+  color: rgb(var(--text-strong));
 }
 .ProseMirror h2 {
   font-size: 1.05rem;
@@ -362,8 +424,8 @@ body {
   background: rgb(var(--bg-raised));
 }
 .ProseMirror .resizable-image__align button[data-active] {
-  color: rgb(var(--accent));
-  background: rgb(var(--accent) / 0.12);
+  color: rgb(var(--accent-ink));
+  background: rgb(var(--accent-ink) / 0.12);
 }
 .ProseMirror .resizable-image__align-sep {
   align-self: stretch;
@@ -372,8 +434,8 @@ body {
   background: rgb(var(--border));
 }
 .ProseMirror .resizable-image__align-delete:hover {
-  color: rgb(251 113 133); /* rose-400, matching the app's delete affordances */
-  background: rgb(251 113 133 / 0.12);
+  color: rgb(var(--danger)); /* matches the app's delete affordances */
+  background: rgb(var(--danger) / 0.12);
 }
 @media (prefers-reduced-motion: reduce) {
   .ProseMirror .resizable-image__skeleton {
@@ -381,7 +443,7 @@ body {
   }
 }
 .ProseMirror .resizable-image.ProseMirror-selectednode > img {
-  outline: 2px solid rgb(var(--accent));
+  outline: 2px solid rgb(var(--accent-ink));
 }
 /* Gap cursor: the caret ProseMirror shows when you click *beside* a block node
    (e.g. an image). StarterKit enables it but ships no CSS, so it was invisible
@@ -397,7 +459,7 @@ body {
   position: absolute;
   top: -2px;
   width: 1.25rem;
-  border-top: 2px solid rgb(var(--accent));
+  border-top: 2px solid rgb(var(--accent-ink));
   animation: pm-gapcursor-blink 1.1s steps(2, start) infinite;
 }
 .ProseMirror-focused .ProseMirror-gapcursor {
@@ -512,18 +574,18 @@ body {
   border-radius: 4px;
   padding: 0.1rem 0.3rem;
   font-size: 0.85em;
-  color: rgb(var(--accent));
+  color: rgb(var(--accent-ink));
 }
 .ProseMirror a {
-  color: rgb(var(--accent));
+  color: rgb(var(--accent-ink));
   text-decoration: underline;
 }
 
 /* @-mention chip referencing another note */
 .note-mention {
-  color: rgb(var(--accent));
-  background: rgb(var(--accent) / 0.12);
-  border: 1px solid rgb(var(--accent) / 0.35);
+  color: rgb(var(--accent-ink));
+  background: rgb(var(--accent-ink) / 0.12);
+  border: 1px solid rgb(var(--accent-ink) / 0.35);
   border-radius: 3px;
   padding: 0 0.25rem;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -532,5 +594,5 @@ body {
   cursor: pointer;
 }
 .note-mention:hover {
-  background: rgb(var(--accent) / 0.2);
+  background: rgb(var(--accent-ink) / 0.2);
 }

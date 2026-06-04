@@ -22,21 +22,47 @@ export function saveProjects(projects: Project[]): void {
   }
 }
 
-// Width (px) of the player pane in the player|notes split — a workspace
-// preference shared across tracks.
-const SPLIT_KEY = 'sound-annotator:player-width'
-export const DEFAULT_PLAYER_WIDTH = 510
+// Color theme preference. 'system' follows the OS (and live-updates with it);
+// 'light' / 'dark' are explicit overrides that stick. Defaults to 'system'.
+// The initial paint is handled by an inline boot script in index.html (no
+// flash); this is the source of truth the React layer reads and writes.
+export type ThemePref = 'system' | 'light' | 'dark'
 
-export function loadPlayerWidth(): number {
+const THEME_KEY = 'sound-annotator:theme'
+
+export function loadTheme(): ThemePref {
   try {
-    const n = parseInt(localStorage.getItem(SPLIT_KEY) ?? '', 10)
-    return Number.isFinite(n) ? n : DEFAULT_PLAYER_WIDTH
+    const v = localStorage.getItem(THEME_KEY)
+    return v === 'light' || v === 'dark' || v === 'system' ? v : 'system'
   } catch {
-    return DEFAULT_PLAYER_WIDTH
+    return 'system'
   }
 }
 
-export function savePlayerWidth(px: number): void {
+export function saveTheme(pref: ThemePref): void {
+  try {
+    localStorage.setItem(THEME_KEY, pref)
+  } catch {
+    /* ignore */
+  }
+}
+
+// Width (px) of the notes pane in the player|notes split — a workspace
+// preference shared across tracks. Notes is the fixed column; the player
+// absorbs window-resize changes (and inspector-drag changes when docked).
+const SPLIT_KEY = 'sound-annotator:notes-width'
+export const DEFAULT_NOTES_WIDTH = 460
+
+export function loadNotesWidth(): number {
+  try {
+    const n = parseInt(localStorage.getItem(SPLIT_KEY) ?? '', 10)
+    return Number.isFinite(n) ? n : DEFAULT_NOTES_WIDTH
+  } catch {
+    return DEFAULT_NOTES_WIDTH
+  }
+}
+
+export function saveNotesWidth(px: number): void {
   try {
     localStorage.setItem(SPLIT_KEY, String(Math.round(px)))
   } catch {
@@ -137,6 +163,29 @@ export function loadNoteOrder(): NoteOrder {
 export function saveNoteOrder(mode: NoteOrder): void {
   try {
     localStorage.setItem(NOTE_ORDER_KEY, mode)
+  } catch {
+    /* ignore */
+  }
+}
+
+// View-only mode keeps its own ordering, separate from the editor's: it offers
+// only Timeline / Live (no 'auto') and defaults to 'live' — viewers watch the
+// notes track the playhead. 'auto' from an older value collapses to 'live'.
+const VIEW_NOTE_ORDER_KEY = 'sound-annotator:note-order-view'
+
+export function loadViewNoteOrder(): NoteOrder {
+  try {
+    const v = localStorage.getItem(VIEW_NOTE_ORDER_KEY)
+    if (v === 'timeline' || v === 'live') return v
+    return 'live'
+  } catch {
+    return 'live'
+  }
+}
+
+export function saveViewNoteOrder(mode: NoteOrder): void {
+  try {
+    localStorage.setItem(VIEW_NOTE_ORDER_KEY, mode === 'auto' ? 'live' : mode)
   } catch {
     /* ignore */
   }

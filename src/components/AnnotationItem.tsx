@@ -5,6 +5,9 @@ import { noteLabel, formatTime } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
+import { hueText } from '../lib/noteColors'
+import { useResolvedTheme } from '../lib/theme'
+import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
 import type { MentionItem } from './MentionList'
 
@@ -14,6 +17,8 @@ interface Props {
   active: boolean
   isPlaying: boolean
   currentTime: number
+  /** Playback rate, so the progress bar can extrapolate smoothly between ticks. */
+  playbackRate?: number
   readOnly?: boolean
   /** Editor mode: this note is the one open in the inspector. */
   selected?: boolean
@@ -45,6 +50,7 @@ export default function AnnotationItem({
   active,
   isPlaying,
   currentTime,
+  playbackRate = 1,
   readOnly = false,
   selected = false,
   onSelect,
@@ -56,6 +62,7 @@ export default function AnnotationItem({
   onSeekNote,
   mentionItems,
 }: Props) {
+  const theme = useResolvedTheme()
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const tags = tagsOf(annotation)
 
@@ -64,7 +71,14 @@ export default function AnnotationItem({
   // Notes without an end last 3 seconds (for the progress bar + "playing" state).
   const effectiveEnd = annotation.end != null ? annotation.end : annotation.start + 3
   const span = Math.max(0.001, effectiveEnd - annotation.start)
-  const progress = Math.min(1, Math.max(0, (currentTime - annotation.start) / span))
+  // Smoothed to the frame rate so the bar glides between the player's coarse
+  // time ticks (the YouTube poll is only 4×/s) instead of stepping.
+  const progress = useSmoothProgress(currentTime, {
+    start: annotation.start,
+    span,
+    playing: isPlaying,
+    rate: playbackRate,
+  })
 
   const stop = (e: MouseEvent) => e.stopPropagation()
 
@@ -98,7 +112,7 @@ export default function AnnotationItem({
       className={`group relative cursor-pointer transition ${
         enterAnim ? 'animate-note-in' : ''
       } ${
-        active ? 'z-20 bg-raised' : selected ? 'bg-raised' : 'hover:bg-raised/25'
+        active ? 'z-20 bg-rowsel' : selected ? 'bg-rowsel' : 'hover:bg-rowsel/25'
       } ${isPlaying && !focused ? 'opacity-50' : ''}`}
     >
       {/* progress bar along the top border */}
@@ -132,7 +146,7 @@ export default function AnnotationItem({
           }}
           title="Jump to this moment and pin it to the top"
           aria-label={`Seek to ${label}`}
-          className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-ink"
+          className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-onbright"
           style={{ background: color }}
         >
           <Play size={9} className="fill-current" />
@@ -179,7 +193,7 @@ export default function AnnotationItem({
             <span
               key={t}
               className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-              style={{ borderColor: info.color, color: info.color }}
+              style={{ borderColor: hueText(info.color, theme), color: hueText(info.color, theme) }}
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
@@ -199,7 +213,7 @@ export default function AnnotationItem({
         <div className="flex-1" />
 
         {active && (
-          <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-accent">
+          <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-accentink">
             <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
             playing
           </span>

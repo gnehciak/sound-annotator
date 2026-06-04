@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
 import type { Annotation, ProjectSource } from '../types'
-import { colorForId } from '../lib/noteColors'
+import { colorForId, hueText } from '../lib/noteColors'
 import { formatTime, noteLabel, notePreview } from '../lib/format'
 import { resolveTag, tagsOf } from '../lib/tags'
 import { loadOverviewZoom, saveOverviewZoom, type OverviewZoom } from '../lib/storage'
+import { useResolvedTheme } from '../lib/theme'
 
 interface Props {
   annotations: Annotation[]
@@ -106,6 +107,7 @@ export default function TrackOverview({
   onSeekNote,
   className = '',
 }: Props) {
+  const theme = useResolvedTheme()
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [railH, setRailH] = useState(0)
   const [hovered, setHovered] = useState<string | null>(null)
@@ -366,7 +368,7 @@ export default function TrackOverview({
               disabled={!scrollable}
               title="Scroll to the playhead"
               aria-label="Scroll to the playhead"
-              className={`${btn} rounded-sm p-1 hover:text-accent`}
+              className={`${btn} rounded-sm p-1 hover:text-accentink`}
             >
               <Crosshair size={12} />
             </button>
@@ -514,7 +516,7 @@ export default function TrackOverview({
                     >
                       <span
                         className="shrink-0 font-mono text-[11px] font-semibold tabular-nums"
-                        style={{ color: p.color }}
+                        style={{ color: hueText(p.color, theme) }}
                       >
                         {p.label}
                       </span>
@@ -590,7 +592,7 @@ function Stat({
   return (
     <div className="flex items-baseline justify-between gap-2">
       <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{label}</span>
-      <span className={`font-mono text-xs tabular-nums ${accent ? 'text-accent' : 'text-fg'}`}>
+      <span className={`font-mono text-xs tabular-nums ${accent ? 'text-accentink' : 'text-fg'}`}>
         {value}
       </span>
     </div>

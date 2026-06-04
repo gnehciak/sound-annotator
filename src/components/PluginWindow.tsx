@@ -55,7 +55,7 @@ export default function PluginWindow({
         {title}
       </span>
       {subtitle && (
-        <span className="shrink-0 font-mono text-[11px] tracking-wider text-accent">
+        <span className="shrink-0 font-mono text-[11px] tracking-wider text-accentink">
           {subtitle}
         </span>
       )}

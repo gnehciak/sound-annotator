@@ -20,7 +20,7 @@ export default function Gate({ children }: { children: React.ReactNode }) {
 function Splash({ label }: { label: string }) {
   return (
     <div className="flex h-full animate-fade-in flex-col items-center justify-center gap-3 bg-ink text-muted">
-      <span className="animate-now-pulse text-2xl text-accent">◉</span>
+      <span className="animate-now-pulse text-2xl text-accentink">◉</span>
       <span className="font-mono text-xs uppercase tracking-[0.2em]">{label}</span>
     </div>
   )
@@ -47,7 +47,7 @@ function SignIn() {
     <div className="flex h-full animate-fade-in items-center justify-center bg-ink text-fg">
       <div className="w-full max-w-sm animate-panel-in border border-line bg-panel p-8">
         <div className="mb-6 flex items-center gap-2">
-          <span className="text-accent">◉</span>
+          <span className="text-accentink">◉</span>
           <span className="text-xs font-semibold uppercase tracking-[0.22em]">
             Sound&nbsp;Annotator
           </span>
@@ -60,14 +60,14 @@ function SignIn() {
         <button
           onClick={go}
           disabled={busy}
-          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 bg-accent py-2.5 text-sm font-bold text-ink hover:brightness-110 disabled:opacity-60"
+          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 bg-accent py-2.5 text-sm font-bold text-onbright hover:brightness-110 disabled:opacity-60"
         >
           <LogIn size={16} />
           {busy ? 'Opening…' : 'Continue with Google'}
         </button>
 
         {error && (
-          <p className="mt-3 font-mono text-[11px] text-rose-400">{error}</p>
+          <p className="mt-3 font-mono text-[11px] text-danger">{error}</p>
         )}
       </div>
     </div>
@@ -79,15 +79,15 @@ function SetupNotice() {
     <div className="flex h-full items-center justify-center bg-ink text-fg">
       <div className="w-full max-w-md border border-line bg-panel p-8">
         <div className="mb-4 flex items-center gap-2">
-          <span className="text-accent">◉</span>
+          <span className="text-accentink">◉</span>
           <span className="text-xs font-semibold uppercase tracking-[0.22em]">
             Sound&nbsp;Annotator
           </span>
         </div>
         <h1 className="text-lg font-semibold">Firebase not configured</h1>
         <p className="mt-2 text-sm text-muted">
-          Create a <code className="text-accent">.env.local</code> from{' '}
-          <code className="text-accent">.env.example</code> and paste your
+          Create a <code className="text-accentink">.env.local</code> from{' '}
+          <code className="text-accentink">.env.example</code> and paste your
           Firebase web-app config values, then restart the dev server.
         </p>
       </div>

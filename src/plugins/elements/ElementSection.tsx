@@ -31,7 +31,7 @@ export default function ElementSection({
             onClick={onRemove}
             title={`Remove ${category.label}`}
             aria-label={`Remove ${category.label}`}
-            className="press rounded p-0.5 text-muted hover:text-rose-400"
+            className="press rounded p-0.5 text-muted hover:text-danger"
           >
             <X size={13} />
           </button>

@@ -1,5 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { resolveTag } from '../lib/tags'
+import { hueText } from '../lib/noteColors'
+import { useResolvedTheme } from '../lib/theme'
 
 export interface MentionItem {
   id: string
@@ -24,6 +26,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
   { items, command },
   ref,
 ) {
+  const theme = useResolvedTheme()
   const [selected, setSelected] = useState(0)
   useEffect(() => setSelected(0), [items])
 
@@ -88,7 +91,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                         <span
                           key={t}
                           className="font-mono text-[10px] uppercase tracking-wider"
-                          style={{ color: info.color }}
+                          style={{ color: hueText(info.color, theme) }}
                         >
                           {info.label}
                         </span>

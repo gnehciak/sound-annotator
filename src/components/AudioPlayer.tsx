@@ -3,6 +3,7 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin, { type Region } from 'wavesurfer.js/plugins/regions'
 import type { PlayerHandle } from '../types'
 import { colorForId } from '../lib/noteColors'
+import { useResolvedTheme, cssRgb } from '../lib/theme'
 
 export interface RegionSpec {
   id: string
@@ -36,6 +37,7 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
   ref,
 ) {
   const { url } = props
+  const theme = useResolvedTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
   const regionsRef = useRef<RegionsPlugin | null>(null)
@@ -91,9 +93,11 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
       container: containerRef.current,
       url,
       height: 88,
-      waveColor: '#4d473a',
-      progressColor: '#f5a623',
-      cursorColor: '#e9e4d8',
+      // Canvas colors are read from the live theme tokens (a separate effect
+      // re-paints them when the theme flips, since canvas ignores CSS vars).
+      waveColor: cssRgb('--border-strong'),
+      progressColor: cssRgb('--accent'),
+      cursorColor: cssRgb('--text'),
       barWidth: 2,
       barGap: 1,
       barRadius: 1,
@@ -169,6 +173,16 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
     wsRef.current?.setVolume(props.volume)
   }, [props.volume])
 
+  // Re-paint the waveform when the theme flips: the canvas was drawn with the
+  // old token colors and won't follow the CSS variables on its own.
+  useEffect(() => {
+    wsRef.current?.setOptions({
+      waveColor: cssRgb('--border-strong'),
+      progressColor: cssRgb('--accent'),
+      cursorColor: cssRgb('--text'),
+    })
+  }, [theme])
+
   // View-only locks the waveform: no drag-to-create, and existing ranges can't
   // be moved or resized. Re-runs after the player (re)mounts on a url change.
   const { readOnly } = props
@@ -181,7 +195,7 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
     }
     if (readOnly) return
     const disable = regions.enableDragSelection(
-      { color: 'rgba(245, 166, 35, 0.25)' },
+      { color: cssRgb('--accent', 0.25) },
       5,
     )
     return () => {

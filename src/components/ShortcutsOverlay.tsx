@@ -68,7 +68,7 @@ export default function ShortcutsOverlay({
         <div className="grid gap-x-8 gap-y-5 p-4 sm:grid-cols-2">
           {GROUPS.map((g) => (
             <div key={g.title}>
-              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-accentink">
                 {g.title}
               </div>
               <ul className="space-y-1.5">

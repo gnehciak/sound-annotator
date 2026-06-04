@@ -35,7 +35,7 @@ export default function SourcePicker({ onYoutube, onAudioFile }: Props) {
           />
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accent hover:bg-accent/20"
+            className="inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
           >
             <Play size={14} /> Load
           </button>
@@ -69,8 +69,8 @@ export default function SourcePicker({ onYoutube, onAudioFile }: Props) {
           }}
           className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded border-2 border-dashed px-4 py-6 text-sm ${
             over
-              ? 'border-accent bg-accent/5 text-accent'
-              : 'border-line text-muted hover:border-accent hover:text-accent'
+              ? 'border-accent bg-accent/5 text-accentink'
+              : 'border-line text-muted hover:border-accent hover:text-accentink'
           }`}
         >
           <input

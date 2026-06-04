@@ -162,6 +162,44 @@ screen is amber, something non-temporal has stolen the signal color.
 emotion or hierarchy. Any color-coded element must also carry a text label
 (timecode), so it reads correctly on a dim projector and for colorblind users.
 
+### Two Themes (Dark / Light)
+
+The system ships **dark** (default, above) and **light** off one set of CSS
+variables. Light is **"The Daylit Station": a warm-paper studio with the lights
+on**, not a generic light web app — every surface stays warm, including the notes
+area. The user picks System / Light / Dark from a header icon button;
+`System` follows the OS. The theme is `data-theme` on `<html>` (a boot script in
+`index.html` paints it before first render, so there's no flash); tokens live in
+`src/index.css`, the runtime in `src/lib/theme.ts`.
+
+Light surface ramp (warm, keeps the relative order inset < ink < panel < raised):
+**ink** `#eae4d8` · **panel** `#f2eee5` · **raised** `#fbf8f2` · **inset**
+`#ded7c7` · **border** `#d2c9b6` · **text** `#2a2620` · **muted** `#5f5646`.
+
+Three light-specific rules, all WCAG-AA verified:
+
+- **The Warm-Note-Page Rule.** The notes list and editor sit on a dedicated
+  `--note` surface. It is the warm base tone (`#eae4d8`) in light — *not* stark
+  white — so the notes read as part of the warm instrument, the deepest warm
+  surface with the chrome panels lifting lighter around it (the same relationship
+  dark uses). (`--note` equals ink in dark.) The active/selected row uses
+  `--row-sel`, a slightly lighter/warmer highlight (`#f3e8cd`) that reads against
+  the warm page; it equals `raised` in dark. (Note: a pure-white page was tried so
+  pasted white-bg screenshots would blend, but it read too clinical against the
+  warm theme, so warmth wins; a pasted white screenshot shows its own edges.)
+- **The Two-Amber Rule.** Amber stays the only signal, but splits by job:
+  `--accent` is the bright signal for **fills and graphics** (Play, spines, dots,
+  progress; `#cc7a0a` in light), and `--accent-ink` is the contrast-safe amber for
+  **text, the LED readout, links, and the focus ring** (`#874e05` in light). They
+  are **identical in dark**, so dark is unchanged and the split only exists where
+  bright amber would fail AA as text on a pale surface. `--on-bright` is the
+  always-dark text that sits *on* an amber/hue fill (timecode labels, the Play
+  button).
+- **The Hue-As-Data-Holds Rule.** The note/tag/element hues stay raw as **fills**
+  in both themes; used as **text or a 1px border** on the white page they are
+  mixed toward ink for AA (`src/lib/noteColors.ts` → `hueText`). The LED glow is
+  dropped in light (a glow is a dark-screen affordance).
+
 ## 3. Typography
 
 **Display / Body Font:** system-ui (with 'Segoe UI', Roboto, sans-serif)
@@ -201,6 +239,9 @@ darker. The only shadows in the system are 1px bevels used to make a handful of
 well, inputs) and a subtle raised highlight on the primary Play button.
 
 ### Shadow Vocabulary
+Both bevels are **theme-tuned tokens** (`--bevel-inset` / `--bevel-raised`):
+heavy on dark, whisper-soft on light so a black inset shadow never dirties a pale
+surface. Values below are the dark theme.
 - **Inset bevel** (`box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.6)`): Recessed
   screens only: LED readouts, the meter well, text inputs, the editor canvas.
 - **Raised bevel** (`box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 3px rgb(0 0 0 / 0.32)`):

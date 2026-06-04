@@ -10,12 +10,26 @@ export default {
         panel: 'rgb(var(--bg-panel) / <alpha-value>)',
         raised: 'rgb(var(--bg-raised) / <alpha-value>)',
         inset: 'rgb(var(--bg-inset) / <alpha-value>)',
+        note: 'rgb(var(--surface-note) / <alpha-value>)',
         line: 'rgb(var(--border) / <alpha-value>)',
         'line-strong': 'rgb(var(--border-strong) / <alpha-value>)',
         fg: 'rgb(var(--text) / <alpha-value>)',
+        'fg-strong': 'rgb(var(--text-strong) / <alpha-value>)',
         muted: 'rgb(var(--text-muted) / <alpha-value>)',
+        // Two ambers: `accent` is the bright signal for FILLS/graphics;
+        // `accentink` is the AA-safe amber for TEXT/icons/LED. Identical in
+        // dark, divergent in light (bright amber fails AA as text on a pale
+        // surface). Use `text-accentink` for amber text, `bg-accent` for fills.
         accent: 'rgb(var(--accent) / <alpha-value>)',
+        accentink: 'rgb(var(--accent-ink) / <alpha-value>)',
         meter: 'rgb(var(--meter) / <alpha-value>)',
+        peak: 'rgb(var(--peak) / <alpha-value>)',
+        danger: 'rgb(var(--danger) / <alpha-value>)',
+        // Text that sits on an amber/hue fill — dark in both themes.
+        onbright: 'rgb(var(--on-bright) / <alpha-value>)',
+        // Selected/active note row — = raised in dark, a warm highlight on the
+        // white note page in light (where raised would vanish into the page).
+        rowsel: 'rgb(var(--row-sel) / <alpha-value>)',
       },
       fontFamily: {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],

@@ -179,7 +179,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           aria-label="Loading video"
           aria-busy="true"
         >
-          <Loader2 size={44} className="animate-spin text-accent" />
+          <Loader2 size={44} className="animate-spin text-accentink" />
         </div>
       ) : (
         // Ready and idle: opaque cover with our play button, hiding YT's poster.
@@ -192,7 +192,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           aria-label="Play video"
           className="absolute inset-0 flex items-center justify-center bg-ink transition-colors hover:bg-ink/90"
         >
-          <Play size={44} className="fill-current text-accent" />
+          <Play size={44} className="fill-current text-accentink" />
         </button>
       )}
     </div>

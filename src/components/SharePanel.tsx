@@ -59,7 +59,7 @@ export default function SharePanel({ project, onToggleShare }: Props) {
         title={shared ? 'Shared — manage link' : 'Share a read-only link'}
         className={`press inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
           shared
-            ? 'border-accent/60 bg-accent/10 text-accent'
+            ? 'border-accent/60 bg-accent/10 text-accentink'
             : 'border-line text-muted hover:border-line-strong hover:text-fg'
         }`}
       >
@@ -73,7 +73,7 @@ export default function SharePanel({ project, onToggleShare }: Props) {
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-fg">
                 {shared ? (
-                  <Globe size={13} className="text-accent" />
+                  <Globe size={13} className="text-accentink" />
                 ) : (
                   <Lock size={13} className="text-muted" />
                 )}
@@ -115,7 +115,7 @@ export default function SharePanel({ project, onToggleShare }: Props) {
               <button
                 onClick={copy}
                 title="Copy link"
-                className="press inline-flex shrink-0 items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg hover:border-accent hover:text-accent"
+                className="press inline-flex shrink-0 items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
               >
                 {copied ? <Check size={12} /> : <Copy size={12} />}
                 {copied ? 'Copied' : 'Copy'}

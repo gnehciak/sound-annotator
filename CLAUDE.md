@@ -21,11 +21,21 @@ strategic and visual system; read them before any UI change:
   typography, components. Creative North Star: **"The Listening Station."**
   Machine-readable extensions live in `.impeccable/design.json`.
 
-Design tokens are defined as CSS variables in `src/index.css` (`:root`) and
-mapped to semantic Tailwind colors in `tailwind.config.js`
-(`ink / panel / raised / inset / line / line-strong / fg / muted / accent /
-meter`). Per-note colors live in `src/lib/noteColors.ts`. Retune the
-whole theme from those files.
+Design tokens are defined as CSS variables in `src/index.css` and mapped to
+semantic Tailwind colors in `tailwind.config.js` (`ink / panel / raised / inset /
+note / line / line-strong / fg / fg-strong / muted / accent / accentink / meter /
+peak / danger / onbright / rowsel`). Per-note colors live in
+`src/lib/noteColors.ts`. Retune the whole theme from those files.
+
+**Dark + light themes** flow off that one token set. `src/index.css` has a
+`:root, [data-theme='dark']` block (warm-dark, the default) and a
+`[data-theme='light']` block (warm-paper — every surface warm, incl. the notes). The
+theme is `data-theme` on `<html>`: a boot script in `index.html` paints it
+flash-free before render, and `src/lib/theme.ts` is the runtime (System / Light /
+Dark; `useTheme` controller, `useResolvedTheme` subscriber for canvas, `cssRgb`
+reader). Amber splits into `--accent` (bright fills) and `--accent-ink` (AA text)
+— identical in dark, divergent in light. See DESIGN.md §2 "Two Themes". Keep both
+blocks in sync when adding a token, and AA-verify any new light pair.
 
 For design tasks, invoke the impeccable skill (e.g. `/impeccable critique`,
 `/impeccable audit`, `/impeccable polish`, `/impeccable live`). It reads

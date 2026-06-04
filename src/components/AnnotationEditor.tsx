@@ -195,7 +195,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
             onClick={() => fileInputRef.current?.click()}
           />
           {uploading > 0 ? (
-            <span className="ml-1 flex items-center gap-1 font-mono text-[10px] text-accent">
+            <span className="ml-1 flex items-center gap-1 font-mono text-[10px] text-accentink">
               <Loader2 size={11} className="animate-spin" />
               Uploading image…
             </span>
@@ -243,7 +243,7 @@ function ToolbarButton({
       onClick={onClick}
       className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
         active
-          ? 'bg-accent/15 text-accent'
+          ? 'bg-accent/15 text-accentink'
           : 'text-muted hover:bg-raised hover:text-fg'
       }`}
     >

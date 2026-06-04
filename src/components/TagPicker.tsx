@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Tag as TagIcon, Plus, X, Check } from 'lucide-react'
 import { TAGS, resolveTag } from '../lib/tags'
 import { usePresence } from '../lib/usePresence'
+import { hueText } from '../lib/noteColors'
+import { useResolvedTheme } from '../lib/theme'
 
 interface Props {
   /** Tags currently on the note (preset ids or custom text). */
@@ -18,6 +20,7 @@ interface Props {
  * be set in one pass. Mirrors TagFilter's dropdown styling.
  */
 export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
+  const theme = useResolvedTheme()
   const [open, setOpen] = useState(false)
   const pop = usePresence(open)
   const [text, setText] = useState('')
@@ -70,7 +73,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
           <span
             key={t}
             className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-            style={{ borderColor: c.color, color: c.color }}
+            style={{ borderColor: hueText(c.color, theme), color: hueText(c.color, theme) }}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
@@ -176,7 +179,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
                   style={{ background: t.color }}
                 />
                 <span className="flex-1 truncate">{t.label}</span>
-                {on && <Check size={12} className="shrink-0 text-accent" />}
+                {on && <Check size={12} className="shrink-0 text-accentink" />}
               </button>
             )
           })}

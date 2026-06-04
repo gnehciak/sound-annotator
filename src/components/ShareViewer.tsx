@@ -9,10 +9,21 @@ import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
 import Transport from './Transport'
+import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
+import TitleBar from './TitleBar'
+import NotesHeaderControls from './NotesHeaderControls'
+import SplitHandle from './SplitHandle'
+import ExportPdfButton from './ExportPdfButton'
+import { useNotesView } from '../lib/useNotesView'
+import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import type { MentionItem } from './MentionList'
 
 type Status = 'loading' | 'ready' | 'notfound'
+
+// How long consecutive ±step seeks keep accumulating before re-anchoring to
+// the live playhead (see `step`).
+const STEP_WINDOW = 1200
 
 /**
  * Read-only viewer for a shared project, rendered (outside the auth Gate) when
@@ -33,6 +44,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  const [notesPad, setNotesPad] = useState(0)
 
   function changeVolume(v: number) {
     setVolume(v)
@@ -52,7 +64,26 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   }
 
   const playerRef = useRef<PlayerHandle>(null)
-  const notesScrollRef = useRef<HTMLDivElement>(null)
+  const notesScrollRef = useRef<HTMLDivElement | null>(null)
+  const notesRoRef = useRef<ResizeObserver | null>(null)
+
+  // Pad the bottom of the notes panel so the playing note can still scroll to
+  // the top (auto-pin) even when the notes don't fill the panel. Mirrors App.
+  const setNotesScroll = useCallback((el: HTMLDivElement | null) => {
+    notesScrollRef.current = el
+    notesRoRef.current?.disconnect()
+    if (!el) return
+    const update = () => setNotesPad(Math.max(0, el.clientHeight - 64))
+    update()
+    notesRoRef.current = new ResizeObserver(update)
+    notesRoRef.current.observe(el)
+  }, [])
+
+  // Accumulate consecutive ±step seeks (the 1s/5s buttons) against a
+  // short-lived target instead of the advancing playhead — mirrors the editor
+  // so slow taps keep moving instead of being eaten by playback between them.
+  const seekTargetRef = useRef<number | null>(null)
+  const lastStepRef = useRef(0)
 
   // Fetch once. firestore.rules only returns the doc when it's `shared`, so a
   // private or missing id resolves to null → "not available".
@@ -72,6 +103,28 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
   const annotations = useMemo(() => project?.annotations ?? [], [project])
 
+  // The same resizable split + notes-view controls the editor uses (read-only
+  // here, but filter/order/pin/cue never mutate notes).
+  const {
+    splitRef,
+    dragging: draggingNotes,
+    startSplitDrag,
+    resetSplit,
+    style: splitStyle,
+  } = useNotesSplit()
+  const {
+    noteOrder,
+    changeNoteOrder,
+    autoPin,
+    toggleAutoPin,
+    autoSeek,
+    toggleAutoSeek,
+    setTagFilter,
+    filterTags,
+    activeFilter,
+    visibleAnnotations,
+  } = useNotesView(annotations, true)
+
   const handleTime = useCallback((t: number) => setCurrentTime(t), [])
   const handleDuration = useCallback((d: number) => setDuration(d), [])
   const handlePlaying = useCallback((p: boolean) => setIsPlaying(p), [])
@@ -80,6 +133,23 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     playerRef.current?.seekTo(t)
     setCurrentTime(t)
   }, [])
+
+  const step = useCallback(
+    (delta: number) => {
+      const recent = Date.now() - lastStepRef.current < STEP_WINDOW
+      const base =
+        recent && seekTargetRef.current != null
+          ? seekTargetRef.current
+          : playerRef.current?.getCurrentTime?.() ?? currentTime
+      let target = base + delta
+      if (duration > 0) target = Math.min(target, duration)
+      target = Math.max(0, target)
+      seekTargetRef.current = target
+      lastStepRef.current = Date.now()
+      seek(target)
+    },
+    [currentTime, duration, seek],
+  )
   const play = useCallback(() => {
     setIsPlaying(true)
     playerRef.current?.play()
@@ -152,7 +222,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   if (status === 'loading') {
     return (
       <div className="flex h-full animate-fade-in flex-col items-center justify-center gap-3 bg-ink text-muted">
-        <span className="animate-now-pulse text-2xl text-accent">◉</span>
+        <span className="animate-now-pulse text-2xl text-accentink">◉</span>
         <span className="font-mono text-xs uppercase tracking-[0.2em]">
           Opening shared track…
         </span>
@@ -164,7 +234,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     return (
       <div className="flex h-full items-center justify-center bg-ink p-6 text-fg">
         <div className="w-full max-w-md border border-line bg-panel p-8 text-center">
-          <span className="text-accent">◉</span>
+          <span className="text-accentink">◉</span>
           <h1 className="mt-3 text-lg font-semibold">Link unavailable</h1>
           <p className="mt-2 text-sm text-muted">
             This shared track doesn’t exist or sharing was turned off. Ask
@@ -172,7 +242,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </p>
           <a
             href={window.location.pathname}
-            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 bg-accent px-4 py-2 text-sm font-bold text-ink hover:brightness-110"
+            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 bg-accent px-4 py-2 text-sm font-bold text-onbright hover:brightness-110"
           >
             Open Sound Annotator
           </a>
@@ -191,16 +261,17 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
-        <span className="text-accent">◉</span>
+        <span className="text-accentink">◉</span>
         <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator
         </span>
-        <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accent">
+        <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
           <Eye size={11} /> Read only
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
           {project.title}
         </span>
+        <ExportPdfButton project={project} />
         <a
           href={window.location.pathname}
           title="Open the full app"
@@ -210,14 +281,22 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         </a>
       </header>
 
-      {/* Body: player on top/left, notes on bottom/right */}
-      <div className="flex min-h-0 flex-1 flex-col min-[660px]:flex-row">
-        <div className="flex shrink-0 flex-col overflow-y-auto border-b border-line min-[660px]:w-[440px] min-[660px]:max-w-[60%] min-[660px]:border-b-0 min-[660px]:border-r">
+      {/* Body: the same resizable player|notes split the editor uses — notes is
+          the fixed column, the player flexes (and stacks above on narrow). */}
+      <div
+        ref={splitRef}
+        className={`flex min-h-0 flex-1 flex-col ${NOTES_SPLIT_660.row}`}
+        style={splitStyle}
+      >
+        {/* Player column — the flex column. */}
+        <div
+          className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${NOTES_SPLIT_660.player}`}
+        >
           <TitleBar
             left="Player"
             right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
           />
-          <div className="space-y-2.5 p-3">
+          <div className="shrink-0 space-y-2.5 p-3">
             {hasPlayer ? (
               <PlayerPane
                 ref={playerRef}
@@ -253,6 +332,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 readOnly
                 onPlayPause={() => (isPlaying ? pause() : play())}
                 onSeek={seek}
+                onStep={step}
                 onSetRate={setPlaybackRate}
                 onSetVolume={changeVolume}
                 onToggleMute={toggleMute}
@@ -261,43 +341,80 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               />
             )}
           </div>
-        </div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TitleBar
-            left="Notes"
-            right={`${annotations.length} ${annotations.length === 1 ? 'note' : 'notes'}`}
-          />
-          <div ref={notesScrollRef} className="relative flex-1 overflow-y-auto">
-            <AnnotationList
+          {hasPlayer && (
+            <TrackOverview
+              className="min-h-[160px] flex-1"
+              resetKey={project.id}
               annotations={annotations}
+              duration={duration}
               currentTime={currentTime}
               isPlaying={isPlaying}
+              playbackRate={playbackRate}
+              source={source}
+              onSeek={seek}
+              onSeekNote={seekToNote}
+            />
+          )}
+        </div>
+
+        {/* Drag handle — resize the split (double-click to reset). */}
+        <SplitHandle
+          variantClass={NOTES_SPLIT_660.handle}
+          dragging={draggingNotes}
+          onPointerDown={(e) => startSplitDrag(e, 0)}
+          onDoubleClick={resetSplit}
+        />
+
+        {/* Notes column — the fixed-width column. */}
+        <div className={`flex min-w-0 flex-1 flex-col ${NOTES_SPLIT_660.notes}`}>
+          <TitleBar
+            left="Notes"
+            right={
+              activeFilter.size > 0
+                ? `${visibleAnnotations.length} / ${annotations.length}`
+                : `${annotations.length} ${annotations.length === 1 ? 'note' : 'notes'}`
+            }
+            actions={
+              <NotesHeaderControls
+                filterTags={filterTags}
+                activeFilter={activeFilter}
+                onTagFilter={setTagFilter}
+                noteOrder={noteOrder}
+                onNoteOrder={changeNoteOrder}
+                autoPin={autoPin}
+                onToggleAutoPin={toggleAutoPin}
+                autoSeek={autoSeek}
+                onToggleAutoSeek={toggleAutoSeek}
+                viewOnly
+              />
+            }
+          />
+          <div
+            ref={setNotesScroll}
+            className="relative flex-1 overflow-y-auto"
+          >
+            <AnnotationList
+              annotations={visibleAnnotations}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              playbackRate={playbackRate}
               readOnly
+              filtered={activeFilter.size > 0}
               scrollRef={notesScrollRef}
+              noteOrder={noteOrder}
+              autoPin={autoPin}
               onSeek={seek}
               onPlay={play}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
             />
+            {visibleAnnotations.length > 0 && (
+              <div aria-hidden style={{ height: notesPad }} />
+            )}
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function TitleBar({ left, right }: { left: string; right?: string }) {
-  return (
-    <div className="flex items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5">
-      <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
-        {left}
-      </span>
-      {right && (
-        <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          {right}
-        </span>
-      )}
     </div>
   )
 }

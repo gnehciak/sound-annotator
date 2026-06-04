@@ -53,7 +53,7 @@ export default function TagFilter({ tags, selected, onChange }: Props) {
         aria-label="Filter notes by tag"
         className={`press flex items-center gap-1 rounded-sm px-1.5 py-1 font-mono text-[10px] uppercase tracking-wider ${
           active
-            ? 'bg-raised text-accent'
+            ? 'bg-raised text-accentink'
             : 'text-muted hover:bg-raised hover:text-fg'
         }`}
       >
@@ -105,7 +105,7 @@ export default function TagFilter({ tags, selected, onChange }: Props) {
                     style={{ background: c.color }}
                   />
                   <span className="flex-1 truncate">{c.label}</span>
-                  {on && <Check size={12} className="shrink-0 text-accent" />}
+                  {on && <Check size={12} className="shrink-0 text-accentink" />}
                 </button>
               )
             })

@@ -8,6 +8,25 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Sound Annotator</title>
+    <!-- Resolve the theme before first paint so there's no light/dark flash.
+         Mirrors lib/theme.ts: 'system' (default) follows the OS; 'light' /
+         'dark' are explicit overrides. Classic (blocking) script on purpose. -->
+    <script>
+      ;(function () {
+        try {
+          var pref = localStorage.getItem('sound-annotator:theme') || 'system'
+          var dark =
+            pref === 'dark' ||
+            (pref !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var theme = dark ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.style.colorScheme = theme
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

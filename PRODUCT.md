@@ -29,7 +29,8 @@ class.
 
 Precise, technical, pro-tool. The interface should feel like a piece of studio
 gear or an editing application (DAW / NLE), not a web dashboard: confident,
-dense, instrument-like. Warm-dark surfaces, monospace timecodes, LED-style
+dense, instrument-like. Warm surfaces (a warm-dark default and a warm-paper light
+theme — "the same studio with the lights on"), monospace timecodes, LED-style
 readouts, a committed amber accent. UI copy is terse and functional (verb plus
 object on buttons, no marketing tone).
 

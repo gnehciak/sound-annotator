@@ -88,7 +88,7 @@ export default function FieldSelect({
           >
             <Check
               size={12}
-              className={value === opt ? 'text-accent' : 'opacity-0'}
+              className={value === opt ? 'text-accentink' : 'opacity-0'}
             />
             {opt}
           </button>

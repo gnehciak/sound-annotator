@@ -10,6 +10,8 @@ interface Props {
   annotations: Annotation[]
   currentTime: number
   isPlaying: boolean
+  /** Playback rate, forwarded so each note's progress bar smooths between ticks. */
+  playbackRate?: number
   readOnly?: boolean
   /** A tag filter is active and has hidden some (or all) notes. */
   filtered?: boolean
@@ -44,6 +46,7 @@ export default function AnnotationList({
   annotations,
   currentTime,
   isPlaying,
+  playbackRate = 1,
   readOnly = false,
   filtered = false,
   scrollRef,
@@ -326,9 +329,9 @@ export default function AnnotationList({
         ) : (
           <>
             No notes yet. Press play, then click{' '}
-            <span className="font-mono text-accent">Add note</span> to mark a
+            <span className="font-mono text-accentink">Add note</span> to mark a
             moment, or use{' '}
-            <span className="font-mono text-accent">Mark start / Mark end</span>{' '}
+            <span className="font-mono text-accentink">Mark start / Mark end</span>{' '}
             to note a whole section.
           </>
         )}
@@ -346,6 +349,7 @@ export default function AnnotationList({
           active={activeIds.has(a.id)}
           isPlaying={isPlaying}
           currentTime={currentTime}
+          playbackRate={playbackRate}
           readOnly={readOnly}
           selected={selectedId === a.id}
           onSelect={onSelect ? (seekToo) => onSelect(a.id, seekToo) : undefined}

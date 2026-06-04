@@ -39,8 +39,14 @@ export default function Popover({
       const p = panelRef.current
       if (!a || !p) return
       const r = a.getBoundingClientRect()
-      p.style.left = `${Math.round(r.left)}px`
       if (width === 'anchor') p.style.width = `${Math.round(r.width)}px`
+      // Clamp horizontally into the viewport (8px gutter) so a right-edge
+      // anchor's popover doesn't overflow off-screen.
+      const left = Math.max(
+        8,
+        Math.min(Math.round(r.left), window.innerWidth - p.offsetWidth - 8),
+      )
+      p.style.left = `${left}px`
       const below = window.innerHeight - r.bottom
       if (below < p.offsetHeight + 8 && r.top > below) {
         p.style.top = 'auto'

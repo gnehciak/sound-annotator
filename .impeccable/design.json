@@ -28,6 +28,26 @@
       "note-sky": { "role": "tertiary", "displayName": "Note Sky", "canonical": "#5aa8e6" },
       "note-orange": { "role": "tertiary", "displayName": "Note Orange", "canonical": "#ef8b4b" }
     },
+    "themes": {
+      "default": "dark",
+      "mechanism": "Set `data-theme` on <html>. 'system' (default) follows the OS and is resolved to light/dark in JS (src/lib/theme.ts); a flash-free boot script in index.html paints it before first render. The Tailwind semantic colors read CSS variables, so both themes flow from one set of tokens.",
+      "dark": {
+        "displayName": "The Listening Station (warm-dark studio gear)",
+        "tokens": { "ink": "#1a1813", "panel": "#211f18", "raised": "#2a271f", "inset": "#131210", "note": "#1a1813", "border": "#38342b", "border-strong": "#4d473a", "text": "#e9e4d8", "text-strong": "#ffffff", "muted": "#a89e8a", "accent": "#f5a623", "accent-ink": "#f5a623", "meter": "#9ccb63", "peak": "#ef6f6f", "danger": "#fb7185", "on-bright": "#1a1813", "row-sel": "#2a271f" }
+      },
+      "light": {
+        "displayName": "The Daylit Station (warm-paper chrome framing a white note page)",
+        "tokens": { "ink": "#eae4d8", "panel": "#f2eee5", "raised": "#fbf8f2", "inset": "#ded7c7", "note": "#eae4d8", "border": "#d2c9b6", "border-strong": "#b8ae98", "text": "#2a2620", "text-strong": "#1c1a16", "muted": "#5f5646", "accent": "#cc7a0a", "accent-ink": "#874e05", "meter": "#4f7d26", "peak": "#c2433b", "danger": "#be123c", "on-bright": "#1a1813", "row-sel": "#f3e8cd" }
+      },
+      "rules": [
+        "Two ambers: `--accent` is the bright signal for FILLS/graphics (Play, spines, dots, progress); `--accent-ink` is the AA-safe amber for TEXT/LED/links/focus. Identical in dark, divergent in light (bright amber fails AA as text on a pale surface).",
+        "The note page (`--note` / `bg-note`) is the warm base tone in light (NOT stark white — that read too clinical against the warm theme); it equals ink in dark. It is the deepest warm surface, with chrome panels lifting lighter around it.",
+        "`--on-bright` is the text that sits ON an amber/hue fill (timecode labels, the Play button): dark in both themes.",
+        "`--row-sel` is the selected/active note row: = raised in dark, a warm highlight on light (raised would vanish into the white page).",
+        "Note/tag/element hues stay raw as FILLS; used as TEXT or a 1px border on the white page they are mixed toward ink for AA (src/lib/noteColors.ts `hueText`).",
+        "Every light pair is WCAG AA verified: body/muted/placeholder/amber-text >= 4.5:1, non-text graphics >= 3:1."
+      ]
+    },
     "typographyMeta": {
       "display": { "displayName": "Track Title", "purpose": "The editable track title; the largest prose on screen. A tool, so it never shouts (<=1.125rem)." },
       "body": { "displayName": "Body", "purpose": "Note content and general UI copy; system humanist sans, ~65-75ch measure." },

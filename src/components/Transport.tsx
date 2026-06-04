@@ -32,6 +32,8 @@ interface Props {
   readOnly?: boolean
   onPlayPause: () => void
   onSeek: (t: number) => void
+  /** Relative ±seconds nudge (the 1s/5s buttons); accumulates across taps. */
+  onStep: (delta: number) => void
   onSetRate: (rate: number) => void
   onSetVolume: (v: number) => void
   onToggleMute: () => void
@@ -50,6 +52,7 @@ export default function Transport({
   readOnly = false,
   onPlayPause,
   onSeek,
+  onStep,
   onSetRate,
   onSetVolume,
   onToggleMute,
@@ -201,7 +204,7 @@ export default function Transport({
             title="Playback speed"
             className={`press inline-flex items-center gap-0.5 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${
               playbackRate !== 1
-                ? 'border-accent/60 bg-accent/10 text-accent'
+                ? 'border-accent/60 bg-accent/10 text-accentink'
                 : 'border-line bg-inset text-muted hover:text-fg'
             }`}
           >
@@ -230,7 +233,7 @@ export default function Transport({
                   }}
                   className={`flex w-full items-center justify-between px-2 py-1 font-mono text-[11px] tabular-nums ${
                     playbackRate === r
-                      ? 'bg-raised text-accent'
+                      ? 'bg-raised text-accentink'
                       : 'text-muted hover:bg-raised/50 hover:text-fg'
                   }`}
                 >
@@ -262,7 +265,7 @@ export default function Transport({
           <SkipBack size={13} />
         </button>
         <button
-          onClick={() => onSeek(Math.max(0, currentTime - 5))}
+          onClick={() => onStep(-5)}
           aria-label="Back 5 seconds"
           title="Jump back 5 seconds (Shift ←)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
@@ -270,7 +273,7 @@ export default function Transport({
           <ChevronsLeft size={13} /> 5s
         </button>
         <button
-          onClick={() => onSeek(Math.max(0, currentTime - 1))}
+          onClick={() => onStep(-1)}
           aria-label="Back 1 second"
           title="Jump back 1 second (←)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
@@ -280,13 +283,13 @@ export default function Transport({
         <button
           onClick={onPlayPause}
           title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-          className="press bevel-raised inline-flex w-24 items-center justify-center gap-1.5 bg-accent py-1.5 text-sm font-bold text-ink hover:brightness-110"
+          className="press bevel-raised inline-flex w-24 items-center justify-center gap-1.5 bg-accent py-1.5 text-sm font-bold text-onbright hover:brightness-110"
         >
           {isPlaying ? <Pause size={15} /> : <Play size={15} />}
           {isPlaying ? 'Pause' : 'Play'}
         </button>
         <button
-          onClick={() => onSeek(currentTime + 1)}
+          onClick={() => onStep(1)}
           aria-label="Forward 1 second"
           title="Jump forward 1 second (→)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
@@ -294,7 +297,7 @@ export default function Transport({
           1s <ChevronRight size={13} />
         </button>
         <button
-          onClick={() => onSeek(currentTime + 5)}
+          onClick={() => onStep(5)}
           aria-label="Forward 5 seconds"
           title="Jump forward 5 seconds (Shift →)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
@@ -372,7 +375,7 @@ function VolumeControl({
         aria-label={muted ? 'Unmute' : 'Mute'}
         aria-pressed={muted}
         title={muted ? 'Unmute' : 'Mute'}
-        className={`press ${muted ? 'text-accent' : 'text-muted hover:text-fg'}`}
+        className={`press ${muted ? 'text-accentink' : 'text-muted hover:text-fg'}`}
       >
         <Icon size={15} />
       </button>
