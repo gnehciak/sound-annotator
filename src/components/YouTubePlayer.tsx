@@ -12,6 +12,8 @@ import { loadYouTubeApi } from '../lib/youtube'
 interface Props {
   videoId: string
   playbackRate: number
+  /** 0–1; mapped to YouTube's 0–100 scale. */
+  volume: number
   onTime: (t: number) => void
   onDuration: (d: number) => void
   onPlayingChange: (playing: boolean) => void
@@ -19,7 +21,7 @@ interface Props {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, playbackRate, onTime, onDuration, onPlayingChange },
+  { videoId, playbackRate, volume, onTime, onDuration, onPlayingChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -30,6 +32,10 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   // current rate without re-creating the player on every speed change.
   const rateRef = useRef(playbackRate)
   rateRef.current = playbackRate
+  // Same idea for volume: the onReady closure applies whatever level is current
+  // when the (re)mounted player becomes ready.
+  const volRef = useRef(volume)
+  volRef.current = volume
   // Until the video has started once, we cover it to hide YouTube's poster
   // (title, avatar, share / watch-later buttons, big play button).
   const [started, setStarted] = useState(false)
@@ -70,6 +76,10 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
             setReady(true)
             onDuration(e.target.getDuration() || 0)
             e.target.setPlaybackRate?.(rateRef.current)
+            // Autoplay policies can start the player muted — unmute (unless we
+            // want silence) so our volume level actually takes effect.
+            if (volRef.current > 0) e.target.unMute?.()
+            e.target.setVolume?.(Math.round(volRef.current * 100))
           },
           onStateChange: (e: any) => {
             // 1 = playing, 2 = paused, 0 = ended, 3 = buffering. Ignore 3 for
@@ -121,6 +131,14 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
     playerRef.current?.setPlaybackRate?.(playbackRate)
   }, [playbackRate])
 
+  // Apply live volume changes (onReady handles the initial / post-remount level).
+  useEffect(() => {
+    const p = playerRef.current
+    if (!p) return
+    if (volume > 0) p.unMute?.()
+    p.setVolume?.(Math.round(volume * 100))
+  }, [volume])
+
   useImperativeHandle(
     ref,
     () => ({
@@ -133,7 +151,13 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   )
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+    // Cap the video at 50vh tall (keeping 16:9 + centred) so a wide player
+    // column doesn't squeeze the overview rail below it. Width tracks the
+    // height cap: min(100%, 50vh·16/9) ⇒ height ≤ 50vh.
+    <div
+      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg bg-black"
+      style={{ maxWidth: 'calc(50vh * 16 / 9)' }}
+    >
       <div ref={containerRef} className="h-full w-full" />
       {started ? (
         // Transparent click-catcher: blocks YouTube's hover title bar and lets

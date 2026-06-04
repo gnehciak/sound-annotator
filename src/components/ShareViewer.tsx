@@ -3,7 +3,9 @@ import { Eye, ExternalLink } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
+import { loadVolume, saveVolume, DEFAULT_VOLUME } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
+import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
 import Transport from './Transport'
@@ -29,6 +31,25 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [volume, setVolume] = useState(loadVolume)
+  const [muted, setMuted] = useState(false)
+
+  function changeVolume(v: number) {
+    setVolume(v)
+    saveVolume(v)
+    if (v > 0) setMuted(false)
+  }
+  function toggleMute() {
+    if (muted) {
+      setMuted(false)
+      if (volume === 0) {
+        setVolume(DEFAULT_VOLUME)
+        saveVolume(DEFAULT_VOLUME)
+      }
+    } else {
+      setMuted(true)
+    }
+  }
 
   const playerRef = useRef<PlayerHandle>(null)
   const notesScrollRef = useRef<HTMLDivElement>(null)
@@ -114,14 +135,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           id: a.id,
           label: noteLabel(a.start, a.end),
           color: a.color ?? colorForId(a.id),
-          tag: a.tag,
+          tags: tagsOf(a),
           preview: notePreview(a.contentHtml),
         }))
         .filter(
           (it) =>
             !q ||
             it.label.toLowerCase().includes(q) ||
-            (it.tag ?? '').includes(q) ||
+            it.tags.some((t) => t.toLowerCase().includes(q)) ||
             it.preview.toLowerCase().includes(q),
         )
     },
@@ -204,6 +225,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 audioUrl={audioUrl}
                 regionSpecs={regionSpecs}
                 playbackRate={playbackRate}
+                volume={muted ? 0 : volume}
                 readOnly
                 onTime={handleTime}
                 onDuration={handleDuration}
@@ -225,11 +247,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 currentTime={currentTime}
                 duration={duration}
                 playbackRate={playbackRate}
+                volume={volume}
+                muted={muted}
                 hasNotes={annotations.length > 0}
                 readOnly
                 onPlayPause={() => (isPlaying ? pause() : play())}
                 onSeek={seek}
                 onSetRate={setPlaybackRate}
+                onSetVolume={changeVolume}
+                onToggleMute={toggleMute}
                 onPrevNote={() => jumpNote(-1)}
                 onNextNote={() => jumpNote(1)}
               />

@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react'
 import { ChevronFirst, ChevronLast, Plus, X } from 'lucide-react'
-import { formatTime } from '../lib/format'
+import { formatTime, parseTime } from '../lib/format'
+import Popover from './Popover'
 
 interface Props {
   pendingIn: number | null
@@ -7,7 +9,10 @@ interface Props {
   onMarkIn: () => void
   onMarkOut: () => void
   onCancelMark: () => void
+  /** Add a note at the live current time (the N shortcut, and the "now" action). */
   onAddNote: () => void
+  /** Add a note at an explicit start (and optional end for a range). */
+  onAddNoteAt: (start: number, end?: number) => void
 }
 
 // Note-creation actions, docked as a strip beneath the Notes header — that's
@@ -22,7 +27,34 @@ export default function NoteActions({
   onMarkOut,
   onCancelMark,
   onAddNote,
+  onAddNoteAt,
 }: Props) {
+  const [open, setOpen] = useState(false)
+  const [startStr, setStartStr] = useState('')
+  const [endStr, setEndStr] = useState('')
+  const addRef = useRef<HTMLButtonElement>(null)
+
+  const openMenu = () => {
+    setStartStr(formatTime(currentTime))
+    setEndStr('')
+    setOpen(true)
+  }
+
+  const start = parseTime(startStr)
+  const endProvided = endStr.trim() !== ''
+  const end = endProvided ? parseTime(endStr) : null
+  const customValid =
+    start != null && (!endProvided || (end != null && end > start))
+
+  const submitCustom = () => {
+    if (!customValid || start == null) return
+    onAddNoteAt(start, end != null ? end : undefined)
+    setOpen(false)
+  }
+
+  const timeInput =
+    'w-full rounded border border-line bg-inset px-1.5 py-1 text-center font-mono text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none'
+
   return (
     <div className="border-b border-line bg-panel p-2">
       <div className="grid grid-cols-3 items-stretch gap-1.5">
@@ -53,9 +85,11 @@ export default function NoteActions({
             </button>
           )}
         </div>
+
         <button
-          onClick={onAddNote}
-          title="Add a note pinned to the current moment (N)"
+          ref={addRef}
+          onClick={() => (open ? setOpen(false) : openMenu())}
+          title="Add a note — at the current moment (N) or a custom time"
           className="press inline-flex min-w-0 items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20"
         >
           <Plus size={13} className="shrink-0" />
@@ -64,6 +98,7 @@ export default function NoteActions({
             ({formatTime(currentTime)})
           </span>
         </button>
+
         <button
           onClick={onMarkOut}
           disabled={pendingIn == null}
@@ -74,6 +109,72 @@ export default function NoteActions({
           Mark end <ChevronLast size={13} />
         </button>
       </div>
+
+      <Popover
+        open={open}
+        anchorRef={addRef}
+        onClose={() => setOpen(false)}
+        width={252}
+        className="origin-top rounded border border-line bg-panel p-2 shadow-lg"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            onAddNote()
+            setOpen(false)
+          }}
+          className="press flex w-full items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20"
+        >
+          <Plus size={13} /> Add at {formatTime(currentTime)}
+          <span className="font-mono tracking-normal opacity-70">(now)</span>
+        </button>
+
+        <div className="mb-1 mt-2.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+          Custom time
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            submitCustom()
+          }}
+          className="flex items-end gap-1.5"
+        >
+          <label className="min-w-0 flex-1">
+            <span className="mb-0.5 block font-mono text-[9px] uppercase tracking-wider text-muted">
+              Start
+            </span>
+            <input
+              value={startStr}
+              onChange={(e) => setStartStr(e.target.value)}
+              placeholder="m:ss"
+              inputMode="numeric"
+              aria-label="Custom start time"
+              className={timeInput}
+            />
+          </label>
+          <span className="pb-1.5 text-muted">–</span>
+          <label className="min-w-0 flex-1">
+            <span className="mb-0.5 block font-mono text-[9px] uppercase tracking-wider text-muted">
+              End
+            </span>
+            <input
+              value={endStr}
+              onChange={(e) => setEndStr(e.target.value)}
+              placeholder="optional"
+              inputMode="numeric"
+              aria-label="Custom end time (optional)"
+              className={timeInput}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={!customValid}
+            className="press shrink-0 rounded border border-line px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
+          >
+            Add
+          </button>
+        </form>
+      </Popover>
     </div>
   )
 }

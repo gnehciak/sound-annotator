@@ -5,7 +5,7 @@ export interface MentionItem {
   id: string
   label: string
   color: string
-  tag?: string
+  tags?: string[]
   /** plain-text snippet of the note body, to identify it in the list */
   preview?: string
 }
@@ -61,7 +61,6 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
         <div className="px-3 py-2 text-xs text-muted">No notes to mention</div>
       ) : (
         items.map((item, i) => {
-          const tag = resolveTag(item.tag)
           return (
             <button
               key={item.id}
@@ -81,12 +80,20 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                   style={{ background: item.color }}
                 />
                 <span className="font-mono text-fg">@{item.label}</span>
-                {tag && (
-                  <span
-                    className="ml-auto font-mono text-[10px] uppercase tracking-wider"
-                    style={{ color: tag.color }}
-                  >
-                    {tag.label}
+                {item.tags && item.tags.length > 0 && (
+                  <span className="ml-auto flex items-center gap-1.5">
+                    {item.tags.map((t) => {
+                      const info = resolveTag(t)
+                      return info ? (
+                        <span
+                          key={t}
+                          className="font-mono text-[10px] uppercase tracking-wider"
+                          style={{ color: info.color }}
+                        >
+                          {info.label}
+                        </span>
+                      ) : null
+                    })}
                   </span>
                 )}
               </span>

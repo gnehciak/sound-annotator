@@ -8,6 +8,8 @@ interface Props {
   audioUrl: string | null
   regionSpecs: RegionSpec[]
   playbackRate: number
+  /** 0–1 playback volume, applied to whichever player loads. */
+  volume: number
   readOnly?: boolean
   onTime: (t: number) => void
   onDuration: (d: number) => void
@@ -29,6 +31,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         ref={ref}
         videoId={source.videoId}
         playbackRate={props.playbackRate}
+        volume={props.volume}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}
@@ -42,6 +45,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         url={audioUrl}
         regionSpecs={props.regionSpecs}
         playbackRate={props.playbackRate}
+        volume={props.volume}
         readOnly={props.readOnly}
         onTime={props.onTime}
         onDuration={props.onDuration}

@@ -5,8 +5,9 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
-import { ChevronFirst, ChevronLast, X, Trash2, Plus } from 'lucide-react'
+import { ArrowDownToLine, X, Trash2, Plus } from 'lucide-react'
 import type { Annotation } from '../types'
+import { formatTime } from '../lib/format'
 import {
   blocksOf,
   textHtmlOf,
@@ -15,6 +16,7 @@ import {
   TEXT_BLOCK,
 } from '../lib/noteBlocks'
 import { getPlugin, addablePlugins } from '../lib/notePlugins'
+import { tagsOf } from '../lib/tags'
 import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
 import TagPicker from './TagPicker'
 import ColorPicker from './ColorPicker'
@@ -24,6 +26,8 @@ import type { MentionItem } from './MentionList'
 interface Props {
   annotation: Annotation
   color: string
+  /** Custom tags already used elsewhere in this project, offered for reuse. */
+  projectTags: string[]
   currentTime: number
   /** Freshly created: drop the caret into the text editor on open. */
   autoFocus?: boolean
@@ -47,6 +51,7 @@ interface Props {
 export default function NoteInspector({
   annotation,
   color,
+  projectTags,
   currentTime,
   autoFocus,
   onFocusHandled,
@@ -98,49 +103,17 @@ export default function NoteInspector({
     if (id) onSeekNote(id)
   }
 
-  const iconBtn =
-    'press rounded p-1 text-muted hover:bg-raised hover:text-fg'
-
   return (
     <div className="flex flex-col">
       {/* Metadata controls */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-line/60 px-3 py-2">
         <ColorPicker color={color} onChange={(c) => onUpdate({ color: c })} />
-        <TagPicker tag={annotation.tag} onChange={(tag) => onUpdate({ tag })} />
+        <TagPicker
+          tags={tagsOf(annotation)}
+          projectTags={projectTags}
+          onChange={(tags) => onUpdate({ tags })}
+        />
         <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => onUpdate({ start: Math.floor(currentTime) })}
-          title="Set start to the current time"
-          aria-label="Set start to current time"
-          className={iconBtn}
-        >
-          <ChevronFirst size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onUpdate({
-              end: Math.max(Math.floor(currentTime), annotation.start + 1),
-            })
-          }
-          title="Set end to the current time (makes it cover a section)"
-          aria-label="Set end to current time"
-          className={iconBtn}
-        >
-          <ChevronLast size={15} />
-        </button>
-        {isRange && (
-          <button
-            type="button"
-            onClick={() => onUpdate({ end: undefined })}
-            title="Turn this back into a single moment"
-            aria-label="Clear the end"
-            className={iconBtn}
-          >
-            <X size={15} />
-          </button>
-        )}
         <button
           type="button"
           onClick={onDelete}
@@ -150,6 +123,25 @@ export default function NoteInspector({
         >
           <Trash2 size={14} />
         </button>
+      </div>
+
+      {/* Times — begin / end, each settable to the current playhead. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line/60 px-3 py-2">
+        <TimeField
+          label="Begin"
+          value={formatTime(annotation.start)}
+          onSetNow={() => onUpdate({ start: Math.floor(currentTime) })}
+        />
+        <TimeField
+          label="End"
+          value={isRange ? formatTime(annotation.end!) : '—'}
+          onSetNow={() =>
+            onUpdate({
+              end: Math.max(Math.floor(currentTime), annotation.start + 1),
+            })
+          }
+          onClear={isRange ? () => onUpdate({ end: undefined }) : undefined}
+        />
       </div>
 
       {/* Content blocks: text editor inline, then each property plugin's editor */}
@@ -206,6 +198,53 @@ export default function NoteInspector({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * One labelled timecode (Begin / End): the time, a "set to the current
+ * playhead" button, and — for the end — a clear button back to a single moment.
+ */
+function TimeField({
+  label,
+  value,
+  onSetNow,
+  onClear,
+}: {
+  label: string
+  value: string
+  onSetNow: () => void
+  onClear?: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+        {label}
+      </span>
+      <span className="min-w-[3.5ch] font-mono text-[13px] tabular-nums text-fg">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={onSetNow}
+        title={`Set ${label.toLowerCase()} to the current time`}
+        aria-label={`Set ${label.toLowerCase()} to current time`}
+        className="press inline-flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent"
+      >
+        <ArrowDownToLine size={12} /> Now
+      </button>
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          title="Turn this back into a single moment"
+          aria-label="Clear the end"
+          className="press rounded p-1 text-muted hover:bg-raised hover:text-rose-400"
+        >
+          <X size={13} />
+        </button>
+      )}
     </div>
   )
 }

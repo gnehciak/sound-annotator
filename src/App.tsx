@@ -1,13 +1,30 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type { Annotation, PlayerHandle, Project } from './types'
 import {
   loadPlayerWidth,
   savePlayerWidth,
   DEFAULT_PLAYER_WIDTH,
+  loadInspectorWidth,
+  saveInspectorWidth,
+  loadVolume,
+  saveVolume,
+  DEFAULT_VOLUME,
   loadViewOnly,
   saveViewOnly,
-  loadResetOnPause,
-  saveResetOnPause,
+  loadNoteOrder,
+  saveNoteOrder,
+  type NoteOrder,
+  loadAutoPin,
+  saveAutoPin,
+  loadAutoSeek,
+  saveAutoSeek,
   loadSidebarOpen,
   saveSidebarOpen,
   loadWindowMode,
@@ -26,6 +43,7 @@ import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
+import { customTagsUsedIn, tagsUsedIn, tagsOf } from './lib/tags'
 import {
   Plus,
   Trash2,
@@ -36,7 +54,9 @@ import {
   Eye,
   Pencil,
   Check,
-  ListRestart,
+  Pin,
+  PinOff,
+  Crosshair,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
@@ -46,6 +66,7 @@ import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
+import TagFilter from './components/TagFilter'
 import SharePanel from './components/SharePanel'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
@@ -86,10 +107,23 @@ export default function App() {
   const [notesPad, setNotesPad] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [playerWidth, setPlayerWidth] = useState(loadPlayerWidth)
+  const [inspectorWidth, setInspectorWidth] = useState(loadInspectorWidth)
   const [draggingSplit, setDraggingSplit] = useState(false)
+  // Player volume (0–1, sticky) and a separate mute that remembers the level.
+  const [volume, setVolume] = useState(loadVolume)
+  const [muted, setMuted] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
-  // When on, pausing resorts the notes back to timeline order (see AnnotationList).
-  const [resetOnPause, setResetOnPause] = useState(loadResetOnPause)
+  // How the notes list is ordered: timeline / auto / live (see AnnotationList).
+  const [noteOrder, setNoteOrder] = useState<NoteOrder>(loadNoteOrder)
+  // When on, the playing note auto-scrolls to the top of the notes list (and
+  // re-pins on click / after a scroll cooldown). Off keeps the list still.
+  const [autoPin, setAutoPin] = useState(loadAutoPin)
+  // When on, clicking a note in the list cues the playhead to it. Off leaves the
+  // playhead put (⌘/Ctrl-click still cues). Defaults off — see selectNote.
+  const [autoSeek, setAutoSeek] = useState(loadAutoSeek)
+  // Tags the notes list is filtered to (empty = show all). A note is shown if
+  // its tag is in the set. Reset when switching tracks (tags differ per track).
+  const [tagFilter, setTagFilter] = useState<Set<string>>(() => new Set())
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -107,12 +141,37 @@ export default function App() {
       return next
     })
   }
-  function toggleResetOnPause() {
-    setResetOnPause((on) => {
+  function changeNoteOrder(mode: NoteOrder) {
+    saveNoteOrder(mode)
+    setNoteOrder(mode)
+  }
+  function toggleAutoPin() {
+    setAutoPin((on) => {
       const next = !on
-      saveResetOnPause(next)
+      saveAutoPin(next)
       return next
     })
+  }
+  function toggleAutoSeek() {
+    setAutoSeek((on) => {
+      const next = !on
+      saveAutoSeek(next)
+      return next
+    })
+  }
+  // Moving the slider always unmutes; dragging to 0 just goes silent.
+  function changeVolume(v: number) {
+    setVolume(v)
+    if (v > 0) setMuted(false)
+  }
+  function toggleMute() {
+    if (muted) {
+      setMuted(false)
+      // Unmuting from a zeroed slider would stay silent — restore a usable level.
+      if (volume === 0) setVolume(DEFAULT_VOLUME)
+    } else {
+      setMuted(true)
+    }
   }
 
   // Remember the track rack open/closed across sessions. An effect (rather than
@@ -120,6 +179,18 @@ export default function App() {
   useEffect(() => {
     saveSidebarOpen(sidebarOpen)
   }, [sidebarOpen])
+
+  // Switching to view-only deselects any open note, so nothing stays
+  // highlighted/inspected. An effect (rather than clearing at each toggle site)
+  // covers every path in: the View button, the V shortcut, and a saved state.
+  useEffect(() => {
+    if (viewOnly) setSelectedNoteId(null)
+  }, [viewOnly])
+
+  // Remember the chosen volume across sessions (mute is intentionally transient).
+  useEffect(() => {
+    saveVolume(volume)
+  }, [volume])
 
   const playerRef = useRef<PlayerHandle>(null)
   const splitRef = useRef<HTMLDivElement>(null)
@@ -157,17 +228,73 @@ export default function App() {
     selectedNoteId && current
       ? current.annotations.find((a) => a.id === selectedNoteId) ?? null
       : null
-  // The inspector is for editing only; never shown in view-only mode.
-  const inspectorOpen = !!selectedNote && !viewOnly
-  const transportLocked = inspectorOpen && effectiveWindowMode === 'modal'
-  const showDock = inspectorOpen && effectiveWindowMode === 'dock'
-  const showModal = inspectorOpen && effectiveWindowMode === 'modal'
+  // Custom tags already used in this project, offered for reuse in the picker.
+  const projectTags = useMemo(
+    () => customTagsUsedIn(current?.annotations ?? []),
+    [current?.annotations],
+  )
+  // Every tag in use across this track's notes — the filter's menu.
+  const filterTags = useMemo(
+    () => tagsUsedIn(current?.annotations ?? []),
+    [current?.annotations],
+  )
+  // The selection narrowed to tags still in use: a tag whose last note was
+  // retagged or deleted silently drops out, so the filter never gets stuck
+  // hiding everything by a ghost tag. Derived (not stored) to stay in sync.
+  const activeFilter = useMemo(() => {
+    if (tagFilter.size === 0) return tagFilter
+    const avail = new Set(filterTags)
+    const next = new Set([...tagFilter].filter((t) => avail.has(t)))
+    return next.size === tagFilter.size ? tagFilter : next
+  }, [tagFilter, filterTags])
+  // Notes shown in the list: all of them, or those carrying any selected tag.
+  const visibleAnnotations = useMemo(() => {
+    const all = current?.annotations ?? []
+    if (activeFilter.size === 0) return all
+    return all.filter((a) => tagsOf(a).some((t) => activeFilter.has(t)))
+  }, [current?.annotations, activeFilter])
+  // The inspector is editing-only (never in view-only mode). In dock mode it's a
+  // persistent 3rd column — open even with nothing selected (it shows an empty
+  // state); the modal only appears on demand, when a note is actually selected.
+  const showDock = !viewOnly && effectiveWindowMode === 'dock'
+  const showModal =
+    !viewOnly && !!selectedNote && effectiveWindowMode === 'modal'
+  const transportLocked = showModal
   const inspectorSubtitle = selectedNote
     ? noteLabel(selectedNote.start, selectedNote.end)
     : undefined
 
+  // Esc deselects the open note in the docked inspector (the modal inspector
+  // closes on Esc via PluginWindow). A window listener so it fires even while
+  // the caret is in the note editor — which the global hotkeys deliberately
+  // skip — and it stands down for an open @-mention popup or the help overlay.
+  useEffect(() => {
+    if (!showDock || !selectedNoteId) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (showHelp || document.querySelector('[data-mention-popup]')) return
+      setSelectedNoteId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showDock, selectedNoteId, showHelp])
+
+  // After a seek, the player keeps reporting its old position for a beat
+  // (YouTube polls getCurrentTime; audio lags a frame), which would clobber the
+  // optimistic time and flash back. Ignore reports until it reaches the target
+  // (within 0.6s) or a short deadline passes.
+  const seekGuardRef = useRef<{ target: number; deadline: number } | null>(null)
+
   // Stable callbacks so the players aren't torn down on every time tick.
-  const handleTime = useCallback((t: number) => setCurrentTime(t), [])
+  const handleTime = useCallback((t: number) => {
+    const g = seekGuardRef.current
+    if (g) {
+      if (Math.abs(t - g.target) > 0.6 && now() < g.deadline) return
+      seekGuardRef.current = null
+    }
+    setCurrentTime(t)
+  }, [])
   const handleDuration = useCallback((d: number) => setDuration(d), [])
   const handlePlaying = useCallback((p: boolean) => setIsPlaying(p), [])
 
@@ -179,14 +306,14 @@ export default function App() {
         id: a.id,
         label: noteLabel(a.start, a.end),
         color: a.color ?? colorForId(a.id),
-        tag: a.tag,
+        tags: tagsOf(a),
         preview: notePreview(a.contentHtml),
       }))
       .filter(
         (it) =>
           !q ||
           it.label.toLowerCase().includes(q) ||
-          (it.tag ?? '').includes(q) ||
+          it.tags.some((t) => t.toLowerCase().includes(q)) ||
           it.preview.toLowerCase().includes(q),
       )
   }, [])
@@ -261,6 +388,7 @@ export default function App() {
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
+    setTagFilter(new Set())
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current)
       audioUrlRef.current = null
@@ -409,6 +537,23 @@ export default function App() {
     setFocusNoteId(ann.id)
   }
 
+  // Add a note at an explicit time (optional end → a range), then open it.
+  function addNoteAt(start: number, end?: number) {
+    if (!current) return
+    const s = Math.max(0, Math.floor(start))
+    const ann: Annotation = {
+      id: uid(),
+      start: s,
+      contentHtml: '',
+      blocks: [makeTextBlock('')],
+      createdAt: now(),
+    }
+    if (end != null) ann.end = Math.max(Math.floor(end), s + 1)
+    patchProject(current.id, { annotations: [...current.annotations, ann] })
+    selectNote(ann.id)
+    setFocusNoteId(ann.id)
+  }
+
   function updateAnnotation(annId: string, patch: Partial<Annotation>) {
     if (!current) return
     patchProject(current.id, {
@@ -440,8 +585,9 @@ export default function App() {
   }
 
   function seek(t: number) {
-    playerRef.current?.seekTo(t)
+    seekGuardRef.current = { target: t, deadline: now() + 800 }
     setCurrentTime(t)
+    playerRef.current?.seekTo(t)
   }
 
   // Optimistic transport: flip the playing state immediately so Play/Pause
@@ -460,8 +606,21 @@ export default function App() {
   }
 
   // ---- note inspector controls ------------------------------------------
-  function selectNote(id: string) {
+  function selectNote(id: string, seekToo = false) {
+    const note = current?.annotations.find((a) => a.id === id)
+    // Clicking the already-open note deselects it (the persistent dock shows its
+    // empty state; a modal closes) — unless this is an explicit ⌘/Ctrl-click,
+    // which just re-cues the playhead without deselecting.
+    if (id === selectedNoteId) {
+      if (seekToo && note) seek(note.start)
+      else setSelectedNoteId(null)
+      return
+    }
     setSelectedNoteId(id)
+    // Cue the playhead to the note only when asked: a ⌘/Ctrl-click, or when the
+    // "auto-cue on click" toggle is on. Plain clicks leave the playhead put so
+    // editing doesn't keep jumping the player around. Never auto-plays.
+    if ((seekToo || autoSeek) && note) seek(note.start)
     // A modal inspector covers the transport, so pause when it'll open as one.
     if (effectiveWindowMode === 'modal') pause()
   }
@@ -650,6 +809,34 @@ export default function App() {
     savePlayerWidth(DEFAULT_PLAYER_WIDTH)
   }
 
+  // Resize the docked inspector (3rd column). It hugs the right edge, so its
+  // width grows as you drag the handle left; the notes panel takes the rest.
+  function startInspectorDrag(e: React.PointerEvent) {
+    e.preventDefault()
+    const container = splitRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    let last = inspectorWidth
+    setDraggingSplit(true)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(280, rect.width - 360)
+      last = Math.min(max, Math.max(280, rect.right - ev.clientX))
+      setInspectorWidth(last)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      setDraggingSplit(false)
+      saveInspectorWidth(last)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   // The player|notes split goes side-by-side once its container is wide enough.
   // Usable space depends on the sidebar: open it eats 240px, so we require a
   // 900px viewport; collapsed we only need 660px (240px less) for the same fit.
@@ -690,9 +877,9 @@ export default function App() {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* ---- Global header ---- */}
-      <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
+      <header className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 sm:gap-3 sm:px-4">
         <span className="text-accent">◉</span>
-        <span className="text-xs font-semibold uppercase tracking-[0.22em] text-fg">
+        <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
           Sound&nbsp;Annotator
         </span>
         {viewOnly && (
@@ -763,24 +950,6 @@ export default function App() {
           </button>
         </div>
         <button
-          type="button"
-          onClick={toggleResetOnPause}
-          aria-pressed={resetOnPause}
-          title={
-            resetOnPause
-              ? 'Pausing resets notes to timeline order — click to keep the live order'
-              : 'Notes keep the live order when paused — click to reset to timeline order'
-          }
-          aria-label="Reset notes to timeline order when paused"
-          className={`press rounded p-1.5 ${
-            resetOnPause
-              ? 'bg-raised text-accent'
-              : 'text-muted hover:bg-raised hover:text-fg'
-          }`}
-        >
-          <ListRestart size={16} />
-        </button>
-        <button
           onClick={() => setShowHelp(true)}
           title="Keyboard shortcuts (?)"
           aria-label="Keyboard shortcuts"
@@ -788,8 +957,10 @@ export default function App() {
         >
           <Keyboard size={16} />
         </button>
-        <LevelMeter active={isPlaying} />
-        <div className="ml-1 flex items-baseline gap-1 rounded border border-line bg-inset px-2.5 py-1">
+        <span className="hidden min-[860px]:block">
+          <LevelMeter active={isPlaying} />
+        </span>
+        <div className="ml-1 hidden items-baseline gap-1 rounded border border-line bg-inset px-2.5 py-1 min-[720px]:flex">
           <span className="led text-base leading-none">{formatTime(currentTime)}</span>
           <span className="font-mono text-[10px] text-muted">
             / {formatTime(duration)}
@@ -1021,6 +1192,7 @@ export default function App() {
                     audioUrl={audioUrl}
                     regionSpecs={regionSpecs}
                     playbackRate={playbackRate}
+                    volume={muted ? 0 : volume}
                     readOnly={viewOnly}
                     onTime={handleTime}
                     onDuration={handleDuration}
@@ -1047,11 +1219,15 @@ export default function App() {
                     currentTime={currentTime}
                     duration={duration}
                     playbackRate={playbackRate}
+                    volume={volume}
+                    muted={muted}
                     hasNotes={(current.annotations.length ?? 0) > 0}
                     readOnly={viewOnly}
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
                     onSetRate={setPlaybackRate}
+                    onSetVolume={changeVolume}
+                    onToggleMute={toggleMute}
                     onPrevNote={() => jumpNote(-1)}
                     onNextNote={() => jumpNote(1)}
                   />
@@ -1090,9 +1266,62 @@ export default function App() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <TitleBar
                   left="Notes"
-                  right={`${current.annotations.length} ${
-                    current.annotations.length === 1 ? 'note' : 'notes'
-                  }`}
+                  right={
+                    activeFilter.size > 0
+                      ? `${visibleAnnotations.length} / ${current.annotations.length}`
+                      : `${current.annotations.length} ${
+                          current.annotations.length === 1 ? 'note' : 'notes'
+                        }`
+                  }
+                  actions={
+                    <div className="flex items-center gap-1.5">
+                      <TagFilter
+                        tags={filterTags}
+                        selected={activeFilter}
+                        onChange={setTagFilter}
+                      />
+                      <NoteOrderControl
+                        value={noteOrder}
+                        onChange={changeNoteOrder}
+                      />
+                      <button
+                        type="button"
+                        onClick={toggleAutoPin}
+                        aria-pressed={autoPin}
+                        title={
+                          autoPin
+                            ? 'Auto-pin on: the playing note scrolls to the top — click to turn off'
+                            : 'Auto-pin off: the notes list stays put — click to turn on'
+                        }
+                        aria-label="Auto-pin the playing note to the top"
+                        className={`press rounded-sm p-1 ${
+                          autoPin
+                            ? 'bg-raised text-accent'
+                            : 'text-muted hover:bg-raised hover:text-fg'
+                        }`}
+                      >
+                        {autoPin ? <Pin size={14} /> : <PinOff size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={toggleAutoSeek}
+                        aria-pressed={autoSeek}
+                        title={
+                          autoSeek
+                            ? 'Auto-cue on: clicking a note moves the playhead to it — click to turn off (⌘-click still cues)'
+                            : 'Auto-cue off: clicking a note just opens it — ⌘-click to cue the playhead, or click to turn on'
+                        }
+                        aria-label="Move the playhead to a note when you click it"
+                        className={`press rounded-sm p-1 ${
+                          autoSeek
+                            ? 'bg-raised text-accent'
+                            : 'text-muted hover:bg-raised hover:text-fg'
+                        }`}
+                      >
+                        <Crosshair size={14} />
+                      </button>
+                    </div>
+                  }
                 />
                 {!viewOnly && (
                   <NoteActions
@@ -1102,16 +1331,19 @@ export default function App() {
                     onMarkOut={markOut}
                     onCancelMark={() => setPendingIn(null)}
                     onAddNote={addAnnotationAtCurrent}
+                    onAddNoteAt={addNoteAt}
                   />
                 )}
                 <div ref={setNotesScroll} className="relative flex-1 overflow-y-auto">
                   <AnnotationList
-                    annotations={current.annotations}
+                    annotations={visibleAnnotations}
                     currentTime={currentTime}
                     isPlaying={isPlaying}
                     readOnly={viewOnly}
+                    filtered={activeFilter.size > 0}
                     scrollRef={notesScrollRef}
-                    resetOnPause={resetOnPause}
+                    noteOrder={noteOrder}
+                    autoPin={autoPin}
                     selectedId={selectedNoteId}
                     onSelect={selectNote}
                     onSeek={seek}
@@ -1120,39 +1352,74 @@ export default function App() {
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
                   />
-                  {current.annotations.length > 0 && (
+                  {visibleAnnotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />
                   )}
                 </div>
               </div>
 
-              {/* Note inspector — docked 3rd column (wide screens); slides open
-                  by growing its width so the notes list eases aside. */}
-              {showDock && selectedNote && (
-                <div className="shrink-0 animate-dock-in overflow-hidden">
-                  <div className="h-full w-[22rem]">
+              {/* Drag handle to resize the notes / inspector boundary. */}
+              {showDock && (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize notes and inspector"
+                  onPointerDown={startInspectorDrag}
+                  title="Drag to resize"
+                  className={`w-1 shrink-0 cursor-col-resize touch-none transition-colors ${
+                    draggingSplit ? 'bg-accent' : 'bg-line hover:bg-accent/60'
+                  }`}
+                />
+              )}
+
+              {/* Note inspector — a persistent docked 3rd column (wide screens in
+                  edit mode). Shows the selected note's editor, or an empty state
+                  when nothing's selected. Slides in once on mount, then stays. */}
+              {showDock && (
+                <div
+                  className="dock-slide-in min-w-0 shrink-0 overflow-hidden"
+                  style={{
+                    // Cap against the viewport so a wide inspector + a shrunk
+                    // window can never starve the player+notes (they keep ≥700px).
+                    ['--inspector-w' as string]: `min(${inspectorWidth}px, calc(100vw - 700px))`,
+                  }}
+                >
+                  <div className="h-full w-[var(--inspector-w)]">
                     <PluginWindow
                       title="Note"
                       subtitle={inspectorSubtitle}
                       mode="dock"
                       onSetMode={changeWindowMode}
-                      onClose={() => setSelectedNoteId(null)}
                     >
-                      <NoteInspector
-                        key={selectedNote.id}
-                        annotation={selectedNote}
-                        color={selectedNote.color ?? colorForId(selectedNote.id)}
-                        currentTime={currentTime}
-                        autoFocus={focusNoteId === selectedNote.id}
-                        onFocusHandled={() => setFocusNoteId(null)}
-                        onUpdate={(patch) =>
-                          updateAnnotation(selectedNote.id, patch)
-                        }
-                        onDelete={() => deleteAnnotation(selectedNote.id)}
-                        onSeekNote={seekToNote}
-                        mentionItems={getMentionItems}
-                        uploadImage={handleUploadImage}
-                      />
+                      {selectedNote ? (
+                        <NoteInspector
+                          key={selectedNote.id}
+                          annotation={selectedNote}
+                          color={selectedNote.color ?? colorForId(selectedNote.id)}
+                          projectTags={projectTags}
+                          currentTime={currentTime}
+                          autoFocus={focusNoteId === selectedNote.id}
+                          onFocusHandled={() => setFocusNoteId(null)}
+                          onUpdate={(patch) =>
+                            updateAnnotation(selectedNote.id, patch)
+                          }
+                          onDelete={() => deleteAnnotation(selectedNote.id)}
+                          onSeekNote={seekToNote}
+                          mentionItems={getMentionItems}
+                          uploadImage={handleUploadImage}
+                        />
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                          <Pencil size={22} className="text-muted/50" />
+                          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+                            No note selected
+                          </p>
+                          <p className="max-w-[16rem] text-[12px] leading-relaxed text-muted/70">
+                            Click a note to edit it here, or add one with the
+                            button above.
+                          </p>
+                        </div>
+                      )}
                     </PluginWindow>
                   </div>
                 </div>
@@ -1175,6 +1442,7 @@ export default function App() {
             key={selectedNote.id}
             annotation={selectedNote}
             color={selectedNote.color ?? colorForId(selectedNote.id)}
+            projectTags={projectTags}
             currentTime={currentTime}
             autoFocus={focusNoteId === selectedNote.id}
             onFocusHandled={() => setFocusNoteId(null)}
@@ -1226,17 +1494,88 @@ function LevelMeter({ active }: { active: boolean }) {
   )
 }
 
-function TitleBar({ left, right }: { left: string; right?: string }) {
+function TitleBar({
+  left,
+  right,
+  actions,
+}: {
+  left: string
+  right?: string
+  actions?: ReactNode
+}) {
   return (
-    <div className="flex items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5">
-      <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
+    <div className="flex items-center justify-between gap-3 border-b border-line bg-raised/60 px-3 py-1.5">
+      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
         {left}
       </span>
-      {right && (
-        <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
-          {right}
-        </span>
-      )}
+      <div className="flex min-w-0 items-center gap-3">
+        {actions}
+        {right && (
+          <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-muted">
+            {right}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// The notes list ordering, as a squared segmented switch (Timeline · Auto ·
+// Live) — one stability↔liveness dial, not a matrix of when/which permutations.
+// Mirrors the Edit | View switch; stays neutral (no amber) since none of the
+// modes mean "now". Lives in the Notes title bar.
+const NOTE_ORDER_OPTIONS: {
+  value: NoteOrder
+  label: string
+  title: string
+}[] = [
+  {
+    value: 'timeline',
+    label: 'Timeline',
+    title: 'Timeline — always in chronological (start-time) order',
+  },
+  {
+    value: 'auto',
+    label: 'Auto',
+    title: 'Auto — live order while playing, timeline order when paused',
+  },
+  {
+    value: 'live',
+    label: 'Live',
+    title: 'Live — always reorders around the playhead',
+  },
+]
+
+function NoteOrderControl({
+  value,
+  onChange,
+}: {
+  value: NoteOrder
+  onChange: (mode: NoteOrder) => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Note order"
+      className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+    >
+      {NOTE_ORDER_OPTIONS.map((opt) => {
+        const active = value === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            title={opt.title}
+            className={`press rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+              active ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
+            }`}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

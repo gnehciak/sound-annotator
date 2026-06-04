@@ -10,6 +10,9 @@ import {
   Check,
   SkipBack,
   SkipForward,
+  Volume2,
+  Volume1,
+  VolumeX,
 } from 'lucide-react'
 import { formatTime, parseTime } from '../lib/format'
 
@@ -22,11 +25,16 @@ interface Props {
   currentTime: number
   duration: number
   playbackRate: number
+  /** Current volume, 0–1. */
+  volume: number
+  muted: boolean
   hasNotes: boolean
   readOnly?: boolean
   onPlayPause: () => void
   onSeek: (t: number) => void
   onSetRate: (rate: number) => void
+  onSetVolume: (v: number) => void
+  onToggleMute: () => void
   onPrevNote: () => void
   onNextNote: () => void
 }
@@ -36,11 +44,15 @@ export default function Transport({
   currentTime,
   duration,
   playbackRate,
+  volume,
+  muted,
   hasNotes,
   readOnly = false,
   onPlayPause,
   onSeek,
   onSetRate,
+  onSetVolume,
+  onToggleMute,
   onPrevNote,
   onNextNote,
 }: Props) {
@@ -229,6 +241,13 @@ export default function Transport({
             </div>
           )}
         </div>
+
+        <VolumeControl
+          volume={volume}
+          muted={muted}
+          onSetVolume={onSetVolume}
+          onToggleMute={onToggleMute}
+        />
       </div>
 
       {/* row 1: playback (flanked by prev/next-note jumps) */}
@@ -312,5 +331,104 @@ export default function Transport({
       ))}
     </div>
     </>
+  )
+}
+
+/**
+ * Mute toggle + a compact drag/click volume slider, styled like the seek bar.
+ * Drives the loaded player's volume (YouTube via the IFrame API, audio via
+ * wavesurfer). The slider also takes arrow keys when focused — stopPropagation
+ * keeps those off the global ←/→ seek shortcuts.
+ */
+function VolumeControl({
+  volume,
+  muted,
+  onSetVolume,
+  onToggleMute,
+}: {
+  volume: number
+  muted: boolean
+  onSetVolume: (v: number) => void
+  onToggleMute: () => void
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
+  const level = muted ? 0 : volume
+  const pct = Math.round(level * 100)
+  const Icon = level === 0 ? VolumeX : level < 0.5 ? Volume1 : Volume2
+
+  const setFromX = (clientX: number) => {
+    const el = trackRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    onSetVolume(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)))
+  }
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={onToggleMute}
+        aria-label={muted ? 'Unmute' : 'Mute'}
+        aria-pressed={muted}
+        title={muted ? 'Unmute' : 'Mute'}
+        className={`press ${muted ? 'text-accent' : 'text-muted hover:text-fg'}`}
+      >
+        <Icon size={15} />
+      </button>
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Volume"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        title={`Volume ${pct}%`}
+        onPointerDown={(e) => {
+          draggingRef.current = true
+          setFromX(e.clientX)
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+          } catch {
+            /* ignore */
+          }
+        }}
+        onPointerMove={(e) => {
+          if (draggingRef.current) setFromX(e.clientX)
+        }}
+        onPointerUp={(e) => {
+          draggingRef.current = false
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          } catch {
+            /* ignore */
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            e.stopPropagation()
+            onSetVolume(Math.min(1, level + 0.05))
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+            e.preventDefault()
+            e.stopPropagation()
+            onSetVolume(Math.max(0, level - 0.05))
+          }
+        }}
+        className="group relative w-16 cursor-pointer touch-none py-2 outline-none"
+      >
+        <div className="h-1.5 w-full overflow-hidden rounded-full border border-line bg-inset group-focus-visible:border-accent">
+          <div
+            className="h-full rounded-full bg-accent"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div
+          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
+          style={{ left: `${pct}%` }}
+        />
+      </div>
+    </div>
   )
 }

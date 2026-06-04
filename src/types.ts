@@ -31,8 +31,13 @@ export interface Annotation {
   start: number
   /** optional range end in seconds (the note covers a section) */
   end?: number
-  /** category tag id (see lib/tags.ts), e.g. "pitch" | "comment" */
+  /**
+   * Legacy single category tag (see lib/tags.ts). Superseded by `tags`; older
+   * notes still carry only this. Read both via `tagsOf()` (lib/tags.ts).
+   */
   tag?: string
+  /** Category tags a note carries — preset ids or custom text (see lib/tags.ts). */
+  tags?: string[]
   /** custom colour override; falls back to a color derived from the id */
   color?: string
   /**

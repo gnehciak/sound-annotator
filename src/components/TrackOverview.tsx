@@ -3,7 +3,7 @@ import { ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
 import type { Annotation, ProjectSource } from '../types'
 import { colorForId } from '../lib/noteColors'
 import { formatTime, noteLabel, notePreview } from '../lib/format'
-import { resolveTag } from '../lib/tags'
+import { resolveTag, tagsOf } from '../lib/tags'
 import { loadOverviewZoom, saveOverviewZoom, type OverviewZoom } from '../lib/storage'
 
 interface Props {
@@ -159,12 +159,13 @@ export default function TrackOverview({
   const tagCounts = useMemo(() => {
     const m = new Map<string, { label: string; color: string; count: number }>()
     for (const a of annotations) {
-      if (!a.tag) continue
-      const info = resolveTag(a.tag)
-      if (!info) continue
-      const e = m.get(a.tag)
-      if (e) e.count++
-      else m.set(a.tag, { label: info.label, color: info.color, count: 1 })
+      for (const t of tagsOf(a)) {
+        const info = resolveTag(t)
+        if (!info) continue
+        const e = m.get(t)
+        if (e) e.count++
+        else m.set(t, { label: info.label, color: info.color, count: 1 })
+      }
     }
     return [...m.values()].sort((a, b) => b.count - a.count)
   }, [annotations])

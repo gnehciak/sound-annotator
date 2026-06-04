@@ -78,6 +78,37 @@ body {
   animation: segFlicker 0.85s ease-in-out infinite;
 }
 
+/* The docked inspector slides open by growing its column width, so the notes
+   list eases aside instead of the panel jumping in. Plain CSS (not a Tailwind
+   keyframe) so the dev server applies it without a config reload. */
+@keyframes dockSlideIn {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--inspector-w, 22rem);
+  }
+}
+/* `backwards` (not `both`): hold the from-0 before the run, but DON'T pin the
+   final width afterwards — so the base width (the resizable var) takes over and
+   the inspector can be dragged wider/narrower once it has slid in. */
+.dock-slide-in {
+  width: var(--inspector-w, 22rem);
+  animation: dockSlideIn 240ms var(--ease-out) backwards;
+}
+@keyframes dockSlideOut {
+  from {
+    width: var(--inspector-w, 22rem);
+  }
+  to {
+    width: 0;
+  }
+}
+.dock-slide-out {
+  width: 0;
+  animation: dockSlideOut 200ms var(--ease-out) both;
+}
+
 /* ------------------------------------------------------------------
    Interaction motion. Hover/focus state changes on controls ease in
    instead of snapping; a press dips the control a hair (tactile, like
@@ -108,6 +139,24 @@ body {
   }
   .press:active {
     transform: scale(0.97);
+  }
+}
+
+/* ============================================================
+   Responsive & input-method adaptation
+   ============================================================ */
+
+/* Coarse pointers (touch / stylus): the panel resize handles are a 4px sliver,
+   impossible to grab by finger. Expand the hit area 10px each side with a
+   transparent overlay — no layout shift, the visible handle stays hairline. */
+@media (pointer: coarse) {
+  [role='separator'][aria-orientation='vertical'] {
+    position: relative;
+  }
+  [role='separator'][aria-orientation='vertical']::after {
+    content: '';
+    position: absolute;
+    inset: 0 -10px;
   }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
 import type { Annotation } from '../types'
+import type { NoteOrder } from '../lib/storage'
 import AnnotationItem from './AnnotationItem'
 import { colorForId } from '../lib/noteColors'
 import { prefersReducedMotion } from '../lib/usePresence'
@@ -10,13 +11,25 @@ interface Props {
   currentTime: number
   isPlaying: boolean
   readOnly?: boolean
+  /** A tag filter is active and has hidden some (or all) notes. */
+  filtered?: boolean
   scrollRef: RefObject<HTMLDivElement | null>
-  /** When paused, sort by timeline (start) order rather than playhead order. */
-  resetOnPause?: boolean
+  /**
+   * How to order the list: 'timeline' (always chronological), 'auto' (playhead
+   * order while playing, timeline when paused), or 'live' (always playhead
+   * order). Defaults to 'live' — the no-prop callers (e.g. the share viewer)
+   * keep their playhead ordering.
+   */
+  noteOrder?: NoteOrder
+  /**
+   * Auto-scroll the playing note to the top (on play, on note-click, and after a
+   * scroll cooldown). Off keeps the list still — the user scrolls it by hand.
+   */
+  autoPin?: boolean
   /** Editor: the note currently open in the inspector. */
   selectedId?: string | null
-  /** Editor: select a note (opens it in the inspector). */
-  onSelect?: (id: string) => void
+  /** Editor: select a note (opens it). `seekToo` (⌘/Ctrl-click) also cues it. */
+  onSelect?: (id: string, seekToo: boolean) => void
   onSeek: (t: number) => void
   onPlay: () => void
   /** Persist a new top-to-bottom order for a group of same-time notes. */
@@ -32,8 +45,10 @@ export default function AnnotationList({
   currentTime,
   isPlaying,
   readOnly = false,
+  filtered = false,
   scrollRef,
-  resetOnPause = false,
+  noteOrder = 'live',
+  autoPin = true,
   selectedId,
   onSelect,
   onSeek,
@@ -67,9 +82,10 @@ export default function AnnotationList({
     return a.createdAt - b.createdAt
   }
 
-  // Paused with "reset on pause" on: drop the playhead-relative grouping and
-  // show the notes in plain timeline order, which is steadier to read/edit.
-  const chronological = !isPlaying && resetOnPause
+  // Drop the playhead-relative grouping for plain timeline order (steadier to
+  // read/edit) when ordering is 'timeline', or 'auto' while paused.
+  const chronological =
+    noteOrder === 'timeline' || (noteOrder === 'auto' && !isPlaying)
 
   const sorted = useMemo(() => {
     return [...annotations].sort((a, b) => {
@@ -105,6 +121,11 @@ export default function AnnotationList({
   // Read inside long-lived closures (scroll listener) without re-binding them.
   const playingRef = useRef(false)
   playingRef.current = isPlaying
+  // Latest auto-pin flag for the raf/timer callbacks; synced in an effect.
+  const autoPinRef = useRef(autoPin)
+  useEffect(() => {
+    autoPinRef.current = autoPin
+  }, [autoPin])
 
   const cancelFollow = () => {
     if (followRaf.current != null) {
@@ -123,6 +144,7 @@ export default function AnnotationList({
     return id ? document.getElementById(`note-${id}`) : null
   }
   const followToTop = () => {
+    if (!autoPinRef.current) return // auto-pin off: never scroll on our own
     cancelFollow()
     const sc = scrollRef.current
     if (!sc) return
@@ -204,7 +226,7 @@ export default function AnnotationList({
     // folded into the FLIP offset so notes whose layout didn't change don't
     // teleport.
     let pinShift = 0
-    if (!activeChanged && primaryActiveId && scroller) {
+    if (autoPin && !activeChanged && primaryActiveId && scroller) {
       const oldA = prevTops.current.get(primaryActiveId)
       const newA = newTops.get(primaryActiveId)
       if (oldA != null && newA != null && oldA !== newA) {
@@ -219,9 +241,10 @@ export default function AnnotationList({
       }
     }
 
-    // Slide every other note from its old viewport position to its new one.
+    // Slide every other note from its old viewport position to its new one. With
+    // auto-pin off there's no pinned anchor, so the playing note slides too.
     for (const id of ids) {
-      if (id === primaryActiveId) continue
+      if (autoPin && id === primaryActiveId) continue
       const el = document.getElementById(`note-${id}`)
       const old = prevTops.current.get(id)
       const neu = newTops.get(id)
@@ -244,7 +267,7 @@ export default function AnnotationList({
     // Bring the new playing note to the top (unless the user is scrolling around,
     // or playback is paused — while paused the user is editing and the list
     // shouldn't jump on its own).
-    if (activeChanged && primaryActiveId && !userScrolling.current && isPlaying) {
+    if (autoPin && activeChanged && primaryActiveId && !userScrolling.current && isPlaying) {
       followToTop()
     }
 
@@ -296,7 +319,9 @@ export default function AnnotationList({
   if (sorted.length === 0) {
     return (
       <div className="m-3 border border-dashed border-line p-8 text-center text-sm text-muted">
-        {readOnly ? (
+        {filtered ? (
+          'No notes match the selected tags.'
+        ) : readOnly ? (
           'No notes on this track.'
         ) : (
           <>
@@ -323,7 +348,7 @@ export default function AnnotationList({
           currentTime={currentTime}
           readOnly={readOnly}
           selected={selectedId === a.id}
-          onSelect={onSelect ? () => onSelect(a.id) : undefined}
+          onSelect={onSelect ? (seekToo) => onSelect(a.id, seekToo) : undefined}
           canMoveUp={idx > 0 && sameSlot(sorted[idx - 1], a)}
           canMoveDown={idx < sorted.length - 1 && sameSlot(a, sorted[idx + 1])}
           onMoveUp={() => moveNote(a.id, -1)}

@@ -15,6 +15,8 @@ interface Props {
   url: string
   regionSpecs: RegionSpec[]
   playbackRate: number
+  /** 0–1, passed straight to wavesurfer's setVolume. */
+  volume: number
   readOnly?: boolean
   onTime: (t: number) => void
   onDuration: (d: number) => void
@@ -106,6 +108,7 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
       readyRef.current = true
       // preservePitch: slowing the audio keeps it in tune (music analysis).
       ws.setPlaybackRate(cb.current.playbackRate, true)
+      ws.setVolume(cb.current.volume)
       reconcile()
     })
     ws.on('timeupdate', (t: number) => {
@@ -160,6 +163,11 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
   useEffect(() => {
     wsRef.current?.setPlaybackRate(props.playbackRate, true)
   }, [props.playbackRate])
+
+  // Apply live volume changes (the 'ready' handler covers the initial level).
+  useEffect(() => {
+    wsRef.current?.setVolume(props.volume)
+  }, [props.volume])
 
   // View-only locks the waveform: no drag-to-create, and existing ranges can't
   // be moved or resized. Re-runs after the player (re)mounts on a url change.

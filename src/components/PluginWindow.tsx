@@ -10,7 +10,8 @@ interface Props {
   subtitle?: string
   mode: WindowMode
   onSetMode: (mode: WindowMode) => void
-  onClose: () => void
+  /** When omitted, the close button + Esc-to-close are off (a persistent panel). */
+  onClose?: () => void
   children: ReactNode
 }
 
@@ -39,6 +40,7 @@ export default function PluginWindow({
       if (e.key === 'Escape') {
         // Let an open @-mention popup take Escape first (it closes itself).
         if (document.querySelector('[data-mention-popup]')) return
+        if (!onClose) return
         e.stopPropagation()
         onClose()
       }
@@ -70,16 +72,20 @@ export default function PluginWindow({
         onClick={() => onSetMode('modal')}
         icon={<Maximize2 size={13} />}
       />
-      <span className="mx-0.5 h-3.5 w-px bg-line" />
-      <button
-        type="button"
-        onClick={onClose}
-        title="Close (Esc)"
-        aria-label="Close"
-        className="press rounded p-1 text-muted hover:text-fg"
-      >
-        <X size={15} />
-      </button>
+      {onClose && (
+        <>
+          <span className="mx-0.5 h-3.5 w-px bg-line" />
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close (Esc)"
+            aria-label="Close"
+            className="press rounded p-1 text-muted hover:text-fg"
+          >
+            <X size={15} />
+          </button>
+        </>
+      )}
     </div>
   )
 
@@ -88,7 +94,7 @@ export default function PluginWindow({
       <div
         className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-ink/70 p-6"
         onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose()
+          if (e.target === e.currentTarget) onClose?.()
         }}
       >
         <div

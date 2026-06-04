@@ -4,7 +4,7 @@ import type { Annotation } from '../types'
 import { noteLabel, formatTime } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
-import { resolveTag } from '../lib/tags'
+import { resolveTag, tagsOf } from '../lib/tags'
 import AnnotationEditor from './AnnotationEditor'
 import type { MentionItem } from './MentionList'
 
@@ -17,8 +17,11 @@ interface Props {
   readOnly?: boolean
   /** Editor mode: this note is the one open in the inspector. */
   selected?: boolean
-  /** Editor mode: select this note (opens it in the inspector). */
-  onSelect?: () => void
+  /**
+   * Editor mode: select this note (opens it in the inspector). `seekToo` is set
+   * for a ⌘/Ctrl-click, asking to also cue the playhead to the note.
+   */
+  onSelect?: (seekToo: boolean) => void
   /** Whether a same-time note sits directly above / below this one. */
   canMoveUp?: boolean
   canMoveDown?: boolean
@@ -54,7 +57,7 @@ export default function AnnotationItem({
   mentionItems,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
-  const tagInfo = resolveTag(annotation.tag)
+  const tags = tagsOf(annotation)
 
   const isRange = annotation.end != null
   const label = noteLabel(annotation.start, annotation.end)
@@ -81,7 +84,7 @@ export default function AnnotationItem({
   const handleClick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-type="mention"]')) return
     if (readOnly) onPlay()
-    else onSelect?.()
+    else onSelect?.(e.metaKey || e.ctrlKey)
   }
 
   const focused = active || selected
@@ -170,18 +173,22 @@ export default function AnnotationItem({
           </span>
         )}
 
-        {tagInfo && (
-          <span
-            className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-            style={{ borderColor: tagInfo.color, color: tagInfo.color }}
-          >
+        {tags.map((t) => {
+          const info = resolveTag(t)!
+          return (
             <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: tagInfo.color }}
-            />
-            {tagInfo.label}
-          </span>
-        )}
+              key={t}
+              className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+              style={{ borderColor: info.color, color: info.color }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: info.color }}
+              />
+              {info.label}
+            </span>
+          )
+        })}
 
         {isRange && (
           <span className="font-mono text-[10px] text-muted" title="How long this section lasts">

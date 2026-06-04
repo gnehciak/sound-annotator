@@ -1,5 +1,6 @@
-// Category tags a note can carry. Stored on Annotation.tag, either as a preset
-// id ("pitch") or as free custom text the user typed ("articulation").
+// Category tags a note can carry. Stored on Annotation.tags (an array; legacy
+// notes carry a single Annotation.tag — read both via tagsOf). Each entry is a
+// preset id ("pitch") or free custom text the user typed ("articulation").
 export interface NoteTag {
   id: string
   label: string
@@ -22,6 +23,49 @@ const PALETTE = TAGS.map((t) => t.color)
 
 export function isPreset(tag: string): boolean {
   return BY_ID.has(tag)
+}
+
+/**
+ * A note's tags, normalised across the model migration: the `tags` array is
+ * authoritative once present (even when empty); otherwise fall back to the
+ * legacy single `tag`. Every read site goes through this.
+ */
+export function tagsOf(note: { tag?: string; tags?: string[] }): string[] {
+  if (note.tags) return note.tags
+  return note.tag ? [note.tag] : []
+}
+
+type TaggedNote = { tag?: string; tags?: string[] }
+
+/**
+ * Distinct custom (non-preset) tags used across a project's notes, in
+ * first-seen order. Lets the picker offer a project-scoped vocabulary for
+ * reuse without any global list.
+ */
+export function customTagsUsedIn(notes: TaggedNote[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const n of notes) {
+    for (const t of tagsOf(n)) {
+      if (!isPreset(t) && !seen.has(t)) {
+        seen.add(t)
+        out.push(t)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Every distinct tag actually used across a project's notes — presets first in
+ * their canonical order, then custom tags in first-seen order. The notes filter
+ * offers exactly this set, so it never lists a tag with nothing to show.
+ */
+export function tagsUsedIn(notes: TaggedNote[]): string[] {
+  const used = new Set<string>()
+  for (const n of notes) for (const t of tagsOf(n)) used.add(t)
+  const presets = TAGS.filter((t) => used.has(t.id)).map((t) => t.id)
+  return [...presets, ...customTagsUsedIn(notes)]
 }
 
 /** Resolve a stored tag (preset id or custom text) to a display label + color. */
