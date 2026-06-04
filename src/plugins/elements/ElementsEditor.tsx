@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { usePresence } from '../../lib/usePresence'
+import Popover from '../../components/Popover'
 import {
   ELEMENTS,
   LAYERS,
@@ -21,7 +21,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
     categoriesPresent(value).map((c) => c.id),
   )
   const [addOpen, setAddOpen] = useState(false)
-  const addPop = usePresence(addOpen)
+  const addBtnRef = useRef<HTMLButtonElement>(null)
 
   const setLayer = (id: string | undefined) => onChange({ ...value, layer: id })
 
@@ -93,34 +93,36 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
         <div className="px-3 py-2 text-[12px] text-muted">No elements recorded.</div>
       )}
 
-      {/* Add element — reveals a category section on demand */}
+      {/* Add element — reveals a category section on demand. The menu is
+          portalled (Popover) so it isn't clipped by the window's scroll area. */}
       {!readOnly && addable.length > 0 && (
-        <div className="relative border-t border-line/60 px-3 pt-2">
+        <div className="border-t border-line/60 px-3 pt-2">
           <button
+            ref={addBtnRef}
             type="button"
             onClick={() => setAddOpen((o) => !o)}
             className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accent"
           >
             <Plus size={12} /> Add element
           </button>
-          {addPop.mounted && (
-            <div
-              className={`absolute left-3 top-full z-30 mt-1 w-48 origin-top-left rounded border border-line bg-panel py-1 shadow-lg ${
-                addPop.closing ? 'animate-pop-out' : 'animate-pop-in'
-              }`}
-            >
-              {addable.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => addCategory(c.id)}
-                  className="flex w-full items-center px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider text-muted hover:bg-raised hover:text-fg"
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <Popover
+            open={addOpen}
+            anchorRef={addBtnRef}
+            onClose={() => setAddOpen(false)}
+            width={192}
+            className="origin-top-left rounded border border-line bg-panel py-1 shadow-lg"
+          >
+            {addable.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => addCategory(c.id)}
+                className="flex w-full items-center px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider text-muted hover:bg-raised hover:text-fg"
+              >
+                {c.label}
+              </button>
+            ))}
+          </Popover>
         </div>
       )}
     </div>
