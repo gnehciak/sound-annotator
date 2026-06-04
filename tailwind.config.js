@@ -57,6 +57,9 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.35' },
         },
+        // The docked inspector slides open by growing its column width, so the
+        // notes list eases aside instead of the panel jumping in.
+        'dock-in': { from: { width: '0' }, to: { width: '22rem' } },
       },
       animation: {
         'fade-in': 'fade-in 160ms ease-out both',
@@ -69,6 +72,7 @@ export default {
         // note's opacity over the resting `opacity-50` dim state.
         'note-in': 'note-in 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
         'now-pulse': 'now-pulse 1.7s ease-in-out infinite',
+        'dock-in': 'dock-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both',
       },
       // Squared-off: pro tools don't use the soft shadcn radii. Even `rounded-lg`
       // resolves to ~2px so nothing reads as a floating card.

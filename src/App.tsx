@@ -1126,32 +1126,35 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Note inspector — docked 3rd column (wide screens) */}
+              {/* Note inspector — docked 3rd column (wide screens); slides open
+                  by growing its width so the notes list eases aside. */}
               {showDock && selectedNote && (
-                <div className="w-[22rem] shrink-0">
-                  <PluginWindow
-                    title="Note"
-                    subtitle={inspectorSubtitle}
-                    mode="dock"
-                    onSetMode={changeWindowMode}
-                    onClose={() => setSelectedNoteId(null)}
-                  >
-                    <NoteInspector
-                      key={selectedNote.id}
-                      annotation={selectedNote}
-                      color={selectedNote.color ?? colorForId(selectedNote.id)}
-                      currentTime={currentTime}
-                      autoFocus={focusNoteId === selectedNote.id}
-                      onFocusHandled={() => setFocusNoteId(null)}
-                      onUpdate={(patch) =>
-                        updateAnnotation(selectedNote.id, patch)
-                      }
-                      onDelete={() => deleteAnnotation(selectedNote.id)}
-                      onSeekNote={seekToNote}
-                      mentionItems={getMentionItems}
-                      uploadImage={handleUploadImage}
-                    />
-                  </PluginWindow>
+                <div className="shrink-0 animate-dock-in overflow-hidden">
+                  <div className="h-full w-[22rem]">
+                    <PluginWindow
+                      title="Note"
+                      subtitle={inspectorSubtitle}
+                      mode="dock"
+                      onSetMode={changeWindowMode}
+                      onClose={() => setSelectedNoteId(null)}
+                    >
+                      <NoteInspector
+                        key={selectedNote.id}
+                        annotation={selectedNote}
+                        color={selectedNote.color ?? colorForId(selectedNote.id)}
+                        currentTime={currentTime}
+                        autoFocus={focusNoteId === selectedNote.id}
+                        onFocusHandled={() => setFocusNoteId(null)}
+                        onUpdate={(patch) =>
+                          updateAnnotation(selectedNote.id, patch)
+                        }
+                        onDelete={() => deleteAnnotation(selectedNote.id)}
+                        onSeekNote={seekToNote}
+                        mentionItems={getMentionItems}
+                        uploadImage={handleUploadImage}
+                      />
+                    </PluginWindow>
+                  </div>
                 </div>
               )}
             </div>
