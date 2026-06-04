@@ -46,6 +46,12 @@ export interface Annotation {
    * single `text` block on read.
    */
   blocks?: NoteBlock[]
+  /**
+   * Manual sort position among notes that share the same `start`. Only used as
+   * the same-time tiebreaker (set via the note's ▲/▼ controls); notes that have
+   * never been reordered leave it unset and fall back to `createdAt` order.
+   */
+  order?: number
   createdAt: number
 }
 

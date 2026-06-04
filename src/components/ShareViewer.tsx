@@ -253,6 +253,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               onPlay={play}
               onUpdate={() => {}}
               onDelete={() => {}}
+              onReorder={() => {}}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
             />

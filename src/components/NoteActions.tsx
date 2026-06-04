@@ -3,6 +3,7 @@ import { formatTime } from '../lib/format'
 
 interface Props {
   pendingIn: number | null
+  currentTime: number
   onMarkIn: () => void
   onMarkOut: () => void
   onCancelMark: () => void
@@ -16,6 +17,7 @@ interface Props {
 // it eats into Start's own width rather than shifting Add note / Mark end.
 export default function NoteActions({
   pendingIn,
+  currentTime,
   onMarkIn,
   onMarkOut,
   onCancelMark,
@@ -56,7 +58,11 @@ export default function NoteActions({
           title="Add a note pinned to the current moment (N)"
           className="press inline-flex min-w-0 items-center justify-center gap-1.5 border border-accent/70 bg-accent/10 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-accent hover:bg-accent/20"
         >
-          <Plus size={13} /> Add note
+          <Plus size={13} className="shrink-0" />
+          <span className="truncate">Add note</span>
+          <span className="shrink-0 font-mono tabular-nums tracking-normal opacity-70">
+            ({formatTime(currentTime)})
+          </span>
         </button>
         <button
           onClick={onMarkOut}

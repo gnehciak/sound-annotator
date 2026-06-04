@@ -64,6 +64,26 @@ export function saveViewOnly(on: boolean): void {
   }
 }
 
+// When on, pausing snaps the notes list back to timeline (start-time) order
+// instead of the playhead-relative order. A reading preference; defaults on.
+const RESET_ON_PAUSE_KEY = 'sound-annotator:reset-on-pause'
+
+export function loadResetOnPause(): boolean {
+  try {
+    return localStorage.getItem(RESET_ON_PAUSE_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+export function saveResetOnPause(on: boolean): void {
+  try {
+    localStorage.setItem(RESET_ON_PAUSE_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
 // Plugin window presentation — 'dock' (3rd column) or 'modal' (focused
 // overlay). A workspace preference remembered across sessions. Defaults to dock.
 const WINDOW_MODE_KEY = 'sound-annotator:window-mode'
@@ -99,6 +119,32 @@ export function loadSidebarOpen(): boolean {
 export function saveSidebarOpen(open: boolean): void {
   try {
     localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+// Overview timeline zoom — 'fit' (whole track) or a gridline unit in seconds
+// (e.g. 30 → 30-second divisions). A workspace preference remembered across
+// sessions and tracks. Defaults to fit.
+const OVERVIEW_ZOOM_KEY = 'sound-annotator:overview-zoom'
+
+export type OverviewZoom = 'fit' | number
+
+export function loadOverviewZoom(): OverviewZoom {
+  try {
+    const raw = localStorage.getItem(OVERVIEW_ZOOM_KEY)
+    if (!raw || raw === 'fit') return 'fit'
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? n : 'fit'
+  } catch {
+    return 'fit'
+  }
+}
+
+export function saveOverviewZoom(zoom: OverviewZoom): void {
+  try {
+    localStorage.setItem(OVERVIEW_ZOOM_KEY, zoom === 'fit' ? 'fit' : String(zoom))
   } catch {
     /* ignore */
   }

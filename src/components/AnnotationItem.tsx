@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react'
 import {
   Play,
   ChevronFirst,
   ChevronLast,
   ChevronDown,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
   X,
   Trash2,
   Plus,
@@ -15,7 +24,7 @@ import { blocksOf, textHtmlOf, asTextData, makeBlock, TEXT_BLOCK } from '../lib/
 import { getPlugin, addablePlugins } from '../lib/notePlugins'
 import { usePresence } from '../lib/usePresence'
 import { resolveTag } from '../lib/tags'
-import AnnotationEditor from './AnnotationEditor'
+import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
 import TagPicker from './TagPicker'
 import ColorPicker from './ColorPicker'
 import type { MentionItem } from './MentionList'
@@ -27,6 +36,15 @@ interface Props {
   isPlaying: boolean
   currentTime: number
   readOnly?: boolean
+  /** Freshly created: expand, scroll into view, and focus the editor. */
+  autoFocusNew?: boolean
+  /** Called once the auto-focus has run, so the parent can clear its target. */
+  onFocusHandled?: () => void
+  /** Whether a same-time note sits directly above / below this one. */
+  canMoveUp?: boolean
+  canMoveDown?: boolean
+  onMoveUp?: () => void
+  onMoveDown?: () => void
   onPlay: () => void
   onUpdate: (patch: Partial<Annotation>) => void
   onDelete: () => void
@@ -49,6 +67,12 @@ export default function AnnotationItem({
   isPlaying,
   currentTime,
   readOnly = false,
+  autoFocusNew = false,
+  onFocusHandled,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveUp,
+  onMoveDown,
   onPlay,
   onUpdate,
   onDelete,
@@ -89,6 +113,22 @@ export default function AnnotationItem({
   const [expanded, setExpanded] = useState(() => !readOnly && !textHtml)
   const tagInfo = resolveTag(annotation.tag)
   const rootRef = useRef<HTMLDivElement>(null)
+  const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
+
+  // Just-created note: bring it into view and drop the caret into its editor so
+  // the user can type immediately. (A new empty note already mounts expanded.)
+  // Wait a frame so the editor has mounted and the list has settled before
+  // scrolling/focusing, then tell the parent it's handled (clearing the
+  // one-shot target).
+  useEffect(() => {
+    if (!autoFocusNew) return
+    const raf = requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({ block: 'nearest' })
+      editorApiRef.current?.focus()
+      onFocusHandled?.()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [autoFocusNew, onFocusHandled])
 
   // Collapse (hide the editor fields) when the user clicks away from the note.
   useEffect(() => {
@@ -119,6 +159,21 @@ export default function AnnotationItem({
   // becomes active mid-playback.
   const [enterAnim] = useState(() => active || expanded)
 
+  // Esc "deselects" the note: collapse it and drop the caret out of its editor,
+  // so you can return to keyboard transport shortcuts without reaching for the
+  // mouse. Handled in the capture phase because ProseMirror always calls
+  // preventDefault on Escape (it's a "capture" key), which rules out a
+  // defaultPrevented check — and because the @-mention popup tears itself down
+  // synchronously on Esc before a bubble handler would see it. In capture we
+  // still see the open popup, so we let Esc close it and leave the note put.
+  const handleEscapeCapture = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Escape' || !expanded) return
+    if (document.querySelector('[data-mention-popup]')) return
+    setExpanded(false)
+    const el = document.activeElement as HTMLElement | null
+    if (el && rootRef.current?.contains(el)) el.blur()
+  }
+
   const handleBodyMouseDown = (e: MouseEvent) => {
     const mention = (e.target as HTMLElement).closest('[data-type="mention"]')
     if (mention) {
@@ -143,6 +198,7 @@ export default function AnnotationItem({
       ref={rootRef}
       id={`note-${annotation.id}`}
       onClick={readOnly ? handleReadOnlyClick : undefined}
+      onKeyDownCapture={readOnly ? undefined : handleEscapeCapture}
       className={`group relative transition ${
         enterAnim ? 'animate-note-in' : ''
       } ${active ? 'z-20 bg-raised' : 'hover:bg-raised/25'} ${
@@ -194,6 +250,43 @@ export default function AnnotationItem({
           <Play size={9} className="fill-current" />
           {label}
         </button>
+
+        {/* Reorder arrows — shown only when another note shares this time, so the
+           order is otherwise ambiguous. preventDefault on mousedown keeps focus
+           off the button (a focused button in the list fights the scroll pin
+           when the reorder re-sorts). */}
+        {!readOnly && (canMoveUp || canMoveDown) && (
+          <span className="flex items-center" onClick={stop}>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={!canMoveUp}
+              onClick={(e) => {
+                stop(e)
+                onMoveUp?.()
+              }}
+              title="Move above the note at the same time"
+              aria-label="Move note up"
+              className="press px-0.5 text-muted hover:text-fg disabled:opacity-25 disabled:hover:text-muted"
+            >
+              <ArrowUp size={13} />
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={!canMoveDown}
+              onClick={(e) => {
+                stop(e)
+                onMoveDown?.()
+              }}
+              title="Move below the note at the same time"
+              aria-label="Move note down"
+              className="press px-0.5 text-muted hover:text-fg disabled:opacity-25 disabled:hover:text-muted"
+            >
+              <ArrowDown size={13} />
+            </button>
+          </span>
+        )}
 
         {!readOnly && expanded && (
           <ColorPicker color={color} onChange={(c) => onUpdate({ color: c })} />
@@ -313,6 +406,7 @@ export default function AnnotationItem({
             return (
               <AnnotationEditor
                 key={block.id}
+                ref={editorApiRef}
                 noteId={annotation.id}
                 mentionItems={mentionItems}
                 uploadImage={uploadImage}

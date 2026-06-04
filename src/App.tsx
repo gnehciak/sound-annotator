@@ -6,6 +6,8 @@ import {
   DEFAULT_PLAYER_WIDTH,
   loadViewOnly,
   saveViewOnly,
+  loadResetOnPause,
+  saveResetOnPause,
   loadSidebarOpen,
   saveSidebarOpen,
   loadWindowMode,
@@ -35,11 +37,13 @@ import {
   Eye,
   Pencil,
   Check,
+  ListRestart,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
+import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
@@ -76,11 +80,16 @@ export default function App() {
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   const [pendingIn, setPendingIn] = useState<number | null>(null)
+  // Id of a just-created note that should grab focus (and scroll into view) so
+  // the user can start typing immediately. Cleared once the note handles it.
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null)
   const [notesPad, setNotesPad] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [playerWidth, setPlayerWidth] = useState(loadPlayerWidth)
   const [draggingSplit, setDraggingSplit] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
+  // When on, pausing resorts the notes back to timeline order (see AnnotationList).
+  const [resetOnPause, setResetOnPause] = useState(loadResetOnPause)
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
   const [openWindow, setOpenWindow] = useState<{
@@ -98,6 +107,13 @@ export default function App() {
     setViewOnly((on) => {
       const next = !on
       saveViewOnly(next)
+      return next
+    })
+  }
+  function toggleResetOnPause() {
+    setResetOnPause((on) => {
+      const next = !on
+      saveResetOnPause(next)
       return next
     })
   }
@@ -384,6 +400,7 @@ export default function App() {
       createdAt: now(),
     }
     patchProject(current.id, { annotations: [...current.annotations, ann] })
+    setFocusNoteId(ann.id)
   }
 
   function updateAnnotation(annId: string, patch: Partial<Annotation>) {
@@ -391,6 +408,19 @@ export default function App() {
     patchProject(current.id, {
       annotations: current.annotations.map((a) =>
         a.id === annId ? { ...a, ...patch } : a,
+      ),
+    })
+  }
+
+  // Persist a manual order for a group of same-time notes: `orderedIds` is the
+  // group in its new top-to-bottom order, and each gets `order` = its position.
+  // Other notes are untouched (the order field only breaks same-`start` ties).
+  function reorderAnnotations(orderedIds: string[]) {
+    if (!current) return
+    const pos = new Map(orderedIds.map((id, i) => [id, i]))
+    patchProject(current.id, {
+      annotations: current.annotations.map((a) =>
+        pos.has(a.id) ? { ...a, order: pos.get(a.id)! } : a,
       ),
     })
   }
@@ -479,6 +509,7 @@ export default function App() {
         },
       ],
     })
+    setFocusNoteId(id)
   }
 
   function updateRegionGeom(id: string, start: number, end: number) {
@@ -556,11 +587,11 @@ export default function App() {
         break
       case 'ArrowLeft':
         e.preventDefault()
-        seek(Math.max(0, currentTime - (e.shiftKey ? 30 : 5)))
+        seek(Math.max(0, currentTime - (e.shiftKey ? 5 : 1)))
         break
       case 'ArrowRight':
         e.preventDefault()
-        seek(currentTime + (e.shiftKey ? 30 : 5))
+        seek(currentTime + (e.shiftKey ? 5 : 1))
         break
       case 'ArrowUp':
         e.preventDefault()
@@ -739,6 +770,24 @@ export default function App() {
             <Eye size={12} /> View
           </button>
         </div>
+        <button
+          type="button"
+          onClick={toggleResetOnPause}
+          aria-pressed={resetOnPause}
+          title={
+            resetOnPause
+              ? 'Pausing resets notes to timeline order — click to keep the live order'
+              : 'Notes keep the live order when paused — click to reset to timeline order'
+          }
+          aria-label="Reset notes to timeline order when paused"
+          className={`press rounded p-1.5 ${
+            resetOnPause
+              ? 'bg-raised text-accent'
+              : 'text-muted hover:bg-raised hover:text-fg'
+          }`}
+        >
+          <ListRestart size={16} />
+        </button>
         <button
           onClick={() => setShowHelp(true)}
           title="Keyboard shortcuts (?)"
@@ -973,7 +1022,7 @@ export default function App() {
                   left="Player"
                   right={current.source.type === 'youtube' ? 'YouTube' : 'Audio'}
                 />
-                <div className="space-y-2.5 p-3">
+                <div className="shrink-0 space-y-2.5 p-3">
                   <PlayerPane
                     ref={playerRef}
                     source={current.source}
@@ -1015,6 +1064,21 @@ export default function App() {
                     onNextNote={() => jumpNote(1)}
                   />
                 </div>
+
+                {/* Fills the space below the transport: a proportional map of
+                    every note along the timeline, plus a session readout. */}
+                <TrackOverview
+                  className="min-h-[160px] flex-1"
+                  resetKey={current.id}
+                  annotations={current.annotations}
+                  duration={duration}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  playbackRate={playbackRate}
+                  source={current.source}
+                  onSeek={seek}
+                  onSeekNote={seekToNote}
+                />
               </div>
 
               {/* Drag handle — resize the split (double-click to reset) */}
@@ -1041,6 +1105,7 @@ export default function App() {
                 {!viewOnly && (
                   <NoteActions
                     pendingIn={pendingIn}
+                    currentTime={currentTime}
                     onMarkIn={markIn}
                     onMarkOut={markOut}
                     onCancelMark={() => setPendingIn(null)}
@@ -1054,10 +1119,14 @@ export default function App() {
                     isPlaying={isPlaying}
                     readOnly={viewOnly}
                     scrollRef={notesScrollRef}
+                    resetOnPause={resetOnPause}
+                    focusNoteId={focusNoteId}
+                    onFocusHandled={() => setFocusNoteId(null)}
                     onSeek={seek}
                     onPlay={play}
                     onUpdate={updateAnnotation}
                     onDelete={deleteAnnotation}
+                    onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
                     uploadImage={handleUploadImage}

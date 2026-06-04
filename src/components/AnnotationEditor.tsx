@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -29,16 +36,24 @@ interface Props {
   ) => Promise<string>
 }
 
-export default function AnnotationEditor({
-  content,
-  onChange,
-  autofocus,
-  showToolbar,
-  readOnly = false,
-  noteId,
-  mentionItems,
-  uploadImage,
-}: Props) {
+/** Imperative handle: drop the caret into the editor (used to focus new notes). */
+export interface AnnotationEditorHandle {
+  focus: () => void
+}
+
+const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function AnnotationEditor(
+  {
+    content,
+    onChange,
+    autofocus,
+    showToolbar,
+    readOnly = false,
+    noteId,
+    mentionItems,
+    uploadImage,
+  },
+  ref,
+) {
   const editorRef = useRef<Editor | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(0)
@@ -114,6 +129,14 @@ export default function AnnotationEditor({
   })
   editorRef.current = editor
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => editorRef.current?.commands.focus('end'),
+    }),
+    [],
+  )
+
   // Keep editability in sync when the global view-only mode is toggled live.
   useEffect(() => {
     editor?.setEditable(!readOnly)
@@ -187,7 +210,9 @@ export default function AnnotationEditor({
       <EditorContent editor={editor} />
     </div>
   )
-}
+})
+
+export default AnnotationEditor
 
 function ToolbarButton({
   icon,

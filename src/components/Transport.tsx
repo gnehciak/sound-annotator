@@ -48,6 +48,8 @@ export default function Transport({
   const draggingRef = useRef(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  // Set by Escape so the ensuing blur cancels instead of committing the draft.
+  const skipCommitRef = useRef(false)
 
   // Playback-speed dropdown (open state + outside-click / Escape to close).
   const speedRef = useRef<HTMLDivElement>(null)
@@ -111,14 +113,22 @@ export default function Transport({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              commitTime()
-              e.currentTarget.blur()
+              e.currentTarget.blur() // blur commits
             } else if (e.key === 'Escape') {
-              setEditing(false)
+              e.preventDefault()
+              skipCommitRef.current = true
               e.currentTarget.blur()
             }
           }}
-          onBlur={() => setEditing(false)}
+          onBlur={() => {
+            // Defocusing confirms the typed time, same as Enter; Escape cancels.
+            if (skipCommitRef.current) {
+              skipCommitRef.current = false
+              setEditing(false)
+            } else {
+              commitTime()
+            }
+          }}
           title="Type a time (m:ss or seconds) and press Enter to jump"
           aria-label="Current time — type to jump"
           className="led w-16 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-center text-sm leading-none outline-none focus:border-accent focus:bg-inset"
@@ -233,20 +243,20 @@ export default function Transport({
           <SkipBack size={13} />
         </button>
         <button
-          onClick={() => onSeek(Math.max(0, currentTime - 30))}
-          aria-label="Back 30 seconds"
-          title="Jump back 30 seconds (Shift ←)"
-          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
-        >
-          <ChevronsLeft size={13} /> 30s
-        </button>
-        <button
           onClick={() => onSeek(Math.max(0, currentTime - 5))}
           aria-label="Back 5 seconds"
-          title="Jump back 5 seconds (←)"
+          title="Jump back 5 seconds (Shift ←)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
         >
-          <ChevronLeft size={13} /> 5s
+          <ChevronsLeft size={13} /> 5s
+        </button>
+        <button
+          onClick={() => onSeek(Math.max(0, currentTime - 1))}
+          aria-label="Back 1 second"
+          title="Jump back 1 second (←)"
+          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
+        >
+          <ChevronLeft size={13} /> 1s
         </button>
         <button
           onClick={onPlayPause}
@@ -257,20 +267,20 @@ export default function Transport({
           {isPlaying ? 'Pause' : 'Play'}
         </button>
         <button
-          onClick={() => onSeek(currentTime + 5)}
-          aria-label="Forward 5 seconds"
-          title="Jump forward 5 seconds (→)"
+          onClick={() => onSeek(currentTime + 1)}
+          aria-label="Forward 1 second"
+          title="Jump forward 1 second (→)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
         >
-          5s <ChevronRight size={13} />
+          1s <ChevronRight size={13} />
         </button>
         <button
-          onClick={() => onSeek(currentTime + 30)}
-          aria-label="Forward 30 seconds"
-          title="Jump forward 30 seconds (Shift →)"
+          onClick={() => onSeek(currentTime + 5)}
+          aria-label="Forward 5 seconds"
+          title="Jump forward 5 seconds (Shift →)"
           className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
         >
-          30s <ChevronsRight size={13} />
+          5s <ChevronsRight size={13} />
         </button>
         <button
           onClick={onNextNote}

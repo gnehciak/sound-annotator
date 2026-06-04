@@ -11,10 +11,18 @@ interface Props {
   isPlaying: boolean
   readOnly?: boolean
   scrollRef: RefObject<HTMLDivElement | null>
+  /** When paused, sort by timeline (start) order rather than playhead order. */
+  resetOnPause?: boolean
+  /** A just-created note to focus + scroll into view, or null. */
+  focusNoteId?: string | null
+  /** Called once the focus note has been handled, so the parent can clear it. */
+  onFocusHandled?: () => void
   onSeek: (t: number) => void
   onPlay: () => void
   onUpdate: (id: string, patch: Partial<Annotation>) => void
   onDelete: (id: string) => void
+  /** Persist a new top-to-bottom order for a group of same-time notes. */
+  onReorder: (orderedIds: string[]) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
   uploadImage?: (
@@ -35,10 +43,14 @@ export default function AnnotationList({
   isPlaying,
   readOnly = false,
   scrollRef,
+  resetOnPause = false,
+  focusNoteId,
+  onFocusHandled,
   onSeek,
   onPlay,
   onUpdate,
   onDelete,
+  onReorder,
   onSeekNote,
   mentionItems,
   uploadImage,
@@ -53,21 +65,38 @@ export default function AnnotationList({
     return ids
   }, [annotations, currentTime])
 
-  // Order: finished notes on top, then the playing notes, then upcoming.
+  // finished (0) on top, then playing (1), then upcoming (2).
+  const rank = (a: Annotation) => {
+    if (currentTime > endOf(a)) return 0
+    if (currentTime >= a.start) return 1
+    return 2
+  }
+
+  // Tiebreaker for notes that land in the same slot (same time, same rank):
+  // a manually set `order` wins; reordered notes (which all carry `order`) sit
+  // above never-touched ones, which keep their original creation order.
+  const tie = (a: Annotation, b: Annotation) => {
+    if (a.order != null && b.order != null) return a.order - b.order
+    if (a.order != null) return -1
+    if (b.order != null) return 1
+    return a.createdAt - b.createdAt
+  }
+
+  // Paused with "reset on pause" on: drop the playhead-relative grouping and
+  // show the notes in plain timeline order, which is steadier to read/edit.
+  const chronological = !isPlaying && resetOnPause
+
   const sorted = useMemo(() => {
-    const rank = (a: Annotation) => {
-      if (currentTime > endOf(a)) return 0 // finished
-      if (currentTime >= a.start) return 1 // playing
-      return 2 // upcoming
-    }
     return [...annotations].sort((a, b) => {
+      if (chronological) return a.start - b.start || tie(a, b)
       const ra = rank(a)
       const rb = rank(b)
       if (ra !== rb) return ra - rb
-      if (ra === 0) return endOf(a) - endOf(b) || a.start - b.start
-      return a.start - b.start || a.createdAt - b.createdAt
+      if (ra === 0) return endOf(a) - endOf(b) || a.start - b.start || tie(a, b)
+      return a.start - b.start || tie(a, b)
     })
-  }, [annotations, currentTime])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotations, currentTime, chronological])
 
   const primaryActiveId = sorted.find((a) => activeIds.has(a.id))?.id ?? null
   const orderSig = sorted.map((a) => a.id).join('|')
@@ -250,6 +279,35 @@ export default function AnnotationList({
     requestAnimationFrame(() => followToTop())
   }
 
+  // Two notes occupy the same slot when only the manual `order` tiebreaker
+  // separates them, so the ▲/▼ controls can swap them and the swap will stick.
+  // In timeline order that's just a shared start; otherwise the playhead rank
+  // (and, for finished notes, the end) must match too.
+  const sameSlot = (a: Annotation, b: Annotation) =>
+    chronological
+      ? a.start === b.start
+      : rank(a) === rank(b) &&
+        a.start === b.start &&
+        (rank(a) !== 0 || endOf(a) === endOf(b))
+
+  // Move a note one step within its run of same-slot neighbours, then persist
+  // the run's new order. No-op if the adjacent note is in a different slot.
+  const moveNote = (id: string, dir: -1 | 1) => {
+    const i = sorted.findIndex((a) => a.id === id)
+    if (i < 0) return
+    const j = i + dir
+    if (j < 0 || j >= sorted.length || !sameSlot(sorted[i], sorted[j])) return
+    let lo = i
+    let hi = i
+    while (lo > 0 && sameSlot(sorted[lo - 1], sorted[lo])) lo--
+    while (hi < sorted.length - 1 && sameSlot(sorted[hi], sorted[hi + 1])) hi++
+    const run = sorted.slice(lo, hi + 1).map((a) => a.id)
+    const pi = i - lo
+    const pj = j - lo
+    ;[run[pi], run[pj]] = [run[pj], run[pi]]
+    onReorder(run)
+  }
+
   if (sorted.length === 0) {
     return (
       <div className="m-3 border border-dashed border-line p-8 text-center text-sm text-muted">
@@ -270,7 +328,7 @@ export default function AnnotationList({
 
   return (
     <div className="divide-y divide-line border-b border-line">
-      {sorted.map((a) => (
+      {sorted.map((a, idx) => (
         <AnnotationItem
           key={a.id}
           annotation={a}
@@ -279,6 +337,12 @@ export default function AnnotationList({
           isPlaying={isPlaying}
           currentTime={currentTime}
           readOnly={readOnly}
+          autoFocusNew={focusNoteId === a.id}
+          onFocusHandled={onFocusHandled}
+          canMoveUp={idx > 0 && sameSlot(sorted[idx - 1], a)}
+          canMoveDown={idx < sorted.length - 1 && sameSlot(a, sorted[idx + 1])}
+          onMoveUp={() => moveNote(a.id, -1)}
+          onMoveDown={() => moveNote(a.id, 1)}
           onPlay={() => playNote(a.start)}
           onUpdate={(patch) => onUpdate(a.id, patch)}
           onDelete={() => onDelete(a.id)}

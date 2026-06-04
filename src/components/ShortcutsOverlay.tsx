@@ -5,8 +5,8 @@ const GROUPS = [
     title: 'Transport',
     items: [
       { keys: ['Space'], label: 'Play / pause' },
-      { keys: ['←', '→'], label: 'Seek 5 seconds' },
-      { keys: ['⇧', '←', '→'], label: 'Seek 30 seconds' },
+      { keys: ['←', '→'], label: 'Seek 1 second' },
+      { keys: ['⇧', '←', '→'], label: 'Seek 5 seconds' },
     ],
   },
   {
