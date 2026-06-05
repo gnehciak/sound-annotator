@@ -3,22 +3,16 @@ import { Eye, ExternalLink } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
-import {
-  loadVolume,
-  saveVolume,
-  DEFAULT_VOLUME,
-  loadOverviewOpen,
-  saveOverviewOpen,
-} from '../lib/storage'
+import { loadVolume, saveVolume, DEFAULT_VOLUME } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
 import Transport from './Transport'
-import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
 import TitleBar from './TitleBar'
 import NotesHeaderControls from './NotesHeaderControls'
+import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import { useNotesView } from '../lib/useNotesView'
@@ -51,14 +45,16 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   const [notesPad, setNotesPad] = useState(0)
-  const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+  const [searchOpen, setSearchOpen] = useState(false)
 
-  function toggleOverview() {
-    setOverviewOpen((on) => {
-      const next = !on
-      saveOverviewOpen(next)
-      return next
-    })
+  // Reveal/dismiss the notes search; closing clears the query (see App).
+  function toggleSearch() {
+    if (searchOpen) {
+      setSearch('')
+      setSearchOpen(false)
+    } else {
+      setSearchOpen(true)
+    }
   }
   function changeVolume(v: number) {
     setVolume(v)
@@ -91,6 +87,26 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     update()
     notesRoRef.current = new ResizeObserver(update)
     notesRoRef.current.observe(el)
+  }, [])
+
+  // Drive --player-max-h from the player area's measured height so the 16:9 video
+  // fills the space the overview rail used to occupy (capped + centred) instead
+  // of the default 50vh. Guarded against re-applying so it can't loop.
+  const playerAreaRoRef = useRef<ResizeObserver | null>(null)
+  const playerMaxHRef = useRef(-1)
+  const setPlayerArea = useCallback((el: HTMLDivElement | null) => {
+    playerAreaRoRef.current?.disconnect()
+    if (!el) return
+    const apply = () => {
+      const h = el.clientHeight
+      if (h > 0 && Math.abs(h - playerMaxHRef.current) >= 1) {
+        playerMaxHRef.current = h
+        el.style.setProperty('--player-max-h', `${h}px`)
+      }
+    }
+    apply()
+    playerAreaRoRef.current = new ResizeObserver(apply)
+    playerAreaRoRef.current.observe(el)
   }, [])
 
   // Accumulate consecutive ±step seeks (the 1s/5s buttons) against a
@@ -130,12 +146,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     noteOrder,
     changeNoteOrder,
     autoPin,
-    toggleAutoPin,
     autoSeek,
     toggleAutoSeek,
     setTagFilter,
     filterTags,
     activeFilter,
+    search,
+    setSearch,
+    isFiltered,
     visibleAnnotations,
   } = useNotesView(annotations, true)
 
@@ -302,74 +320,69 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         className={`flex min-h-0 flex-1 flex-col ${NOTES_SPLIT_660.row}`}
         style={splitStyle}
       >
-        {/* Player column — the flex column. */}
+        {/* Player column — the flex column. The read-only view has no overview
+            rail, so the player fills the freed height; the transport pins below. */}
         <div
-          className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${NOTES_SPLIT_660.player}`}
+          className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${NOTES_SPLIT_660.player}`}
         >
           <TitleBar
             left="Player"
             right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
           />
-          <div className="shrink-0 space-y-2.5 p-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
             {hasPlayer ? (
-              <PlayerPane
-                ref={playerRef}
-                source={source}
-                audioUrl={audioUrl}
-                regionSpecs={regionSpecs}
-                playbackRate={playbackRate}
-                volume={muted ? 0 : volume}
-                readOnly
-                onTime={handleTime}
-                onDuration={handleDuration}
-                onPlayingChange={handlePlaying}
-                onSeek={seek}
-                onCreateRange={() => {}}
-                onUpdateRegion={() => {}}
-              />
+              <>
+                <div
+                  ref={setPlayerArea}
+                  className={
+                    source?.type === 'youtube'
+                      ? 'flex min-h-0 flex-1 flex-col justify-center'
+                      : 'shrink-0'
+                  }
+                >
+                  <PlayerPane
+                    ref={playerRef}
+                    source={source}
+                    audioUrl={audioUrl}
+                    regionSpecs={regionSpecs}
+                    playbackRate={playbackRate}
+                    volume={muted ? 0 : volume}
+                    readOnly
+                    onTime={handleTime}
+                    onDuration={handleDuration}
+                    onPlayingChange={handlePlaying}
+                    onSeek={seek}
+                    onCreateRange={() => {}}
+                    onUpdateRegion={() => {}}
+                  />
+                </div>
+
+                <Transport
+                  isPlaying={isPlaying}
+                  currentTime={currentTime}
+                  duration={duration}
+                  playbackRate={playbackRate}
+                  volume={volume}
+                  muted={muted}
+                  hasNotes={annotations.length > 0}
+                  readOnly
+                  onPlayPause={() => (isPlaying ? pause() : play())}
+                  onSeek={seek}
+                  onStep={step}
+                  onSetRate={setPlaybackRate}
+                  onSetVolume={changeVolume}
+                  onToggleMute={toggleMute}
+                  onPrevNote={() => jumpNote(-1)}
+                  onNextNote={() => jumpNote(1)}
+                />
+              </>
             ) : (
               <div className="border border-dashed border-line p-6 text-center text-sm text-muted">
                 The audio for this track isn’t available, but the notes below are
                 still here.
               </div>
             )}
-
-            {hasPlayer && (
-              <Transport
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={duration}
-                playbackRate={playbackRate}
-                volume={volume}
-                muted={muted}
-                hasNotes={annotations.length > 0}
-                readOnly
-                onPlayPause={() => (isPlaying ? pause() : play())}
-                onSeek={seek}
-                onStep={step}
-                onSetRate={setPlaybackRate}
-                onSetVolume={changeVolume}
-                onToggleMute={toggleMute}
-                onPrevNote={() => jumpNote(-1)}
-                onNextNote={() => jumpNote(1)}
-              />
-            )}
           </div>
-
-          {hasPlayer && (
-            <TrackOverview
-              className={overviewOpen ? 'min-h-[160px] flex-1' : 'shrink-0'}
-              resetKey={project.id}
-              annotations={annotations}
-              duration={duration}
-              currentTime={currentTime}
-              isPlaying={isPlaying}
-              open={overviewOpen}
-              onToggleOpen={toggleOverview}
-              onSeek={seek}
-              onSeekNote={seekToNote}
-            />
-          )}
         </div>
 
         {/* Drag handle — resize the split (double-click to reset). */}
@@ -385,7 +398,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <TitleBar
             left="Notes"
             right={
-              activeFilter.size > 0
+              isFiltered
                 ? `${visibleAnnotations.length} / ${annotations.length}`
                 : `${annotations.length} ${annotations.length === 1 ? 'note' : 'notes'}`
             }
@@ -396,14 +409,24 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 onTagFilter={setTagFilter}
                 noteOrder={noteOrder}
                 onNoteOrder={changeNoteOrder}
-                autoPin={autoPin}
-                onToggleAutoPin={toggleAutoPin}
                 autoSeek={autoSeek}
                 onToggleAutoSeek={toggleAutoSeek}
+                searchOpen={searchOpen}
+                searchActive={search.trim() !== ''}
+                onToggleSearch={toggleSearch}
                 viewOnly
               />
             }
           />
+          {searchOpen && (
+            <NotesSearch
+              value={search}
+              onChange={setSearch}
+              count={visibleAnnotations.length}
+              total={annotations.length}
+              onClose={toggleSearch}
+            />
+          )}
           <div
             ref={setNotesScroll}
             className="relative flex-1 overflow-y-auto"
@@ -414,7 +437,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               isPlaying={isPlaying}
               playbackRate={playbackRate}
               readOnly
-              filtered={activeFilter.size > 0}
+              filtered={isFiltered}
               scrollRef={notesScrollRef}
               noteOrder={noteOrder}
               autoPin={autoPin}

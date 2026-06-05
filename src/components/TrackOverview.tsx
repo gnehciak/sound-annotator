@@ -14,11 +14,11 @@ interface Props {
   isPlaying: boolean
   /** Changing this (e.g. the project id) resets the scroll position. */
   resetKey?: string
-  /** Whether the rail is expanded; collapsed shows just this header strip. */
+  /** Whether the strip is expanded; collapsed shows just this header strip. */
   open: boolean
-  /** Toggle the rail open/closed (the header chevron). */
+  /** Toggle the strip open/closed (the header chevron). */
   onToggleOpen: () => void
-  /** Scrub to an arbitrary time (clicking the rail background). */
+  /** Scrub to an arbitrary time (clicking the strip background). */
   onSeek: (t: number) => void
   /** Jump to a note and scroll it into view in the notes list. */
   onSeekNote: (id: string) => void
@@ -33,32 +33,27 @@ interface RailNote {
   start: number
   end?: number
   isRange: boolean
-  /** Marked as a structural section — drawn with a bracket left of the spine. */
+  /** Marked as a structural section — drawn with a bracket hung from the top. */
   structure: boolean
-  /** Optional name shown vertically beside the section bracket. */
+  /** Optional name shown above the section bracket. */
   sectionName: string
   color: string
   label: string
   preview: string
 }
 interface PlacedNote extends RailNote {
-  y: number
-  yEnd: number | null
-  /** Shows a text label at rest (vs. spine tick only) — false when thinned. */
-  baseLabel: boolean
+  x: number
+  xEnd: number | null
 }
 
-const PAD = 12 // keeps the 0:00 / end flags off the panel edges
-const ROW = 18 // min px gap between two visible labels before the lower thins
-const SPINE = 72 // x of the time axis line
-const LABEL_X = 80 // x where note labels begin
-// Structure-section furniture, in the lane between the time labels and the
-// spine: a [ glyph (vertical stroke at BRACKET_X, ticks reaching the spine) with
-// the section name set vertically in its own lane just to its left.
-const BRACKET_X = SPINE - 16
-const BRACKET_W = 8
-const NAME_W = 14 // width of the vertical section-name lane
-const NAME_X = BRACKET_X - 2 - NAME_W // name sits just left of the bracket
+const PAD = 12 // keeps the 0:00 / end labels off the timeline edges
+const PAD_V = 6 // top/bottom breathing room inside the strip
+// The section bracket hangs from the very top; its name sits just *below* the
+// stroke (so the stroke never strikes through the text).
+const SECTION_BRACKET_Y = PAD_V
+const SECTION_NAME_Y = PAD_V + 9
+const DIAMOND = 7 // note flag size (rotated square)
+const STRIP_H = 88 // the timeline's own height (the tag footer adds below it)
 
 // Zoom is expressed as a time unit: the seconds between gridlines. Each division
 // occupies UNIT_PX, so a smaller unit = more zoomed in. 'fit' shows the whole
@@ -102,11 +97,13 @@ const zoomLabel = (zoom: Zoom) => {
 }
 
 /**
- * A proportional map of the whole track: time runs top→bottom, every note is a
- * color-coded flag at its real position, ranges render as bars, and the amber
- * playhead sweeps down as it plays. The rail is zoomable in time units (buttons
- * or ⌘/Ctrl + wheel, anchored at the cursor) and scrollable; the zoom level is
- * remembered across sessions. A session-stat footer bottoms out the panel.
+ * A proportional map of the whole track laid out as a short horizontal strip:
+ * time runs left→right, every note is a color-coded flag at its real position,
+ * ranges render as bars, section notes get a bracket hung from the top, and the
+ * amber playhead sweeps right as it plays. Hovering a flag pops a preview. The
+ * strip is zoomable in time units (buttons or ⌘/Ctrl + wheel, anchored at the
+ * cursor) and scrolls horizontally; the zoom level is remembered across
+ * sessions. A tag-tally footer bottoms out the panel.
  */
 export default function TrackOverview({
   annotations,
@@ -121,9 +118,13 @@ export default function TrackOverview({
   className = '',
 }: Props) {
   const theme = useResolvedTheme()
+  const sectionRef = useRef<HTMLElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const [railW, setRailW] = useState(0)
   const [railH, setRailH] = useState(0)
-  const [hovered, setHovered] = useState<string | null>(null)
+  // The hovered flag + the section-relative x where it was entered (so the
+  // preview popover can sit above it).
+  const [hover, setHover] = useState<{ id: string; x: number } | null>(null)
   const [zoom, setZoom] = useState<Zoom>(loadOverviewZoom)
 
   // Latest zoom/duration for the once-bound wheel listener; written only in
@@ -141,12 +142,15 @@ export default function TrackOverview({
   // Accumulates trackpad wheel delta so ⌘/Ctrl + wheel steps one unit per notch.
   const wheelAccumRef = useRef(0)
 
-  // Track the viewport's pixel height: flags are positioned against it and the
-  // content height decides when the rail scrolls.
+  // Track the viewport's pixel size: flags are positioned against it, the width
+  // drives the time scale, and the content width decides when the strip scrolls.
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
-    const measure = () => setRailH(el.clientHeight)
+    const measure = () => {
+      setRailW(el.clientWidth)
+      setRailH(el.clientHeight)
+    }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -187,46 +191,36 @@ export default function TrackOverview({
     return [...m.values()].sort((a, b) => b.count - a.count)
   }, [annotations])
 
-  const usableBase = Math.max(0, railH - PAD * 2)
+  const usableBase = Math.max(0, railW - PAD * 2)
   const effZoom = effectiveZoomOf(zoom, usableBase, duration)
   const pxPerSec = pxPerSecOf(zoom, usableBase, duration)
-  const contentH = PAD * 2 + duration * pxPerSec
-  const ready = duration > 0 && railH > 40
-  const scrollable = ready && contentH > railH + 1
-  const yOf = (t: number) => PAD + t * pxPerSec
+  const contentW = PAD * 2 + duration * pxPerSec
+  const ready = duration > 0 && railW > 40
+  const scrollable = ready && contentW > railW + 1
+  const xOf = (t: number) => PAD + t * pxPerSec
+
+  // Vertical lane geometry: sections pin to the top, the ruler to the bottom, the
+  // spine sits just below the (optional) section lane.
+  const hasSections = items.some((it) => it.structure)
+  const spineY = PAD_V + (hasSections ? 34 : 8)
+  const rulerY = Math.max(spineY + 14, railH - 20)
 
   const ladder = ladderOf(usableBase, duration)
   const curIdx = Math.max(0, ladder.indexOf(effZoom))
   const canZoomIn = ready && curIdx < ladder.length - 1
   const canZoomOut = ready && curIdx > 0
 
-  // Place each note and decide whether it carries a label at rest. Folding top→
-  // down, a note shows its label only if it clears the last shown one by ROW;
-  // denser notes keep their spine tick (and reveal their label on hover). Zoom
-  // spreads notes out, so more labels survive the fold.
+  // Place each note along the time axis.
   const placed = useMemo<PlacedNote[]>(() => {
-    const ub = Math.max(0, railH - PAD * 2)
+    const ub = Math.max(0, railW - PAD * 2)
     const px = pxPerSecOf(zoom, ub, duration)
-    const y = (t: number) => PAD + t * px
-    return items.reduce<{ rows: PlacedNote[]; lastLabelY: number }>(
-      (st, it) => {
-        const top = y(it.start)
-        const baseLabel = top - st.lastLabelY >= ROW
-        const row: PlacedNote = {
-          ...it,
-          y: top,
-          yEnd: it.isRange ? y(it.end!) : null,
-          baseLabel,
-        }
-        return { rows: [...st.rows, row], lastLabelY: baseLabel ? top : st.lastLabelY }
-      },
-      { rows: [], lastLabelY: -Infinity },
-    ).rows
-  }, [items, railH, zoom, duration])
-
-  const primaryActiveId =
-    placed.find((p) => currentTime >= p.start && currentTime <= (p.end ?? p.start + 3))
-      ?.id ?? null
+    const x = (t: number) => PAD + t * px
+    return items.map((it) => ({
+      ...it,
+      x: x(it.start),
+      xEnd: it.isRange ? x(it.end!) : null,
+    }))
+  }, [items, railW, zoom, duration])
 
   // Time gridlines: at fit, the densest "nice" unit that still reads; otherwise
   // the chosen zoom unit itself.
@@ -242,14 +236,14 @@ export default function TrackOverview({
   // Reset the scroll position when the track changes (zoom is intentionally kept).
   useEffect(() => {
     userScrollingRef.current = false
-    if (viewportRef.current) viewportRef.current.scrollTop = 0
+    if (viewportRef.current) viewportRef.current.scrollLeft = 0
   }, [resetKey])
 
   // Apply the cursor-anchored scroll position after a zoom change re-renders.
   useLayoutEffect(() => {
     const vp = viewportRef.current
     if (vp && pendingScrollRef.current != null) {
-      vp.scrollTop = clamp(pendingScrollRef.current, 0, vp.scrollHeight - vp.clientHeight)
+      vp.scrollLeft = clamp(pendingScrollRef.current, 0, vp.scrollWidth - vp.clientWidth)
       pendingScrollRef.current = null
     }
   }, [zoom])
@@ -262,41 +256,41 @@ export default function TrackOverview({
     }, 3500)
   }
 
-  // Set zoom while keeping the time under `clientY` (or the viewport centre)
+  // Set zoom while keeping the time under `clientX` (or the viewport centre)
   // stationary — the natural pro-tool zoom feel. Persists the new level.
-  const setZoomAnchored = (next: Zoom, clientY: number | null) => {
+  const setZoomAnchored = (next: Zoom, clientX: number | null) => {
     const vp = viewportRef.current
-    if (!vp || vp.clientHeight <= 0) {
+    if (!vp || vp.clientWidth <= 0) {
       zoomRef.current = next
       setZoom(next)
       saveOverviewZoom(next)
       return
     }
-    const ub = Math.max(0, vp.clientHeight - PAD * 2)
+    const ub = Math.max(0, vp.clientWidth - PAD * 2)
     const oldPx = pxPerSecOf(zoomRef.current, ub, durationRef.current)
     const newPx = pxPerSecOf(next, ub, durationRef.current)
-    const h = vp.clientHeight
-    const cy = clientY != null ? clientY - vp.getBoundingClientRect().top : h / 2
-    const tAt = oldPx > 0 ? (vp.scrollTop + cy - PAD) / oldPx : 0
-    pendingScrollRef.current = PAD + tAt * newPx - cy
+    const w = vp.clientWidth
+    const cx = clientX != null ? clientX - vp.getBoundingClientRect().left : w / 2
+    const tAt = oldPx > 0 ? (vp.scrollLeft + cx - PAD) / oldPx : 0
+    pendingScrollRef.current = PAD + tAt * newPx - cx
     zoomRef.current = next
     setZoom(next)
     saveOverviewZoom(next)
   }
 
   // Step one level along the zoom ladder (dir +1 = in, -1 = out).
-  const stepZoom = (dir: 1 | -1, clientY: number | null) => {
+  const stepZoom = (dir: 1 | -1, clientX: number | null) => {
     const vp = viewportRef.current
     if (!vp) return
-    const ub = Math.max(0, vp.clientHeight - PAD * 2)
+    const ub = Math.max(0, vp.clientWidth - PAD * 2)
     const lad = ladderOf(ub, durationRef.current)
     const eff = effectiveZoomOf(zoomRef.current, ub, durationRef.current)
     const idx = Math.max(0, lad.indexOf(eff))
-    setZoomAnchored(lad[clamp(idx + dir, 0, lad.length - 1)], clientY)
+    setZoomAnchored(lad[clamp(idx + dir, 0, lad.length - 1)], clientX)
   }
 
   // ⌘/Ctrl + wheel (and trackpad pinch) zooms in time-unit steps, anchored at the
-  // cursor; a plain wheel scrolls and pauses the playhead follow.
+  // cursor; a plain wheel pans the timeline horizontally and pauses the follow.
   useEffect(() => {
     const vp = viewportRef.current
     if (!vp) return
@@ -306,12 +300,17 @@ export default function TrackOverview({
         wheelAccumRef.current += e.deltaY
         if (wheelAccumRef.current <= -40) {
           wheelAccumRef.current = 0
-          stepZoom(1, e.clientY)
+          stepZoom(1, e.clientX)
         } else if (wheelAccumRef.current >= 40) {
           wheelAccumRef.current = 0
-          stepZoom(-1, e.clientY)
+          stepZoom(-1, e.clientX)
         }
-      } else {
+      } else if (vp.scrollWidth > vp.clientWidth + 1) {
+        // Translate vertical wheel to horizontal pan so a plain scroll wheel
+        // still moves the timeline.
+        const horiz = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+        e.preventDefault()
+        vp.scrollLeft += horiz
         markUserScrolling()
       }
     }
@@ -329,21 +328,21 @@ export default function TrackOverview({
   useEffect(() => {
     const vp = viewportRef.current
     if (!vp || !isPlaying || userScrollingRef.current || duration <= 0) return
-    const px = pxPerSecOf(zoom, Math.max(0, vp.clientHeight - PAD * 2), duration)
-    const fullH = PAD * 2 + duration * px
-    const h = vp.clientHeight
-    if (fullH <= h + 1) return // fits — nothing to follow
-    const y = PAD + currentTime * px
-    if (y < vp.scrollTop + h * 0.12 || y > vp.scrollTop + h * 0.88) {
-      vp.scrollTop = clamp(y - h / 3, 0, fullH - h)
+    const px = pxPerSecOf(zoom, Math.max(0, vp.clientWidth - PAD * 2), duration)
+    const fullW = PAD * 2 + duration * px
+    const w = vp.clientWidth
+    if (fullW <= w + 1) return // fits — nothing to follow
+    const x = PAD + currentTime * px
+    if (x < vp.scrollLeft + w * 0.12 || x > vp.scrollLeft + w * 0.88) {
+      vp.scrollLeft = clamp(x - w / 3, 0, fullW - w)
     }
-  }, [currentTime, isPlaying, zoom, duration, railH])
+  }, [currentTime, isPlaying, zoom, duration, railW])
 
   const scrollToNow = () => {
     const vp = viewportRef.current
     if (!vp || !ready) return
-    const y = PAD + currentTime * pxPerSec
-    vp.scrollTop = clamp(y - vp.clientHeight / 3, 0, Math.max(0, contentH - vp.clientHeight))
+    const x = PAD + currentTime * pxPerSec
+    vp.scrollLeft = clamp(x - vp.clientWidth / 3, 0, Math.max(0, contentW - vp.clientWidth))
     userScrollingRef.current = false
     if (scrollTimerRef.current) {
       clearTimeout(scrollTimerRef.current)
@@ -354,33 +353,52 @@ export default function TrackOverview({
   const scrub = (e: React.MouseEvent) => {
     const vp = viewportRef.current
     if (!ready || !vp) return
-    const contentY = vp.scrollTop + (e.clientY - vp.getBoundingClientRect().top)
-    onSeek(clamp((contentY - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
+    const contentX = vp.scrollLeft + (e.clientX - vp.getBoundingClientRect().left)
+    onSeek(clamp((contentX - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
   }
+
+  const enterFlag = (id: string, e: React.MouseEvent) => {
+    const left = sectionRef.current?.getBoundingClientRect().left ?? 0
+    setHover({ id, x: e.clientX - left })
+  }
+  const leaveFlag = (id: string) =>
+    setHover((h) => (h?.id === id ? null : h))
+
+  const hoverNote = hover ? placed.find((p) => p.id === hover.id) : null
 
   const btn =
     'press border border-line bg-inset text-muted hover:text-fg disabled:opacity-30 disabled:hover:text-muted'
 
   return (
-    <section className={`flex flex-col border-t border-line bg-panel ${className}`}>
-      {/* Map panel header: collapse toggle (label) + scroll-to-now + zoom. The
-          header strip is always shown so the rail can be reopened after it's
-          collapsed away. */}
-      <div className="flex items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5">
-        <button
-          type="button"
-          onClick={onToggleOpen}
-          aria-expanded={open}
-          title={open ? 'Hide overview' : 'Show overview'}
-          className="press -ml-1 flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-muted hover:text-fg"
-        >
+    <section
+      ref={sectionRef}
+      className={`relative flex flex-col border-t border-line bg-panel ${className}`}
+    >
+      {/* Map panel header — the whole bar toggles the strip open/closed (the zoom
+          controls stop propagation). Always shown so it can be reopened after
+          it's collapsed away. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggleOpen()
+          }
+        }}
+        aria-expanded={open}
+        title={open ? 'Hide overview' : 'Show overview'}
+        className="flex cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5 text-muted transition-colors hover:bg-raised hover:text-fg"
+      >
+        <span className="flex items-center gap-1.5">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           <span className="font-mono text-[11px] uppercase tracking-[0.25em]">
             Overview
           </span>
-        </button>
+        </span>
         {open && ready && items.length > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={scrollToNow}
@@ -427,208 +445,211 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* The rail (scroll viewport). Hidden (not unmounted) when collapsed so its
-          once-bound ResizeObserver + wheel listeners survive and re-measure on
-          reopen. */}
+      {/* The timeline (scroll viewport). Hidden (not unmounted) when collapsed so
+          its once-bound ResizeObserver + wheel listeners survive and re-measure
+          on reopen. */}
       <div
         ref={viewportRef}
-        className={`relative min-h-0 flex-1 overflow-y-auto ${open ? '' : 'hidden'}`}
+        className={`relative overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden ${open ? '' : 'hidden'}`}
+        style={{ height: open ? STRIP_H : undefined, scrollbarWidth: 'none' }}
       >
         {items.length === 0 ? (
           <Hint>Notes you pin will map onto the timeline here.</Hint>
         ) : !ready ? (
           <Hint>Load the track to map its notes along the timeline.</Hint>
         ) : (
-          <div className="relative cursor-pointer" style={{ height: contentH }} onClick={scrub}>
+          <div className="relative h-full cursor-pointer" style={{ width: contentW }} onClick={scrub}>
             {/* time axis: spine line */}
             <div
-              className="absolute w-px bg-line"
-              style={{ left: SPINE, top: PAD, height: contentH - PAD * 2 }}
+              className="absolute h-px bg-line"
+              style={{ left: PAD, top: spineY, width: Math.max(0, contentW - PAD * 2) }}
             />
-            {/* 0:00 / total end labels */}
+            {/* 0:00 / total end labels at the ruler */}
             <span
-              className="absolute left-2 -translate-y-1/2 font-mono text-[10px] tabular-nums text-muted"
-              style={{ top: PAD }}
+              className="absolute font-mono text-[10px] tabular-nums text-muted"
+              style={{ left: PAD, top: rulerY }}
             >
               0:00
             </span>
             <span
-              className="absolute left-2 -translate-y-1/2 font-mono text-[10px] tabular-nums text-muted"
-              style={{ top: contentH - PAD }}
+              className="absolute font-mono text-[10px] tabular-nums text-muted"
+              style={{ left: contentW - PAD, top: rulerY, transform: 'translateX(-100%)' }}
             >
               {formatTime(duration)}
             </span>
 
-            {/* intermediate time gridlines */}
+            {/* intermediate time gridlines + timecodes */}
             {ticks.map((t) => (
-              <div key={t} className="pointer-events-none absolute" style={{ top: yOf(t) }}>
-                <span className="absolute left-2 -translate-y-1/2 font-mono text-[10px] tabular-nums text-muted/55">
+              <div key={t} className="pointer-events-none absolute" style={{ left: xOf(t) }}>
+                <span
+                  className="absolute w-px -translate-x-1/2 bg-line/60"
+                  style={{ top: spineY, height: Math.max(0, rulerY - spineY) }}
+                />
+                <span
+                  className="absolute -translate-x-1/2 font-mono text-[10px] tabular-nums text-muted/55"
+                  style={{ top: rulerY }}
+                >
                   {formatTime(t)}
                 </span>
-                <span
-                  className="absolute h-px w-2 -translate-y-1/2 bg-line"
-                  style={{ left: SPINE - 4 }}
-                />
               </div>
             ))}
 
             {placed.map((p) => {
               const active =
                 currentTime >= p.start && currentTime <= (p.end ?? p.start + 3)
-              const primary = p.id === primaryActiveId
-              const showLabel = p.baseLabel || hovered === p.id || primary
-              const lift = hovered === p.id || active
-              const onTop = hovered === p.id || primary
-              // Structure bracket spans start→end; a point note gets a small
+              const lift = hover?.id === p.id || active
+              // Section bracket spans start→end; a point section gets a small
               // fixed bracket centred on its flag.
-              const brkTop = p.yEnd != null ? p.y : p.y - 7
-              const brkH = p.yEnd != null ? Math.max(14, p.yEnd - p.y) : 14
+              const secLeft = p.xEnd != null ? p.x : p.x - 7
+              const secW = p.xEnd != null ? Math.max(2, p.xEnd - p.x) : 14
               return (
                 <div key={p.id}>
-                  {/* structure-section bracket, in the lane left of the spine */}
+                  {/* structure-section bracket, hung from the top of the strip */}
                   {p.structure && (
                     <div
                       className="pointer-events-none absolute"
                       style={{
-                        left: BRACKET_X,
-                        top: brkTop,
-                        height: brkH,
-                        width: BRACKET_W,
+                        left: secLeft,
+                        top: SECTION_BRACKET_Y,
+                        width: secW,
                         opacity: active ? 1 : 0.85,
                       }}
                     >
-                      <div
-                        className="absolute inset-y-0 left-0 w-[2px] rounded-full"
-                        style={{ background: p.color }}
-                      />
                       <div
                         className="absolute left-0 top-0 h-[2px] w-full rounded-full"
                         style={{ background: p.color }}
                       />
                       <div
-                        className="absolute bottom-0 left-0 h-[2px] w-full rounded-full"
+                        className="absolute left-0 top-0 h-[6px] w-[2px] rounded-full"
+                        style={{ background: p.color }}
+                      />
+                      <div
+                        className="absolute right-0 top-0 h-[6px] w-[2px] rounded-full"
                         style={{ background: p.color }}
                       />
                     </div>
                   )}
 
-                  {/* section name, set vertically (reading up) left of the bracket.
-                      The outer box spans the bracket; the inner label is sticky, so
-                      as the rail scrolls it stays pinned to whichever viewport edge
-                      the section runs past — clamped within its own span. */}
+                  {/* section name above the bracket. The outer box spans the
+                      section; the inner label is sticky, so as the strip scrolls
+                      it stays pinned to whichever edge the section runs past —
+                      clamped within its own span. */}
                   {p.structure && p.sectionName && (
                     <div
                       className="pointer-events-none absolute"
-                      style={{ left: NAME_X, top: brkTop, height: brkH, width: NAME_W }}
+                      style={{ left: secLeft, top: SECTION_NAME_Y, width: secW }}
                     >
-                      <div className="sticky flex justify-center" style={{ top: PAD, bottom: PAD }}>
-                        <span
-                          className="font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
-                          style={{
-                            writingMode: 'vertical-rl',
-                            transform: 'rotate(180deg)',
-                            maxHeight: brkH,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            color: hueText(p.color, theme),
-                            opacity: active ? 1 : 0.85,
-                          }}
-                        >
-                          {p.sectionName}
-                        </span>
-                      </div>
+                      <span
+                        className="sticky inline-block font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
+                        style={{
+                          left: PAD,
+                          right: PAD,
+                          maxWidth: secW,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: hueText(p.color, theme),
+                          opacity: active ? 1 : 0.85,
+                        }}
+                      >
+                        {p.sectionName}
+                      </span>
                     </div>
                   )}
 
                   {/* range bar on the spine */}
-                  {p.isRange && p.yEnd != null && (
+                  {p.isRange && p.xEnd != null && (
                     <div
-                      className="absolute w-[3px] rounded-full"
+                      className="absolute rounded-full"
                       style={{
-                        left: SPINE - 1,
-                        top: p.y,
-                        height: Math.max(2, p.yEnd - p.y),
+                        left: p.x,
+                        top: spineY - 1.5,
+                        width: Math.max(2, p.xEnd - p.x),
+                        height: 3,
                         background: p.color,
                         opacity: active ? 1 : 0.8,
                       }}
                     />
                   )}
 
-                  {/* flag marker (click target) on the spine */}
+                  {/* flag marker (click target + hover preview) on the spine */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation()
                       onSeekNote(p.id)
                     }}
-                    onMouseEnter={() => setHovered(p.id)}
-                    onMouseLeave={() => setHovered((h) => (h === p.id ? null : h))}
-                    title={`${p.label}${p.preview ? ` · ${p.preview}` : ''}`}
+                    onMouseEnter={(e) => enterFlag(p.id, e)}
+                    onMouseLeave={() => leaveFlag(p.id)}
                     aria-label={`Seek to note at ${p.label}`}
-                    className="press absolute z-10 flex items-center justify-center"
+                    className="press absolute z-10 flex items-center"
                     style={{
-                      left: SPINE - 7,
-                      width: 14,
-                      top: p.y,
-                      height: p.isRange && p.yEnd != null ? Math.max(14, p.yEnd - p.y) : 14,
-                      transform: p.isRange ? undefined : 'translateY(-50%)',
+                      left: p.x,
+                      top: spineY,
+                      width: p.isRange && p.xEnd != null ? Math.max(14, p.xEnd - p.x) : 14,
+                      height: 14,
+                      justifyContent: p.isRange ? 'flex-start' : 'center',
+                      transform: p.isRange ? 'translateY(-50%)' : 'translate(-50%, -50%)',
                     }}
                   >
                     <span
                       className={`block rotate-45 rounded-[1px] ring-1 ring-ink transition-transform ${
                         lift ? 'scale-125' : ''
-                      } ${p.isRange ? 'self-start' : ''}`}
-                      style={{ width: 7, height: 7, background: p.color, marginTop: p.isRange ? -1 : 0 }}
+                      }`}
+                      style={{ width: DIAMOND, height: DIAMOND, background: p.color }}
                     />
                   </button>
-
-                  {/* note label */}
-                  {showLabel && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onSeekNote(p.id)
-                      }}
-                      onMouseEnter={() => setHovered(p.id)}
-                      onMouseLeave={() => setHovered((h) => (h === p.id ? null : h))}
-                      className={`group absolute flex -translate-y-1/2 items-center gap-1.5 overflow-hidden rounded-sm py-0.5 pl-1.5 pr-2 text-left ${
-                        primary ? 'bg-raised' : 'hover:bg-raised/60'
-                      } ${onTop ? 'z-30' : 'z-20'}`}
-                      style={{ left: LABEL_X, top: p.y, maxWidth: `calc(100% - ${LABEL_X + 8}px)` }}
-                    >
-                      <span
-                        className="shrink-0 font-mono text-[11px] font-semibold tabular-nums"
-                        style={{ color: hueText(p.color, theme) }}
-                      >
-                        {p.label}
-                      </span>
-                      {primary && (
-                        <span className="h-1.5 w-1.5 shrink-0 animate-now-pulse rounded-full bg-accent" />
-                      )}
-                      {p.preview && (
-                        <span className="min-w-0 flex-1 truncate text-[11px] text-muted">
-                          {p.preview}
-                        </span>
-                      )}
-                    </button>
-                  )}
                 </div>
               )
             })}
 
-            {/* playhead — amber "now" line sweeping down the rail */}
+            {/* playhead — amber "now" line sweeping right across the strip */}
             <div
-              className="pointer-events-none absolute z-40 flex -translate-y-1/2 items-center"
-              style={{ top: yOf(currentTime), left: SPINE - 4, right: 8 }}
+              className="pointer-events-none absolute z-40"
+              style={{ left: xOf(currentTime), top: 0, bottom: 0 }}
             >
-              <span className="h-2 w-2 shrink-0 rotate-45 bg-accent shadow-[0_0_6px_rgb(245_166_35/0.7)]" />
-              <span className="ml-1 h-px flex-1 bg-accent/70" />
+              <span
+                className="absolute w-px -translate-x-1/2 bg-accent/70"
+                style={{ top: PAD_V, bottom: PAD_V, left: 0 }}
+              />
+              <span
+                className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-accent shadow-[0_0_6px_rgb(245_166_35/0.7)]"
+                style={{ top: spineY, left: 0 }}
+              />
             </div>
           </div>
         )}
       </div>
+
+      {/* hover preview popover — floats above the strip, anchored at the flag's x */}
+      {open && hoverNote && (
+        <div
+          className="pointer-events-none absolute bottom-full z-50 mb-1 -translate-x-1/2"
+          style={{ left: clamp(hover!.x, 124, Math.max(124, railW - 124)), maxWidth: 248 }}
+        >
+          <div className="rounded-md border border-line bg-raised px-2.5 py-1.5 shadow-lg">
+            <span
+              className="font-mono text-[11px] font-semibold tabular-nums"
+              style={{ color: hueText(hoverNote.color, theme) }}
+            >
+              {hoverNote.label}
+            </span>
+            {hoverNote.preview && (
+              <p
+                className="mt-0.5 text-[11px] leading-snug text-fg"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {hoverNote.preview}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Session readout — just the tag tallies. */}
       {open && tagCounts.length > 0 && (

@@ -1,12 +1,13 @@
-import { Pin, PinOff, Crosshair } from 'lucide-react'
+import { Crosshair, Search } from 'lucide-react'
 import type { NoteOrder } from '../lib/storage'
 import TagFilter from './TagFilter'
 
 /**
  * The inline controls in the Notes panel header: tag filter, list-order switch,
- * auto-pin and auto-cue. All are view preferences (they never mutate notes), so
- * they live here once and are rendered by both the editor (App) and the
- * read-only ShareViewer. Wired to {@link useNotesView}.
+ * and auto-cue. All are view preferences (they never mutate notes), so they live
+ * here once and are rendered by both the editor (App) and the read-only
+ * ShareViewer. Wired to {@link useNotesView}. Auto-pin has no control of its own
+ * — it's coupled to the order (on for Live/Auto, off for Timeline).
  */
 export default function NotesHeaderControls({
   filterTags,
@@ -14,10 +15,11 @@ export default function NotesHeaderControls({
   onTagFilter,
   noteOrder,
   onNoteOrder,
-  autoPin,
-  onToggleAutoPin,
   autoSeek,
   onToggleAutoSeek,
+  searchOpen,
+  searchActive,
+  onToggleSearch,
   viewOnly = false,
 }: {
   filterTags: string[]
@@ -25,10 +27,12 @@ export default function NotesHeaderControls({
   onTagFilter: (next: Set<string>) => void
   noteOrder: NoteOrder
   onNoteOrder: (mode: NoteOrder) => void
-  autoPin: boolean
-  onToggleAutoPin: () => void
   autoSeek: boolean
   onToggleAutoSeek: () => void
+  /** Whether the search row is open, and whether it currently has a query. */
+  searchOpen: boolean
+  searchActive: boolean
+  onToggleSearch: () => void
   /**
    * View-only mode: drops the editor-specific controls — no auto-cue toggle
    * (note clicks just play) and no 'auto' order (only Timeline / Live).
@@ -41,30 +45,26 @@ export default function NotesHeaderControls({
     : NOTE_ORDER_OPTIONS
   return (
     <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onToggleSearch}
+        aria-pressed={searchOpen}
+        title={searchActive ? 'Search active — click to change' : 'Search notes'}
+        aria-label="Search notes"
+        className={`press rounded-sm p-1 ${
+          searchOpen || searchActive
+            ? 'bg-raised text-accentink'
+            : 'text-muted hover:bg-raised hover:text-fg'
+        }`}
+      >
+        <Search size={14} />
+      </button>
       <TagFilter tags={filterTags} selected={activeFilter} onChange={onTagFilter} />
       <NoteOrderControl
         value={noteOrder}
         onChange={onNoteOrder}
         options={orderOptions}
       />
-      <button
-        type="button"
-        onClick={onToggleAutoPin}
-        aria-pressed={autoPin}
-        title={
-          autoPin
-            ? 'Auto-pin on: the playing note scrolls to the top — click to turn off'
-            : 'Auto-pin off: the notes list stays put — click to turn on'
-        }
-        aria-label="Auto-pin the playing note to the top"
-        className={`press rounded-sm p-1 ${
-          autoPin
-            ? 'bg-raised text-accentink'
-            : 'text-muted hover:bg-raised hover:text-fg'
-        }`}
-      >
-        {autoPin ? <Pin size={14} /> : <PinOff size={14} />}
-      </button>
       {!viewOnly && (
         <button
           type="button"
@@ -101,17 +101,18 @@ const NOTE_ORDER_OPTIONS: {
   {
     value: 'timeline',
     label: 'Timeline',
-    title: 'Timeline — always in chronological (start-time) order',
+    title: 'Timeline — always chronological (start-time) order; the list stays put',
   },
   {
     value: 'auto',
     label: 'Auto',
-    title: 'Auto — live order while playing, timeline order when paused',
+    title:
+      'Auto — follows the playhead while playing (pins it to the top), chronological when paused',
   },
   {
     value: 'live',
     label: 'Live',
-    title: 'Live — always reorders around the playhead',
+    title: 'Live — always reorders around the playhead and pins the playing note to the top',
   },
 ]
 

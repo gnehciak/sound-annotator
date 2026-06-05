@@ -3,13 +3,15 @@
 // No server and no PDF library: we build a self-contained HTML document (inline
 // styles, note images referenced by their Cloud Storage URLs) in a hidden
 // iframe, then trigger the browser's print dialog — "Save as PDF" produces the
-// file. The document is a light, paper-styled report: title + video thumbnail +
-// the YouTube and share links up top, then every note in a Time / Tags /
-// Content table. Rich-text notes render as-is (TipTap HTML, including pasted
-// images); musical-elements (and any future window plugin) blocks render as a
-// labelled spec line beneath the text.
+// file. The document is a light, paper-styled report. Page 1 is a cover: brand
+// bar, title, video thumbnail, and a keyed meta block (source / project link /
+// note count / annotated range / export date) pinned to the page foot. The
+// notes start on page 2 as a Time / Tags / Content table. Rich-text notes
+// render as-is (TipTap HTML, including pasted images); musical-elements (and
+// any future window plugin) blocks render as a labelled spec line beneath the
+// text.
 import type { Annotation, Project } from '../types'
-import { noteLabel } from './format'
+import { formatTime, noteLabel } from './format'
 import { resolveTag, tagsOf } from './tags'
 import { colorForId } from './noteColors'
 import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
@@ -112,11 +114,25 @@ function tableRow(note: Annotation): string {
   </tr>`
 }
 
-function headerBlock(project: Project): string {
+/** The span the notes cover, e.g. "0:00–15:42" (one timecode for one moment). */
+function noteRange(notes: Annotation[]): string {
+  if (notes.length === 0) return ''
+  const first = notes[0].start
+  const last = Math.max(...notes.map((n) => n.end ?? n.start))
+  return last > first ? `${formatTime(first)}–${formatTime(last)}` : formatTime(first)
+}
+
+/**
+ * Page 1: a full-page cover. Brand bar with the amber signal rule, the title
+ * at display scale, the thumbnail, and a keyed meta block pinned to the page
+ * foot. `min-height: 96vh` + `break-after: page` fills the first sheet and
+ * pushes the notes table to page 2.
+ */
+function coverBlock(project: Project, notes: Annotation[]): string {
   const source = project.source
   const link = projectUrl(project.id)
-  // Thumbnail: YouTube poster (high-res with a graceful fallback), or a glyph
-  // banner for audio tracks that have no artwork.
+  // Thumbnail: YouTube poster, or a glyph banner for audio tracks that have
+  // no artwork.
   let thumb = ''
   let sourceRow = ''
   if (source?.type === 'youtube' && source.videoId) {
@@ -134,22 +150,34 @@ function headerBlock(project: Project): string {
     thumb = `<div class="thumb-audio"><span class="glyph">♪</span><span class="thumb-name">${esc(
       name,
     )}</span></div>`
-    sourceRow = `<div class="link-row"><span class="link-k">Audio file</span><span class="link-v">${esc(
+    sourceRow = `<div class="link-row"><span class="link-k">Audio file</span><span class="meta-v">${esc(
       name,
     )}</span></div>`
   }
 
-  return `<header class="head">
-    <div class="brand">◉ Sound Annotator</div>
+  const range = noteRange(notes)
+  // en-GB pins "6 June 2026": the document chrome (NOTES / RANGE / EXPORTED)
+  // is hardcoded English, so a system-locale date would read mixed-language.
+  const exported = new Date().toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  return `<section class="cover">
+    <div class="cover-brand"><div class="brand">◉ Sound Annotator</div></div>
     <h1>${esc(project.title || 'Untitled track')}</h1>
     ${thumb}
-    <div class="links">
+    <div class="cover-meta">
       ${sourceRow}
       <div class="link-row"><span class="link-k">Project</span><a class="link-v" href="${esc(
         link,
       )}">${esc(link)}</a></div>
+      <div class="link-row"><span class="link-k">Notes</span><span class="meta-v">${notes.length}</span></div>
+      ${range ? `<div class="link-row"><span class="link-k">Range</span><span class="meta-v">${esc(range)}</span></div>` : ''}
+      <div class="link-row"><span class="link-k">Exported</span><span class="meta-v">${esc(exported)}</span></div>
     </div>
-  </header>`
+  </section>`
 }
 
 const STYLES = `
@@ -169,16 +197,32 @@ const STYLES = `
     text-transform: uppercase;
     color: #9a5d08;
   }
+  /* Cover page: fills the first sheet (96vh leaves slack so the forced break
+     never spills a near-empty second cover page) and pins the meta block to
+     the foot with margin-top: auto. */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    min-height: 96vh;
+    break-after: page;
+    page-break-after: always;
+  }
+  .cover-brand {
+    padding-bottom: 10px;
+    border-bottom: 3px solid #e08a0c;
+  }
   h1 {
-    margin: 6px 0 14px;
-    font-size: 26px;
+    margin: 64px 0 0;
+    font-size: 32px;
     font-weight: 700;
-    letter-spacing: -0.01em;
-    line-height: 1.15;
+    letter-spacing: -0.015em;
+    line-height: 1.12;
+    text-wrap: balance;
   }
   .thumb-wrap {
     width: 100%;
-    max-width: 460px;
+    max-width: 600px;
+    margin-top: 28px;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 6px;
@@ -191,7 +235,8 @@ const STYLES = `
     align-items: center;
     gap: 12px;
     width: 100%;
-    max-width: 460px;
+    max-width: 600px;
+    margin-top: 28px;
     padding: 22px 18px;
     border-radius: 6px;
     border: 1px solid #d2c9b6;
@@ -203,7 +248,13 @@ const STYLES = `
     color: #6e6555;
     word-break: break-all;
   }
-  .links { margin-top: 12px; display: grid; gap: 4px; }
+  .cover-meta {
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid #d2c9b6;
+    display: grid;
+    gap: 5px;
+  }
   .link-row { display: flex; align-items: baseline; gap: 10px; }
   .link-k {
     flex: 0 0 64px;
@@ -218,6 +269,17 @@ const STYLES = `
     word-break: break-all;
     text-decoration: none;
   }
+  .meta-v {
+    font: 11px ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color: #44403a;
+    word-break: break-all;
+  }
+  .report-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6e6555;
+  }
+  .report-title + .section { margin-top: 6px; }
   .section {
     margin: 22px 0 8px;
     padding-bottom: 6px;
@@ -362,7 +424,8 @@ export function buildExportHtml(project: Project): string {
   <style>${STYLES}</style>
 </head>
 <body>
-  ${headerBlock(project)}
+  ${coverBlock(project, notes)}
+  <div class="report-title">${esc(project.title || 'Untitled track')}</div>
   <div class="section"><h2>Notes</h2><span class="count">${count}</span></div>
   ${body}
   <script>

@@ -17,10 +17,15 @@ export function noteLabel(start: number, end?: number): string {
     : formatTime(start)
 }
 
+/** A note's full plain text (TipTap HTML stripped, whitespace collapsed). */
+export function notePlainText(contentHtml: string): string {
+  const doc = new DOMParser().parseFromString(contentHtml, 'text/html')
+  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
 /** A short plain-text snippet of a note's TipTap HTML, for previews/labels. */
 export function notePreview(contentHtml: string, max = 80): string {
-  const doc = new DOMParser().parseFromString(contentHtml, 'text/html')
-  const text = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
+  const text = notePlainText(contentHtml)
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
 }
 

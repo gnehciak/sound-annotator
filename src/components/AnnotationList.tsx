@@ -323,7 +323,7 @@ export default function AnnotationList({
     return (
       <div className="m-3 border border-dashed border-line p-8 text-center text-sm text-muted">
         {filtered ? (
-          'No notes match the selected tags.'
+          'No notes match your search or filters.'
         ) : readOnly ? (
           'No notes on this track.'
         ) : (
@@ -358,6 +358,7 @@ export default function AnnotationList({
           onMoveUp={() => moveNote(a.id, -1)}
           onMoveDown={() => moveNote(a.id, 1)}
           onPlay={() => playNote(a.start)}
+          onSeek={onSeek}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
         />

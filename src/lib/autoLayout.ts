@@ -11,10 +11,10 @@
  *  - Horizontal: notes and the docked inspector each get a screen-proportional
  *    width inside a comfortable band; the player (flex) keeps whatever's left,
  *    never below its minimum (trim notes, then the inspector, to guarantee it).
- *  - Vertical: the video and the overview rail share one pool (everything in the
- *    player column that isn't fixed chrome). The overview earns a floor that
- *    grows with note density; the video takes the rest, capped by what its
- *    column width allows at 16:9 and by a share of the column height.
+ *  - Vertical: the video and the overview band share one pool (everything in the
+ *    player column that isn't fixed chrome). The horizontal overview takes a
+ *    compact fixed floor; the video takes the rest, capped by what its column
+ *    width allows at 16:9 and by a share of the column height.
  *
  * The constants are deliberately grouped and named so the whole feel can be
  * retuned here without touching the wiring.
@@ -26,12 +26,10 @@ export interface FitMeasurements {
   rowWidth: number
   /** Height (px) of that row = the player column height (side-by-side only). */
   rowHeight: number
-  /** Current video height + overview-rail height (px). Their sum is the pool the
+  /** Current video height + overview-band height (px). Their sum is the pool the
    *  vertical fit re-divides, and it's invariant to the horizontal split because
    *  the overview is flex-1 (= pool − video) however wide the column gets. */
   videoOverviewPool: number
-  /** Notes mapped in the overview — a denser track earns a taller rail. */
-  noteCount: number
   /** Whether the docked inspector column is present (reserve width for it). */
   hasInspector: boolean
 }
@@ -58,14 +56,12 @@ const INSPECTOR_MAX_W = 460
 // --- vertical bands (px) ---
 const VIDEO_MIN_H = 160
 const VIDEO_MAX_COLUMN_FRACTION = 0.52 // don't let the video eat the column
-const OVERVIEW_MIN_H = 200 // rail + session footer stay usable
-const OVERVIEW_PER_NOTE = 8 // grow the rail floor a touch per note…
-const OVERVIEW_BONUS_CAP = 180 // …up to this much extra
+const OVERVIEW_MIN_H = 130 // the horizontal band + tag footer stay usable
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 export function computeFitLayout(m: FitMeasurements): FitLayout {
-  const { rowWidth, rowHeight, videoOverviewPool, noteCount, hasInspector } = m
+  const { rowWidth, rowHeight, videoOverviewPool, hasInspector } = m
 
   // Degenerate measurements (unmounted / zero-size): hand back sane minimums.
   if (rowWidth <= 0 || rowHeight <= 0) {
@@ -99,8 +95,9 @@ export function computeFitLayout(m: FitMeasurements): FitLayout {
 
   // --- vertical: divide the video|overview pool ---
   const videoCapByWidth = (playerColWidth * 9) / 16 // 16:9 height the width allows
-  const overviewWant =
-    OVERVIEW_MIN_H + Math.min(OVERVIEW_BONUS_CAP, Math.max(0, noteCount) * OVERVIEW_PER_NOTE)
+  // The horizontal overview wants a compact, fixed band — notes spread along its
+  // width, so a denser track no longer needs more height.
+  const overviewWant = OVERVIEW_MIN_H
 
   let video = videoOverviewPool - overviewWant
   video = Math.min(video, videoCapByWidth, rowHeight * VIDEO_MAX_COLUMN_FRACTION)

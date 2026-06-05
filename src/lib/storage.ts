@@ -231,27 +231,6 @@ export function saveSidebarOpen(open: boolean): void {
   }
 }
 
-// Auto-pin — when on, the playing note scrolls to the top of the notes list
-// (and re-pins after a scroll, and on note-click). Off keeps the list still, so
-// the user scrolls it by hand. A workspace preference; defaults on.
-const AUTO_PIN_KEY = 'sound-annotator:auto-pin'
-
-export function loadAutoPin(): boolean {
-  try {
-    return localStorage.getItem(AUTO_PIN_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-
-export function saveAutoPin(on: boolean): void {
-  try {
-    localStorage.setItem(AUTO_PIN_KEY, on ? '1' : '0')
-  } catch {
-    /* ignore */
-  }
-}
-
 // Auto-cue on click — when on, clicking a note in the list moves the playhead
 // to it (and opens it). Off leaves the playhead where it is; ⌘/Ctrl-click still
 // cues on demand. A workspace preference; defaults off (clicking just edits).

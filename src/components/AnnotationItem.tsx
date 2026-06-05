@@ -34,6 +34,8 @@ interface Props {
   onMoveDown?: () => void
   /** Seek (and pin) to this note's moment — the timecode button. */
   onPlay: () => void
+  /** Scrub to an arbitrary time within the note (clicking the progress bar). */
+  onSeek?: (t: number) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
 }
@@ -59,6 +61,7 @@ export default function AnnotationItem({
   onMoveUp,
   onMoveDown,
   onPlay,
+  onSeek,
   onSeekNote,
   mentionItems,
 }: Props) {
@@ -115,16 +118,45 @@ export default function AnnotationItem({
         active ? 'z-20 bg-rowsel' : selected ? 'bg-rowsel' : 'hover:bg-rowsel/25'
       } ${isPlaying && !focused ? 'opacity-50' : ''}`}
     >
-      {/* progress bar along the top border */}
-      <div
-        className="absolute inset-x-0 top-0 z-10 h-[3px]"
-        style={{ background: `${color}33` }}
-      >
+      {/* progress bar along the top border. For ranges it's a scrubber: clicking
+          seeks to that fraction of the note's span. The button is a taller
+          transparent grab strip (over the header's top padding) so the thin bar
+          isn't a pixel-hunt; the visible bar thickens on hover. */}
+      {isRange && onSeek ? (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            stop(e)
+            const r = e.currentTarget.getBoundingClientRect()
+            const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+            onSeek(annotation.start + f * span)
+          }}
+          title="Click to scrub within this note"
+          aria-label="Scrub within this note"
+          className="group/bar absolute inset-x-0 top-0 z-10 flex h-2 cursor-pointer items-start"
+        >
+          <span
+            className="block h-[3px] w-full transition-[height] group-hover/bar:h-[5px]"
+            style={{ background: `${color}33` }}
+          >
+            <span
+              className="block h-full"
+              style={{ width: `${progress * 100}%`, background: color }}
+            />
+          </span>
+        </button>
+      ) : (
         <div
-          className="h-full"
-          style={{ width: `${progress * 100}%`, background: color }}
-        />
-      </div>
+          className="absolute inset-x-0 top-0 z-10 h-[3px]"
+          style={{ background: `${color}33` }}
+        >
+          <div
+            className="h-full"
+            style={{ width: `${progress * 100}%`, background: color }}
+          />
+        </div>
+      )}
 
       {/* colored spine — shown while playing or selected */}
       <div

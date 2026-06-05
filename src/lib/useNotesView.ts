@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { Annotation } from '../types'
-import { tagsUsedIn, tagsOf } from './tags'
+import { tagsUsedIn, tagsOf, resolveTag } from './tags'
+import { noteLabel, notePlainText } from './format'
 import {
   loadNoteOrder,
   saveNoteOrder,
   loadViewNoteOrder,
   saveViewNoteOrder,
-  loadAutoPin,
-  saveAutoPin,
   loadAutoSeek,
   saveAutoSeek,
   type NoteOrder,
@@ -32,12 +31,16 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
   const [editOrder, setEditOrder] = useState<NoteOrder>(loadNoteOrder)
   const [viewOrder, setViewOrder] = useState<NoteOrder>(loadViewNoteOrder)
   const noteOrder = viewOnly ? viewOrder : editOrder
-  // When on, the playing note auto-scrolls to the top of the notes list.
-  const [autoPin, setAutoPin] = useState(loadAutoPin)
+  // Auto-pin (scrolling the playing note to the top) is coupled to the order in
+  // both modes — on for Live and Auto, off for Timeline. There's no separate
+  // toggle: the one order switch drives both ordering and pinning.
+  const autoPin = noteOrder !== 'timeline'
   // When on, clicking a note in the list cues the playhead to it.
   const [autoSeek, setAutoSeek] = useState(loadAutoSeek)
   // Tags the notes list is filtered to (empty = show all).
   const [tagFilter, setTagFilter] = useState<Set<string>>(() => new Set())
+  // Free-text search query (empty = show all). Composes with the tag filter.
+  const [search, setSearch] = useState('')
 
   function changeNoteOrder(mode: NoteOrder) {
     if (viewOnly) {
@@ -47,13 +50,6 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
       saveNoteOrder(mode)
       setEditOrder(mode)
     }
-  }
-  function toggleAutoPin() {
-    setAutoPin((on) => {
-      const next = !on
-      saveAutoPin(next)
-      return next
-    })
   }
   function toggleAutoSeek() {
     setAutoSeek((on) => {
@@ -74,22 +70,59 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
     const next = new Set([...tagFilter].filter((t) => avail.has(t)))
     return next.size === tagFilter.size ? tagFilter : next
   }, [tagFilter, filterTags])
-  // Notes shown in the list: all of them, or those carrying any selected tag.
+  // A lowercased search haystack per note — timecode label + full text + tag
+  // labels + section name. Parses HTML, so memoised on the notes (not per
+  // keystroke); the query just scans these strings.
+  const searchIndex = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const a of annotations) {
+      const tags = tagsOf(a).map((t) => resolveTag(t)?.label ?? t)
+      m.set(
+        a.id,
+        [noteLabel(a.start, a.end), notePlainText(a.contentHtml), a.sectionName ?? '', ...tags]
+          .join('   ')
+          .toLowerCase(),
+      )
+    }
+    return m
+  }, [annotations])
+
+  // Query split into terms; every term must match somewhere (AND).
+  const searchTerms = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? q.split(/\s+/) : []
+  }, [search])
+
+  // Whether anything is narrowing the list (tags and/or search) — drives the
+  // count readout and the "no matches" empty state.
+  const isFiltered = activeFilter.size > 0 || searchTerms.length > 0
+
+  // Notes shown in the list: narrowed to the selected tags (any-of) and then to
+  // the search terms (all-of). Either filter empty means it doesn't narrow.
   const visibleAnnotations = useMemo(() => {
-    if (activeFilter.size === 0) return annotations
-    return annotations.filter((a) => tagsOf(a).some((t) => activeFilter.has(t)))
-  }, [annotations, activeFilter])
+    if (!isFiltered) return annotations
+    return annotations.filter((a) => {
+      if (activeFilter.size > 0 && !tagsOf(a).some((t) => activeFilter.has(t))) return false
+      if (searchTerms.length > 0) {
+        const hay = searchIndex.get(a.id) ?? ''
+        if (!searchTerms.every((t) => hay.includes(t))) return false
+      }
+      return true
+    })
+  }, [annotations, activeFilter, searchTerms, searchIndex, isFiltered])
 
   return {
     noteOrder,
     changeNoteOrder,
     autoPin,
-    toggleAutoPin,
     autoSeek,
     toggleAutoSeek,
     setTagFilter,
     filterTags,
     activeFilter,
+    search,
+    setSearch,
+    isFiltered,
     visibleAnnotations,
   }
 }

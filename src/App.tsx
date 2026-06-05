@@ -10,8 +10,6 @@ import type { Annotation, PlayerHandle, Project } from './types'
 import {
   loadInspectorWidth,
   saveInspectorWidth,
-  loadPlayerHeight,
-  savePlayerHeight,
   loadVolume,
   saveVolume,
   DEFAULT_VOLUME,
@@ -66,6 +64,7 @@ import SourcePicker from './components/SourcePicker'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
+import NotesSearch from './components/NotesSearch'
 import SplitHandle from './components/SplitHandle'
 import { useNotesView } from './lib/useNotesView'
 import { useNotesSplit, NOTES_SPLIT_660, NOTES_SPLIT_900 } from './lib/notesSplit'
@@ -129,6 +128,9 @@ export default function App() {
   // Overview rail open/collapsed. Collapsing leaves only its header strip so the
   // player gets the vertical room.
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+  // Whether the notes search row is revealed (the query itself lives in
+  // useNotesView). Resets when the track changes.
+  const [searchOpen, setSearchOpen] = useState(false)
   const [pendingIn, setPendingIn] = useState<number | null>(null)
   // Id of a just-created note that should grab focus (and scroll into view) so
   // the user can start typing immediately. Cleared once the note handles it.
@@ -148,11 +150,6 @@ export default function App() {
   // Dragging state for the inspector|notes handle (the player|notes handle owns
   // its own, inside `split`).
   const [draggingInspector, setDraggingInspector] = useState(false)
-  // Max height (px) of the YouTube video, set by the handle under the transport;
-  // null = the player's CSS default (50vh). The overview rail (flex-1) absorbs
-  // the inverse, so a shorter video gives the timeline map more room.
-  const [playerHeight, setPlayerHeight] = useState<number | null>(loadPlayerHeight)
-  const [draggingPlayer, setDraggingPlayer] = useState(false)
   // Player volume (0–1, sticky) and a separate mute that remembers the level.
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
@@ -180,6 +177,16 @@ export default function App() {
       saveOverviewOpen(next)
       return next
     })
+  }
+  // Reveal/dismiss the notes search row; closing always clears the query so the
+  // list isn't left silently filtered with no visible field.
+  function toggleSearch() {
+    if (searchOpen) {
+      setSearch('')
+      setSearchOpen(false)
+    } else {
+      setSearchOpen(true)
+    }
   }
   // Moving the slider always unmutes; dragging to 0 just goes silent.
   function changeVolume(v: number) {
@@ -222,6 +229,8 @@ export default function App() {
   const audioUrlRef = useRef<string | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
+  const playerAreaRoRef = useRef<ResizeObserver | null>(null)
+  const playerMaxHRef = useRef(-1)
   // Projects whose orphaned images have already been swept this session.
   const sweptImagesRef = useRef<Set<string>>(new Set())
 
@@ -235,6 +244,24 @@ export default function App() {
     update()
     notesRoRef.current = new ResizeObserver(update)
     notesRoRef.current.observe(el)
+  }, [])
+
+  // Drive --player-max-h from the player area's measured height so the 16:9 video
+  // fills it (capped + centred) — the player now takes all the room the short
+  // overview strip leaves. Guarded against re-applying so it can't loop.
+  const setPlayerArea = useCallback((el: HTMLDivElement | null) => {
+    playerAreaRoRef.current?.disconnect()
+    if (!el) return
+    const apply = () => {
+      const h = el.clientHeight
+      if (h > 0 && Math.abs(h - playerMaxHRef.current) >= 1) {
+        playerMaxHRef.current = h
+        el.style.setProperty('--player-max-h', `${h}px`)
+      }
+    }
+    apply()
+    playerAreaRoRef.current = new ResizeObserver(apply)
+    playerAreaRoRef.current.observe(el)
   }, [])
 
   const current = projects.find((p) => p.id === currentId) ?? null
@@ -264,12 +291,14 @@ export default function App() {
     noteOrder,
     changeNoteOrder,
     autoPin,
-    toggleAutoPin,
     autoSeek,
     toggleAutoSeek,
     setTagFilter,
     filterTags,
     activeFilter,
+    search,
+    setSearch,
+    isFiltered,
     visibleAnnotations,
   } = useNotesView(current?.annotations ?? [], viewOnly)
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
@@ -417,6 +446,8 @@ export default function App() {
     setDuration(0)
     setIsPlaying(false)
     setTagFilter(new Set())
+    setSearch('')
+    setSearchOpen(false)
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current)
       audioUrlRef.current = null
@@ -925,63 +956,18 @@ export default function App() {
     window.addEventListener('pointerup', up)
   }
 
-  // ---- player | overview vertical resize --------------------------------
-  // The handle under the transport sets the video's max height; the overview
-  // rail (flex-1) takes the inverse, so dragging trades video size for timeline
-  // room. Starts from the video's actual height, clamps so the transport +
-  // overview stay visible, persists, and double-click resets to the default.
-  function startPlayerDrag(e: React.PointerEvent) {
-    e.preventDefault()
-    const startY = e.clientY
-    const startH = playerBoxRef.current?.clientHeight ?? playerHeight ?? 0
-    const containerH = splitRef.current?.clientHeight ?? window.innerHeight
-    const max = Math.max(180, containerH - 300)
-    let last = startH
-    setDraggingPlayer(true)
-    document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'row-resize'
-    const move = (ev: PointerEvent) => {
-      last = Math.min(max, Math.max(120, startH + (ev.clientY - startY)))
-      setPlayerHeight(last)
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      document.body.style.userSelect = ''
-      document.body.style.cursor = ''
-      setDraggingPlayer(false)
-      savePlayerHeight(last)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-  function resetPlayerHeight() {
-    setPlayerHeight(null)
-    savePlayerHeight(null)
-  }
-
   // ---- auto-fit the whole workspace to this screen (the "Fit" button) ----
   // One shot: measure the live row, ask computeFitLayout for the optimal column
-  // widths + video height, then apply and persist them. Respects the current
-  // sidebar state (the row width already excludes it). When the panes are
-  // stacked (narrow), only the video cap is meaningful, so just keep it modest.
+  // widths, then apply and persist them. Respects the current sidebar state (the
+  // row width already excludes it). The video sizes itself to its area, so only
+  // the column widths are fitted; stacked (narrow) has nothing to fit.
   function fitLayout() {
     const el = splitRef.current
     if (!el) return
     const rowWidth = el.clientWidth
     const rowHeight = el.clientHeight
     const horizontal = getComputedStyle(el).flexDirection === 'row'
-    const isYouTube = current?.source?.type === 'youtube'
-
-    if (!horizontal) {
-      if (isYouTube) {
-        const cap = (rowWidth * 9) / 16
-        const h = Math.max(160, Math.round(Math.min(cap, window.innerHeight * 0.4)))
-        setPlayerHeight(h)
-        savePlayerHeight(h)
-      }
-      return
-    }
+    if (!horizontal) return
 
     const fit = computeFitLayout({
       rowWidth,
@@ -989,7 +975,6 @@ export default function App() {
       videoOverviewPool:
         (playerBoxRef.current?.clientHeight ?? 0) +
         (overviewRef.current?.clientHeight ?? 0),
-      noteCount: current?.annotations.length ?? 0,
       hasInspector: showDock,
     })
 
@@ -997,10 +982,6 @@ export default function App() {
     if (showDock) {
       setInspectorWidth(fit.inspectorWidth)
       saveInspectorWidth(fit.inspectorWidth)
-    }
-    if (isYouTube) {
-      setPlayerHeight(fit.playerHeight)
-      savePlayerHeight(fit.playerHeight)
     }
   }
 
@@ -1404,40 +1385,41 @@ export default function App() {
               style={splitStyle}
             >
               {/* Viewer panel — the flex column: absorbs window resize so the
-                  notes column keeps its width. `--player-max-h` caps the video
-                  height (driven by the resize handle below the transport). */}
+                  notes column keeps its width. The video fills the room the short
+                  overview strip leaves (--player-max-h tracks the player area). */}
               <div
-                className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${splitVariant.player}`}
-                style={{
-                  ['--player-max-h' as string]:
-                    playerHeight != null ? `${playerHeight}px` : undefined,
-                }}
+                className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${splitVariant.player}`}
               >
                 <TitleBar
                   left="Player"
                   right={current.source.type === 'youtube' ? 'YouTube' : 'Audio'}
                 />
-                <div className="shrink-0 space-y-2.5 p-3">
-                  <div ref={playerBoxRef}>
-                    <PlayerPane
-                      ref={playerRef}
-                      source={current.source}
-                      audioUrl={audioUrl}
-                      regionSpecs={regionSpecs}
-                      playbackRate={playbackRate}
-                      volume={muted ? 0 : volume}
-                      readOnly={viewOnly}
-                      onTime={handleTime}
-                      onDuration={handleDuration}
-                      onPlayingChange={handlePlaying}
-                      onSeek={seek}
-                      onCreateRange={createRange}
-                      onUpdateRegion={updateRegionGeom}
-                    />
+                <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
+                  <div
+                    ref={setPlayerArea}
+                    className="flex min-h-0 flex-1 flex-col justify-center"
+                  >
+                    <div ref={playerBoxRef}>
+                      <PlayerPane
+                        ref={playerRef}
+                        source={current.source}
+                        audioUrl={audioUrl}
+                        regionSpecs={regionSpecs}
+                        playbackRate={playbackRate}
+                        volume={muted ? 0 : volume}
+                        readOnly={viewOnly}
+                        onTime={handleTime}
+                        onDuration={handleDuration}
+                        onPlayingChange={handlePlaying}
+                        onSeek={seek}
+                        onCreateRange={createRange}
+                        onUpdateRegion={updateRegionGeom}
+                      />
+                    </div>
                   </div>
 
                   {uploadPct != null && (
-                    <div className="flex items-center gap-2 border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+                    <div className="flex shrink-0 items-center gap-2 border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
                       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                         <span
                           className="block h-full bg-accent transition-[width]"
@@ -1468,42 +1450,11 @@ export default function App() {
                   />
                 </div>
 
-                {/* Drag to trade video height for overview room (YouTube only —
-                    the audio waveform is already short). Double-click resets. */}
-                {current.source.type === 'youtube' && (
-                  <div
-                    role="separator"
-                    aria-orientation="horizontal"
-                    aria-label="Resize the player — drag to give the overview more or less room"
-                    onPointerDown={startPlayerDrag}
-                    onDoubleClick={resetPlayerHeight}
-                    title="Drag to resize the player · double-click to reset"
-                    className="group flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
-                  >
-                    <span
-                      className={`h-[3px] w-10 rounded-full transition-colors ${
-                        draggingPlayer
-                          ? 'bg-accent'
-                          : 'bg-line-strong group-hover:bg-accent/70'
-                      }`}
-                    />
-                  </div>
-                )}
-
-                {/* Fills the space below the transport: a proportional map of
-                    every note along the timeline, plus a session readout. The
-                    wrapper carries the flex sizing so its height is measurable.
-                    Collapsed, it shrinks to just the overview's header strip. */}
-                <div
-                  ref={overviewRef}
-                  className={
-                    overviewOpen
-                      ? 'flex min-h-[160px] flex-1 flex-col'
-                      : 'flex shrink-0 flex-col'
-                  }
-                >
+                {/* A short, toggleable timeline strip below the player. The
+                    timeline carries its own fixed height; collapsed, it's just
+                    the header strip. */}
+                <div ref={overviewRef} className="flex shrink-0 flex-col">
                   <TrackOverview
-                    className="min-h-0 flex-1"
                     resetKey={current.id}
                     annotations={current.annotations}
                     duration={duration}
@@ -1537,7 +1488,7 @@ export default function App() {
                 <TitleBar
                   left="Notes"
                   right={
-                    activeFilter.size > 0
+                    isFiltered
                       ? `${visibleAnnotations.length} / ${current.annotations.length}`
                       : `${current.annotations.length} ${
                           current.annotations.length === 1 ? 'note' : 'notes'
@@ -1550,14 +1501,24 @@ export default function App() {
                       onTagFilter={setTagFilter}
                       noteOrder={noteOrder}
                       onNoteOrder={changeNoteOrder}
-                      autoPin={autoPin}
-                      onToggleAutoPin={toggleAutoPin}
                       autoSeek={autoSeek}
                       onToggleAutoSeek={toggleAutoSeek}
+                      searchOpen={searchOpen}
+                      searchActive={search.trim() !== ''}
+                      onToggleSearch={toggleSearch}
                       viewOnly={viewOnly}
                     />
                   }
                 />
+                {searchOpen && (
+                  <NotesSearch
+                    value={search}
+                    onChange={setSearch}
+                    count={visibleAnnotations.length}
+                    total={current.annotations.length}
+                    onClose={toggleSearch}
+                  />
+                )}
                 {!viewOnly && (
                   <NoteActions
                     pendingIn={pendingIn}
@@ -1579,7 +1540,7 @@ export default function App() {
                     isPlaying={isPlaying}
                     playbackRate={playbackRate}
                     readOnly={viewOnly}
-                    filtered={activeFilter.size > 0}
+                    filtered={isFiltered}
                     scrollRef={notesScrollRef}
                     noteOrder={noteOrder}
                     autoPin={autoPin}
@@ -1625,7 +1586,7 @@ export default function App() {
                 >
                   <div className="h-full w-[var(--inspector-w)]">
                     <PluginWindow
-                      title="Note"
+                      title="Note Properties"
                       subtitle={inspectorSubtitle}
                       mode="dock"
                       onSetMode={changeWindowMode}
@@ -1679,7 +1640,7 @@ export default function App() {
       {/* Note inspector — modal overlay (narrow screens or chosen mode) */}
       {showModal && selectedNote && (
         <PluginWindow
-          title="Note"
+          title="Note Properties"
           subtitle={inspectorSubtitle}
           mode="modal"
           onSetMode={changeWindowMode}
