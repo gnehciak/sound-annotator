@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Crosshair,
+  Brackets,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { formatTime, parseTime } from '../lib/format'
@@ -43,7 +44,15 @@ interface Props {
   /** Freshly created: drop the caret into the text editor on open. */
   autoFocus?: boolean
   onFocusHandled?: () => void
-  onUpdate: (patch: Partial<Annotation>) => void
+  /**
+   * Apply a patch to the note. `opts.mode='text'` marks a rich-text body edit
+   * (kept out of the app-level undo history — the editor owns its own undo);
+   * `opts.coalesceKey` groups a rapid run of edits into one undo step.
+   */
+  onUpdate: (
+    patch: Partial<Annotation>,
+    opts?: { mode?: 'text'; coalesceKey?: string },
+  ) => void
   onDelete: () => void
   /** Cue the playhead to a time (clicking the range bar). */
   onSeek: (t: number) => void
@@ -84,12 +93,15 @@ export default function NoteInspector({
     const next = blocks.map((b) =>
       b.id === blockId ? { ...b, data: { html } } : b,
     )
-    onUpdate({ blocks: next, contentHtml: textHtmlOf(next) })
+    // Body text: editor owns its own undo, so keep this out of app history.
+    onUpdate({ blocks: next, contentHtml: textHtmlOf(next) }, { mode: 'text' })
   }
   const updateBlockData = (blockId: string, data: unknown) => {
-    onUpdate({
-      blocks: blocks.map((b) => (b.id === blockId ? { ...b, data } : b)),
-    })
+    // A run of edits to the same property block collapses into one undo step.
+    onUpdate(
+      { blocks: blocks.map((b) => (b.id === blockId ? { ...b, data } : b)) },
+      { coalesceKey: `block:${blockId}` },
+    )
   }
   const addBlock = (type: string) => {
     const plugin = getPlugin(type)
@@ -100,14 +112,18 @@ export default function NoteInspector({
     onUpdate({ blocks: blocks.filter((b) => b.id !== blockId) })
 
   // Begin/End edits, clamped: start ∈ [0, end-1]; end ≥ start+1.
+  // Rapid ±1s nudges to the same endpoint collapse into one undo step.
+  const timeKey = { coalesceKey: `time:${annotation.id}` }
   const setStart = (t: number) => {
     const max =
       annotation.end != null ? annotation.end - 1 : Number.POSITIVE_INFINITY
-    onUpdate({ start: Math.max(0, Math.min(max, Math.round(t))) })
+    onUpdate({ start: Math.max(0, Math.min(max, Math.round(t))) }, timeKey)
   }
   const setEnd = (t: number) =>
-    onUpdate({ end: Math.max(Math.round(t), annotation.start + 1) })
-  const clearEnd = () => onUpdate({ end: undefined })
+    onUpdate({ end: Math.max(Math.round(t), annotation.start + 1) }, timeKey)
+  // Removing the end makes this a point note, which can't be a section (a
+  // section needs a span to bracket), so drop the structure flag too.
+  const clearEnd = () => onUpdate({ end: undefined, structure: false })
 
   // Just-created note: focus the text editor so the user can type immediately.
   useEffect(() => {
@@ -150,6 +166,62 @@ export default function NoteInspector({
         >
           <Trash2 size={14} />
         </button>
+      </div>
+
+      {/* Structure section: a clear on/off switch on its own row, with a name
+          field (when on) that shows beside the section's bracket in the overview. */}
+      <div className="flex flex-col gap-2 border-b border-line/60 px-3 py-2">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={annotation.structure ?? false}
+          aria-disabled={annotation.end == null}
+          onClick={() => {
+            if (annotation.end == null) return
+            onUpdate({ structure: !annotation.structure })
+          }}
+          title={
+            annotation.end == null
+              ? 'Give this note an end time first — a section brackets a span, not a single moment'
+              : 'Section notes are bracketed along their span in the overview'
+          }
+          className={`flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-left transition-colors ${
+            annotation.end == null
+              ? 'cursor-not-allowed border-line/60 opacity-50'
+              : annotation.structure
+                ? 'press border-accent/60 bg-accent/10'
+                : 'press border-line hover:border-line-strong'
+          }`}
+        >
+          <span
+            className={`flex items-center gap-1.5 text-[12px] ${
+              annotation.structure ? 'text-fg' : 'text-muted'
+            }`}
+          >
+            <Brackets size={14} className="shrink-0" />
+            Mark as section note
+          </span>
+          <span
+            className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors ${
+              annotation.structure ? 'border-accent bg-accent' : 'border-line bg-inset'
+            }`}
+          >
+            <span
+              className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
+                annotation.structure ? 'left-3 bg-onbright' : 'left-0.5 bg-muted'
+              }`}
+            />
+          </span>
+        </button>
+        {annotation.structure && (
+          <input
+            value={annotation.sectionName ?? ''}
+            onChange={(e) => onUpdate({ sectionName: e.target.value })}
+            placeholder="Section name"
+            aria-label="Section name"
+            className="w-full rounded-sm border border-line bg-inset px-2 py-1 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+        )}
       </div>
 
       {/* Times — a mini range bar; Begin on the left, End on the right. Click an

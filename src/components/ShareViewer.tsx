@@ -3,7 +3,13 @@ import { Eye, ExternalLink } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
-import { loadVolume, saveVolume, DEFAULT_VOLUME } from '../lib/storage'
+import {
+  loadVolume,
+  saveVolume,
+  DEFAULT_VOLUME,
+  loadOverviewOpen,
+  saveOverviewOpen,
+} from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
@@ -45,7 +51,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   const [notesPad, setNotesPad] = useState(0)
+  const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
 
+  function toggleOverview() {
+    setOverviewOpen((on) => {
+      const next = !on
+      saveOverviewOpen(next)
+      return next
+    })
+  }
   function changeVolume(v: number) {
     setVolume(v)
     saveVolume(v)
@@ -344,14 +358,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
           {hasPlayer && (
             <TrackOverview
-              className="min-h-[160px] flex-1"
+              className={overviewOpen ? 'min-h-[160px] flex-1' : 'shrink-0'}
               resetKey={project.id}
               annotations={annotations}
               duration={duration}
               currentTime={currentTime}
               isPlaying={isPlaying}
-              playbackRate={playbackRate}
-              source={source}
+              open={overviewOpen}
+              onToggleOpen={toggleOverview}
               onSeek={seek}
               onSeekNote={seekToNote}
             />

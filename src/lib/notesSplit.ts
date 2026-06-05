@@ -69,8 +69,24 @@ export function useNotesSplit() {
     saveNotesWidth(DEFAULT_NOTES_WIDTH)
   }
 
+  // Set + persist the width directly (used by the auto-fit "Fit" button). Floors
+  // at the same 340px the drag does.
+  function applyNotesWidth(px: number) {
+    const w = Math.max(340, Math.round(px))
+    setNotesWidth(w)
+    saveNotesWidth(w)
+  }
+
   // Drop onto the split container so its children can read --notes-w.
   const style = { ['--notes-w']: `${notesWidth}px` } as CSSProperties
 
-  return { splitRef, notesWidth, dragging, startSplitDrag, resetSplit, style }
+  return {
+    splitRef,
+    notesWidth,
+    dragging,
+    startSplitDrag,
+    resetSplit,
+    setNotesWidth: applyNotesWidth,
+    style,
+  }
 }

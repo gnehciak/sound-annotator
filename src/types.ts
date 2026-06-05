@@ -57,6 +57,17 @@ export interface Annotation {
    * never been reordered leave it unset and fall back to `createdAt` order.
    */
   order?: number
+  /**
+   * Marks this note as a structural section (e.g. exposition, development). In
+   * the overview a square bracket frames the note's span to the left of the
+   * time spine. Off by default.
+   */
+  structure?: boolean
+  /**
+   * Optional label for a structure section, shown vertically beside its bracket
+   * in the overview. Only meaningful when `structure` is set.
+   */
+  sectionName?: string
   createdAt: number
 }
 

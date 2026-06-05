@@ -27,6 +27,13 @@ const GROUPS = [
       { keys: ['?'], label: 'Show this help' },
     ],
   },
+  {
+    title: 'Editing',
+    items: [
+      { keys: ['⌘', 'Z'], label: 'Undo' },
+      { keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
+    ],
+  },
 ]
 
 export default function ShortcutsOverlay({

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
-import type { Annotation, ProjectSource } from '../types'
+import { ZoomIn, ZoomOut, Crosshair, ChevronDown, ChevronRight } from 'lucide-react'
+import type { Annotation } from '../types'
 import { colorForId, hueText } from '../lib/noteColors'
 import { formatTime, noteLabel, notePreview } from '../lib/format'
 import { resolveTag, tagsOf } from '../lib/tags'
@@ -12,10 +12,12 @@ interface Props {
   duration: number
   currentTime: number
   isPlaying: boolean
-  playbackRate: number
-  source?: ProjectSource
   /** Changing this (e.g. the project id) resets the scroll position. */
   resetKey?: string
+  /** Whether the rail is expanded; collapsed shows just this header strip. */
+  open: boolean
+  /** Toggle the rail open/closed (the header chevron). */
+  onToggleOpen: () => void
   /** Scrub to an arbitrary time (clicking the rail background). */
   onSeek: (t: number) => void
   /** Jump to a note and scroll it into view in the notes list. */
@@ -31,6 +33,10 @@ interface RailNote {
   start: number
   end?: number
   isRange: boolean
+  /** Marked as a structural section — drawn with a bracket left of the spine. */
+  structure: boolean
+  /** Optional name shown vertically beside the section bracket. */
+  sectionName: string
   color: string
   label: string
   preview: string
@@ -44,8 +50,15 @@ interface PlacedNote extends RailNote {
 
 const PAD = 12 // keeps the 0:00 / end flags off the panel edges
 const ROW = 18 // min px gap between two visible labels before the lower thins
-const SPINE = 44 // x of the time axis line
-const LABEL_X = 52 // x where note labels begin
+const SPINE = 72 // x of the time axis line
+const LABEL_X = 80 // x where note labels begin
+// Structure-section furniture, in the lane between the time labels and the
+// spine: a [ glyph (vertical stroke at BRACKET_X, ticks reaching the spine) with
+// the section name set vertically in its own lane just to its left.
+const BRACKET_X = SPINE - 16
+const BRACKET_W = 8
+const NAME_W = 14 // width of the vertical section-name lane
+const NAME_X = BRACKET_X - 2 - NAME_W // name sits just left of the bracket
 
 // Zoom is expressed as a time unit: the seconds between gridlines. Each division
 // occupies UNIT_PX, so a smaller unit = more zoomed in. 'fit' shows the whole
@@ -100,9 +113,9 @@ export default function TrackOverview({
   duration,
   currentTime,
   isPlaying,
-  playbackRate,
-  source,
   resetKey,
+  open,
+  onToggleOpen,
   onSeek,
   onSeekNote,
   className = '',
@@ -151,6 +164,8 @@ export default function TrackOverview({
           start: a.start,
           end: a.end,
           isRange: a.end != null,
+          structure: a.structure ?? false,
+          sectionName: a.sectionName?.trim() ?? '',
           color: a.color ?? colorForId(a.id),
           label: noteLabel(a.start, a.end),
           preview: notePreview(a.contentHtml),
@@ -343,24 +358,28 @@ export default function TrackOverview({
     onSeek(clamp((contentY - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
   }
 
-  const rangeCount = items.reduce((n, it) => n + (it.isRange ? 1 : 0), 0)
-  const sourceLabel = !source
-    ? '—'
-    : source.type === 'youtube'
-      ? '▶ YouTube'
-      : `♪ ${source.fileName ?? 'Audio'}`
-
   const btn =
     'press border border-line bg-inset text-muted hover:text-fg disabled:opacity-30 disabled:hover:text-muted'
 
   return (
     <section className={`flex flex-col border-t border-line bg-panel ${className}`}>
-      {/* Map panel header + scroll-to-now + zoom controls */}
+      {/* Map panel header: collapse toggle (label) + scroll-to-now + zoom. The
+          header strip is always shown so the rail can be reopened after it's
+          collapsed away. */}
       <div className="flex items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5">
-        <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
-          Overview
-        </span>
-        {ready && items.length > 0 && (
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          aria-expanded={open}
+          title={open ? 'Hide overview' : 'Show overview'}
+          className="press -ml-1 flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-muted hover:text-fg"
+        >
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <span className="font-mono text-[11px] uppercase tracking-[0.25em]">
+            Overview
+          </span>
+        </button>
+        {open && ready && items.length > 0 && (
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -408,8 +427,13 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* The rail (scroll viewport) */}
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-y-auto">
+      {/* The rail (scroll viewport). Hidden (not unmounted) when collapsed so its
+          once-bound ResizeObserver + wheel listeners survive and re-measure on
+          reopen. */}
+      <div
+        ref={viewportRef}
+        className={`relative min-h-0 flex-1 overflow-y-auto ${open ? '' : 'hidden'}`}
+      >
         {items.length === 0 ? (
           <Hint>Notes you pin will map onto the timeline here.</Hint>
         ) : !ready ? (
@@ -455,8 +479,68 @@ export default function TrackOverview({
               const showLabel = p.baseLabel || hovered === p.id || primary
               const lift = hovered === p.id || active
               const onTop = hovered === p.id || primary
+              // Structure bracket spans start→end; a point note gets a small
+              // fixed bracket centred on its flag.
+              const brkTop = p.yEnd != null ? p.y : p.y - 7
+              const brkH = p.yEnd != null ? Math.max(14, p.yEnd - p.y) : 14
               return (
                 <div key={p.id}>
+                  {/* structure-section bracket, in the lane left of the spine */}
+                  {p.structure && (
+                    <div
+                      className="pointer-events-none absolute"
+                      style={{
+                        left: BRACKET_X,
+                        top: brkTop,
+                        height: brkH,
+                        width: BRACKET_W,
+                        opacity: active ? 1 : 0.85,
+                      }}
+                    >
+                      <div
+                        className="absolute inset-y-0 left-0 w-[2px] rounded-full"
+                        style={{ background: p.color }}
+                      />
+                      <div
+                        className="absolute left-0 top-0 h-[2px] w-full rounded-full"
+                        style={{ background: p.color }}
+                      />
+                      <div
+                        className="absolute bottom-0 left-0 h-[2px] w-full rounded-full"
+                        style={{ background: p.color }}
+                      />
+                    </div>
+                  )}
+
+                  {/* section name, set vertically (reading up) left of the bracket.
+                      The outer box spans the bracket; the inner label is sticky, so
+                      as the rail scrolls it stays pinned to whichever viewport edge
+                      the section runs past — clamped within its own span. */}
+                  {p.structure && p.sectionName && (
+                    <div
+                      className="pointer-events-none absolute"
+                      style={{ left: NAME_X, top: brkTop, height: brkH, width: NAME_W }}
+                    >
+                      <div className="sticky flex justify-center" style={{ top: PAD, bottom: PAD }}>
+                        <span
+                          className="font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
+                          style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            maxHeight: brkH,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: hueText(p.color, theme),
+                            opacity: active ? 1 : 0.85,
+                          }}
+                        >
+                          {p.sectionName}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* range bar on the spine */}
                   {p.isRange && p.yEnd != null && (
                     <div
@@ -546,24 +630,10 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* Session readout */}
-      <div className="shrink-0 border-t border-line bg-inset/40 px-3 py-2">
-        <div className="flex items-center justify-between border-b border-line/60 pb-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-            Track
-          </span>
-          <span className="min-w-0 truncate pl-2 font-mono text-[10px] tabular-nums text-muted">
-            {sourceLabel}
-          </span>
-        </div>
-        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
-          <Stat label="Length" value={formatTime(duration)} />
-          <Stat label="Notes" value={String(items.length)} />
-          <Stat label="Ranges" value={String(rangeCount)} />
-          <Stat label="Speed" value={`${playbackRate}×`} accent={playbackRate !== 1} />
-        </div>
-        {tagCounts.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-line/60 pt-1.5">
+      {/* Session readout — just the tag tallies. */}
+      {open && tagCounts.length > 0 && (
+        <div className="shrink-0 border-t border-line bg-inset/40 px-3 py-1.5">
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
             {tagCounts.map((t) => (
               <span key={t.label} className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
@@ -574,28 +644,9 @@ export default function TrackOverview({
               </span>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
-  )
-}
-
-function Stat({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string
-  value: string
-  accent?: boolean
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{label}</span>
-      <span className={`font-mono text-xs tabular-nums ${accent ? 'text-accentink' : 'text-fg'}`}>
-        {value}
-      </span>
-    </div>
   )
 }
 

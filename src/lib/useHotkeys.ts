@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 
-const isTypingTarget = (el: EventTarget | null): boolean => {
+export const isTypingTarget = (el: EventTarget | null): boolean => {
   if (!(el instanceof HTMLElement)) return false
   return (
     el.isContentEditable ||

@@ -10,6 +10,8 @@ import type { Annotation, PlayerHandle, Project } from './types'
 import {
   loadInspectorWidth,
   saveInspectorWidth,
+  loadPlayerHeight,
+  savePlayerHeight,
   loadVolume,
   saveVolume,
   DEFAULT_VOLUME,
@@ -17,6 +19,8 @@ import {
   saveViewOnly,
   loadSidebarOpen,
   saveSidebarOpen,
+  loadOverviewOpen,
+  saveOverviewOpen,
   loadWindowMode,
   saveWindowMode,
 } from './lib/storage'
@@ -46,6 +50,9 @@ import {
   Check,
   Play,
   Music,
+  Proportions,
+  Undo2,
+  Redo2,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
@@ -62,12 +69,14 @@ import NotesHeaderControls from './components/NotesHeaderControls'
 import SplitHandle from './components/SplitHandle'
 import { useNotesView } from './lib/useNotesView'
 import { useNotesSplit, NOTES_SPLIT_660, NOTES_SPLIT_900 } from './lib/notesSplit'
+import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
 import ExportPdfButton from './components/ExportPdfButton'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
-import { useHotkeys } from './lib/useHotkeys'
+import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
+import { useProjectHistory } from './lib/useProjectHistory'
 
 const uid = () => crypto.randomUUID()
 const now = () => Date.now()
@@ -81,8 +90,22 @@ export default function App() {
   // Color theme controller (System / Light / Dark). Owns <html data-theme>.
   const { pref: themePref, setPref: setThemePref, resolved: resolvedTheme } =
     useTheme()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [currentId, setCurrentId] = useState<string | null>(null)
+  // Project data + the open-track id live behind an undo/redo history. `commit`
+  // is the undoable mutation primitive; `setProjects`/`setCurrentId` are raw
+  // (no history) for hydration, text-body edits, and project lifecycle.
+  const {
+    projects,
+    setProjects,
+    currentId,
+    setCurrentId,
+    commit,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    epoch,
+    reset: resetHistory,
+  } = useProjectHistory()
   const [loadingProjects, setLoadingProjects] = useState(true)
 
   // Last version of each project written to Firestore, keyed by id. Used to
@@ -103,6 +126,9 @@ export default function App() {
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
+  // Overview rail open/collapsed. Collapsing leaves only its header strip so the
+  // player gets the vertical room.
+  const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
   const [pendingIn, setPendingIn] = useState<number | null>(null)
   // Id of a just-created note that should grab focus (and scroll into view) so
   // the user can start typing immediately. Cleared once the note handles it.
@@ -115,12 +141,18 @@ export default function App() {
     dragging: draggingNotes,
     startSplitDrag,
     resetSplit,
+    setNotesWidth,
     style: splitStyle,
   } = useNotesSplit()
   const [inspectorWidth, setInspectorWidth] = useState(loadInspectorWidth)
   // Dragging state for the inspector|notes handle (the player|notes handle owns
   // its own, inside `split`).
   const [draggingInspector, setDraggingInspector] = useState(false)
+  // Max height (px) of the YouTube video, set by the handle under the transport;
+  // null = the player's CSS default (50vh). The overview rail (flex-1) absorbs
+  // the inverse, so a shorter video gives the timeline map more room.
+  const [playerHeight, setPlayerHeight] = useState<number | null>(loadPlayerHeight)
+  const [draggingPlayer, setDraggingPlayer] = useState(false)
   // Player volume (0–1, sticky) and a separate mute that remembers the level.
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
@@ -139,6 +171,13 @@ export default function App() {
     setViewOnly((on) => {
       const next = !on
       saveViewOnly(next)
+      return next
+    })
+  }
+  function toggleOverview() {
+    setOverviewOpen((on) => {
+      const next = !on
+      saveOverviewOpen(next)
       return next
     })
   }
@@ -176,6 +215,10 @@ export default function App() {
   }, [volume])
 
   const playerRef = useRef<PlayerHandle>(null)
+  // Wrap the player and overview so the resize drag + auto-fit can read their
+  // live heights (their sum is the pool the vertical split divides).
+  const playerBoxRef = useRef<HTMLDivElement>(null)
+  const overviewRef = useRef<HTMLDivElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
@@ -323,9 +366,10 @@ export default function App() {
     fetchProjects(user.uid)
       .then((loaded) => {
         if (cancelled) return
-        setProjects(loaded)
+        // Baseline the history to the freshly loaded set (clears any prior
+        // undo/redo stacks); nothing before sign-in should be undoable.
+        resetHistory(loaded, loaded[0]?.id ?? null)
         persistedRef.current = new Map(loaded.map((p) => [p.id, p]))
-        setCurrentId((cur) => cur ?? loaded[0]?.id ?? null)
         hydratedRef.current = true
         setLoadingProjects(false)
       })
@@ -337,7 +381,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [user, resetHistory])
 
   // Persist changed projects (debounced — TipTap fires onUpdate on every
   // keystroke). Only projects whose object reference changed are written.
@@ -421,11 +465,50 @@ export default function App() {
   }, [focusNoteId])
 
   // ---- project mutations -------------------------------------------------
-  const patchProject = useCallback((id: string, patch: Partial<Project>) => {
-    setProjects((ps) =>
-      ps.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: now() } : p)),
-    )
-  }, [])
+  // Raw, non-undoable patch (text-body edits, audio attach, share toggle).
+  const patchProject = useCallback(
+    (id: string, patch: Partial<Project>) => {
+      setProjects((ps) =>
+        ps.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: now() } : p)),
+      )
+    },
+    [setProjects],
+  )
+
+  // Undoable patch — same shape as patchProject, but recorded in history.
+  const commitProject = useCallback(
+    (id: string, patch: Partial<Project>, opts?: { coalesceKey?: string }) => {
+      commit(
+        (ps) =>
+          ps.map((p) =>
+            p.id === id ? { ...p, ...patch, updatedAt: now() } : p,
+          ),
+        opts,
+      )
+    },
+    [commit],
+  )
+
+  // Undoable mutation of one project's annotations. `fn` maps the latest
+  // annotation list (read from the history's present, not a stale closure).
+  const commitAnnotations = useCallback(
+    (
+      projectId: string,
+      fn: (anns: Annotation[]) => Annotation[],
+      opts?: { coalesceKey?: string },
+    ) => {
+      commit(
+        (ps) =>
+          ps.map((p) =>
+            p.id === projectId
+              ? { ...p, updatedAt: now(), annotations: fn(p.annotations) }
+              : p,
+          ),
+        opts,
+      )
+    },
+    [commit],
+  )
 
   function createProject() {
     const p: Project = {
@@ -434,8 +517,9 @@ export default function App() {
       annotations: [],
       updatedAt: now(),
     }
-    setProjects((ps) => [p, ...ps])
-    setCurrentId(p.id)
+    // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
+    // so undo can't later cross it and silently drop the new track.
+    resetHistory([p, ...projects], p.id)
   }
 
   function removeProject(id: string) {
@@ -453,8 +537,9 @@ export default function App() {
     )
     persistedRef.current.delete(id)
     const remaining = projects.filter((p) => p.id !== id)
-    setProjects(remaining)
-    if (currentId === id) setCurrentId(remaining[0]?.id ?? null)
+    // Deleting a track tears down its cloud assets irreversibly — re-baseline
+    // history so a later undo can't resurrect it into a broken state.
+    resetHistory(remaining, currentId === id ? remaining[0]?.id ?? null : currentId)
   }
 
   function setYoutubeSource(url: string) {
@@ -464,7 +549,7 @@ export default function App() {
       alert("Couldn't find a YouTube video id in that link.")
       return
     }
-    patchProject(current.id, {
+    commitProject(current.id, {
       source: { type: 'youtube', youtubeUrl: url, videoId },
     })
   }
@@ -516,7 +601,7 @@ export default function App() {
       blocks: [makeTextBlock('')],
       createdAt: now(),
     }
-    patchProject(current.id, { annotations: [...current.annotations, ann] })
+    commitAnnotations(current.id, (anns) => [...anns, ann])
     selectNote(ann.id)
     setFocusNoteId(ann.id)
   }
@@ -533,18 +618,37 @@ export default function App() {
       createdAt: now(),
     }
     if (end != null) ann.end = Math.max(Math.floor(end), s + 1)
-    patchProject(current.id, { annotations: [...current.annotations, ann] })
+    commitAnnotations(current.id, (anns) => [...anns, ann])
     selectNote(ann.id)
     setFocusNoteId(ann.id)
   }
 
-  function updateAnnotation(annId: string, patch: Partial<Annotation>) {
+  function updateAnnotation(
+    annId: string,
+    patch: Partial<Annotation>,
+    opts?: { mode?: 'text'; coalesceKey?: string },
+  ) {
     if (!current) return
-    patchProject(current.id, {
-      annotations: current.annotations.map((a) =>
-        a.id === annId ? { ...a, ...patch } : a,
-      ),
-    })
+    const projectId = current.id
+    const fn = (anns: Annotation[]) =>
+      anns.map((a) => (a.id === annId ? { ...a, ...patch } : a))
+    if (opts?.mode === 'text') {
+      // Rich-text body: editor owns its undo, so apply raw (no history step).
+      // It still rides along in the next undoable snapshot.
+      setProjects((ps) =>
+        ps.map((p) =>
+          p.id === projectId
+            ? { ...p, updatedAt: now(), annotations: fn(p.annotations) }
+            : p,
+        ),
+      )
+    } else {
+      commitAnnotations(
+        projectId,
+        fn,
+        opts?.coalesceKey ? { coalesceKey: opts.coalesceKey } : undefined,
+      )
+    }
   }
 
   // Persist a manual order for a group of same-time notes: `orderedIds` is the
@@ -553,19 +657,15 @@ export default function App() {
   function reorderAnnotations(orderedIds: string[]) {
     if (!current) return
     const pos = new Map(orderedIds.map((id, i) => [id, i]))
-    patchProject(current.id, {
-      annotations: current.annotations.map((a) =>
-        pos.has(a.id) ? { ...a, order: pos.get(a.id)! } : a,
-      ),
-    })
+    commitAnnotations(current.id, (anns) =>
+      anns.map((a) => (pos.has(a.id) ? { ...a, order: pos.get(a.id)! } : a)),
+    )
   }
 
   function deleteAnnotation(annId: string) {
     if (!current) return
     if (selectedNoteId === annId) setSelectedNoteId(null)
-    patchProject(current.id, {
-      annotations: current.annotations.filter((a) => a.id !== annId),
-    })
+    commitAnnotations(current.id, (anns) => anns.filter((a) => a.id !== annId))
   }
 
   function seek(t: number) {
@@ -644,19 +744,17 @@ export default function App() {
     if (!current) return
     const s = Math.max(0, Math.round(Math.min(start, end)))
     const e = Math.max(Math.round(Math.max(start, end)), s + 1)
-    patchProject(current.id, {
-      annotations: [
-        ...current.annotations,
-        {
-          id,
-          start: s,
-          end: e,
-          contentHtml: '',
-          blocks: [makeTextBlock('')],
-          createdAt: now(),
-        },
-      ],
-    })
+    commitAnnotations(current.id, (anns) => [
+      ...anns,
+      {
+        id,
+        start: s,
+        end: e,
+        contentHtml: '',
+        blocks: [makeTextBlock('')],
+        createdAt: now(),
+      },
+    ])
     selectNote(id)
     setFocusNoteId(id)
   }
@@ -672,7 +770,8 @@ export default function App() {
             start: Math.max(0, Math.round(Math.min(start, end))),
             end: Math.round(Math.max(start, end)),
           }
-    updateAnnotation(id, patch)
+    // A drag fires many updates — collapse them into one undo step.
+    updateAnnotation(id, patch, { coalesceKey: `region:${id}` })
   }
 
   function markIn() {
@@ -773,6 +872,28 @@ export default function App() {
     }
   })
 
+  // ---- undo / redo -------------------------------------------------------
+  // A dedicated listener (the global hotkeys deliberately ignore Cmd/Ctrl
+  // combos). While the caret is in a text field — TipTap's contenteditable, an
+  // input, etc. — we stand down so the editor/native undo handles it; otherwise
+  // Cmd/Ctrl-Z undoes structural changes and Cmd-Shift-Z / Ctrl-Y redoes.
+  useEffect(() => {
+    if (viewOnly) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const k = e.key.toLowerCase()
+      const isUndo = k === 'z' && !e.shiftKey
+      const isRedo = (k === 'z' && e.shiftKey) || k === 'y'
+      if (!isUndo && !isRedo) return
+      if (e.defaultPrevented || isTypingTarget(e.target)) return
+      e.preventDefault()
+      if (isRedo) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewOnly, undo, redo])
+
   // ---- docked inspector (3rd column) resize -----------------------------
   // The player|notes split itself lives in `useNotesSplit` (shared with the
   // ShareViewer). Resize the docked inspector here: it hugs the right edge, so
@@ -802,6 +923,85 @@ export default function App() {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+  }
+
+  // ---- player | overview vertical resize --------------------------------
+  // The handle under the transport sets the video's max height; the overview
+  // rail (flex-1) takes the inverse, so dragging trades video size for timeline
+  // room. Starts from the video's actual height, clamps so the transport +
+  // overview stay visible, persists, and double-click resets to the default.
+  function startPlayerDrag(e: React.PointerEvent) {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = playerBoxRef.current?.clientHeight ?? playerHeight ?? 0
+    const containerH = splitRef.current?.clientHeight ?? window.innerHeight
+    const max = Math.max(180, containerH - 300)
+    let last = startH
+    setDraggingPlayer(true)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'row-resize'
+    const move = (ev: PointerEvent) => {
+      last = Math.min(max, Math.max(120, startH + (ev.clientY - startY)))
+      setPlayerHeight(last)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      setDraggingPlayer(false)
+      savePlayerHeight(last)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  function resetPlayerHeight() {
+    setPlayerHeight(null)
+    savePlayerHeight(null)
+  }
+
+  // ---- auto-fit the whole workspace to this screen (the "Fit" button) ----
+  // One shot: measure the live row, ask computeFitLayout for the optimal column
+  // widths + video height, then apply and persist them. Respects the current
+  // sidebar state (the row width already excludes it). When the panes are
+  // stacked (narrow), only the video cap is meaningful, so just keep it modest.
+  function fitLayout() {
+    const el = splitRef.current
+    if (!el) return
+    const rowWidth = el.clientWidth
+    const rowHeight = el.clientHeight
+    const horizontal = getComputedStyle(el).flexDirection === 'row'
+    const isYouTube = current?.source?.type === 'youtube'
+
+    if (!horizontal) {
+      if (isYouTube) {
+        const cap = (rowWidth * 9) / 16
+        const h = Math.max(160, Math.round(Math.min(cap, window.innerHeight * 0.4)))
+        setPlayerHeight(h)
+        savePlayerHeight(h)
+      }
+      return
+    }
+
+    const fit = computeFitLayout({
+      rowWidth,
+      rowHeight,
+      videoOverviewPool:
+        (playerBoxRef.current?.clientHeight ?? 0) +
+        (overviewRef.current?.clientHeight ?? 0),
+      noteCount: current?.annotations.length ?? 0,
+      hasInspector: showDock,
+    })
+
+    setNotesWidth(fit.notesWidth)
+    if (showDock) {
+      setInspectorWidth(fit.inspectorWidth)
+      saveInspectorWidth(fit.inspectorWidth)
+    }
+    if (isYouTube) {
+      setPlayerHeight(fit.playerHeight)
+      savePlayerHeight(fit.playerHeight)
+    }
   }
 
   // The player|notes split goes side-by-side once its container is wide enough.
@@ -871,6 +1071,37 @@ export default function App() {
             {saveStatus === 'error' && (
               <span className="text-accentink">Save failed</span>
             )}
+          </div>
+        )}
+        {/* Undo / redo of structural changes (note add/delete/move/retime,
+            tags, colours, ranges, sections, rename). Editing-only; the rich-text
+            body keeps its own in-editor undo. ⌘Z / ⌘⇧Z (Ctrl on Win/Linux). */}
+        {!viewOnly && (
+          <div
+            role="group"
+            aria-label="Undo and redo"
+            className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+          >
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (⌘Z)"
+              aria-label="Undo"
+              className="press rounded-[1px] p-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Undo2 size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (⌘⇧Z)"
+              aria-label="Redo"
+              className="press rounded-[1px] p-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Redo2 size={15} />
+            </button>
           </div>
         )}
         {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
@@ -1070,7 +1301,11 @@ export default function App() {
                   <input
                     value={current.title}
                     onChange={(e) =>
-                      patchProject(current.id, { title: e.target.value })
+                      commitProject(
+                        current.id,
+                        { title: e.target.value },
+                        { coalesceKey: `title:${current.id}` },
+                      )
                     }
                     aria-label="Track title"
                     className="min-w-0 flex-1 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg"
@@ -1099,6 +1334,18 @@ export default function App() {
                       Audio file
                     </span>
                   ))}
+                {current.source && (
+                  <button
+                    type="button"
+                    onClick={fitLayout}
+                    title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
+                    aria-label="Fit layout to screen"
+                    className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                  >
+                    <Proportions size={12} />
+                    Fit
+                  </button>
+                )}
                 {current.source && <ExportPdfButton project={current} />}
                 {current.source && (
                   <SharePanel
@@ -1157,30 +1404,37 @@ export default function App() {
               style={splitStyle}
             >
               {/* Viewer panel — the flex column: absorbs window resize so the
-                  notes column keeps its width. */}
+                  notes column keeps its width. `--player-max-h` caps the video
+                  height (driven by the resize handle below the transport). */}
               <div
                 className={`flex shrink-0 flex-col overflow-y-auto border-b border-line ${splitVariant.player}`}
+                style={{
+                  ['--player-max-h' as string]:
+                    playerHeight != null ? `${playerHeight}px` : undefined,
+                }}
               >
                 <TitleBar
                   left="Player"
                   right={current.source.type === 'youtube' ? 'YouTube' : 'Audio'}
                 />
                 <div className="shrink-0 space-y-2.5 p-3">
-                  <PlayerPane
-                    ref={playerRef}
-                    source={current.source}
-                    audioUrl={audioUrl}
-                    regionSpecs={regionSpecs}
-                    playbackRate={playbackRate}
-                    volume={muted ? 0 : volume}
-                    readOnly={viewOnly}
-                    onTime={handleTime}
-                    onDuration={handleDuration}
-                    onPlayingChange={handlePlaying}
-                    onSeek={seek}
-                    onCreateRange={createRange}
-                    onUpdateRegion={updateRegionGeom}
-                  />
+                  <div ref={playerBoxRef}>
+                    <PlayerPane
+                      ref={playerRef}
+                      source={current.source}
+                      audioUrl={audioUrl}
+                      regionSpecs={regionSpecs}
+                      playbackRate={playbackRate}
+                      volume={muted ? 0 : volume}
+                      readOnly={viewOnly}
+                      onTime={handleTime}
+                      onDuration={handleDuration}
+                      onPlayingChange={handlePlaying}
+                      onSeek={seek}
+                      onCreateRange={createRange}
+                      onUpdateRegion={updateRegionGeom}
+                    />
+                  </div>
 
                   {uploadPct != null && (
                     <div className="flex items-center gap-2 border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -1214,20 +1468,53 @@ export default function App() {
                   />
                 </div>
 
+                {/* Drag to trade video height for overview room (YouTube only —
+                    the audio waveform is already short). Double-click resets. */}
+                {current.source.type === 'youtube' && (
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize the player — drag to give the overview more or less room"
+                    onPointerDown={startPlayerDrag}
+                    onDoubleClick={resetPlayerHeight}
+                    title="Drag to resize the player · double-click to reset"
+                    className="group flex h-2 shrink-0 cursor-row-resize touch-none items-center justify-center"
+                  >
+                    <span
+                      className={`h-[3px] w-10 rounded-full transition-colors ${
+                        draggingPlayer
+                          ? 'bg-accent'
+                          : 'bg-line-strong group-hover:bg-accent/70'
+                      }`}
+                    />
+                  </div>
+                )}
+
                 {/* Fills the space below the transport: a proportional map of
-                    every note along the timeline, plus a session readout. */}
-                <TrackOverview
-                  className="min-h-[160px] flex-1"
-                  resetKey={current.id}
-                  annotations={current.annotations}
-                  duration={duration}
-                  currentTime={currentTime}
-                  isPlaying={isPlaying}
-                  playbackRate={playbackRate}
-                  source={current.source}
-                  onSeek={seek}
-                  onSeekNote={seekToNote}
-                />
+                    every note along the timeline, plus a session readout. The
+                    wrapper carries the flex sizing so its height is measurable.
+                    Collapsed, it shrinks to just the overview's header strip. */}
+                <div
+                  ref={overviewRef}
+                  className={
+                    overviewOpen
+                      ? 'flex min-h-[160px] flex-1 flex-col'
+                      : 'flex shrink-0 flex-col'
+                  }
+                >
+                  <TrackOverview
+                    className="min-h-0 flex-1"
+                    resetKey={current.id}
+                    annotations={current.annotations}
+                    duration={duration}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                    open={overviewOpen}
+                    onToggleOpen={toggleOverview}
+                    onSeek={seek}
+                    onSeekNote={seekToNote}
+                  />
+                </div>
               </div>
 
               {/* Drag handle — resize the split (double-click to reset). The
@@ -1350,7 +1637,7 @@ export default function App() {
                     >
                       {selectedNote ? (
                         <NoteInspector
-                          key={selectedNote.id}
+                          key={`${selectedNote.id}:${epoch}`}
                           annotation={selectedNote}
                           color={selectedNote.color ?? colorForId(selectedNote.id)}
                           projectTags={projectTags}
@@ -1359,8 +1646,8 @@ export default function App() {
                           playbackRate={playbackRate}
                           autoFocus={focusNoteId === selectedNote.id}
                           onFocusHandled={() => setFocusNoteId(null)}
-                          onUpdate={(patch) =>
-                            updateAnnotation(selectedNote.id, patch)
+                          onUpdate={(patch, opts) =>
+                            updateAnnotation(selectedNote.id, patch, opts)
                           }
                           onDelete={() => deleteAnnotation(selectedNote.id)}
                           onSeek={seek}
@@ -1399,7 +1686,7 @@ export default function App() {
           onClose={() => setSelectedNoteId(null)}
         >
           <NoteInspector
-            key={selectedNote.id}
+            key={`${selectedNote.id}:${epoch}`}
             annotation={selectedNote}
             color={selectedNote.color ?? colorForId(selectedNote.id)}
             projectTags={projectTags}
@@ -1408,7 +1695,7 @@ export default function App() {
             playbackRate={playbackRate}
             autoFocus={focusNoteId === selectedNote.id}
             onFocusHandled={() => setFocusNoteId(null)}
-            onUpdate={(patch) => updateAnnotation(selectedNote.id, patch)}
+            onUpdate={(patch, opts) => updateAnnotation(selectedNote.id, patch, opts)}
             onDelete={() => deleteAnnotation(selectedNote.id)}
             onSeek={seek}
             onSeekNote={seekToNote}

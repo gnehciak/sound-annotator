@@ -298,3 +298,50 @@ export function saveOverviewZoom(zoom: OverviewZoom): void {
     /* ignore */
   }
 }
+
+// Overview rail open/collapsed — collapsing it leaves just the panel header
+// strip so the player gets the room. A workspace preference remembered across
+// sessions; defaults to open.
+const OVERVIEW_OPEN_KEY = 'sound-annotator:overview-open'
+
+export function loadOverviewOpen(): boolean {
+  try {
+    return localStorage.getItem(OVERVIEW_OPEN_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+export function saveOverviewOpen(open: boolean): void {
+  try {
+    localStorage.setItem(OVERVIEW_OPEN_KEY, open ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+// Max height (px) of the YouTube video, set by dragging the handle under the
+// transport. Trading video size for overview-rail room is the whole point: the
+// overview is flex-1, so a shorter video gives it more space. A workspace
+// preference; null (unset) falls back to the player's CSS default (50vh).
+const PLAYER_HEIGHT_KEY = 'sound-annotator:player-height'
+
+export function loadPlayerHeight(): number | null {
+  try {
+    const raw = localStorage.getItem(PLAYER_HEIGHT_KEY)
+    if (raw == null) return null
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+export function savePlayerHeight(px: number | null): void {
+  try {
+    if (px == null) localStorage.removeItem(PLAYER_HEIGHT_KEY)
+    else localStorage.setItem(PLAYER_HEIGHT_KEY, String(Math.round(px)))
+  } catch {
+    /* ignore */
+  }
+}

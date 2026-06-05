@@ -151,12 +151,13 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   )
 
   return (
-    // Cap the video at 50vh tall (keeping 16:9 + centred) so a wide player
-    // column doesn't squeeze the overview rail below it. Width tracks the
-    // height cap: min(100%, 50vh·16/9) ⇒ height ≤ 50vh.
+    // Cap the video height (keeping 16:9 + centred) so a wide player column
+    // doesn't squeeze the overview rail below it. Width tracks the height cap:
+    // min(100%, cap·16/9) ⇒ height ≤ cap. The cap is `--player-max-h`, which the
+    // app drives from the resize handle under the transport; it defaults to 50vh.
     <div
       className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg bg-black"
-      style={{ maxWidth: 'calc(50vh * 16 / 9)' }}
+      style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <div ref={containerRef} className="h-full w-full" />
       {started ? (

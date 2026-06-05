@@ -149,7 +149,16 @@ export default function AnnotationItem({
           className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-onbright"
           style={{ background: color }}
         >
-          <Play size={9} className="fill-current" />
+          {active && isPlaying ? (
+            <span className="eq" aria-hidden="true">
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+            </span>
+          ) : (
+            <Play size={9} className="fill-current" />
+          )}
           {label}
         </button>
 
