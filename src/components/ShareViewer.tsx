@@ -15,6 +15,7 @@ import NotesHeaderControls from './NotesHeaderControls'
 import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
+import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import type { MentionItem } from './MentionList'
@@ -304,6 +305,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           {project.title}
         </span>
         <ExportPdfButton project={project} />
+        <CopyProjectButton project={project} />
         <a
           href={window.location.pathname}
           title="Open the full app"
