@@ -48,10 +48,10 @@ interface PlacedNote extends RailNote {
 
 const PAD = 12 // keeps the 0:00 / end labels off the timeline edges
 const PAD_V = 6 // top/bottom breathing room inside the strip
-// The section bracket hangs from the very top; its name sits just *below* the
-// stroke (so the stroke never strikes through the text).
-const SECTION_BRACKET_Y = PAD_V
-const SECTION_NAME_Y = PAD_V + 9
+// The section name sits at the very top; the bracket hangs from just below it
+// (kept clear of the text so the stroke never strikes through).
+const SECTION_NAME_Y = PAD_V
+const SECTION_BRACKET_Y = PAD_V + 13
 const DIAMOND = 7 // note flag size (rotated square)
 const STRIP_H = 88 // the timeline's own height (the tag footer adds below it)
 
@@ -118,13 +118,16 @@ export default function TrackOverview({
   className = '',
 }: Props) {
   const theme = useResolvedTheme()
-  const sectionRef = useRef<HTMLElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [railW, setRailW] = useState(0)
-  const [railH, setRailH] = useState(0)
-  // The hovered flag + the section-relative x where it was entered (so the
-  // preview popover can sit above it).
+  // The hovered flag + the viewport-relative x where it was entered, so its
+  // preview popover can float just above the strip at the flag.
   const [hover, setHover] = useState<{ id: string; x: number } | null>(null)
+  // The header's height — the popover floats just above the strip below it.
+  const [headerH, setHeaderH] = useState(0)
+  const measureHeader = (el: HTMLDivElement | null) => {
+    if (el) setHeaderH(el.offsetHeight)
+  }
   const [zoom, setZoom] = useState<Zoom>(loadOverviewZoom)
 
   // Latest zoom/duration for the once-bound wheel listener; written only in
@@ -147,10 +150,7 @@ export default function TrackOverview({
   useEffect(() => {
     const el = viewportRef.current
     if (!el) return
-    const measure = () => {
-      setRailW(el.clientWidth)
-      setRailH(el.clientHeight)
-    }
+    const measure = () => setRailW(el.clientWidth)
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -202,8 +202,8 @@ export default function TrackOverview({
   // Vertical lane geometry: sections pin to the top, the ruler to the bottom, the
   // spine sits just below the (optional) section lane.
   const hasSections = items.some((it) => it.structure)
-  const spineY = PAD_V + (hasSections ? 34 : 8)
-  const rulerY = Math.max(spineY + 14, railH - 20)
+  const spineY = PAD_V + (hasSections ? 32 : 8)
+  const rulerY = Math.max(spineY + 14, STRIP_H - 20)
 
   const ladder = ladderOf(usableBase, duration)
   const curIdx = Math.max(0, ladder.indexOf(effZoom))
@@ -357,13 +357,6 @@ export default function TrackOverview({
     onSeek(clamp((contentX - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
   }
 
-  const enterFlag = (id: string, e: React.MouseEvent) => {
-    const left = sectionRef.current?.getBoundingClientRect().left ?? 0
-    setHover({ id, x: e.clientX - left })
-  }
-  const leaveFlag = (id: string) =>
-    setHover((h) => (h?.id === id ? null : h))
-
   const hoverNote = hover ? placed.find((p) => p.id === hover.id) : null
 
   const btn =
@@ -371,13 +364,13 @@ export default function TrackOverview({
 
   return (
     <section
-      ref={sectionRef}
       className={`relative flex flex-col border-t border-line bg-panel ${className}`}
     >
       {/* Map panel header — the whole bar toggles the strip open/closed (the zoom
           controls stop propagation). Always shown so it can be reopened after
           it's collapsed away. */}
       <div
+        ref={measureHeader}
         role="button"
         tabIndex={0}
         onClick={onToggleOpen}
@@ -389,7 +382,7 @@ export default function TrackOverview({
         }}
         aria-expanded={open}
         title={open ? 'Hide overview' : 'Show overview'}
-        className="flex cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 py-1.5 text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="flex h-9 shrink-0 cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 text-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <span className="flex items-center gap-1.5">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -445,13 +438,19 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* The timeline (scroll viewport). Hidden (not unmounted) when collapsed so
-          its once-bound ResizeObserver + wheel listeners survive and re-measure
-          on reopen. */}
+      {/* The collapsible timeline + tag footer. Slides open/closed via the grid
+          row 0fr↔1fr trick; the viewport keeps a fixed height so the timeline
+          never reflows mid-slide, and stays mounted so its once-bound listeners
+          survive. */}
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-instr"
+        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+      >
+       <div className="overflow-hidden">
       <div
         ref={viewportRef}
-        className={`relative overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden ${open ? '' : 'hidden'}`}
-        style={{ height: open ? STRIP_H : undefined, scrollbarWidth: 'none' }}
+        className="relative overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
+        style={{ height: STRIP_H, scrollbarWidth: 'none' }}
       >
         {items.length === 0 ? (
           <Hint>Notes you pin will map onto the timeline here.</Hint>
@@ -540,7 +539,7 @@ export default function TrackOverview({
                       style={{ left: secLeft, top: SECTION_NAME_Y, width: secW }}
                     >
                       <span
-                        className="sticky inline-block font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
+                        className="sticky inline-block align-top font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
                         style={{
                           left: PAD,
                           right: PAD,
@@ -579,8 +578,13 @@ export default function TrackOverview({
                       e.stopPropagation()
                       onSeekNote(p.id)
                     }}
-                    onMouseEnter={(e) => enterFlag(p.id, e)}
-                    onMouseLeave={() => leaveFlag(p.id)}
+                    onMouseEnter={(e) =>
+                      setHover({
+                        id: p.id,
+                        x: e.clientX - (viewportRef.current?.getBoundingClientRect().left ?? 0),
+                      })
+                    }
+                    onMouseLeave={() => setHover((h) => (h?.id === p.id ? null : h))}
                     aria-label={`Seek to note at ${p.label}`}
                     className="press absolute z-10 flex items-center"
                     style={{
@@ -621,11 +625,34 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* hover preview popover — floats above the strip, anchored at the flag's x */}
-      {open && hoverNote && (
+      {/* Session readout — just the tag tallies (slides with the timeline). */}
+      {tagCounts.length > 0 && (
+        <div className="shrink-0 border-t border-line bg-inset/40 px-3 py-1.5">
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
+            {tagCounts.map((t) => (
+              <span key={t.label} className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                  {t.label}
+                </span>
+                <span className="font-mono text-[10px] tabular-nums text-fg">{t.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+       </div>
+      </div>
+
+      {/* hover preview popover — floats just above the timeline strip at the flag */}
+      {hover && hoverNote && (
         <div
-          className="pointer-events-none absolute bottom-full z-50 mb-1 -translate-x-1/2"
-          style={{ left: clamp(hover!.x, 124, Math.max(124, railW - 124)), maxWidth: 248 }}
+          className="pointer-events-none absolute z-50 -translate-x-1/2 -translate-y-full"
+          style={{
+            left: clamp(hover.x, 124, Math.max(124, railW - 124)),
+            top: headerH - 4,
+            maxWidth: 248,
+          }}
         >
           <div className="rounded-md border border-line bg-raised px-2.5 py-1.5 shadow-lg">
             <span
@@ -639,7 +666,7 @@ export default function TrackOverview({
                 className="mt-0.5 text-[11px] leading-snug text-fg"
                 style={{
                   display: '-webkit-box',
-                  WebkitLineClamp: 3,
+                  WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                 }}
@@ -647,23 +674,6 @@ export default function TrackOverview({
                 {hoverNote.preview}
               </p>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Session readout — just the tag tallies. */}
-      {open && tagCounts.length > 0 && (
-        <div className="shrink-0 border-t border-line bg-inset/40 px-3 py-1.5">
-          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
-            {tagCounts.map((t) => (
-              <span key={t.label} className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                  {t.label}
-                </span>
-                <span className="font-mono text-[10px] tabular-nums text-fg">{t.count}</span>
-              </span>
-            ))}
           </div>
         </div>
       )}
