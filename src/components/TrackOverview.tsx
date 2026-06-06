@@ -53,7 +53,6 @@ const PAD_V = 6 // top/bottom breathing room inside the strip
 const SECTION_NAME_Y = PAD_V
 const SECTION_BRACKET_Y = PAD_V + 13
 const DIAMOND = 7 // note flag size (rotated square)
-const STRIP_H = 88 // the timeline's own height (the tag footer adds below it)
 
 // Zoom is expressed as a time unit: the seconds between gridlines. Each division
 // occupies UNIT_PX, so a smaller unit = more zoomed in. 'fit' shows the whole
@@ -203,7 +202,10 @@ export default function TrackOverview({
   // spine sits just below the (optional) section lane.
   const hasSections = items.some((it) => it.structure)
   const spineY = PAD_V + (hasSections ? 32 : 8)
-  const rulerY = Math.max(spineY + 14, STRIP_H - 20)
+  // Ruler sits just below the spine (a short gridline gap), and the strip is
+  // only as tall as it needs to be — no dead space under the timecodes.
+  const rulerY = spineY + 14
+  const stripH = rulerY + 16
 
   const ladder = ladderOf(usableBase, duration)
   const curIdx = Math.max(0, ladder.indexOf(effZoom))
@@ -450,7 +452,7 @@ export default function TrackOverview({
       <div
         ref={viewportRef}
         className="relative overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
-        style={{ height: STRIP_H, scrollbarWidth: 'none' }}
+        style={{ height: stripH, scrollbarWidth: 'none' }}
       >
         {items.length === 0 ? (
           <Hint>Notes you pin will map onto the timeline here.</Hint>
