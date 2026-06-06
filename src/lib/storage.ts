@@ -211,26 +211,6 @@ export function saveWindowMode(mode: 'dock' | 'modal'): void {
   }
 }
 
-// Track-rack (sidebar) open/closed — a workspace preference remembered across
-// sessions. Defaults to open for a first visit.
-const SIDEBAR_KEY = 'sound-annotator:sidebar-open'
-
-export function loadSidebarOpen(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_KEY) !== '0'
-  } catch {
-    return true
-  }
-}
-
-export function saveSidebarOpen(open: boolean): void {
-  try {
-    localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0')
-  } catch {
-    /* ignore */
-  }
-}
-
 // Auto-cue on click — when on, clicking a note in the list moves the playhead
 // to it (and opens it). Off leaves the playhead where it is; ⌘/Ctrl-click still
 // cues on demand. A workspace preference; defaults off (clicking just edits).

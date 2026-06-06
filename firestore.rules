@@ -34,5 +34,24 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && resource.data.ownerId == request.auth.uid;
     }
+
+    // Home-page folders are private to their owner — unlike projects there is
+    // no share-by-link exception. Membership lives on each project's
+    // `folderId`, so these docs are just names.
+    match /folders/{folderId} {
+      allow get, list: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+
+      // Owner can rename/delete; ownerId can never be reassigned.
+      allow update: if request.auth != null
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+
+      allow delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
   }
 }

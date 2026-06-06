@@ -83,6 +83,20 @@ export interface Project {
    * panel. See firestore.rules — shared docs are world-readable by id.
    */
   shared?: boolean
+  /**
+   * Id of the home-page folder this track lives in, or null/absent for the
+   * root library ("unfiled"). Folders live in their own `folders` collection
+   * (see lib/folderStore.ts); an id pointing at a deleted folder is treated
+   * as unfiled.
+   */
+  folderId?: string | null
+}
+
+/** A home-page folder grouping tracks. Flat (no nesting), never shared. */
+export interface Folder {
+  id: string
+  name: string
+  createdAt: number
 }
 
 /** Imperative API every player implementation exposes to the rest of the app. */

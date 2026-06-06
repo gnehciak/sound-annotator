@@ -8,10 +8,9 @@ import { loadNotesWidth, saveNotesWidth, DEFAULT_NOTES_WIDTH } from './storage'
  * changes while the notes column keeps its width. The width is a persisted
  * workspace preference (see storage `notes-width`).
  *
- * The Tailwind variants below are full literals (no string concat) so the
- * scanner generates them; pick `at660` (collapsed sidebar / ShareViewer) or
- * `at900` (sidebar open eats 240px, so we need a wider viewport for the split).
- * Below the breakpoint the panes stack vertically and the width rules go inert.
+ * The Tailwind variant below is full literals (no string concat) so the
+ * scanner generates them. The split goes side-by-side at 660px; below the
+ * breakpoint the panes stack vertically and the width rules go inert.
  */
 export const NOTES_SPLIT_660 = {
   row: 'min-[660px]:flex-row',
@@ -19,14 +18,6 @@ export const NOTES_SPLIT_660 = {
   notes:
     'min-[660px]:flex-none min-[660px]:w-[var(--notes-w)] min-[660px]:min-w-[340px] min-[660px]:max-w-[calc(100%-360px)]',
   handle: 'min-[660px]:block',
-}
-
-export const NOTES_SPLIT_900 = {
-  row: 'min-[900px]:flex-row',
-  player: 'min-[900px]:flex-1 min-[900px]:min-w-0 min-[900px]:border-b-0',
-  notes:
-    'min-[900px]:flex-none min-[900px]:w-[var(--notes-w)] min-[900px]:min-w-[340px] min-[900px]:max-w-[calc(100%-360px)]',
-  handle: 'min-[900px]:block',
 }
 
 export function useNotesSplit() {

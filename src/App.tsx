@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Annotation, PlayerHandle, Project } from './types'
+import type { Annotation, Folder, PlayerHandle, Project } from './types'
 import {
   loadInspectorWidth,
   saveInspectorWidth,
@@ -15,14 +15,13 @@ import {
   DEFAULT_VOLUME,
   loadViewOnly,
   saveViewOnly,
-  loadSidebarOpen,
-  saveSidebarOpen,
   loadOverviewOpen,
   saveOverviewOpen,
   loadWindowMode,
   saveWindowMode,
 } from './lib/storage'
 import { fetchProjects, saveProject, deleteProjectDoc } from './lib/projectStore'
+import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
 import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
 import {
@@ -37,10 +36,7 @@ import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
-  Plus,
-  Trash2,
-  Menu,
-  ChevronsLeft,
+  Home,
   Keyboard,
   LogOut,
   Eye,
@@ -67,9 +63,10 @@ import NotesHeaderControls from './components/NotesHeaderControls'
 import NotesSearch from './components/NotesSearch'
 import SplitHandle from './components/SplitHandle'
 import { useNotesView } from './lib/useNotesView'
-import { useNotesSplit, NOTES_SPLIT_660, NOTES_SPLIT_900 } from './lib/notesSplit'
+import { useNotesSplit, NOTES_SPLIT_660 } from './lib/notesSplit'
 import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
+import HomePage from './components/HomePage'
 import ExportPdfButton from './components/ExportPdfButton'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
@@ -79,6 +76,23 @@ import { useProjectHistory } from './lib/useProjectHistory'
 
 const uid = () => crypto.randomUUID()
 const now = () => Date.now()
+
+// ---- URL <-> view ---------------------------------------------------------
+// No router: `/` is the home page (the project library) and `?track={id}` is a
+// deep link into the editor. Share links use `?view=` and never reach App —
+// main.tsx routes them to the ShareViewer before this module matters.
+
+/** The app URL for a given open track (or the home page when null). */
+const trackUrl = (id: string | null) =>
+  id ? `${window.location.pathname}?track=${id}` : window.location.pathname
+
+/** Reflect a navigation in the URL (popstate drives the reverse direction). */
+function syncUrl(id: string | null, mode: 'push' | 'replace' = 'push') {
+  const url = trackUrl(id)
+  if (url === window.location.pathname + window.location.search) return
+  if (mode === 'push') window.history.pushState({ track: id }, '', url)
+  else window.history.replaceState({ track: id }, '', url)
+}
 
 // How long consecutive ±step seeks keep accumulating against the same target
 // before the next one re-anchors to the live playhead (see `step`).
@@ -90,13 +104,12 @@ export default function App() {
   const { pref: themePref, setPref: setThemePref, resolved: resolvedTheme } =
     useTheme()
   // Project data + the open-track id live behind an undo/redo history. `commit`
-  // is the undoable mutation primitive; `setProjects`/`setCurrentId` are raw
-  // (no history) for hydration, text-body edits, and project lifecycle.
+  // is the undoable mutation primitive; `setProjects` is raw (no history) for
+  // hydration, text-body edits, and project lifecycle.
   const {
     projects,
     setProjects,
     currentId,
-    setCurrentId,
     commit,
     undo,
     redo,
@@ -106,6 +119,13 @@ export default function App() {
     reset: resetHistory,
   } = useProjectHistory()
   const [loadingProjects, setLoadingProjects] = useState(true)
+
+  // Home-page folders. Outside the undo history (folder CRUD and track moves
+  // are not undoable); persisted immediately via folderStore. `openFolderId`
+  // lives here, not in HomePage, so the open folder survives a trip into the
+  // editor and folder deletion can clear it in one place.
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null)
 
   // Last version of each project written to Firestore, keyed by id. Used to
   // write only the projects that actually changed (mutations replace the
@@ -124,7 +144,6 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   // Overview rail open/collapsed. Collapsing leaves only its header strip so the
   // player gets the vertical room.
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
@@ -203,12 +222,6 @@ export default function App() {
     }
   }
 
-  // Remember the track rack open/closed across sessions. An effect (rather than
-  // saving at each toggle site) keeps every setSidebarOpen caller in sync.
-  useEffect(() => {
-    saveSidebarOpen(sidebarOpen)
-  }, [sidebarOpen])
-
   // Switching to view-only deselects any open note, so nothing stays
   // highlighted/inspected. An effect (rather than clearing at each toggle site)
   // covers every path in: the View button, the V shortcut, and a saved state.
@@ -266,12 +279,23 @@ export default function App() {
 
   const current = projects.find((p) => p.id === currentId) ?? null
 
+  // Home vs editor: no router — the home page is simply "no open track".
+  // Deriving from `current` (not just currentId) self-heals a dangling id.
+  const view: 'home' | 'track' = current ? 'track' : 'home'
+
   // Keep the help modal mounted through its fade-out.
   const help = usePresence(showHelp)
 
   // Latest notes of the current project, read by the mention suggestion.
   const annotationsRef = useRef<Annotation[]>([])
   annotationsRef.current = current?.annotations ?? []
+
+  // Latest project list for the popstate handler, which subscribes once and
+  // fires outside React's data flow.
+  const projectsRef = useRef<Project[]>([])
+  useEffect(() => {
+    projectsRef.current = projects
+  }, [projects])
 
   // ---- note inspector (dock 3rd column or modal) ------------------------
   const effectiveWindowMode: WindowMode =
@@ -386,18 +410,33 @@ export default function App() {
     [user, currentId],
   )
 
-  // Load this user's projects from Firestore once on sign-in.
+  // Load this user's projects and folders from Firestore once on sign-in.
   useEffect(() => {
     if (!user) return
     let cancelled = false
     setLoadingProjects(true)
     hydratedRef.current = false
-    fetchProjects(user.uid)
-      .then((loaded) => {
+    Promise.all([
+      fetchProjects(user.uid),
+      // Folders are non-critical chrome: a failed read (offline blip, rules
+      // not yet deployed) must never block the project list from loading.
+      fetchFolders(user.uid).catch((err) => {
+        console.error('Failed to load folders:', err)
+        return [] as Folder[]
+      }),
+    ])
+      .then(([loaded, loadedFolders]) => {
         if (cancelled) return
+        setFolders(loadedFolders)
+        // Land on the home page — unless the URL deep-links (`?track=`) to a
+        // track we actually own; a dead link falls back home and is cleaned.
+        const urlId = new URLSearchParams(window.location.search).get('track')
+        const deepLink =
+          urlId && loaded.some((p) => p.id === urlId) ? urlId : null
+        if (urlId && !deepLink) syncUrl(null, 'replace')
         // Baseline the history to the freshly loaded set (clears any prior
         // undo/redo stacks); nothing before sign-in should be undoable.
-        resetHistory(loaded, loaded[0]?.id ?? null)
+        resetHistory(loaded, deepLink)
         persistedRef.current = new Map(loaded.map((p) => [p.id, p]))
         hydratedRef.current = true
         setLoadingProjects(false)
@@ -411,6 +450,21 @@ export default function App() {
       cancelled = true
     }
   }, [user, resetHistory])
+
+  // Back/forward: re-derive the open track from the URL. An id that no longer
+  // exists (deleted track, stale entry) falls back to home and cleans the URL.
+  useEffect(() => {
+    const onPop = () => {
+      const id = new URLSearchParams(window.location.search).get('track')
+      const valid =
+        id && projectsRef.current.some((p) => p.id === id) ? id : null
+      if (id && !valid) syncUrl(null, 'replace')
+      setSelectedNoteId(null)
+      resetHistory(projectsRef.current, valid)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [resetHistory])
 
   // Persist changed projects (debounced — TipTap fires onUpdate on every
   // keystroke). Only projects whose object reference changed are written.
@@ -541,16 +595,34 @@ export default function App() {
     [commit],
   )
 
+  // ---- home / editor navigation ------------------------------------------
+  // Opening and closing tracks are lifecycle boundaries (like create/delete):
+  // both re-baseline the history, so undo can never switch tracks under the
+  // URL, and both reflect themselves in it (popstate drives the reverse).
+  function openTrack(id: string) {
+    setSelectedNoteId(null)
+    resetHistory(projects, id)
+    syncUrl(id)
+  }
+  function goHome() {
+    setSelectedNoteId(null)
+    resetHistory(projects, null)
+    syncUrl(null)
+  }
+
   function createProject() {
     const p: Project = {
       id: uid(),
       title: 'Untitled track',
       annotations: [],
       updatedAt: now(),
+      // Born into the folder that's open on the home page (null = root).
+      folderId: openFolderId,
     }
     // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
     // so undo can't later cross it and silently drop the new track.
     resetHistory([p, ...projects], p.id)
+    syncUrl(p.id)
   }
 
   function removeProject(id: string) {
@@ -569,9 +641,55 @@ export default function App() {
     persistedRef.current.delete(id)
     const remaining = projects.filter((p) => p.id !== id)
     // Deleting a track tears down its cloud assets irreversibly — re-baseline
-    // history so a later undo can't resurrect it into a broken state.
-    resetHistory(remaining, currentId === id ? remaining[0]?.id ?? null : currentId)
+    // history so a later undo can't resurrect it into a broken state. Deleting
+    // the open track lands back on the home page.
+    resetHistory(remaining, currentId === id ? null : currentId)
+    if (currentId === id) syncUrl(null, 'replace')
   }
+
+  // ---- folders -------------------------------------------------------------
+  // Folder CRUD is optimistic local state + an immediate fire-and-forget write
+  // (matching removeProject's style); it never enters the undo history.
+  function createFolder(): string {
+    const f: Folder = { id: uid(), name: 'New folder', createdAt: now() }
+    setFolders((fs) => [...fs, f])
+    if (user)
+      void saveFolder(user.uid, f).catch((err) =>
+        console.error('Failed to create folder:', err),
+      )
+    return f.id // HomePage opens the fresh tile in rename mode
+  }
+
+  function renameFolder(id: string, name: string) {
+    const next = name.trim()
+    const f = folders.find((x) => x.id === id)
+    if (!next || !f || next === f.name) return
+    setFolders((fs) => fs.map((x) => (x.id === id ? { ...x, name: next } : x)))
+    if (user)
+      void saveFolder(user.uid, { ...f, name: next }).catch((err) =>
+        console.error('Failed to rename folder:', err),
+      )
+  }
+
+  function deleteFolder(id: string) {
+    // Drive semantics: the folder's tracks move back to the root library, not
+    // the trash. New object references → the dirty-save effect persists each.
+    setProjects((ps) =>
+      ps.map((p) => (p.folderId === id ? { ...p, folderId: null } : p)),
+    )
+    setFolders((fs) => fs.filter((f) => f.id !== id))
+    if (openFolderId === id) setOpenFolderId(null)
+    void deleteFolderDoc(id).catch((err) =>
+      console.error('Failed to delete folder:', err),
+    )
+  }
+
+  // Move a track between folders (null = unfiled). Raw, non-undoable: the
+  // dirty-save effect picks up the new object reference and persists it.
+  const moveTrackToFolder = useCallback(
+    (id: string, folderId: string | null) => patchProject(id, { folderId }),
+    [patchProject],
+  )
 
   function setYoutubeSource(url: string) {
     if (!current) return
@@ -834,7 +952,7 @@ export default function App() {
   // ---- global keyboard shortcuts (press ? for the full list) -------------
   const playerActive = !!current?.source && !needsAudioFile
   useHotkeys((e) => {
-    // Always available: help overlay + sidebar.
+    if (view === 'home') return // home page: no transport/edit hotkeys
     if (e.key === 'Escape') {
       if (showHelp) setShowHelp(false)
       return
@@ -846,11 +964,6 @@ export default function App() {
     }
     if (showHelp) return // modal open — swallow the rest
     if (transportLocked) return // a modal plugin window owns the keyboard
-    if (e.key === '[') {
-      e.preventDefault()
-      setSidebarOpen((s) => !s)
-      return
-    }
     if (e.key === 'v' || e.key === 'V') {
       toggleViewOnly()
       return
@@ -909,7 +1022,9 @@ export default function App() {
   // input, etc. — we stand down so the editor/native undo handles it; otherwise
   // Cmd/Ctrl-Z undoes structural changes and Cmd-Shift-Z / Ctrl-Y redoes.
   useEffect(() => {
-    if (viewOnly) return
+    // Editor-only (belt and braces on home: nav re-baselines, so canUndo is
+    // already false there — the gate just makes the intent explicit).
+    if (viewOnly || view === 'home') return
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       const k = e.key.toLowerCase()
@@ -923,7 +1038,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [viewOnly, undo, redo])
+  }, [viewOnly, view, undo, redo])
 
   // ---- docked inspector (3rd column) resize -----------------------------
   // The player|notes split itself lives in `useNotesSplit` (shared with the
@@ -958,9 +1073,8 @@ export default function App() {
 
   // ---- auto-fit the whole workspace to this screen (the "Fit" button) ----
   // One shot: measure the live row, ask computeFitLayout for the optimal column
-  // widths, then apply and persist them. Respects the current sidebar state (the
-  // row width already excludes it). The video sizes itself to its area, so only
-  // the column widths are fitted; stacked (narrow) has nothing to fit.
+  // widths, then apply and persist them. The video sizes itself to its area, so
+  // only the column widths are fitted; stacked (narrow) has nothing to fit.
   function fitLayout() {
     const el = splitRef.current
     if (!el) return
@@ -986,9 +1100,9 @@ export default function App() {
   }
 
   // The player|notes split goes side-by-side once its container is wide enough.
-  // Usable space depends on the sidebar: open it eats 240px, so we require a
-  // 900px viewport; collapsed we only need 660px (240px less) for the same fit.
-  const splitVariant = sidebarOpen ? NOTES_SPLIT_900 : NOTES_SPLIT_660
+  // With the track rack gone the editor always spans the full viewport, so the
+  // 660px breakpoint variant is the only one needed (shared with ShareViewer).
+  const splitVariant = NOTES_SPLIT_660
 
   const regionSpecs = current
     ? current.annotations.map((a) => ({
@@ -1014,11 +1128,31 @@ export default function App() {
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* ---- Global header ---- */}
       <header className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 sm:gap-3 sm:px-4">
-        <span className="text-accentink">◉</span>
-        <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
-          Sound&nbsp;Annotator
-        </span>
-        {viewOnly && (
+        {/* The wordmark doubles as the way home (with an explicit button beside
+            it while a track is open). */}
+        <button
+          type="button"
+          onClick={goHome}
+          title="Back to the library"
+          className="press flex items-center gap-2 sm:gap-3"
+        >
+          <span className="text-accentink">◉</span>
+          <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
+            Sound&nbsp;Annotator
+          </span>
+        </button>
+        {view === 'track' && (
+          <button
+            type="button"
+            onClick={goHome}
+            title="Back to the library"
+            aria-label="Back to the library"
+            className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+          >
+            <Home size={16} />
+          </button>
+        )}
+        {view === 'track' && viewOnly && (
           <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
             <Eye size={11} /> View only
           </span>
@@ -1057,7 +1191,7 @@ export default function App() {
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
             body keeps its own in-editor undo. ⌘Z / ⌘⇧Z (Ctrl on Win/Linux). */}
-        {!viewOnly && (
+        {view === 'track' && !viewOnly && (
           <div
             role="group"
             aria-label="Undo and redo"
@@ -1088,56 +1222,64 @@ export default function App() {
         {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
             fill keeps amber pure; the active View segment carries amber text to
             echo the view-only state. The 'V' key still flips it. */}
-        <div
-          role="group"
-          aria-label="Editing mode"
-          className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
-        >
-          <button
-            type="button"
-            onClick={() => setViewMode(false)}
-            aria-pressed={!viewOnly}
-            title="Edit mode (V)"
-            className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-              viewOnly ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
-            }`}
+        {view === 'track' && (
+          <div
+            role="group"
+            aria-label="Editing mode"
+            className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
           >
-            <Pencil size={12} /> Edit
-          </button>
+            <button
+              type="button"
+              onClick={() => setViewMode(false)}
+              aria-pressed={!viewOnly}
+              title="Edit mode (V)"
+              className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                viewOnly ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
+              }`}
+            >
+              <Pencil size={12} /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode(true)}
+              aria-pressed={viewOnly}
+              title="View-only mode (V)"
+              className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
+              }`}
+            >
+              <Eye size={12} /> View
+            </button>
+          </div>
+        )}
+        {view === 'track' && (
           <button
-            type="button"
-            onClick={() => setViewMode(true)}
-            aria-pressed={viewOnly}
-            title="View-only mode (V)"
-            className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-              viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-            }`}
+            onClick={() => setShowHelp(true)}
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+            className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
           >
-            <Eye size={12} /> View
+            <Keyboard size={16} />
           </button>
-        </div>
-        <button
-          onClick={() => setShowHelp(true)}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-          className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
-        >
-          <Keyboard size={16} />
-        </button>
+        )}
         <ThemeToggle
           pref={themePref}
           resolved={resolvedTheme}
           onChange={setThemePref}
         />
-        <span className="hidden min-[860px]:block">
-          <LevelMeter active={isPlaying} />
-        </span>
-        <div className="ml-1 hidden items-baseline gap-1 rounded border border-line bg-inset px-2.5 py-1 min-[720px]:flex">
-          <span className="led text-base leading-none">{formatTime(currentTime)}</span>
-          <span className="font-mono text-[10px] text-muted">
-            / {formatTime(duration)}
+        {view === 'track' && (
+          <span className="hidden min-[860px]:block">
+            <LevelMeter active={isPlaying} />
           </span>
-        </div>
+        )}
+        {view === 'track' && (
+          <div className="ml-1 hidden items-baseline gap-1 rounded border border-line bg-inset px-2.5 py-1 min-[720px]:flex">
+            <span className="led text-base leading-none">{formatTime(currentTime)}</span>
+            <span className="font-mono text-[10px] text-muted">
+              / {formatTime(duration)}
+            </span>
+          </div>
+        )}
 
         {user && (
           <div className="ml-1 flex items-center gap-1.5 border-l border-line pl-3">
@@ -1165,191 +1307,91 @@ export default function App() {
         )}
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        {/* ---- Track rack (collapsible) ---- */}
-        {/* Width-animates instead of mount-popping. Inner column keeps a fixed
-            w-60 so its contents don't reflow as the rack closes; overflow-hidden
-            clips them. Closed: inert + pointer-events-off so clipped controls
-            stay out of the tab order. */}
-        <aside
-          inert={!sidebarOpen}
-          className={`shrink-0 overflow-hidden border-r bg-panel transition-[width] duration-200 ease-instr ${
-            sidebarOpen ? 'w-60 border-line' : 'w-0 border-transparent'
-          }`}
-        >
-          <div className="flex h-full w-60 flex-col">
-            {/* Same fixed height as the main sub-bar so their bottom borders align. */}
-            <div className="flex h-11 items-center justify-between border-b border-line px-3">
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-                Tracks
-              </span>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                title="Hide tracks ([)"
-                aria-label="Hide track list"
-                className="press rounded p-1 text-muted hover:bg-raised hover:text-fg"
-              >
-                <ChevronsLeft size={16} />
-              </button>
-            </div>
-            {!viewOnly && (
-              <div className="p-2">
-                <button
-                  onClick={createProject}
-                  className="press inline-flex w-full items-center justify-center gap-1.5 rounded border border-line bg-raised px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
-                >
-                  <Plus size={14} /> New track
-                </button>
-              </div>
-            )}
-            <nav className="flex-1 overflow-y-auto pb-2">
-              {projects.length === 0 && (
-                <p className="px-3 py-6 text-center text-xs text-muted">
-                  No tracks yet.
-                </p>
-              )}
-              {projects.map((p) => {
-                const isCurrent = p.id === currentId
-                return (
-                  <div
-                    key={p.id}
-                    className={`group flex items-center gap-1.5 border-b border-l-2 border-line/40 py-1.5 pl-2.5 pr-2 text-sm transition-colors duration-150 ease-instr ${
-                      isCurrent
-                        ? 'border-l-accent bg-raised text-fg'
-                        : 'border-l-transparent text-muted hover:bg-raised/50 hover:text-fg'
-                    }`}
-                  >
-                    <span className="font-mono text-xs text-accentink/70">
-                      {p.source?.type === 'youtube'
-                        ? '▶'
-                        : p.source?.type === 'audio'
-                          ? '♪'
-                          : '·'}
-                    </span>
-                    <button
-                      onClick={() => setCurrentId(p.id)}
-                      className="flex-1 truncate text-left"
-                      title={p.title}
-                    >
-                      {p.title}
-                    </button>
-                    {!viewOnly && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete “${p.title}” and its notes?`))
-                            removeProject(p.id)
-                        }}
-                        className="rounded px-1 text-muted opacity-0 hover:text-danger group-hover:opacity-100"
-                        title="Delete track"
-                        aria-label={`Delete track ${p.title}`}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </nav>
-            <div className="border-t border-line px-3 py-2 text-[10px] leading-snug text-muted">
-              Synced to your account. Signed in across devices.
-            </div>
-          </div>
-        </aside>
-
-        {/* ---- Main ---- */}
-        <main className="flex min-w-0 flex-1 flex-col">
-          {/* Sub-bar: toggle + track title + source badge. Fixed height so the
-              row doesn't grow/shrink as the sidebar toggle (only shown when the
-              sidebar is collapsed) appears and disappears. */}
+      {/* ---- Body: the home page (library), or the editor for the open track */}
+      {!current ? (
+        <HomePage
+          projects={projects}
+          folders={folders}
+          openFolderId={openFolderId}
+          onOpenFolder={setOpenFolderId}
+          onOpenTrack={openTrack}
+          onCreateTrack={createProject}
+          onDeleteTrack={removeProject}
+          onMoveTrack={moveTrackToFolder}
+          onCreateFolder={createFolder}
+          onRenameFolder={renameFolder}
+          onDeleteFolder={deleteFolder}
+        />
+      ) : (
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Sub-bar: track title + source badge + per-track tools. */}
           <div className="flex h-11 items-center gap-2 border-b border-line bg-ink/60 px-3">
-            {!sidebarOpen && (
+            {viewOnly ? (
+              <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-wide text-fg">
+                {current.title}
+              </span>
+            ) : (
+              <input
+                value={current.title}
+                onChange={(e) =>
+                  commitProject(
+                    current.id,
+                    { title: e.target.value },
+                    { coalesceKey: `title:${current.id}` },
+                  )
+                }
+                aria-label="Track title"
+                className="min-w-0 flex-1 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg"
+              />
+            )}
+            {current.source &&
+              (current.source.type === 'youtube' ? (
+                <a
+                  href={
+                    current.source.youtubeUrl ??
+                    (current.source.videoId
+                      ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                      : undefined)
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open the original video on YouTube (new tab)"
+                  className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                >
+                  <Play size={12} />
+                  YouTube
+                </a>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+                  <Music size={12} />
+                  Audio file
+                </span>
+              ))}
+            {current.source && (
               <button
-                onClick={() => setSidebarOpen(true)}
-                title="Show tracks ([)"
-                aria-label="Show track list"
-                className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+                type="button"
+                onClick={fitLayout}
+                title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
+                aria-label="Fit layout to screen"
+                className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
               >
-                <Menu size={18} />
+                <Proportions size={12} />
+                Fit
               </button>
             )}
-            {current ? (
-              <>
-                {viewOnly ? (
-                  <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-wide text-fg">
-                    {current.title}
-                  </span>
-                ) : (
-                  <input
-                    value={current.title}
-                    onChange={(e) =>
-                      commitProject(
-                        current.id,
-                        { title: e.target.value },
-                        { coalesceKey: `title:${current.id}` },
-                      )
-                    }
-                    aria-label="Track title"
-                    className="min-w-0 flex-1 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg"
-                  />
-                )}
-                {current.source &&
-                  (current.source.type === 'youtube' ? (
-                    <a
-                      href={
-                        current.source.youtubeUrl ??
-                        (current.source.videoId
-                          ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                          : undefined)
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open the original video on YouTube (new tab)"
-                      className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
-                    >
-                      <Play size={12} />
-                      YouTube
-                    </a>
-                  ) : (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                      <Music size={12} />
-                      Audio file
-                    </span>
-                  ))}
-                {current.source && (
-                  <button
-                    type="button"
-                    onClick={fitLayout}
-                    title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
-                    aria-label="Fit layout to screen"
-                    className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
-                  >
-                    <Proportions size={12} />
-                    Fit
-                  </button>
-                )}
-                {current.source && <ExportPdfButton project={current} />}
-                {current.source && (
-                  <SharePanel
-                    project={current}
-                    onToggleShare={(shared) =>
-                      patchProject(current.id, { shared })
-                    }
-                  />
-                )}
-              </>
-            ) : (
-              <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
-                No track selected
-              </span>
+            {current.source && <ExportPdfButton project={current} />}
+            {current.source && (
+              <SharePanel
+                project={current}
+                onToggleShare={(shared) =>
+                  patchProject(current.id, { shared })
+                }
+              />
             )}
           </div>
 
           {/* Body */}
-          {!current ? (
-            <div className="flex-1 animate-fade-in overflow-y-auto">
-              <EmptyState onCreate={createProject} readOnly={viewOnly} />
-            </div>
-          ) : !current.source ? (
+          {!current.source ? (
             <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
               {viewOnly ? (
                 <ReadOnlyNotice>This track has no source yet.</ReadOnlyNotice>
@@ -1635,7 +1677,7 @@ export default function App() {
             </div>
           )}
         </main>
-      </div>
+      )}
 
       {/* Note inspector — modal overlay (narrow screens or chosen mode) */}
       {showModal && selectedNote && (
@@ -1705,36 +1747,6 @@ function LevelMeter({ active }: { active: boolean }) {
           />
         )
       })}
-    </div>
-  )
-}
-
-function EmptyState({
-  onCreate,
-  readOnly,
-}: {
-  onCreate: () => void
-  readOnly?: boolean
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <div className="text-5xl">🎛️</div>
-      <h2 className="text-lg font-semibold text-fg">
-        {readOnly ? 'No tracks to view' : 'Annotate a piece of music'}
-      </h2>
-      <p className="max-w-sm text-sm text-muted">
-        {readOnly
-          ? 'There are no tracks here yet. Switch to edit mode to add one.'
-          : 'Add a YouTube video or an audio file, then pin notes to any moment (or a whole section) with text, lists, and screenshots.'}
-      </p>
-      {!readOnly && (
-        <button
-          onClick={onCreate}
-          className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
-        >
-          <Plus size={14} /> New track
-        </button>
-      )}
     </div>
   )
 }

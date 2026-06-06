@@ -29,6 +29,7 @@ function toProject(id: string, data: Record<string, unknown>): Project {
       : [],
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,
+    folderId: typeof data.folderId === 'string' ? data.folderId : null,
   }
 }
 
@@ -66,6 +67,7 @@ export async function saveProject(uid: string, p: Project): Promise<void> {
     annotations: p.annotations,
     updatedAt: p.updatedAt,
     shared: p.shared === true,
+    folderId: p.folderId ?? null,
   })
 }
 

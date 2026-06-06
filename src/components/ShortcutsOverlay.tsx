@@ -22,7 +22,6 @@ const GROUPS = [
     title: 'Navigation',
     items: [
       { keys: ['Home', 'End'], label: 'Jump to start / end' },
-      { keys: ['['], label: 'Toggle track list' },
       { keys: ['V'], label: 'Toggle view-only mode' },
       { keys: ['?'], label: 'Show this help' },
     ],

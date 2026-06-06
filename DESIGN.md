@@ -298,10 +298,15 @@ controls (Set start / Set end / Clear end, delete, and the formatting toolbar)
 are hidden at rest and revealed on hover or focus, keeping the resting state
 quiet.
 
-### Navigation (Track Rack)
-Flush, full-width rows divided by hairlines. The active track carries a 2px amber
-left-bar and Raised fill; inactive rows are Muted and lift to Text on hover. A
-monospace glyph (▶ / ♪) marks the source type.
+### Navigation (Library)
+The signed-in landing view: every track is a flat Panel tile (hairline border,
+squared corners — no soft cards), grouped into folders with Drive semantics
+(folder tiles at the root, drill in to see a folder's tracks). A monospace
+glyph (▶ / ♪) marks the source type; meta lines (note count, updated-ago) are
+monospace Label style. Per-tile controls (move to folder, delete) are hidden at
+rest and revealed on hover/focus. Amber appears only on the primary New-track
+action, the Shared chip, and the drag-and-drop drop highlight. The wordmark and
+a Home button return here from the editor.
 
 ## 6. Do's and Don'ts
 

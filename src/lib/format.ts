@@ -29,6 +29,26 @@ export function notePreview(contentHtml: string, max = 80): string {
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
 }
 
+/** Epoch ms -> compact "ago" label for tiles ("just now", "5m ago", "2d ago"). */
+export function formatRelativeTime(ts: number): string {
+  if (!ts) return '—' // legacy docs default updatedAt to 0
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 7) return `${d}d ago`
+  const w = Math.floor(d / 7)
+  if (w < 5) return `${w}w ago`
+  return new Date(ts).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 /** Parse "m:ss" / "h:mm:ss" / plain seconds into seconds. null if invalid. */
 export function parseTime(input: string): number | null {
   const s = input.trim()
