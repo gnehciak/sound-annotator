@@ -84,6 +84,13 @@ await check('owner can read a legacy doc (no editableByLink key)', () =>
   assertSucceeds(getDoc(doc(owner, 'projects', 'legacy'))))
 await check('stranger can read a legacy shared doc', () =>
   assertSucceeds(getDoc(doc(anon, 'projects', 'legacy'))))
+// A brand-new project's edit-lock subscription starts before the first save
+// creates its doc — the signed-in get must see "missing", not "denied"
+// (a denial reads as "sharing revoked" and deadlocks the new track).
+await check('signed-in user can get a doc that does not exist yet', () =>
+  assertSucceeds(getDoc(doc(owner, 'projects', 'not-created-yet'))))
+await check('stranger cannot get a doc that does not exist', () =>
+  assertFails(getDoc(doc(anon, 'projects', 'not-created-yet'))))
 
 console.log('link editing — permission gates')
 await check('signed-in visitor cannot edit a view-only share', () =>

@@ -68,7 +68,14 @@ service cloud.firestore {
       // holding the link; owners can always fetch their own. (`get(...)`
       // accessors: docs saved before link editing existed lack the
       // `editableByLink` key, and a missing key would error, not miss.)
-      allow get: if resource.data.shared == true
+      //
+      // A signed-in user may also get a doc that doesn't exist yet: a
+      // brand-new project's edit-lock subscription starts before the first
+      // save creates the doc (see lib/editLock.ts), and a denial here would
+      // read as "sharing revoked" and deadlock the new track read-only.
+      // (Doc ids are unguessable, so existence probing gains nothing.)
+      allow get: if (resource == null && request.auth != null)
+        || resource.data.shared == true
         || resource.data.get('editableByLink', false) == true
         || (request.auth != null && resource.data.ownerId == request.auth.uid);
 
