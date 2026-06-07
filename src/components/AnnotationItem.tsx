@@ -194,6 +194,16 @@ export default function AnnotationItem({
           {label}
         </button>
 
+        {/* Score position — the bar number / rehearsal mark, shown as typed. */}
+        {annotation.bar?.trim() && (
+          <span
+            title="Bar / rehearsal mark"
+            className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted"
+          >
+            {annotation.bar.trim()}
+          </span>
+        )}
+
         {/* Reorder arrows — only when another note shares this time. */}
         {!readOnly && (canMoveUp || canMoveDown) && (
           <span className="flex items-center" onClick={stop}>

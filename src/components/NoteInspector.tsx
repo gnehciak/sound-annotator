@@ -239,6 +239,32 @@ export default function NoteInspector({
         onClearEnd={clearEnd}
       />
 
+      {/* Score position — pairs with the time row above: where the note's
+          moment falls in the printed music. Free text: a bar number or a
+          rehearsal mark. A typing run collapses into one undo step. */}
+      <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2">
+        <label
+          htmlFor={`note-bar-${annotation.id}`}
+          title="Where this moment falls in the score"
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted"
+        >
+          Bar
+        </label>
+        <input
+          id={`note-bar-${annotation.id}`}
+          value={annotation.bar ?? ''}
+          onChange={(e) => {
+            const v = e.target.value
+            onUpdate(
+              { bar: v.trim() ? v : undefined },
+              { coalesceKey: `bar:${annotation.id}` },
+            )
+          }}
+          placeholder="Bar number or rehearsal mark — e.g. 24, reh. B"
+          className="w-full rounded-sm border border-line bg-inset px-2 py-1 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+        />
+      </div>
+
       {/* Content blocks: text editor inline, then each property plugin's editor.
           White "page" so pasted (white-bg) screenshots blend; on dark it's = ink. */}
       <div onMouseDown={handleBodyMouseDown} className="min-h-[8rem] bg-note">

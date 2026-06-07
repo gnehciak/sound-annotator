@@ -114,10 +114,11 @@ function contentCell(note: Annotation): string {
 
 function tableRow(note: Annotation): string {
   const color = note.color ?? colorForId(note.id)
+  const bar = note.bar?.trim()
   return `<tr>
     <td class="c-time"><span class="time" style="border-color:${color}">${esc(
       noteLabel(note.start, note.end),
-    )}</span></td>
+    )}</span>${bar ? `<div class="bar">${esc(bar)}</div>` : ''}</td>
     <td class="c-tags">${tagsCell(note)}</td>
     <td class="c-content">${contentCell(note)}</td>
   </tr>`
@@ -333,6 +334,13 @@ const STYLES = `
     border-left: 3px solid #ccc;
     font: 600 12px/1.4 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     white-space: nowrap;
+  }
+  /* Bar number / rehearsal mark, under the timecode (aligned past its rule). */
+  .bar {
+    margin-top: 3px;
+    padding-left: 11px;
+    font: 600 10px/1.4 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color: #6e6555;
   }
   .tag {
     display: inline-block;

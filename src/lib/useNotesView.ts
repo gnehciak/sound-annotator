@@ -71,15 +71,21 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
     return next.size === tagFilter.size ? tagFilter : next
   }, [tagFilter, filterTags])
   // A lowercased search haystack per note — timecode label + full text + tag
-  // labels + section name. Parses HTML, so memoised on the notes (not per
-  // keystroke); the query just scans these strings.
+  // labels + section name + bar/rehearsal mark. Parses HTML, so memoised on
+  // the notes (not per keystroke); the query just scans these strings.
   const searchIndex = useMemo(() => {
     const m = new Map<string, string>()
     for (const a of annotations) {
       const tags = tagsOf(a).map((t) => resolveTag(t)?.label ?? t)
       m.set(
         a.id,
-        [noteLabel(a.start, a.end), notePlainText(a.contentHtml), a.sectionName ?? '', ...tags]
+        [
+          noteLabel(a.start, a.end),
+          notePlainText(a.contentHtml),
+          a.sectionName ?? '',
+          a.bar ?? '',
+          ...tags,
+        ]
           .join('   ')
           .toLowerCase(),
       )

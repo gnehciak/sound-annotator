@@ -52,6 +52,12 @@ export interface Annotation {
    */
   blocks?: NoteBlock[]
   /**
+   * Where this note sits in the score — free text holding a bar number or a
+   * rehearsal mark (e.g. "24", "bb. 12–16", "reh. B"). Shown as a chip beside
+   * the note's timecode.
+   */
+  bar?: string
+  /**
    * Manual sort position among notes that share the same `start`. Only used as
    * the same-time tiebreaker (set via the note's ▲/▼ controls); notes that have
    * never been reordered leave it unset and fall back to `createdAt` order.
