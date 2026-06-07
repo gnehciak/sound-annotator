@@ -54,20 +54,21 @@
 }
 
 /* ============================================================
-   LIGHT — "Daylit Station": warm-paper instrument chrome framing
-   a pure-white note page. Same doctrines, lights on. Surface ramp
-   keeps its relative order (inset < ink < panel < raised) so
-   "raised = lifted / inset = recessed" still reads. Body, muted,
+   LIGHT — "Daylit Station": near-white warm chrome framing a
+   warm-paper note page. Same doctrines, lights on. Surface ramp
+   keeps its relative order (inset < ink < panel < raised) but with
+   a wider tonal spread and darker hairlines than dark, so panel
+   edges draw crisply on the pale surfaces. Body, muted,
    placeholder, and amber-ink are AA-verified on every surface.
    ============================================================ */
 [data-theme='light'] {
-  --bg-ink: 234 228 216; /* #eae4d8 warm base canvas */
-  --bg-panel: 242 238 229; /* #f2eee5 panels (sidebar/header/transport) */
-  --bg-raised: 251 248 242; /* #fbf8f2 controls / title bars (lightest) */
-  --bg-inset: 222 215 199; /* #ded7c7 recessed wells / inputs */
-  --surface-note: 234 228 216; /* #eae4d8 warm note page (= base); not stark white */
-  --border: 210 201 182; /* #d2c9b6 hairlines */
-  --border-strong: 184 174 152; /* #b8ae98 hover/active edges */
+  --bg-ink: 243 239 230; /* #f3efe6 warm base canvas */
+  --bg-panel: 250 248 243; /* #faf8f3 panels (sidebar/header/transport) */
+  --bg-raised: 254 253 251; /* #fefdfb controls / title bars (lightest, near-white warm) */
+  --bg-inset: 227 220 204; /* #e3dccc recessed wells / inputs — held low so wells recess under the whiter chrome */
+  --surface-note: 243 239 230; /* #f3efe6 warm note page (= base); not stark white */
+  --border: 190 178 149; /* #beb295 hairlines — ~2:1 on panel so edges draw */
+  --border-strong: 142 130 106; /* #8e826a hover/active edges — ≥3:1 on ink + panel */
   --text: 42 38 32; /* #2a2620 warm near-black */
   --text-strong: 28 26 22; /* #1c1a16 h1 / emphasis */
   --text-muted: 95 86 70; /* #5f5646 labels/placeholder — AA on every surface incl. inset */
@@ -77,14 +78,14 @@
   --peak: 194 67 59; /* #c2433b meter peak */
   --danger: 190 18 60; /* #be123c rose-700 — delete affordances, AA on chrome */
   --on-bright: 26 24 19; /* text on amber/hue fills stays dark on light too */
-  --row-sel: 243 232 205; /* #f3e8cd warm highlight — reads on the white note page */
+  --row-sel: 246 233 196; /* #f6e9c4 warm highlight — chroma-led so it reads on the lighter page */
 
-  --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.09);
-  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.55),
-    inset 0 -2px 3px rgb(0 0 0 / 0.14);
+  --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.12);
+  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.7),
+    inset 0 -2px 3px rgb(0 0 0 / 0.16);
   --led-glow: none;
-  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6),
-    0 1px 0 rgb(0 0 0 / 0.12);
+  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 1px 0 rgb(0 0 0 / 0.16);
 
   color-scheme: light;
 }

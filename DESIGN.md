@@ -172,18 +172,22 @@ area. The user picks System / Light / Dark from a header icon button;
 `index.html` paints it before first render, so there's no flash); tokens live in
 `src/index.css`, the runtime in `src/lib/theme.ts`.
 
-Light surface ramp (warm, keeps the relative order inset < ink < panel < raised):
-**ink** `#eae4d8` · **panel** `#f2eee5` · **raised** `#fbf8f2` · **inset**
-`#ded7c7` · **border** `#d2c9b6` · **text** `#2a2620` · **muted** `#5f5646`.
+Light surface ramp (warm, keeps the relative order inset < ink < panel < raised,
+but with a wider tonal spread than dark — chrome lifts to near-white warm while
+the inset wells hold their depth — and deliberately darker hairlines, so panel
+edges draw crisply on the pale surfaces instead of melting together):
+**ink** `#f3efe6` · **panel** `#faf8f3` · **raised** `#fefdfb` · **inset**
+`#e3dccc` · **border** `#beb295` · **border-strong** `#8e826a` · **text**
+`#2a2620` · **muted** `#5f5646`.
 
 Three light-specific rules, all WCAG-AA verified:
 
 - **The Warm-Note-Page Rule.** The notes list and editor sit on a dedicated
-  `--note` surface. It is the warm base tone (`#eae4d8`) in light — *not* stark
+  `--note` surface. It is the warm base tone (`#f3efe6`) in light — *not* stark
   white — so the notes read as part of the warm instrument, the deepest warm
   surface with the chrome panels lifting lighter around it (the same relationship
   dark uses). (`--note` equals ink in dark.) The active/selected row uses
-  `--row-sel`, a slightly lighter/warmer highlight (`#f3e8cd`) that reads against
+  `--row-sel`, a chroma-led warm highlight (`#f6e9c4`) that reads against
   the warm page; it equals `raised` in dark. (Note: a pure-white page was tried so
   pasted white-bg screenshots would blend, but it read too clinical against the
   warm theme, so warmth wins; a pasted white screenshot shows its own edges.)
