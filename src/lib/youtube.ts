@@ -19,6 +19,23 @@ export function parseVideoId(input: string): string | null {
   return null
 }
 
+/** Fetch a video's title via the public oEmbed endpoint (no API key). */
+export async function fetchVideoTitle(videoId: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(
+        `https://www.youtube.com/watch?v=${videoId}`,
+      )}&format=json`,
+    )
+    if (!res.ok) return null
+    const data: unknown = await res.json()
+    const title = (data as { title?: unknown }).title
+    return typeof title === 'string' && title.trim() ? title.trim() : null
+  } catch {
+    return null
+  }
+}
+
 let apiPromise: Promise<unknown> | null = null
 
 /** Lazily load the YouTube IFrame Player API exactly once. */

@@ -35,7 +35,7 @@ import {
   deleteProjectImages,
   reconcileProjectImages,
 } from './lib/imageCloud'
-import { parseVideoId } from './lib/youtube'
+import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
@@ -819,6 +819,22 @@ export default function App() {
     commitProject(current.id, {
       source: { type: 'youtube', youtubeUrl: url, videoId },
     })
+    // Derive the initial title from the video (mirrors the audio-file path).
+    // Re-checked at resolve time so a rename during the fetch wins; raw
+    // (non-undoable) like the audio attach's title patch.
+    if (current.title === 'Untitled track') {
+      const projectId = current.id
+      void fetchVideoTitle(videoId).then((title) => {
+        if (!title) return
+        setProjects((ps) =>
+          ps.map((p) =>
+            p.id === projectId && p.title === 'Untitled track'
+              ? { ...p, title, updatedAt: now() }
+              : p,
+          ),
+        )
+      })
+    }
   }
 
   async function attachAudioFile(file: File) {
