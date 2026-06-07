@@ -34,6 +34,10 @@ interface Props {
   onSelect?: (id: string, seekToo: boolean) => void
   onSeek: (t: number) => void
   onPlay: () => void
+  /** Play a range note's passage, stopping at its end (see usePassagePlayback). */
+  onPlayPassage?: (a: Annotation) => void
+  /** Note whose passage is armed to stop — lights that chip's loop segment. */
+  passageId?: string | null
   /** Persist a new top-to-bottom order for a group of same-time notes. */
   onReorder?: (orderedIds: string[]) => void
   onSeekNote: (id: string) => void
@@ -56,6 +60,8 @@ export default function AnnotationList({
   onSelect,
   onSeek,
   onPlay,
+  onPlayPassage,
+  passageId,
   onReorder,
   onSeekNote,
   mentionItems,
@@ -290,6 +296,15 @@ export default function AnnotationList({
     requestAnimationFrame(() => followToTop())
   }
 
+  // The passage segment: same pin behavior, but the host seeks/plays and arms
+  // the stop-at-end itself (usePassagePlayback).
+  const playPassage = (a: Annotation) => {
+    userScrolling.current = false
+    if (returnTimer.current) clearTimeout(returnTimer.current)
+    onPlayPassage?.(a)
+    requestAnimationFrame(() => followToTop())
+  }
+
   // Two notes occupy the same slot when only the manual `order` tiebreaker
   // separates them, so the ▲/▼ controls can swap them and the swap will stick.
   // In timeline order that's just a shared start; otherwise the playhead rank
@@ -358,6 +373,8 @@ export default function AnnotationList({
           onMoveUp={() => moveNote(a.id, -1)}
           onMoveDown={() => moveNote(a.id, 1)}
           onPlay={() => playNote(a.start)}
+          onPlayPassage={onPlayPassage ? () => playPassage(a) : undefined}
+          passageArmed={passageId === a.id}
           onSeek={onSeek}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}

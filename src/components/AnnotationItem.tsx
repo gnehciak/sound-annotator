@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react'
-import { Play, ArrowUp, ArrowDown } from 'lucide-react'
+import { Play, ArrowUp, ArrowDown, RotateCw } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel, formatTime } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
@@ -34,6 +34,13 @@ interface Props {
   onMoveDown?: () => void
   /** Seek (and pin) to this note's moment — the timecode button. */
   onPlay: () => void
+  /**
+   * Range notes: play just this passage, pausing at the note's end — the
+   * loop-glyph segment fused to the timecode chip. Re-clicking restarts it.
+   */
+  onPlayPassage?: () => void
+  /** This note's passage is armed to stop at its end (lights the segment). */
+  passageArmed?: boolean
   /** Scrub to an arbitrary time within the note (clicking the progress bar). */
   onSeek?: (t: number) => void
   onSeekNote: (id: string) => void
@@ -61,6 +68,8 @@ export default function AnnotationItem({
   onMoveUp,
   onMoveDown,
   onPlay,
+  onPlayPassage,
+  passageArmed = false,
   onSeek,
   onSeekNote,
   mentionItems,
@@ -166,33 +175,64 @@ export default function AnnotationItem({
 
       {/* header */}
       <div className="flex items-center gap-2 pb-1 pl-2 pr-1 pt-2">
-        <button
-          type="button"
-          // Don't take focus on click: a focused button inside the list gets
-          // re-asserted on reorder, and the browser's "scroll into view" then
-          // fights the playing-note pin. Keyboard users can still Tab to it.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={(e) => {
-            stop(e)
-            onPlay()
-          }}
-          title="Jump to this moment and pin it to the top"
-          aria-label={`Seek to ${label}`}
-          className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-onbright"
-          style={{ background: color }}
-        >
-          {active && isPlaying ? (
-            <span className="eq" aria-hidden="true">
-              <span className="eq-bar" />
-              <span className="eq-bar" />
-              <span className="eq-bar" />
-              <span className="eq-bar" />
-            </span>
-          ) : (
-            <Play size={9} className="fill-current" />
+        {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
+        <span className="inline-flex items-stretch">
+          <button
+            type="button"
+            // Don't take focus on click: a focused button inside the list gets
+            // re-asserted on reorder, and the browser's "scroll into view" then
+            // fights the playing-note pin. Keyboard users can still Tab to it.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              stop(e)
+              onPlay()
+            }}
+            title="Jump to this moment and pin it to the top"
+            aria-label={`Seek to ${label}`}
+            className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-onbright"
+            style={{ background: color }}
+          >
+            {active && isPlaying ? (
+              <span className="eq" aria-hidden="true">
+                <span className="eq-bar" />
+                <span className="eq-bar" />
+                <span className="eq-bar" />
+                <span className="eq-bar" />
+              </span>
+            ) : (
+              <Play size={9} className="fill-current" />
+            )}
+            {label}
+          </button>
+          {isRange && onPlayPassage && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                stop(e)
+                onPlayPassage()
+              }}
+              title={
+                passageArmed
+                  ? 'Playing this passage — click to restart it'
+                  : 'Play just this passage — pauses at the end'
+              }
+              aria-label={`Play ${label} and stop at the end`}
+              className="press flex items-center border-l border-onbright/25 px-1.5 text-onbright"
+              style={{ background: color }}
+            >
+              <RotateCw
+                size={11}
+                strokeWidth={2.75}
+                className={
+                  passageArmed && isPlaying
+                    ? 'animate-[spin_2.4s_linear_infinite]'
+                    : ''
+                }
+              />
+            </button>
           )}
-          {label}
-        </button>
+        </span>
 
         {/* Score position — the bar number / rehearsal mark, shown as typed. */}
         {annotation.bar?.trim() && (

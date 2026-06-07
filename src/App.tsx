@@ -69,6 +69,7 @@ import NotesHeaderControls from './components/NotesHeaderControls'
 import NotesSearch from './components/NotesSearch'
 import SplitHandle from './components/SplitHandle'
 import { useNotesView } from './lib/useNotesView'
+import { usePassagePlayback } from './lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from './lib/notesSplit'
 import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
@@ -301,8 +302,11 @@ export default function App() {
   const help = usePresence(showHelp)
 
   // Latest notes of the current project, read by the mention suggestion.
+  // Mirrored in an effect, not during render — both readers fire at event time.
   const annotationsRef = useRef<Annotation[]>([])
-  annotationsRef.current = current?.annotations ?? []
+  useEffect(() => {
+    annotationsRef.current = current?.annotations ?? []
+  }, [current])
 
   // Latest project list for the popstate handler, which subscribes once and
   // fires outside React's data flow.
@@ -357,11 +361,14 @@ export default function App() {
     editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
   // Read-only for any reason: the user's own View toggle, or the lock.
   const effectiveViewOnly = viewOnly || lockBlocked
-  // Mirrors for the debounced save (fires outside React's data flow).
+  // Mirrors for the debounced save (fires outside React's data flow, well
+  // after the commit these effects ride on).
   const lockBlockedRef = useRef(false)
-  lockBlockedRef.current = lockBlocked
   const lockClaimRef = useRef(editLock.claim)
-  lockClaimRef.current = editLock.claim
+  useEffect(() => {
+    lockBlockedRef.current = lockBlocked
+    lockClaimRef.current = editLock.claim
+  }, [lockBlocked, editLock.claim])
   // The lock holder's label; their own account in a second tab is the
   // commonest case, so call that out instead of showing them their own name.
   const lockHolderLabel =
@@ -962,6 +969,17 @@ export default function App() {
     setIsPlaying(false)
     playerRef.current?.pause()
   }
+
+  // One-shot passage play (a range note's loop segment): seek to the note's
+  // start, play, pause at its end.
+  const { passageId, playPassage, cancelPassage } = usePassagePlayback({
+    currentTime,
+    seek,
+    play,
+    pause,
+  })
+  // An armed stop is positional — it means nothing on another track.
+  useEffect(() => cancelPassage(), [currentId, cancelPassage])
 
   // ---- note inspector controls ------------------------------------------
   function selectNote(id: string, seekToo = false) {
@@ -1736,6 +1754,8 @@ export default function App() {
                     onSelect={selectNote}
                     onSeek={seek}
                     onPlay={play}
+                    onPlayPassage={playPassage}
+                    passageId={passageId}
                     onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}

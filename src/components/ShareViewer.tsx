@@ -24,6 +24,7 @@ import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
+import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import type { MentionItem } from './MentionList'
 
@@ -208,6 +209,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     setIsPlaying(false)
     playerRef.current?.pause()
   }, [])
+
+  // One-shot passage play (a range note's loop segment): seek to the note's
+  // start, play, pause at its end.
+  const { passageId, playPassage } = usePassagePlayback({
+    currentTime,
+    seek,
+    play,
+    pause,
+  })
 
   const seekToNote = useCallback(
     (id: string) => {
@@ -491,6 +501,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               autoPin={autoPin}
               onSeek={seek}
               onPlay={play}
+              onPlayPassage={playPassage}
+              passageId={passageId}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
             />
