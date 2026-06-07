@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>L — Thumb Postcards</title>
+<style>
+  :root {
+    --page: #ffffff; --panel: #f5f5f2; --raised: #f0efeb;
+    --line: #d6d3c8; --line-mid: #b8b4a6;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05;
+    --mast: #211f18; --mast-line: #38342b; --mast-fg: #e9e4d8; --mast-muted: #a89e8a;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 52px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; background: var(--mast); border-bottom: 1px solid var(--mast-line);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 14.5px; font-weight: 700; color: var(--mast-fg); letter-spacing: -.01em; }
+  .wordmark i { width: 22px; height: 22px; border-radius: 6px; background: #f5a623; display: grid; place-items: center; }
+  .wordmark i::before { content: ''; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent #1a1813; margin-left: 2px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #2a271f; border: 1px solid #4d473a; display: grid; place-items: center; font: 600 10px var(--sans); color: var(--mast-muted); }
+
+  .content { max-width: 1080px; margin: 0 auto; padding: 38px 32px 80px; }
+
+  .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+  .hello h1 { font-size: 27px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.02em; }
+  .hello p { margin-top: 6px; font-size: 14px; color: var(--muted); }
+  .hello-right { display: flex; gap: 12px; align-items: center; }
+  .search { position: relative; width: 290px; }
+  .search input {
+    width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--fg); font: 400 14px var(--sans); padding: 10px 14px 10px 38px; outline: none;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search::before { content: '⌕'; position: absolute; left: 13px; top: 50%; transform: translateY(-55%); color: var(--muted); font-size: 17px; }
+  .new-track {
+    flex: none; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    font: 600 14px var(--sans); padding: 10px 16px; cursor: pointer;
+    box-shadow: 0 1px 2px rgb(28 26 22 / .18);
+  }
+
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 30px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 500 13px var(--sans); color: var(--fg);
+    background: var(--page); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .pill .n { font-size: 12px; color: var(--muted); }
+  .pill.active { background: var(--fg-strong); border-color: var(--fg-strong); color: #fff; }
+  .pill.active .n { color: #cfcabe; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card {
+    display: flex; gap: 18px; align-items: stretch;
+    border-radius: 18px; padding: 18px; cursor: pointer;
+    border: 1px solid rgb(28 26 22 / .07);
+  }
+  .card.hover { box-shadow: 0 6px 20px rgb(28 26 22 / .13); }
+  .thumb { position: relative; width: 176px; align-self: center; aspect-ratio: 16/9; border-radius: 11px; overflow: hidden; flex: none; background: #fff; }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .thumb svg.wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dur {
+    position: absolute; right: 6px; bottom: 6px; padding: 1px 6px;
+    background: rgb(28 26 22 / .75); border-radius: 5px;
+    font: 500 10.5px var(--mono); color: #fff; font-variant-numeric: tabular-nums;
+  }
+  .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .title { font-size: 16px; font-weight: 650; color: var(--fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fchip { flex: none; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgb(255 255 255 / .7); }
+  .meta { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+  .well { position: relative; background: var(--page); border: 1px solid rgb(28 26 22 / .08); border-radius: 9px; height: 34px; overflow: hidden; margin-top: 12px; }
+  .well svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
+  .foot .notes { font-size: 12px; font-weight: 600; color: var(--fg); }
+  .resume-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    font: 600 12.5px var(--sans); padding: 7px 13px; cursor: pointer;
+  }
+  .open-link { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); background: none; border: none; cursor: pointer; padding: 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="hello">
+    <div>
+      <h1>Good afternoon, Lawrence</h1>
+      <p>The coloured ticks under each video are your notes, where they land in the music.</p>
+    </div>
+    <div class="hello-right">
+      <div class="search"><input placeholder="Search tracks…" /></div>
+      <button class="new-track">＋ New track</button>
+    </div>
+  </div>
+
+  <div class="pills">
+    <button class="pill active">All <span class="n">11</span></button>
+    <button class="pill"><span class="dot" style="background:#2a9d8f"></span>Year 10 — Set Works <span class="n">4</span></button>
+    <button class="pill"><span class="dot" style="background:#7c5cd6"></span>Jazz Unit <span class="n">2</span></button>
+    <button class="pill"><span class="dot" style="background:#3b82c4"></span>Film Music <span class="n">2</span></button>
+    <button class="pill">＋ New folder</button>
+  </div>
+
+  <div class="grid">
+    <div class="card" style="background:#cc7a0a12">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/sUgoBb8m1eE/mqdefault.jpg" alt="" /><span class="dur">15:50</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Boléro — Maurice Ravel</div><span class="fchip" style="color:#874e05">Continue</span></div>
+        <div class="meta">24 notes · you stopped at 07:42 · 2 hours ago</div>
+        <div class="well" data-seed="11" data-n="24" data-head=".49"></div>
+        <div class="foot"><span class="notes">24 notes</span><button class="resume-btn">▶ Continue</button></div>
+      </div>
+    </div>
+    <div class="card hover" style="background:#7c5cd610">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/zqNTltOGh5c/mqdefault.jpg" alt="" /><span class="dur">9:22</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">So What — Miles Davis</div><span class="fchip" style="color:#5b3fb0">Jazz Unit</span></div>
+        <div class="meta">18 notes · updated yesterday</div>
+        <div class="well" data-seed="83" data-n="18"></div>
+        <div class="foot"><span class="notes">18 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#f5f5f2">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/CvFH_6DNRCY/mqdefault.jpg" alt="" /><span class="dur">5:12</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Clair de Lune — Debussy</div><span class="fchip" style="color:#1d6e64">Shared</span></div>
+        <div class="meta">31 notes · updated 3 days ago</div>
+        <div class="well" data-seed="23" data-n="31"></div>
+        <div class="foot"><span class="notes">31 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#2a9d8f10">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/2ZBtPf7FOoM/mqdefault.jpg" alt="" /><span class="dur">3:01</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Killer Queen — Queen</div><span class="fchip" style="color:#1d6e64">Year 10</span></div>
+        <div class="meta">27 notes · updated 4 days ago</div>
+        <div class="well" data-seed="41" data-n="27"></div>
+        <div class="foot"><span class="notes">27 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#2a9d8f10">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/fJ9rUzIMcZQ/mqdefault.jpg" alt="" /><span class="dur">5:55</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Bohemian Rhapsody — Queen</div><span class="fchip" style="color:#1d6e64">Year 10</span></div>
+        <div class="meta">22 notes · updated 5 days ago</div>
+        <div class="well" data-seed="57" data-n="22"></div>
+        <div class="foot"><span class="notes">22 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#2a9d8f10">
+      <div class="thumb" data-wave="61" data-hue="#2a9d8f"><span class="dur">4:06</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Music for a While — Purcell</div><span class="fchip" style="color:#1d6e64">Year 10</span></div>
+        <div class="meta">Audio file · 14 notes · updated last week</div>
+        <div class="well" data-seed="61" data-n="14"></div>
+        <div class="foot"><span class="notes">14 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#3b82c410">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/e-QFj59PON4/mqdefault.jpg" alt="" /><span class="dur">1:46</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Also sprach Zarathustra — Strauss</div><span class="fchip" style="color:#2b6499">Film Music</span></div>
+        <div class="meta">7 notes · updated 3 weeks ago</div>
+        <div class="well" data-seed="37" data-n="7"></div>
+        <div class="foot"><span class="notes">7 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+    <div class="card" style="background:#3b82c410">
+      <div class="thumb"><img src="https://i.ytimg.com/vi/RxabLA7UQ9k/mqdefault.jpg" alt="" /><span class="dur">4:35</span></div>
+      <div class="card-body">
+        <div class="card-top"><div class="title">Time — Hans Zimmer</div><span class="fchip" style="color:#2b6499">Film Music</span></div>
+        <div class="meta">16 notes · updated a month ago</div>
+        <div class="well" data-seed="127" data-n="16"></div>
+        <div class="foot"><span class="notes">16 notes</span><button class="open-link">Open track →</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const HUES = ['#2a9d8f', '#7c5cd6', '#d6536f', '#3b82c4', '#d9700f', '#6a9b2e'];
+  function cueline(seed, count, playhead) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 1000, H = 100;
+    let marks = `<line x1="0" y1="50" x2="${W}" y2="50" stroke="#1c1a16" stroke-opacity=".12" stroke-width="2"/>`;
+    const positions = Array.from({ length: count }, () => rnd()).sort();
+    positions.forEach(p => {
+      const hue = HUES[Math.floor(rnd() * HUES.length)];
+      rnd(); rnd();
+      const x = 8 + p * (W - 16);
+      marks += `<rect x="${x.toFixed(0)}" y="22" width="5" height="56" rx="2.5" fill="${hue}"/>`;
+    });
+    if (playhead) {
+      const x = 8 + playhead * (W - 16);
+      marks += `<rect x="${x}" y="6" width="3" height="88" fill="#cc7a0a"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  }
+  document.querySelectorAll('.well').forEach(el => {
+    el.insertAdjacentHTML('afterbegin',
+      cueline(+el.dataset.seed, +el.dataset.n, el.dataset.head ? +el.dataset.head : 0));
+  });
+  function wave(seed, hue) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 320, H = 180, n = 26, bw = 4;
+    const gap = (W - 60 - n * bw) / (n - 1);
+    let bars = `<rect width="${W}" height="${H}" fill="${hue}" fill-opacity=".12"/>`;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1), env = Math.sin(t * Math.PI) ** 0.6;
+      const bh = 8 + rnd() * 80 * (0.3 + 0.7 * env);
+      bars += `<rect x="${(30 + i * (bw + gap)).toFixed(1)}" y="${(H/2 - bh/2).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="2" fill="${hue}"/>`;
+    }
+    return `<svg class="wave" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${bars}</svg>`;
+  }
+  document.querySelectorAll('.thumb[data-wave]').forEach(el => {
+    el.insertAdjacentHTML('afterbegin', wave(+el.dataset.wave, el.dataset.hue));
+  });
+</script>
+</body>
+</html>

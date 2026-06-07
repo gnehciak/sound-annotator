@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dashboard prototypes — pick a direction</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #131210; color: #e9e4d8; font-family: system-ui, sans-serif; padding: 36px; }
+  h1 { font-size: 20px; font-weight: 650; color: #fff; }
+  h2 { font-size: 14px; font-weight: 600; color: #a89e8a; margin: 40px 0 16px; text-transform: uppercase; letter-spacing: .1em; }
+  h2:first-of-type { margin-top: 28px; }
+  .sub { margin: 8px 0 0; font-size: 13px; color: #a89e8a; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1700px; }
+  .cell { border: 1px solid #38342b; background: #211f18; border-radius: 2px; overflow: hidden; }
+  .head { display: flex; align-items: baseline; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #38342b; }
+  .tag { font: 600 11px ui-monospace, monospace; letter-spacing: .15em; color: #1a1813; background: #f5a623; padding: 3px 8px; border-radius: 2px; }
+  .name { font-size: 15px; font-weight: 650; color: #fff; }
+  .desc { font-size: 12px; color: #a89e8a; }
+  .open { margin-left: auto; font-size: 12px; color: #f5a623; text-decoration: none; white-space: nowrap; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .scroll { max-height: 540px; overflow-y: auto; }
+</style>
+</head>
+<body>
+  <h1>Sound Annotator — dashboard directions</h1>
+  <p class="sub">Round 3: YouTube thumbnail as the primary cover, the note timeline simplified to a slim secondary cue line. Dark masthead per today's chrome change. Click “open live” for the full-size page; scroll inside a panel to see everything.</p>
+
+  <h2>Round 4 — layout I in the existing design language (squared, hairlines, mono labels)</h2>
+  <div class="grid">
+    <div class="cell">
+      <div class="head"><span class="tag">M</span><span class="name">Station Cards — light</span><span class="desc">2px corners, real tokens, dark masthead, ink-mixed light hues</span><a class="open" href="m-station-cards.html?theme=light" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="m-station-cards.html?theme=light" target="_blank"><img src="m-station-cards-light.png" alt="Station Cards light prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">M</span><span class="name">Station Cards — dark</span><span class="desc">same design on the default warm-dark theme</span><a class="open" href="m-station-cards.html?theme=dark" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="m-station-cards.html?theme=dark" target="_blank"><img src="m-station-cards-dark.png" alt="Station Cards dark prototype" /></a></div>
+    </div>
+  </div>
+
+  <h2>Round 3 — thumbnail-primary, slim cue line</h2>
+  <div class="grid">
+    <div class="cell">
+      <div class="head"><span class="tag">I</span><span class="name">Thumb Cards</span><span class="desc">the Music-Room grid — thumbnail cover, cue line tucked under it</span><a class="open" href="i-thumb-cards.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="i-thumb-cards.html" target="_blank"><img src="i-thumb-cards.png" alt="Thumb Cards prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">J</span><span class="name">Thumb Cue List</span><span class="desc">rows — small thumb left, cue line under the title, most scannable</span><a class="open" href="j-thumb-list.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="j-thumb-list.html" target="_blank"><img src="j-thumb-list.png" alt="Thumb Cue List prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">K</span><span class="name">Thumb Desk</span><span class="desc">folder sidebar + continue hero with ruler + compact thumb grid</span><a class="open" href="k-thumb-desk.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="k-thumb-desk.html" target="_blank"><img src="k-thumb-desk.png" alt="Thumb Desk prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">L</span><span class="name">Thumb Postcards</span><span class="desc">two-up folder-tinted cards — thumb left, cue well right</span><a class="open" href="l-thumb-postcards.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="l-thumb-postcards.html" target="_blank"><img src="l-thumb-postcards.png" alt="Thumb Postcards prototype" /></a></div>
+    </div>
+  </div>
+
+  <h2>Round 2 — fingerprint × friendly light layout</h2>
+  <div class="grid">
+    <div class="cell">
+      <div class="head"><span class="tag">E</span><span class="name">Soft Cue Cards</span><span class="desc">C's layout verbatim — the fingerprint replaces the card artwork</span><a class="open" href="e-soft-cue-cards.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="e-soft-cue-cards.html" target="_blank"><img src="e-soft-cue-cards.png" alt="Soft Cue Cards prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">F</span><span class="name">The Cue List</span><span class="desc">rows, not cards — wide fingerprints, folder filter pills, most scannable</span><a class="open" href="f-cue-list.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="f-cue-list.html" target="_blank"><img src="f-cue-list.png" alt="Cue List prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">G</span><span class="name">The Desk</span><span class="desc">folder sidebar + continue hero with time ruler + compact card grid</span><a class="open" href="g-the-desk.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="g-the-desk.html" target="_blank"><img src="g-the-desk.png" alt="The Desk prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">H</span><span class="name">Postcards</span><span class="desc">big two-up cards washed in folder colour, white cue well + ruler inside</span><a class="open" href="h-postcards.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="h-postcards.html" target="_blank"><img src="h-postcards.png" alt="Postcards prototype" /></a></div>
+    </div>
+  </div>
+
+  <h2>Round 1 (for reference)</h2>
+  <div class="grid">
+    <div class="cell">
+      <div class="head"><span class="tag">A</span><span class="name">The Record Wall</span><span class="desc">dark · artwork-led shelves</span><a class="open" href="a-record-wall.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="a-record-wall.html" target="_blank"><img src="a-record-wall.png" alt="Record Wall prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">B</span><span class="name">The Cue Sheet</span><span class="desc">dark · annotation fingerprints</span><a class="open" href="b-cue-sheet.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="b-cue-sheet.html" target="_blank"><img src="b-cue-sheet.png" alt="Cue Sheet prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">C</span><span class="name">The Music Room</span><span class="desc">light · friendly consumer cards</span><a class="open" href="c-music-room.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="c-music-room.html" target="_blank"><img src="c-music-room.png" alt="Music Room prototype" /></a></div>
+    </div>
+    <div class="cell">
+      <div class="head"><span class="tag">D</span><span class="name">Liner Notes</span><span class="desc">light · editorial programme</span><a class="open" href="d-liner-notes.html" target="_blank">open live ↗</a></div>
+      <div class="scroll"><a class="shot" href="d-liner-notes.html" target="_blank"><img src="d-liner-notes.png" alt="Liner Notes prototype" /></a></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Light mode — contrast variants</title>
+<style>
+  /* ============================================================
+     Comparison plates for the light-mode contrast retune.
+     Rendered in the MONO palette (what the user runs) — every
+     variant is a structural change to the MODE tokens, so it
+     ports 1:1 to amber / cyan / vermilion / violet.
+     ============================================================ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: #232323; }
+  body {
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+    color: #d9d9d9;
+    padding: 40px 32px 80px;
+  }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .intro { max-width: 1080px; margin: 0 auto 8px; }
+  .intro h1 { font-size: 17px; font-weight: 700; color: #f0f0f0; letter-spacing: 0.02em; }
+  .intro p { font-size: 13px; color: #9d9d9d; margin-top: 6px; line-height: 1.5; max-width: 72ch; }
+  .plate { max-width: 1080px; margin: 44px auto 0; }
+  .plate-cap { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .plate-cap .num {
+    font-family: ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.2em; color: #efefef; text-transform: uppercase;
+    border: 1px solid #4a4a4a; padding: 3px 8px;
+  }
+  .plate-cap .name { font-size: 14px; font-weight: 700; color: #f0f0f0; }
+  .plate-cap .desc { font-size: 12.5px; color: #9d9d9d; }
+
+  /* ---------- the mock itself: one markup, zone-token'd ---------- */
+  .mock {
+    border: 1px solid #000;
+    box-shadow: 0 2px 24px rgb(0 0 0 / 0.5);
+    overflow: hidden;
+    font-size: 13px;
+    color: #222;
+    background: #fff;
+  }
+
+  /* Global header */
+  .hdr {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--hd-bg); color: var(--hd-tx);
+    border-bottom: 1px solid var(--hd-bd);
+    padding: 7px 14px;
+  }
+  .hdr .dot { color: var(--hd-led); font-size: 13px; }
+  .hdr .wordmark {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--hd-tx);
+  }
+  .hdr .hicon { color: var(--hd-mut); font-size: 13px; padding: 2px 4px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 1px solid var(--hd-bd);
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--hd-mut); padding: 3px 6px; border-radius: 2px;
+  }
+  .sp { flex: 1; }
+  .seg {
+    display: flex; gap: 1px; border: 1px solid var(--hd-bd);
+    background: var(--hd-well); padding: 1px; border-radius: 2px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .seg span { padding: 3px 8px; color: var(--hd-mut); border-radius: 1px; }
+  .seg .on { background: var(--hd-raised); color: var(--hd-tx); }
+  .meter { display: flex; gap: 2px; align-items: center; padding: 4px 6px; background: var(--hd-well); border: 1px solid var(--hd-bd); border-radius: 2px; }
+  .meter i { width: 3px; height: 9px; background: var(--hd-mut); opacity: 0.35; border-radius: 0.5px; }
+  .meter i:nth-child(-n + 3) { opacity: 0.8; }
+  .led {
+    display: flex; align-items: baseline; gap: 5px;
+    background: var(--hd-well); border: 1px solid var(--hd-bd);
+    padding: 4px 10px; border-radius: 2px;
+  }
+  .led .t { font-family: ui-monospace, Menlo, monospace; font-size: 15px; font-weight: 500; letter-spacing: 0.08em; color: var(--hd-led); }
+  .led .d { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; color: var(--hd-mut); }
+  .avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--hd-bd);
+    background: conic-gradient(#e07840, #7d9c5a, #4a7ba6, #a0689f, #e07840);
+  }
+
+  /* Sub-bar (track title) */
+  .sub {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--sb-bg); color: var(--sb-tx);
+    border-bottom: 1px solid var(--sb-bd);
+    padding: 9px 14px;
+  }
+  .sub .title { font-size: 14.5px; font-weight: 700; color: var(--sb-tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub button {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: none; border: 1px solid var(--sb-bd); border-radius: 2px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--sb-mut); padding: 5px 9px; white-space: nowrap;
+  }
+
+  /* Columns */
+  .cols { display: flex; min-height: 430px; }
+  .left { width: 39%; border-right: 1px solid var(--tb-bd); display: flex; flex-direction: column; background: var(--ch-bg); }
+  .right { width: 61%; display: flex; flex-direction: column; background: #fff; }
+
+  /* Panel title bars */
+  .tb {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--tb-bg); color: var(--tb-tx);
+    border-bottom: 1px solid var(--tb-bd);
+    padding: 8px 12px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 10px;
+    letter-spacing: 0.25em; text-transform: uppercase;
+  }
+  .tb .r { letter-spacing: 0.08em; display: flex; align-items: center; gap: 10px; }
+  .tb .tseg { display: flex; gap: 1px; border: 1px solid var(--tb-bd); padding: 1px; letter-spacing: 0.08em; }
+  .tb .tseg span { padding: 2px 7px; }
+  .tb .tseg .on { background: var(--ch-raised); color: var(--ch-tx); }
+
+  /* Player well + transport */
+  .video { height: 128px; background: #000; display: flex; align-items: center; justify-content: center; }
+  .video .ply { width: 0; height: 0; border-left: 22px solid #ddd; border-top: 13px solid transparent; border-bottom: 13px solid transparent; }
+  .transport { padding: 10px 12px 8px; border-bottom: 1px solid var(--ch-bd); }
+  .trow1 { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--ch-tx); }
+  .trow1 .dim { color: var(--ch-mut); }
+  .scrub { flex: 1; height: 3px; background: var(--ch-well); border-radius: 2px; position: relative; }
+  .scrub i { position: absolute; left: 0; top: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--ch-mut); }
+  .mini { font-size: 9px; border: 1px solid var(--ch-bd); padding: 2px 5px; border-radius: 2px; color: var(--ch-mut); }
+  .vol { width: 52px; height: 3px; background: var(--ch-mut); border-radius: 2px; }
+  .trow2 { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .trow2 button {
+    background: none; border: 1px solid var(--ch-bd); border-radius: 2px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
+    color: var(--ch-mut); padding: 6px 10px; white-space: nowrap;
+  }
+  .trow2 .play {
+    background: var(--ch-acc); color: var(--ch-onacc); border-color: var(--ch-acc);
+    font-family: system-ui, sans-serif; font-size: 12.5px; font-weight: 600; padding: 6px 18px;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 3px rgb(0 0 0 / 0.25);
+  }
+  .thint { margin-top: 9px; text-align: center; font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em; color: var(--ch-mut); text-transform: uppercase; }
+  .thint kbd { border: 1px solid var(--ch-bd); padding: 1px 5px; border-radius: 2px; margin: 0 2px; }
+
+  /* Overview rail */
+  .rail { padding: 10px 12px 12px; flex: 1; }
+  .bands { display: flex; gap: 2px; }
+  .band { flex: 1; font-family: ui-monospace, Menlo, monospace; font-size: 8.5px; letter-spacing: 0.04em; padding-bottom: 3px; white-space: nowrap; overflow: hidden; }
+  .band i { display: block; height: 0; border-top: 2px solid currentColor; margin-top: 3px; }
+  .band em { display: block; font-style: normal; margin-top: 4px; letter-spacing: 0.18em; opacity: 0.9; }
+  .diam { display: flex; gap: 3px; margin-top: 6px; }
+  .diam i { width: 6px; height: 6px; transform: rotate(45deg); }
+  .ticks { display: flex; justify-content: space-between; font-family: ui-monospace, Menlo, monospace; font-size: 9px; color: var(--ch-mut); margin-top: 8px; border-top: 1px solid var(--ch-bd); padding-top: 5px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; color: var(--ch-mut); text-transform: uppercase; }
+  .legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+
+  /* Notes page (always literal white) */
+  .page { flex: 1; background: #fff; overflow: hidden; }
+  .note { padding: 12px 18px 14px; border-bottom: 1px solid #d6d6d6; position: relative; }
+  .note.active { background: #ececec; }
+  .note.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #e8983d; }
+  .note.t2::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #87b04f; }
+  .nhead { display: flex; align-items: center; gap: 8px; }
+  .tc {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.05em; padding: 3px 8px; border-radius: 2px; color: #1d1d1d; white-space: nowrap;
+  }
+  .tc.plain { background: #f3ead9; }
+  .tc.range { background: #e8983d; }
+  .tc.green { background: #9ccb63; }
+  .tag {
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase; border: 1px solid #b2b2b2; color: #555;
+    padding: 3px 7px; border-radius: 2px; white-space: nowrap;
+  }
+  .len { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; color: #555; }
+  .playing { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.1em; color: #222; text-transform: uppercase; }
+  .note h3 { font-size: 16px; font-weight: 700; color: #111; margin-top: 10px; }
+  .note h3.u { text-decoration: underline; }
+  .note p { font-size: 12px; line-height: 1.55; color: #2a2a2a; margin-top: 7px; max-width: 72ch; }
+  .note p b { color: #111; }
+
+  /* ============================================================
+     ZONE TOKENS PER VARIANT — mono palette.
+     light set:  page #fff · panel #f2f2f2 · raised #ececec ·
+                 inset #e0e0e0 · border #b2b2b2 · text #222 ·
+                 muted #555 · accent #2b2b2b (white text)
+     dark set:   ink #161616 · panel #1d1d1d · raised #262626 ·
+                 inset #101010 · border #333 · text #e6e6e6 ·
+                 muted #a0a0a0 · accent #f0f0f0 (dark text)
+     ============================================================ */
+
+  /* 0 · CURRENT — everything near-white */
+  .v-cur {
+    --hd-bg:#f2f2f2; --hd-tx:#222; --hd-mut:#555; --hd-bd:#b2b2b2; --hd-led:#111; --hd-well:#e0e0e0; --hd-raised:#ececec;
+    --sb-bg:#f2f2f2; --sb-tx:#111; --sb-mut:#555; --sb-bd:#b2b2b2;
+    --tb-bg:#ececec; --tb-tx:#555; --tb-bd:#b2b2b2;
+    --ch-bg:#f2f2f2; --ch-tx:#222; --ch-mut:#555; --ch-bd:#b2b2b2; --ch-well:#e0e0e0; --ch-raised:#ececec;
+    --ch-acc:#2b2b2b; --ch-onacc:#fff;
+  }
+
+  /* 1 · GRAPHITE FRAME — chrome drops to a decisive mid-gray; still a light theme */
+  .v-graphite {
+    --hd-bg:#c7c7c7; --hd-tx:#1a1a1a; --hd-mut:#454545; --hd-bd:#8c8c8c; --hd-led:#0e0e0e; --hd-well:#b5b5b5; --hd-raised:#bdbdbd;
+    --sb-bg:#d4d4d4; --sb-tx:#111; --sb-mut:#3f3f3f; --sb-bd:#8c8c8c;
+    --tb-bg:#c2c2c2; --tb-tx:#383838; --tb-bd:#8c8c8c;
+    --ch-bg:#d4d4d4; --ch-tx:#1a1a1a; --ch-mut:#454545; --ch-bd:#9a9a9a; --ch-well:#bcbcbc; --ch-raised:#c9c9c9;
+    --ch-acc:#222222; --ch-onacc:#fff;
+  }
+
+  /* 2 · DARK MASTHEAD — one dark bar anchors the page; the rest stays daylit */
+  .v-masthead {
+    --hd-bg:#1d1d1d; --hd-tx:#e6e6e6; --hd-mut:#a0a0a0; --hd-bd:#333; --hd-led:#f0f0f0; --hd-well:#101010; --hd-raised:#2e2e2e;
+    --sb-bg:#f2f2f2; --sb-tx:#111; --sb-mut:#555; --sb-bd:#b2b2b2;
+    --tb-bg:#ececec; --tb-tx:#555; --tb-bd:#b2b2b2;
+    --ch-bg:#f2f2f2; --ch-tx:#222; --ch-mut:#555; --ch-bd:#b2b2b2; --ch-well:#e0e0e0; --ch-raised:#ececec;
+    --ch-acc:#2b2b2b; --ch-onacc:#fff;
+  }
+
+  /* 3 · INK STRIPS — dark masthead + dark panel title bars (silkscreened gear labels) */
+  .v-strips {
+    --hd-bg:#1d1d1d; --hd-tx:#e6e6e6; --hd-mut:#a0a0a0; --hd-bd:#333; --hd-led:#f0f0f0; --hd-well:#101010; --hd-raised:#2e2e2e;
+    --sb-bg:#f2f2f2; --sb-tx:#111; --sb-mut:#555; --sb-bd:#b2b2b2;
+    --tb-bg:#1d1d1d; --tb-tx:#a8a8a8; --tb-bd:#333;
+    --ch-bg:#f2f2f2; --ch-tx:#222; --ch-mut:#555; --ch-bd:#b2b2b2; --ch-well:#e0e0e0; --ch-raised:#ececec;
+    --ch-acc:#2b2b2b; --ch-onacc:#fff;
+  }
+
+  /* 4 · DARK BENCH — the whole instrument chrome goes dark; the score stays a white well */
+  .v-bench {
+    --hd-bg:#1d1d1d; --hd-tx:#e6e6e6; --hd-mut:#a0a0a0; --hd-bd:#333; --hd-led:#f0f0f0; --hd-well:#101010; --hd-raised:#2e2e2e;
+    --sb-bg:#161616; --sb-tx:#e6e6e6; --sb-mut:#a0a0a0; --sb-bd:#333;
+    --tb-bg:#262626; --tb-tx:#a0a0a0; --tb-bd:#333;
+    --ch-bg:#1d1d1d; --ch-tx:#e6e6e6; --ch-mut:#a0a0a0; --ch-bd:#333; --ch-well:#101010; --ch-raised:#2e2e2e;
+    --ch-acc:#f0f0f0; --ch-onacc:#161616;
+  }
+  /* in the bench, the active-segment chips inside light zones flip too */
+  .v-bench .tb .tseg .on { background: #2e2e2e; color: #e6e6e6; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Light mode — contrast variants</h1>
+    <p>
+      Five plates, same screen. Shown in the Mono palette (what you're running); every option
+      is a structural retune of the light-mode tokens, so it carries to Amber / Cyan / Vermilion /
+      Violet automatically. The notes page and canvas stay literal white in all of them.
+    </p>
+  </div>
+
+  <template id="mock-t">
+    <div class="mock">
+      <div class="hdr">
+        <span class="dot">◉</span>
+        <span class="wordmark">Sound&nbsp;Annotator</span>
+        <span class="hicon">⌂</span>
+        <span class="chip">◎ View only</span>
+        <div class="sp"></div>
+        <div class="seg"><span class="on">✎ Edit</span><span>◎ View</span></div>
+        <span class="hicon">⌨</span>
+        <span class="hicon">◐</span>
+        <div class="meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="led"><span class="t">0:00</span><span class="d">/ 21:20</span></div>
+        <div class="avatar"></div>
+        <span class="hicon">⎋</span>
+      </div>
+      <div class="sub">
+        <span class="title">BACKUP_Storm Chasers - Concerto for Timpani and Wind Symphony</span>
+        <div class="sp"></div>
+        <button>▷ YouTube</button><button>⛶ Fit</button><button>⇩ PDF</button><button>⌁ Share</button>
+      </div>
+      <div class="cols">
+        <div class="left">
+          <div class="tb"><span>Player</span><span class="r">YouTube</span></div>
+          <div class="video"><div class="ply"></div></div>
+          <div class="transport">
+            <div class="trow1 mono"><span>0:00</span><div class="scrub"><i></i></div><span class="dim">21:20</span><span class="mini">1×</span><div class="vol"></div></div>
+            <div class="trow2">
+              <button>|◁</button><button>« 5s</button><button>‹ 1s</button>
+              <button class="play">▷ Play</button>
+              <button>1s ›</button><button>5s »</button><button>▷|</button>
+            </div>
+            <div class="thint"><kbd>Space</kbd> play <kbd>←</kbd><kbd>→</kbd> seek <kbd>?</kbd> all</div>
+          </div>
+          <div class="tb"><span>⌄ Overview</span><span class="r">⊖ Fit ⊕</span></div>
+          <div class="rail">
+            <div class="bands">
+              <div class="band" style="color:#c97a18"><em>1. SUPERCELL</em><i></i><div class="diam"><i style="background:#c97a18"></i><i style="background:#c97a18"></i><i style="background:#c97a18"></i><i style="background:#c97a18"></i></div></div>
+              <div class="band" style="color:#d4527e"><em>2. BITTERSWEET</em><i></i><div class="diam"><i style="background:#d4527e"></i><i style="background:#d4527e"></i><i style="background:#d4527e"></i></div></div>
+              <div class="band" style="color:#4a7ba6"><em>3. EARLY WARN…</em><i></i><div class="diam"><i style="background:#4a7ba6"></i><i style="background:#4a7ba6"></i><i style="background:#4a7ba6"></i></div></div>
+            </div>
+            <div class="ticks"><span>0:00</span><span>5:00</span><span>10:00</span><span>15:00</span><span>21:20</span></div>
+            <div class="legend">
+              <span style="--c:#e8983d"><i></i>War theme 5</span>
+              <span style="--c:#8a8a8a"><i></i>Comment 4</span>
+              <span style="--c:#87b04f"><i></i>Thunder theme 4</span>
+              <span style="--c:#d4527e"><i></i>Timpani solo 4</span>
+              <span style="--c:#4a7ba6"><i></i>Rebuilding theme 4</span>
+              <span style="--c:#3bb6a6"><i></i>Morse code theme 3</span>
+            </div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="tb">
+            <span>Notes</span>
+            <span class="r">⌕ <span class="tseg"><span class="on">Timeline</span><span>Live</span></span> 63 notes</span>
+          </div>
+          <div class="page">
+            <div class="note">
+              <div class="nhead"><span class="tc plain">▶ 0:00</span><span class="tag">● Comment</span><span class="playing">● Playing</span></div>
+              <h3 class="u">Storm Chasers - Concerto for Timpani and Wind Symphony</h3>
+              <p><b>Year of composition:</b> 2023 &nbsp;·&nbsp; <b>Duration:</b> 16 minutes &nbsp;·&nbsp; <b>Difficulty level:</b> Grade 5+</p>
+              <p><b>World premiere:</b> 28 May 2023, Melbourne Recital Centre, Australia. University of Melbourne Wind Symphony (Nicholas Williams, conductor; Brent Miller, soloist).</p>
+            </div>
+            <div class="note active">
+              <div class="nhead"><span class="tc range">▶ 0:02–6:29 ⟳</span><span class="tag">● Comment</span><span class="len">(6:27 long)</span></div>
+              <h3>1. Supercell</h3>
+              <p>A supercell is a type of thunderstorm. It may impact weather in a wide area (tens of kilometres), often lasting for hours. While commonly associated with the North American tornado alley, supercells can develop in Queensland frequently during the storm season. The music in the first movement is nervous and, at times, ominous.</p>
+            </div>
+            <div class="note t2">
+              <div class="nhead"><span class="tc green">▶ 0:04–0:12 ⟳</span><span class="tag">● Thunder theme</span><span class="len">(0:08 long)</span></div>
+              <p>A quiet tremolo on timpani resembles an ominous roll of thunder somewhere in the distance.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const variants = [
+      ['v-cur',      '0 · Current',        'As shipped — every chrome zone sits within a few percent of white.'],
+      ['v-graphite', '1 · Graphite frame', 'All chrome drops to a decisive mid-gray. Still fully a light theme; the white page clearly reads as the brightest thing on screen.'],
+      ['v-masthead', '2 · Dark masthead',  'The app header alone goes dark and anchors the page; the LED clock reads like hardware again. Everything below stays daylit.'],
+      ['v-strips',   '3 · Ink strips',     'Dark masthead plus dark panel title bars — thin silkscreen bands carry the structure; the body chrome stays light.'],
+      ['v-bench',    '4 · Dark bench',     'The whole instrument chrome goes dark; the score and canvas stay white wells set into it. The strongest contrast — “a white score on the bench”, literally.'],
+    ];
+    const t = document.getElementById('mock-t');
+    for (const [cls, name, desc] of variants) {
+      const plate = document.createElement('div');
+      plate.className = 'plate';
+      const cap = document.createElement('div');
+      cap.className = 'plate-cap';
+      cap.innerHTML = `<span class="num">${name.slice(0, 1)}</span><span class="name">${name.slice(4)}</span><span class="desc">${desc}</span>`;
+      plate.appendChild(cap);
+      const mock = t.content.firstElementChild.cloneNode(true);
+      mock.classList.add(cls);
+      plate.appendChild(mock);
+      document.body.appendChild(plate);
+    }
+  </script>
+</body>
+</html>

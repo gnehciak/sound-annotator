@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>M — Station Cards (layout I, existing design language)</title>
+<script>
+  // ?theme=dark|light (default light) — mirrors the app's data-theme axis.
+  document.documentElement.dataset.theme =
+    new URLSearchParams(location.search).get('theme') || 'light';
+</script>
+<style>
+  /* Real app tokens (amber palette), both modes. */
+  [data-theme='dark'] {
+    --ink: #1a1813; --panel: #211f18; --raised: #2a271f; --inset: #131210;
+    --line: #38342b; --line-strong: #4d473a;
+    --fg: #e9e4d8; --fg-strong: #ffffff; --muted: #a89e8a;
+    --accent: #f5a623; --accent-ink: #f5a623; --onbright: #1a1813;
+    --bevel-inset: inset 0 1px 3px rgb(0 0 0 / 0.6);
+    --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 3px rgb(0 0 0 / 0.32);
+    color-scheme: dark;
+  }
+  [data-theme='light'] {
+    --ink: #ffffff; --panel: #f5f5f2; --raised: #f0efeb; --inset: #e5e3dc;
+    --line: #b8b4a6; --line-strong: #84806f;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05; --onbright: #1a1813;
+    --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.12);
+    --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 -2px 3px rgb(0 0 0 / 0.16);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--ink); color: var(--fg); font-family: system-ui, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; }
+
+  /* Dark masthead — constant across modes (.chrome-dark zone). */
+  header {
+    height: 48px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; background: #211f18; border-bottom: 1px solid #38342b;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; font: 600 11px ui-monospace, Menlo, monospace; letter-spacing: .25em; color: #a89e8a; text-transform: uppercase; }
+  .wordmark i { width: 8px; height: 8px; background: #f5a623; display: block; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: #2a271f; border: 1px solid #4d473a; display: grid; place-items: center; font: 600 10px ui-monospace, monospace; color: #a89e8a; }
+
+  .content { max-width: 1180px; margin: 0 auto; padding: 32px 32px 80px; }
+
+  .hello { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+  .hello h1 { font-size: 20px; font-weight: 650; color: var(--fg-strong); letter-spacing: -.01em; }
+  .hello p { margin-top: 5px; font-size: 13px; color: var(--muted); }
+  .actions { display: flex; gap: 10px; }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 600 11px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--fg); background: var(--raised); border: 1px solid var(--line);
+    border-radius: 2px; padding: 8px 12px; cursor: pointer;
+  }
+  .btn-accent {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 600 11px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent-ink); background: rgb(from var(--accent) r g b / .1);
+    border: 1px solid rgb(from var(--accent) r g b / .7);
+    border-radius: 2px; padding: 8px 12px; cursor: pointer;
+  }
+
+  .search { position: relative; max-width: 520px; margin-bottom: 30px; }
+  .search input {
+    width: 100%; background: var(--inset); border: 1px solid var(--line); border-radius: 2px;
+    box-shadow: var(--bevel-inset);
+    color: var(--fg); font: 400 13.5px system-ui, sans-serif; padding: 10px 14px 10px 36px; outline: none;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search::before { content: '⌕'; position: absolute; left: 12px; top: 50%; transform: translateY(-54%); color: var(--muted); font-size: 16px; }
+
+  .h-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .h-row h2 { font: 600 10px ui-monospace, monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .h-row a { font: 500 11px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); text-decoration: none; }
+
+  .folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 36px; }
+  .folder {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 2px;
+    padding: 12px 14px; cursor: pointer;
+  }
+  .folder:hover { border-color: var(--line-strong); }
+  .folder.new { border-style: dashed; background: none; color: var(--muted); justify-content: center; font: 600 11px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .ficon { width: 34px; height: 34px; border-radius: 2px; display: grid; place-items: center; flex: none; }
+  .ficon svg { width: 17px; height: 17px; }
+  .fname { font-size: 14px; font-weight: 600; color: var(--fg-strong); letter-spacing: .01em; }
+  .fcount { margin-top: 3px; font: 500 10px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 2px;
+    overflow: hidden; cursor: pointer;
+  }
+  .card:hover, .card.hover { border-color: var(--line-strong); }
+  .art { position: relative; aspect-ratio: 16/9; background: var(--inset); border-bottom: 1px solid var(--line); }
+  .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .art svg.wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dur {
+    position: absolute; right: 6px; bottom: 6px; padding: 2px 6px;
+    background: rgb(19 18 16 / .82); border-radius: 2px;
+    font: 500 10px ui-monospace, monospace; letter-spacing: .08em; color: #e9e4d8;
+    font-variant-numeric: tabular-nums;
+  }
+  .card.hover .art::after { content: ''; position: absolute; inset: 0; background: rgb(19 18 16 / .42); }
+  .card.hover .playkey {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 42px; height: 42px; background: var(--accent); border-radius: 2px;
+    box-shadow: var(--bevel-raised);
+    display: grid; place-items: center; z-index: 2;
+  }
+  .card.hover .playkey::before { content: ''; border-style: solid; border-width: 7px 0 7px 12px; border-color: transparent transparent transparent var(--onbright); margin-left: 3px; }
+  .playkey { display: none; }
+  .card.hover .rowicons { opacity: 1; }
+
+  .cue { position: relative; height: 12px; margin: 10px 14px 0; }
+  .cue svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .body { padding: 7px 14px 13px; }
+  .titlerow { display: flex; align-items: flex-start; gap: 8px; }
+  .title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--fg-strong); letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rowicons { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity .12s; }
+  .rowicons button { background: none; border: none; border-radius: 2px; padding: 3px; color: var(--muted); cursor: pointer; line-height: 0; }
+  .rowicons button:hover { background: var(--raised); color: var(--fg); }
+  .rowicons svg { width: 13px; height: 13px; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 6px; font: 500 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 2px; padding: 1px 5px; }
+  .chip.shared { border-color: rgb(from var(--accent) r g b / .6); background: rgb(from var(--accent) r g b / .1); color: var(--accent-ink); }
+  .chip.cont { border-color: rgb(from var(--accent) r g b / .6); background: rgb(from var(--accent) r g b / .1); color: var(--accent-ink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="hello">
+    <div>
+      <h1>Good afternoon, Lawrence</h1>
+      <p>Pick up a track, or bring in something new to annotate.</p>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost">⊞ New folder</button>
+      <button class="btn-accent">＋ New track</button>
+    </div>
+  </div>
+
+  <div class="search"><input placeholder="Search your tracks and folders…" /></div>
+
+  <div class="h-row"><h2>Folders</h2></div>
+  <div class="folders">
+    <div class="folder">
+      <div class="ficon" style="background:rgb(42 157 143 / .12)">
+        <svg viewBox="0 0 24 24" fill="none" class="fhue" data-dark="#3bb6a6" data-light="#1d6e64" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Year 10 — Set Works</div><div class="fcount">4 tracks · 75 notes</div></div>
+    </div>
+    <div class="folder">
+      <div class="ficon" style="background:rgb(124 92 214 / .12)">
+        <svg viewBox="0 0 24 24" fill="none" class="fhue" data-dark="#a07bf0" data-light="#5b3fb0" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Jazz Unit</div><div class="fcount">2 tracks · 27 notes</div></div>
+    </div>
+    <div class="folder">
+      <div class="ficon" style="background:rgb(59 130 196 / .12)">
+        <svg viewBox="0 0 24 24" fill="none" class="fhue" data-dark="#5aa8e6" data-light="#2b6499" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Film Music</div><div class="fcount">2 tracks · 23 notes</div></div>
+    </div>
+    <div class="folder new">＋ New folder</div>
+  </div>
+
+  <div class="h-row"><h2>Recent tracks</h2><a href="#">All 11 →</a></div>
+  <div class="grid">
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/sUgoBb8m1eE/mqdefault.jpg" alt="" /><span class="dur">15:50</span></div>
+      <div class="cue" data-seed="11" data-n="24" data-head=".49"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Boléro — Maurice Ravel</span></div>
+        <div class="meta"><span>24 notes</span><span>·</span><span>2 h ago</span><span class="chip cont">▸ 07:42</span></div>
+      </div>
+    </div>
+    <div class="card hover">
+      <div class="art"><img src="https://i.ytimg.com/vi/zqNTltOGh5c/mqdefault.jpg" alt="" /><span class="dur">9:22</span><span class="playkey"></span></div>
+      <div class="cue" data-seed="83" data-n="18"></div>
+      <div class="body">
+        <div class="titlerow">
+          <span class="title">So What — Miles Davis</span>
+          <span class="rowicons">
+            <button title="Move to folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M12 11v6M9 14l3-3 3 3" stroke-linecap="round"/></svg></button>
+            <button title="Delete track"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
+          </span>
+        </div>
+        <div class="meta"><span>18 notes</span><span>·</span><span>yesterday</span><span class="chip">Jazz Unit</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/CvFH_6DNRCY/mqdefault.jpg" alt="" /><span class="dur">5:12</span></div>
+      <div class="cue" data-seed="23" data-n="31"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Clair de Lune — Debussy</span></div>
+        <div class="meta"><span>31 notes</span><span>·</span><span>3 d ago</span><span class="chip shared">◉ Shared</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/2ZBtPf7FOoM/mqdefault.jpg" alt="" /><span class="dur">3:01</span></div>
+      <div class="cue" data-seed="41" data-n="27"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Killer Queen — Queen</span></div>
+        <div class="meta"><span>27 notes</span><span>·</span><span>4 d ago</span><span class="chip">Year 10</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/fJ9rUzIMcZQ/mqdefault.jpg" alt="" /><span class="dur">5:55</span></div>
+      <div class="cue" data-seed="57" data-n="22"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Bohemian Rhapsody — Queen</span></div>
+        <div class="meta"><span>22 notes</span><span>·</span><span>5 d ago</span><span class="chip">Year 10</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art" data-wave="61"><span class="dur">4:06</span></div>
+      <div class="cue" data-seed="61" data-n="14"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Music for a While — Purcell</span></div>
+        <div class="meta"><span>♪ audio</span><span>·</span><span>14 notes</span><span>·</span><span>1 w ago</span><span class="chip">Year 10</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/hTWKbfoikeg/mqdefault.jpg" alt="" /><span class="dur">5:01</span></div>
+      <div class="cue" data-seed="71" data-n="12"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Smells Like Teen Spirit — Nirvana</span></div>
+        <div class="meta"><span>12 notes</span><span>·</span><span>1 w ago</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="art"><img src="https://i.ytimg.com/vi/RxabLA7UQ9k/mqdefault.jpg" alt="" /><span class="dur">4:35</span></div>
+      <div class="cue" data-seed="127" data-n="16"></div>
+      <div class="body">
+        <div class="titlerow"><span class="title">Time — Hans Zimmer</span></div>
+        <div class="meta"><span>16 notes</span><span>·</span><span>1 mo ago</span><span class="chip">Film Music</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const light = document.documentElement.dataset.theme === 'light';
+  // Note data palette: raw fills in dark, ink-mixed in light (hueText rule).
+  const HUES = light
+    ? ['#1d6e64', '#5b3fb0', '#b03a52', '#2b6499', '#a85408', '#4f7d26']
+    : ['#3bb6a6', '#a07bf0', '#ef6f8b', '#5aa8e6', '#ef8b4b', '#9ccb63'];
+  const TRACK = light ? 'rgb(28 26 22 / .1)' : 'rgb(255 255 255 / .1)';
+  const AMBER = light ? '#cc7a0a' : '#f5a623';
+  document.querySelectorAll('.fhue').forEach(el => {
+    el.setAttribute('stroke', light ? el.dataset.light : el.dataset.dark);
+  });
+  function cueline(seed, count, playhead) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 1000, H = 100;
+    let marks = `<rect x="0" y="46" width="${W}" height="8" fill="${TRACK}"/>`;
+    const positions = Array.from({ length: count }, () => rnd()).sort();
+    positions.forEach(p => {
+      const hue = HUES[Math.floor(rnd() * HUES.length)];
+      rnd(); rnd();
+      const x = 4 + p * (W - 8);
+      marks += `<rect x="${x.toFixed(0)}" y="16" width="7" height="68" fill="${hue}"/>`;
+    });
+    if (playhead) {
+      const x = 4 + playhead * (W - 8);
+      marks += `<rect x="${x - 5}" y="4" width="17" height="92" fill="${AMBER}"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  }
+  document.querySelectorAll('.cue').forEach(el => {
+    el.insertAdjacentHTML('afterbegin',
+      cueline(+el.dataset.seed, +el.dataset.n, el.dataset.head ? +el.dataset.head : 0));
+  });
+  function wave(seed) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const hue = light ? '#1d6e64' : '#3bb6a6';
+    const W = 320, H = 180, n = 26, bw = 4;
+    const gap = (W - 60 - n * bw) / (n - 1);
+    let bars = '';
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1), env = Math.sin(t * Math.PI) ** 0.6;
+      const bh = 8 + rnd() * 80 * (0.3 + 0.7 * env);
+      bars += `<rect x="${(30 + i * (bw + gap)).toFixed(1)}" y="${(H/2 - bh/2).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="1" fill="${hue}"/>`;
+    }
+    return `<svg class="wave" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${bars}</svg>`;
+  }
+  document.querySelectorAll('.art[data-wave]').forEach(el => {
+    el.insertAdjacentHTML('afterbegin', wave(+el.dataset.wave));
+  });
+</script>
+</body>
+</html>

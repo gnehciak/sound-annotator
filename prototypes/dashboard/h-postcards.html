@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>H — Postcards</title>
+<style>
+  :root {
+    --page: #ffffff; --panel: #f5f5f2; --raised: #f0efeb;
+    --line: #d6d3c8; --line-mid: #b8b4a6;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; background: var(--page); border-bottom: 1px solid var(--line);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.01em; }
+  .wordmark i { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; }
+  .wordmark i::before { content: ''; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent #fff; margin-left: 2px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-mid); display: grid; place-items: center; font: 600 11px var(--sans); color: var(--muted); }
+
+  .content { max-width: 1080px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+  .hello h1 { font-size: 28px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.02em; }
+  .hello p { margin-top: 6px; font-size: 14.5px; color: var(--muted); }
+  .hello-right { display: flex; gap: 12px; align-items: center; }
+  .search { position: relative; width: 300px; }
+  .search input {
+    width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--fg); font: 400 14px var(--sans); padding: 10px 14px 10px 38px; outline: none;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search::before { content: '⌕'; position: absolute; left: 13px; top: 50%; transform: translateY(-55%); color: var(--muted); font-size: 17px; }
+  .new-track {
+    flex: none; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    font: 600 14px var(--sans); padding: 10px 16px; cursor: pointer;
+    box-shadow: 0 1px 2px rgb(28 26 22 / .18);
+  }
+
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 500 13px var(--sans); color: var(--fg);
+    background: var(--page); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .pill .n { font-size: 12px; color: var(--muted); }
+  .pill.active { background: var(--fg-strong); border-color: var(--fg-strong); color: #fff; }
+  .pill.active .n { color: #cfcabe; }
+
+  /* Postcards: 2-up, each washed in its folder hue, white cue well inside */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card {
+    border-radius: 18px; padding: 20px 22px; cursor: pointer;
+    border: 1px solid rgb(28 26 22 / .07);
+  }
+  .card.hover { box-shadow: 0 6px 20px rgb(28 26 22 / .13); }
+  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 4px; }
+  .title { font-size: 17px; font-weight: 650; color: var(--fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fchip { flex: none; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgb(255 255 255 / .65); }
+  .meta { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .well { position: relative; background: var(--page); border: 1px solid rgb(28 26 22 / .08); border-radius: 12px; height: 64px; overflow: hidden; }
+  .well svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ruler { display: flex; justify-content: space-between; margin-top: 8px; font: 500 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .foot .notes { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+  .resume-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    font: 600 13px var(--sans); padding: 8px 14px; cursor: pointer;
+  }
+  .open-link { font-size: 13px; font-weight: 600; color: var(--accent-ink); background: none; border: none; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="hello">
+    <div>
+      <h1>Good afternoon, Lawrence</h1>
+      <p>Every card is a track — its colours are your notes, drawn where they land in the music.</p>
+    </div>
+    <div class="hello-right">
+      <div class="search"><input placeholder="Search tracks…" /></div>
+      <button class="new-track">＋ New track</button>
+    </div>
+  </div>
+
+  <div class="pills">
+    <button class="pill active">All <span class="n">12</span></button>
+    <button class="pill"><span class="dot" style="background:#2a9d8f"></span>Year 10 — Set Works <span class="n">4</span></button>
+    <button class="pill"><span class="dot" style="background:#7c5cd6"></span>Jazz Unit <span class="n">3</span></button>
+    <button class="pill"><span class="dot" style="background:#3b82c4"></span>Film Music <span class="n">2</span></button>
+    <button class="pill">＋ New folder</button>
+  </div>
+
+  <div class="grid">
+    <div class="card" style="background:#cc7a0a14">
+      <div class="card-top"><div class="title">Boléro — Maurice Ravel</div><span class="fchip" style="color:#874e05">Continue</span></div>
+      <div class="meta">24 notes · you stopped at 07:42 · 2 hours ago</div>
+      <div class="well" data-seed="11" data-n="24" data-head=".49"></div>
+      <div class="ruler"><span>0:00</span><span>7:55</span><span>15:50</span></div>
+      <div class="foot"><span class="notes">24 notes</span><button class="resume-btn">▶ Continue</button></div>
+    </div>
+    <div class="card hover" style="background:#7c5cd612">
+      <div class="card-top"><div class="title">So What — Miles Davis</div><span class="fchip" style="color:#5b3fb0">Jazz Unit</span></div>
+      <div class="meta">18 notes · updated yesterday</div>
+      <div class="well" data-seed="83" data-n="18"></div>
+      <div class="ruler"><span>0:00</span><span>4:41</span><span>9:22</span></div>
+      <div class="foot"><span class="notes">18 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#f5f5f2">
+      <div class="card-top"><div class="title">Clair de Lune — Debussy</div><span class="fchip" style="color:#1d6e64">Shared</span></div>
+      <div class="meta">31 notes · updated 3 days ago</div>
+      <div class="well" data-seed="23" data-n="31"></div>
+      <div class="ruler"><span>0:00</span><span>2:36</span><span>5:12</span></div>
+      <div class="foot"><span class="notes">31 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#2a9d8f12">
+      <div class="card-top"><div class="title">Killer Queen — Queen</div><span class="fchip" style="color:#1d6e64">Year 10</span></div>
+      <div class="meta">27 notes · updated 4 days ago</div>
+      <div class="well" data-seed="41" data-n="27"></div>
+      <div class="ruler"><span>0:00</span><span>1:30</span><span>3:01</span></div>
+      <div class="foot"><span class="notes">27 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#2a9d8f12">
+      <div class="card-top"><div class="title">Defying Gravity — Wicked</div><span class="fchip" style="color:#1d6e64">Year 10</span></div>
+      <div class="meta">19 notes · updated last week</div>
+      <div class="well" data-seed="53" data-n="19"></div>
+      <div class="ruler"><span>0:00</span><span>2:59</span><span>5:58</span></div>
+      <div class="foot"><span class="notes">19 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#7c5cd612">
+      <div class="card-top"><div class="title">Take Five — Dave Brubeck</div><span class="fchip" style="color:#5b3fb0">Jazz Unit</span></div>
+      <div class="meta">9 notes · updated 2 weeks ago</div>
+      <div class="well" data-seed="97" data-n="9"></div>
+      <div class="ruler"><span>0:00</span><span>2:42</span><span>5:24</span></div>
+      <div class="foot"><span class="notes">9 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#3b82c412">
+      <div class="card-top"><div class="title">Duel of the Fates — John Williams</div><span class="fchip" style="color:#2b6499">Film Music</span></div>
+      <div class="meta">13 notes · updated a month ago</div>
+      <div class="well" data-seed="113" data-n="13"></div>
+      <div class="ruler"><span>0:00</span><span>2:07</span><span>4:14</span></div>
+      <div class="foot"><span class="notes">13 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+    <div class="card" style="background:#3b82c412">
+      <div class="card-top"><div class="title">Time — Hans Zimmer</div><span class="fchip" style="color:#2b6499">Film Music</span></div>
+      <div class="meta">16 notes · updated a month ago</div>
+      <div class="well" data-seed="127" data-n="16"></div>
+      <div class="ruler"><span>0:00</span><span>2:17</span><span>4:35</span></div>
+      <div class="foot"><span class="notes">16 notes</span><button class="open-link">Open track →</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const HUES = ['#2a9d8f', '#7c5cd6', '#d6536f', '#3b82c4', '#d9700f', '#6a9b2e'];
+  function fingerprint(seed, count, playhead) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 1000, H = 100;
+    let marks = '';
+    const positions = Array.from({ length: count }, () => rnd()).sort();
+    positions.forEach(p => {
+      const hue = HUES[Math.floor(rnd() * HUES.length)];
+      const ranged = rnd() < 0.22;
+      const x = 10 + p * (W - 20);
+      if (ranged) {
+        const w = 25 + rnd() * 70;
+        marks += `<rect x="${x.toFixed(0)}" y="26" width="${w.toFixed(0)}" height="${H - 52}" rx="4" fill="${hue}" fill-opacity=".3"/>`
+          + `<rect x="${x.toFixed(0)}" y="26" width="4" height="${H - 52}" rx="2" fill="${hue}"/>`;
+      } else {
+        marks += `<rect x="${x.toFixed(0)}" y="20" width="4" height="${H - 40}" rx="2" fill="${hue}"/>`;
+      }
+    });
+    if (playhead) {
+      const x = 10 + playhead * (W - 20);
+      marks += `<rect x="${x}" y="0" width="3" height="${H}" fill="#cc7a0a"/>`
+        + `<circle cx="${+x + 1.5}" cy="6" r="5.5" fill="#cc7a0a"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  }
+  document.querySelectorAll('.well').forEach(el => {
+    el.insertAdjacentHTML('afterbegin',
+      fingerprint(+el.dataset.seed, +el.dataset.n, el.dataset.head ? +el.dataset.head : 0));
+  });
+</script>
+</body>
+</html>

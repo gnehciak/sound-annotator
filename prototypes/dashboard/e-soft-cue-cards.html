@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>E — Soft Cue Cards</title>
+<style>
+  :root {
+    --page: #ffffff; --panel: #f5f5f2; --raised: #f0efeb; --well: #f7f6f2;
+    --line: #d6d3c8; --line-mid: #b8b4a6;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; background: var(--page); border-bottom: 1px solid var(--line);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.01em; }
+  .wordmark i { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; }
+  .wordmark i::before { content: ''; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent #fff; margin-left: 2px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-mid); display: grid; place-items: center; font: 600 11px var(--sans); color: var(--muted); }
+
+  .content { max-width: 1180px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  .hello { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+  .hello h1 { font-size: 28px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.02em; }
+  .hello p { margin-top: 6px; font-size: 14.5px; color: var(--muted); }
+  .new-track {
+    flex: none; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    font: 600 14px var(--sans); padding: 11px 18px; cursor: pointer;
+    box-shadow: 0 1px 2px rgb(28 26 22 / .18);
+  }
+
+  .search { position: relative; max-width: 560px; margin-bottom: 36px; }
+  .search input {
+    width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    color: var(--fg); font: 400 15px var(--sans); padding: 13px 18px 13px 44px; outline: none;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search::before { content: '⌕'; position: absolute; left: 16px; top: 50%; transform: translateY(-55%); color: var(--muted); font-size: 19px; }
+
+  .h-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .h-row h2 { font-size: 17px; font-weight: 650; color: var(--fg-strong); letter-spacing: -.01em; }
+  .h-row a { font-size: 13px; font-weight: 500; color: var(--accent-ink); text-decoration: none; }
+
+  .folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 44px; }
+  .folder {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--page); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; cursor: pointer; box-shadow: 0 1px 3px rgb(28 26 22 / .06);
+  }
+  .folder.new { border-style: dashed; box-shadow: none; color: var(--muted); justify-content: center; font-size: 14px; font-weight: 500; }
+  .ficon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .ficon svg { width: 20px; height: 20px; }
+  .fname { font-size: 15px; font-weight: 600; color: var(--fg-strong); }
+  .fcount { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--page); border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; cursor: pointer; box-shadow: 0 1px 3px rgb(28 26 22 / .06);
+  }
+  .card.hover { box-shadow: 0 4px 14px rgb(28 26 22 / .12); border-color: var(--line-mid); }
+
+  /* The cue strip is the card's artwork: the track's notes at their real times */
+  .strip { position: relative; height: 86px; background: var(--well); border-bottom: 1px solid var(--line); }
+  .strip svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dur {
+    position: absolute; right: 8px; bottom: 8px; padding: 2px 7px;
+    background: rgb(28 26 22 / .72); border-radius: 6px;
+    font: 500 11px var(--mono); color: #fff; font-variant-numeric: tabular-nums;
+  }
+  .card.hover .strip::after { content: ''; position: absolute; inset: 0; background: rgb(28 26 22 / .1); }
+  .card.hover .playkey {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 44px; height: 44px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 10px rgb(28 26 22 / .25);
+    display: grid; place-items: center; z-index: 2;
+  }
+  .card.hover .playkey::before { content: ''; border-style: solid; border-width: 8px 0 8px 13px; border-color: transparent transparent transparent var(--accent); margin-left: 3px; }
+  .playkey { display: none; }
+
+  .body { padding: 13px 16px 15px; }
+  .title { font-size: 15px; font-weight: 600; color: var(--fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { margin-top: 5px; font-size: 12.5px; color: var(--muted); }
+  .tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .tag { font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: 999px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="hello">
+    <div>
+      <h1>Good afternoon, Lawrence</h1>
+      <p>Pick up a track, or bring in something new to annotate.</p>
+    </div>
+    <button class="new-track">＋ New track</button>
+  </div>
+
+  <div class="search"><input placeholder="Search your tracks and folders…" /></div>
+
+  <div class="h-row"><h2>Folders</h2><a href="#">＋ New folder</a></div>
+  <div class="folders">
+    <div class="folder">
+      <div class="ficon" style="background:#2a9d8f1f">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2a9d8f" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Year 10 — Set Works</div><div class="fcount">4 tracks · 68 notes</div></div>
+    </div>
+    <div class="folder">
+      <div class="ficon" style="background:#7c5cd61f">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c5cd6" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Jazz Unit</div><div class="fcount">3 tracks · 38 notes</div></div>
+    </div>
+    <div class="folder">
+      <div class="ficon" style="background:#3b82c41f">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#3b82c4" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+      </div>
+      <div><div class="fname">Film Music</div><div class="fcount">2 tracks · 29 notes</div></div>
+    </div>
+    <div class="folder new">＋ New folder</div>
+  </div>
+
+  <div class="h-row"><h2>Recent tracks</h2><a href="#">View all 12</a></div>
+  <div class="grid">
+    <div class="card">
+      <div class="strip" data-seed="11" data-n="24" data-head=".49"><span class="dur">15:50</span></div>
+      <div class="body">
+        <div class="title">Boléro — Maurice Ravel</div>
+        <div class="meta">24 notes · Updated 2 hours ago</div>
+        <div class="tags"><span class="tag" style="background:#cc7a0a14;color:#874e05">Continue at 07:42</span></div>
+      </div>
+    </div>
+    <div class="card hover">
+      <div class="strip" data-seed="83" data-n="18"><span class="dur">9:22</span><span class="playkey"></span></div>
+      <div class="body">
+        <div class="title">So What — Miles Davis</div>
+        <div class="meta">18 notes · Updated yesterday</div>
+        <div class="tags"><span class="tag" style="background:#7c5cd614;color:#5b3fb0">Jazz Unit</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="strip" data-seed="23" data-n="31"><span class="dur">5:12</span></div>
+      <div class="body">
+        <div class="title">Clair de Lune — Debussy</div>
+        <div class="meta">31 notes · Updated 3 days ago</div>
+        <div class="tags"><span class="tag" style="background:#2a9d8f14;color:#1d6e64">Shared with class</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="strip" data-seed="41" data-n="27"><span class="dur">3:01</span></div>
+      <div class="body">
+        <div class="title">Killer Queen — Queen</div>
+        <div class="meta">27 notes · Updated 4 days ago</div>
+        <div class="tags"><span class="tag" style="background:#2a9d8f14;color:#1d6e64">Year 10 — Set Works</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="strip" data-seed="53" data-n="19"><span class="dur">5:58</span></div>
+      <div class="body">
+        <div class="title">Defying Gravity — Wicked</div>
+        <div class="meta">19 notes · Updated last week</div>
+        <div class="tags"><span class="tag" style="background:#2a9d8f14;color:#1d6e64">Year 10 — Set Works</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="strip" data-seed="97" data-n="9"><span class="dur">5:24</span></div>
+      <div class="body">
+        <div class="title">Take Five — Dave Brubeck</div>
+        <div class="meta">9 notes · Updated 2 weeks ago</div>
+        <div class="tags"><span class="tag" style="background:#7c5cd614;color:#5b3fb0">Jazz Unit</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Annotation fingerprint, light-tuned: notes at their real positions in
+  // light-safe data hues; ranged notes as soft bands; rounded marks.
+  const HUES = ['#2a9d8f', '#7c5cd6', '#d6536f', '#3b82c4', '#d9700f', '#6a9b2e'];
+  function fingerprint(seed, count, playhead) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 1000, H = 100;
+    let marks = '';
+    const positions = Array.from({ length: count }, () => rnd()).sort();
+    positions.forEach(p => {
+      const hue = HUES[Math.floor(rnd() * HUES.length)];
+      const ranged = rnd() < 0.22;
+      const x = 10 + p * (W - 20);
+      if (ranged) {
+        const w = 25 + rnd() * 70;
+        marks += `<rect x="${x.toFixed(0)}" y="26" width="${w.toFixed(0)}" height="${H - 52}" rx="4" fill="${hue}" fill-opacity=".3"/>`
+          + `<rect x="${x.toFixed(0)}" y="26" width="4" height="${H - 52}" rx="2" fill="${hue}"/>`;
+      } else {
+        marks += `<rect x="${x.toFixed(0)}" y="20" width="4" height="${H - 40}" rx="2" fill="${hue}"/>`;
+      }
+    });
+    if (playhead) {
+      const x = 10 + playhead * (W - 20);
+      marks += `<rect x="${x}" y="0" width="3" height="${H}" fill="#cc7a0a"/>`
+        + `<circle cx="${+x + 1.5}" cy="6" r="5.5" fill="#cc7a0a"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  }
+  document.querySelectorAll('.strip').forEach(el => {
+    el.insertAdjacentHTML('afterbegin',
+      fingerprint(+el.dataset.seed, +el.dataset.n, el.dataset.head ? +el.dataset.head : 0));
+  });
+</script>
+</body>
+</html>

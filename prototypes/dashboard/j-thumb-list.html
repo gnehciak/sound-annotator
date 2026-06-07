@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>J — Thumb Cue List</title>
+<style>
+  :root {
+    --page: #ffffff; --panel: #f5f5f2; --raised: #f0efeb; --well: #f7f6f2;
+    --line: #d6d3c8; --line-mid: #b8b4a6;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05;
+    --mast: #211f18; --mast-line: #38342b; --mast-fg: #e9e4d8; --mast-muted: #a89e8a;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 52px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; background: var(--mast); border-bottom: 1px solid var(--mast-line);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 14.5px; font-weight: 700; color: var(--mast-fg); letter-spacing: -.01em; }
+  .wordmark i { width: 22px; height: 22px; border-radius: 6px; background: #f5a623; display: grid; place-items: center; }
+  .wordmark i::before { content: ''; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent #1a1813; margin-left: 2px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #2a271f; border: 1px solid #4d473a; display: grid; place-items: center; font: 600 10px var(--sans); color: var(--mast-muted); }
+
+  .content { max-width: 1020px; margin: 0 auto; padding: 38px 32px 80px; }
+
+  .hello { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+  .hello h1 { font-size: 26px; font-weight: 700; color: var(--fg-strong); letter-spacing: -.02em; }
+  .new-track {
+    flex: none; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    font: 600 14px var(--sans); padding: 11px 18px; cursor: pointer;
+    box-shadow: 0 1px 2px rgb(28 26 22 / .18);
+  }
+
+  .toolbar { display: flex; gap: 14px; align-items: center; margin-bottom: 26px; flex-wrap: wrap; }
+  .search { position: relative; flex: 1; min-width: 260px; max-width: 420px; }
+  .search input {
+    width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    color: var(--fg); font: 400 14.5px var(--sans); padding: 11px 16px 11px 42px; outline: none;
+  }
+  .search input::placeholder { color: var(--muted); }
+  .search::before { content: '⌕'; position: absolute; left: 15px; top: 50%; transform: translateY(-55%); color: var(--muted); font-size: 18px; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 500 13px var(--sans); color: var(--fg);
+    background: var(--page); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .pill .n { font-size: 12px; color: var(--muted); }
+  .pill.active { background: var(--fg-strong); border-color: var(--fg-strong); color: #fff; }
+  .pill.active .n { color: #cfcabe; }
+
+  /* Continue hero */
+  .resume {
+    display: flex; align-items: center; gap: 20px;
+    background: var(--page); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 2px 8px rgb(28 26 22 / .08);
+    padding: 16px 18px; margin-bottom: 32px;
+  }
+  .resume .thumb { width: 188px; }
+  .resume-mid { flex: 1; min-width: 0; }
+  .resume-kicker { font-size: 12px; font-weight: 600; color: var(--accent-ink); }
+  .resume-title { margin-top: 4px; font-size: 19px; font-weight: 650; color: var(--fg-strong); }
+  .resume-meta { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+  .resume .cue { margin-top: 12px; height: 14px; }
+  .resume-btn {
+    flex: none; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    font: 600 14px var(--sans); padding: 11px 18px; cursor: pointer;
+    box-shadow: 0 1px 2px rgb(28 26 22 / .18);
+  }
+
+  .thumb { position: relative; aspect-ratio: 16/9; flex: none; border-radius: 9px; overflow: hidden; background: var(--well); }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .thumb svg.wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dur {
+    position: absolute; right: 5px; bottom: 5px; padding: 1px 6px;
+    background: rgb(28 26 22 / .75); border-radius: 5px;
+    font: 500 10.5px var(--mono); color: #fff; font-variant-numeric: tabular-nums;
+  }
+
+  h2.section { font-size: 16px; font-weight: 650; color: var(--fg-strong); margin-bottom: 14px; }
+  h2.section span { font-weight: 500; font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+  .rowcard {
+    display: flex; align-items: center; gap: 18px;
+    background: var(--page); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 1px 3px rgb(28 26 22 / .05);
+    padding: 12px 16px; margin-bottom: 10px; cursor: pointer;
+  }
+  .rowcard.hover { box-shadow: 0 4px 14px rgb(28 26 22 / .11); border-color: var(--line-mid); }
+  .rowcard .thumb { width: 118px; }
+  .row-mid { flex: 1; min-width: 0; }
+  .row-title { font-size: 15px; font-weight: 600; color: var(--fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta { margin-top: 3px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .fdot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .row-mid .cue { margin-top: 10px; height: 12px; }
+  .cue { position: relative; }
+  .cue svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .row-right { flex: none; width: 52px; text-align: right; font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .shared { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #2a9d8f14; color: #1d6e64; font-size: 11px; font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="hello">
+    <h1>Your library</h1>
+    <button class="new-track">＋ New track</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="search"><input placeholder="Search your tracks…" /></div>
+    <div class="pills">
+      <button class="pill active">All <span class="n">11</span></button>
+      <button class="pill"><span class="dot" style="background:#2a9d8f"></span>Year 10 <span class="n">4</span></button>
+      <button class="pill"><span class="dot" style="background:#7c5cd6"></span>Jazz Unit <span class="n">2</span></button>
+      <button class="pill"><span class="dot" style="background:#3b82c4"></span>Film Music <span class="n">2</span></button>
+      <button class="pill">＋</button>
+    </div>
+  </div>
+
+  <div class="resume">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/sUgoBb8m1eE/mqdefault.jpg" alt="" /><span class="dur">15:50</span></div>
+    <div class="resume-mid">
+      <div class="resume-kicker">Continue where you left off</div>
+      <div class="resume-title">Boléro — Maurice Ravel</div>
+      <div class="resume-meta">24 notes · you stopped at 07:42</div>
+      <div class="cue" data-seed="11" data-n="24" data-head=".49"></div>
+    </div>
+    <button class="resume-btn">▶ Continue</button>
+  </div>
+
+  <h2 class="section">All tracks <span>11 tracks · 190 notes</span></h2>
+
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/sUgoBb8m1eE/mqdefault.jpg" alt="" /><span class="dur">15:50</span></div>
+    <div class="row-mid">
+      <div class="row-title">Boléro — Maurice Ravel</div>
+      <div class="row-meta">24 notes · 2 hours ago</div>
+      <div class="cue" data-seed="11" data-n="24"></div>
+    </div>
+    <div class="row-right">15:50</div>
+  </div>
+  <div class="rowcard hover">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/zqNTltOGh5c/mqdefault.jpg" alt="" /><span class="dur">9:22</span></div>
+    <div class="row-mid">
+      <div class="row-title">So What — Miles Davis</div>
+      <div class="row-meta"><span class="fdot" style="background:#7c5cd6"></span>Jazz Unit · 18 notes · yesterday</div>
+      <div class="cue" data-seed="83" data-n="18"></div>
+    </div>
+    <div class="row-right">9:22</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/CvFH_6DNRCY/mqdefault.jpg" alt="" /><span class="dur">5:12</span></div>
+    <div class="row-mid">
+      <div class="row-title">Clair de Lune — Debussy</div>
+      <div class="row-meta">31 notes · 3 days ago · <span class="shared">Shared</span></div>
+      <div class="cue" data-seed="23" data-n="31"></div>
+    </div>
+    <div class="row-right">5:12</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/2ZBtPf7FOoM/mqdefault.jpg" alt="" /><span class="dur">3:01</span></div>
+    <div class="row-mid">
+      <div class="row-title">Killer Queen — Queen</div>
+      <div class="row-meta"><span class="fdot" style="background:#2a9d8f"></span>Year 10 · 27 notes · 4 days ago</div>
+      <div class="cue" data-seed="41" data-n="27"></div>
+    </div>
+    <div class="row-right">3:01</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/fJ9rUzIMcZQ/mqdefault.jpg" alt="" /><span class="dur">5:55</span></div>
+    <div class="row-mid">
+      <div class="row-title">Bohemian Rhapsody — Queen</div>
+      <div class="row-meta"><span class="fdot" style="background:#2a9d8f"></span>Year 10 · 22 notes · 5 days ago</div>
+      <div class="cue" data-seed="57" data-n="22"></div>
+    </div>
+    <div class="row-right">5:55</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb" data-wave="61" data-hue="#2a9d8f"><span class="dur">4:06</span></div>
+    <div class="row-mid">
+      <div class="row-title">Music for a While — Purcell</div>
+      <div class="row-meta"><span class="fdot" style="background:#2a9d8f"></span>Year 10 · audio file · 14 notes · last week</div>
+      <div class="cue" data-seed="61" data-n="14"></div>
+    </div>
+    <div class="row-right">4:06</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/hTWKbfoikeg/mqdefault.jpg" alt="" /><span class="dur">5:01</span></div>
+    <div class="row-mid">
+      <div class="row-title">Smells Like Teen Spirit — Nirvana</div>
+      <div class="row-meta">12 notes · last week</div>
+      <div class="cue" data-seed="71" data-n="12"></div>
+    </div>
+    <div class="row-right">5:01</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/vmDDOFXSgAs/mqdefault.jpg" alt="" /><span class="dur">5:24</span></div>
+    <div class="row-mid">
+      <div class="row-title">Take Five — Dave Brubeck</div>
+      <div class="row-meta"><span class="fdot" style="background:#7c5cd6"></span>Jazz Unit · 9 notes · 2 weeks ago</div>
+      <div class="cue" data-seed="97" data-n="9"></div>
+    </div>
+    <div class="row-right">5:24</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/e-QFj59PON4/mqdefault.jpg" alt="" /><span class="dur">1:46</span></div>
+    <div class="row-mid">
+      <div class="row-title">Also sprach Zarathustra — Strauss</div>
+      <div class="row-meta"><span class="fdot" style="background:#3b82c4"></span>Film Music · 7 notes · 3 weeks ago</div>
+      <div class="cue" data-seed="37" data-n="7"></div>
+    </div>
+    <div class="row-right">1:46</div>
+  </div>
+  <div class="rowcard">
+    <div class="thumb"><img src="https://i.ytimg.com/vi/RxabLA7UQ9k/mqdefault.jpg" alt="" /><span class="dur">4:35</span></div>
+    <div class="row-mid">
+      <div class="row-title">Time — Hans Zimmer</div>
+      <div class="row-meta"><span class="fdot" style="background:#3b82c4"></span>Film Music · 16 notes · a month ago</div>
+      <div class="cue" data-seed="127" data-n="16"></div>
+    </div>
+    <div class="row-right">4:35</div>
+  </div>
+</div>
+
+<script>
+  const HUES = ['#2a9d8f', '#7c5cd6', '#d6536f', '#3b82c4', '#d9700f', '#6a9b2e'];
+  function cueline(seed, count, playhead) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 1000, H = 100;
+    let marks = `<rect x="0" y="46" width="${W}" height="8" rx="4" fill="#1c1a16" fill-opacity=".08"/>`;
+    const positions = Array.from({ length: count }, () => rnd()).sort();
+    positions.forEach(p => {
+      const hue = HUES[Math.floor(rnd() * HUES.length)];
+      rnd(); rnd();
+      const x = 6 + p * (W - 12);
+      marks += `<rect x="${x.toFixed(0)}" y="18" width="6" height="64" rx="3" fill="${hue}"/>`;
+    });
+    if (playhead) {
+      const x = 6 + playhead * (W - 12);
+      marks += `<circle cx="${x}" cy="50" r="15" fill="#cc7a0a"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  }
+  document.querySelectorAll('.cue').forEach(el => {
+    el.insertAdjacentHTML('afterbegin',
+      cueline(+el.dataset.seed, +el.dataset.n, el.dataset.head ? +el.dataset.head : 0));
+  });
+  function wave(seed, hue) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 320, H = 180, n = 26, bw = 4;
+    const gap = (W - 60 - n * bw) / (n - 1);
+    let bars = `<rect width="${W}" height="${H}" fill="${hue}" fill-opacity=".1"/>`;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1), env = Math.sin(t * Math.PI) ** 0.6;
+      const bh = 8 + rnd() * 80 * (0.3 + 0.7 * env);
+      bars += `<rect x="${(30 + i * (bw + gap)).toFixed(1)}" y="${(H/2 - bh/2).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="2" fill="${hue}"/>`;
+    }
+    return `<svg class="wave" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${bars}</svg>`;
+  }
+  document.querySelectorAll('.thumb[data-wave]').forEach(el => {
+    el.insertAdjacentHTML('afterbegin', wave(+el.dataset.wave, el.dataset.hue));
+  });
+</script>
+</body>
+</html>

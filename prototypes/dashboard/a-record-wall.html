@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>A — The Record Wall</title>
+<style>
+  :root {
+    --ink: #1a1813; --panel: #211f18; --raised: #2a271f; --inset: #131210;
+    --line: #38342b; --line-strong: #4d473a;
+    --fg: #e9e4d8; --fg-strong: #ffffff; --muted: #a89e8a;
+    --accent: #f5a623; --onbright: #1a1813;
+    --teal: #3bb6a6; --violet: #a07bf0; --rose: #ef6f8b; --sky: #5aa8e6; --orange: #ef8b4b;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--ink); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 48px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; font: 600 11px var(--mono); letter-spacing: .25em; color: var(--muted); text-transform: uppercase; }
+  .wordmark i { width: 8px; height: 8px; background: var(--accent); display: block; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-strong); display: grid; place-items: center; font: 600 10px var(--mono); color: var(--muted); }
+
+  .content { max-width: 1240px; margin: 0 auto; padding: 30px 36px 72px; }
+
+  .toprow { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 26px; }
+  .toprow h1 { font-size: 24px; font-weight: 650; color: var(--fg-strong); letter-spacing: -.01em; }
+  .toprow p { margin-top: 5px; font-size: 13px; color: var(--muted); }
+  .actions { display: flex; gap: 10px; }
+  .btn-ghost {
+    font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--fg); background: var(--raised); border: 1px solid var(--line);
+    border-radius: 2px; padding: 8px 13px; cursor: pointer;
+  }
+  .btn-accent {
+    font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); background: rgb(245 166 35 / .1); border: 1px solid rgb(245 166 35 / .7);
+    border-radius: 2px; padding: 8px 13px; cursor: pointer;
+  }
+
+  /* Continue panel */
+  .resume {
+    display: flex; gap: 22px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 2px;
+    padding: 18px; margin-bottom: 40px;
+  }
+  .resume .cover { width: 168px; flex: none; margin: 0; }
+  .resume-info { min-width: 0; }
+  .resume-kicker { font: 600 10px var(--mono); letter-spacing: .2em; color: var(--accent); text-transform: uppercase; }
+  .resume-title { margin-top: 8px; font-size: 23px; font-weight: 650; color: var(--fg-strong); letter-spacing: -.01em; }
+  .resume-meta { margin-top: 7px; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .resume-btn {
+    margin-top: 16px; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: var(--onbright); border: none; border-radius: 2px;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -2px 3px rgb(0 0 0 / .32);
+    font: 600 12px var(--sans); padding: 9px 16px; cursor: pointer;
+  }
+
+  /* Shelves */
+  .shelf { margin-bottom: 38px; }
+  .shelf-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 13px; border-bottom: 1px solid var(--line); padding-bottom: 9px; }
+  .shelf-head h2 { font-size: 15px; font-weight: 600; color: var(--fg-strong); }
+  .shelf-head .count { font: 500 10px var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+  .shelf-head .spacer { flex: 1; }
+  .shelf-head a { font: 500 11px var(--mono); letter-spacing: .08em; color: var(--muted); text-decoration: none; text-transform: uppercase; }
+  .shelf-row { display: flex; gap: 18px; }
+
+  .tile { width: 188px; cursor: pointer; }
+  .cover {
+    position: relative; aspect-ratio: 1; background: var(--inset);
+    border: 1px solid var(--line); border-radius: 2px; overflow: hidden;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / .6);
+  }
+  .cover svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dur {
+    position: absolute; right: 6px; bottom: 6px; padding: 2px 6px;
+    background: rgb(19 18 16 / .82); border-radius: 2px;
+    font: 500 10px var(--mono); letter-spacing: .08em; color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .src {
+    position: absolute; left: 6px; top: 6px; padding: 2px 6px;
+    background: rgb(19 18 16 / .82); border-radius: 2px;
+    font: 500 10px var(--mono); color: var(--muted);
+  }
+  /* baked-in hover demo */
+  .tile.hover .cover::after { content: ''; position: absolute; inset: 0; background: rgb(19 18 16 / .45); }
+  .tile.hover .playkey {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 46px; height: 46px; background: var(--accent); border-radius: 2px;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -2px 3px rgb(0 0 0 / .32);
+    display: grid; place-items: center; z-index: 2;
+  }
+  .tile.hover .playkey::before { content: ''; border-style: solid; border-width: 8px 0 8px 13px; border-color: transparent transparent transparent var(--onbright); margin-left: 3px; }
+  .tile.hover .tile-title { color: var(--fg-strong); }
+  .playkey { display: none; }
+  .tile.hover .playkey { display: grid; }
+
+  .tile-title { margin-top: 10px; font-size: 13.5px; font-weight: 600; color: var(--fg); letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile-meta { margin-top: 4px; font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="toprow">
+    <div>
+      <h1>Your library</h1>
+      <p>12 tracks across 3 shelves, 197 notes pinned.</p>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost">New shelf</button>
+      <button class="btn-accent">＋ New track</button>
+    </div>
+  </div>
+
+  <div class="resume">
+    <div class="cover" data-seed="11" data-hue="#3bb6a6"><span class="src">▶</span><span class="dur">15:50</span></div>
+    <div class="resume-info">
+      <div class="resume-kicker">Continue</div>
+      <div class="resume-title">Boléro — Maurice Ravel</div>
+      <div class="resume-meta">24 notes · You left off at 07:42 · 2 hours ago</div>
+      <button class="resume-btn">Open track ▸</button>
+    </div>
+  </div>
+
+  <section class="shelf">
+    <div class="shelf-head"><h2>On the bench</h2><span class="count">3 tracks</span><span class="spacer"></span><a href="#">All recent →</a></div>
+    <div class="shelf-row">
+      <div class="tile">
+        <div class="cover" data-seed="11" data-hue="#3bb6a6"><span class="src">▶</span><span class="dur">15:50</span></div>
+        <div class="tile-title">Boléro — Maurice Ravel</div><div class="tile-meta">24 notes · 2 h ago</div>
+      </div>
+      <div class="tile hover">
+        <div class="cover" data-seed="23" data-hue="#a07bf0"><span class="src">▶</span><span class="dur">5:12</span><span class="playkey"></span></div>
+        <div class="tile-title">Clair de Lune — Debussy</div><div class="tile-meta">31 notes · 3 d ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="37" data-hue="#ef8b4b"><span class="src">▶</span><span class="dur">1:46</span></div>
+        <div class="tile-title">Also sprach Zarathustra — Strauss</div><div class="tile-meta">7 notes · 3 w ago</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="shelf">
+    <div class="shelf-head"><h2>Year 10 — Set Works</h2><span class="count">4 tracks</span><span class="spacer"></span><a href="#">Open shelf →</a></div>
+    <div class="shelf-row">
+      <div class="tile">
+        <div class="cover" data-seed="41" data-hue="#ef6f8b"><span class="src">▶</span><span class="dur">3:01</span></div>
+        <div class="tile-title">Killer Queen — Queen</div><div class="tile-meta">27 notes · 4 d ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="53" data-hue="#ef8b4b"><span class="src">▶</span><span class="dur">5:58</span></div>
+        <div class="tile-title">Defying Gravity — Wicked</div><div class="tile-meta">19 notes · 1 w ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="61" data-hue="#3bb6a6"><span class="src">♪</span><span class="dur">4:06</span></div>
+        <div class="tile-title">Music for a While — Purcell</div><div class="tile-meta">14 notes · 1 w ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="73" data-hue="#5aa8e6"><span class="src">♪</span><span class="dur">7:00</span></div>
+        <div class="tile-title">Release — Afro Celt Sound System</div><div class="tile-meta">8 notes · 2 w ago</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="shelf">
+    <div class="shelf-head"><h2>Jazz Unit</h2><span class="count">3 tracks</span><span class="spacer"></span><a href="#">Open shelf →</a></div>
+    <div class="shelf-row">
+      <div class="tile">
+        <div class="cover" data-seed="83" data-hue="#5aa8e6"><span class="src">♪</span><span class="dur">9:22</span></div>
+        <div class="tile-title">So What — Miles Davis</div><div class="tile-meta">18 notes · yesterday</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="97" data-hue="#a07bf0"><span class="src">♪</span><span class="dur">5:24</span></div>
+        <div class="tile-title">Take Five — Dave Brubeck</div><div class="tile-meta">9 notes · 2 w ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="103" data-hue="#ef6f8b"><span class="src">▶</span><span class="dur">6:44</span></div>
+        <div class="tile-title">Blue Rondo à la Turk — Brubeck</div><div class="tile-meta">11 notes · 3 w ago</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="shelf">
+    <div class="shelf-head"><h2>Film Music</h2><span class="count">2 tracks</span><span class="spacer"></span><a href="#">Open shelf →</a></div>
+    <div class="shelf-row">
+      <div class="tile">
+        <div class="cover" data-seed="113" data-hue="#3bb6a6"><span class="src">▶</span><span class="dur">4:14</span></div>
+        <div class="tile-title">Duel of the Fates — John Williams</div><div class="tile-meta">13 notes · 1 mo ago</div>
+      </div>
+      <div class="tile">
+        <div class="cover" data-seed="127" data-hue="#5aa8e6"><span class="src">▶</span><span class="dur">4:35</span></div>
+        <div class="tile-title">Time — Hans Zimmer</div><div class="tile-meta">16 notes · 1 mo ago</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  // Deterministic waveform "cover art" per track (stands in for real
+  // waveform-derived art; YouTube tracks would show their thumbnail instead).
+  function art(seed, hue) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const n = 26, W = 188, H = 188, bw = 3.5;
+    const gap = (W - 36 - n * bw) / (n - 1);
+    let bars = `<line x1="18" y1="${H/2}" x2="${W-18}" y2="${H/2}" stroke="${hue}" stroke-opacity=".25" stroke-width="1"/>`;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const env = Math.sin(t * Math.PI) ** 0.7;
+      const bh = 6 + rnd() * 92 * (0.3 + 0.7 * env);
+      const x = 18 + i * (bw + gap);
+      bars += `<rect x="${x.toFixed(1)}" y="${(H/2 - bh/2).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="1" fill="${hue}"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${bars}</svg>`;
+  }
+  document.querySelectorAll('.cover').forEach(c => {
+    c.insertAdjacentHTML('afterbegin', art(+c.dataset.seed, c.dataset.hue));
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sound Annotator — rounded / consumer prototype</title>
+<style>
+  /* ------------------------------------------------------------------
+     PROTOTYPE — "The Listening Room"
+     A consumer-friendly take on the editor: soft light surface, white
+     cards, pill chips, circular transport. Deliberately departs from
+     the shipped "Listening Station" doctrine (squared, flush, dark).
+     Kept from the brand: amber = now, mono timecodes, note hues = identity.
+     ------------------------------------------------------------------ */
+  :root {
+    /* surface */
+    --bg: #f4f2ee;          /* soft warm-gray room */
+    --card: #ffffff;        /* content surfaces */
+    --well: #edeae4;        /* recessed: seek track, overview strip */
+    --hairline: #e6e2da;    /* soft edges inside cards */
+    --edge: #d9d4c9;        /* card outlines (barely there) */
+
+    /* ink */
+    --ink: #221d15;
+    --muted: #6b6355;       /* 5.2:1 on white, 4.6:1 on --bg */
+    --faint: #8d8576;       /* large/decorative only */
+
+    /* signal — amber stays the one voice color */
+    --accent: #cc7a0a;      /* fills, playhead, progress */
+    --accent-ink: #874e05;  /* AA text on pale surfaces */
+    --accent-soft: #f7e9d2; /* tint chips / hover wash */
+    --on-accent: #261a04;
+
+    --danger: #b3382c;
+
+    /* note identity hues — fill / AA-text pairs (same data palette) */
+    --teal: #3bb6a6;     --teal-ink: #11695e;     --teal-soft: #e2f3f0;
+    --sky: #5aa8e6;      --sky-ink: #1d6bb2;      --sky-soft: #e7f1fb;
+    --rose: #ef6f8b;     --rose-ink: #b32a52;     --rose-soft: #fdebef;
+    --violet: #a07bf0;   --violet-ink: #6d3bd8;   --violet-soft: #f0eafd;
+    --orange: #ef8b4b;   --orange-ink: #a8500e;   --orange-soft: #fdeee2;
+
+    /* shape */
+    --r-card: 16px;
+    --r-control: 10px;
+    --r-pill: 999px;
+
+    /* elevation — soft, low, layered */
+    --shadow-card: 0 1px 2px rgb(34 29 21 / 0.05), 0 4px 16px rgb(34 29 21 / 0.06);
+    --shadow-lift: 0 2px 4px rgb(34 29 21 / 0.07), 0 10px 28px rgb(34 29 21 / 0.10);
+
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  button:focus-visible, [tabindex]:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent-ink);
+    outline-offset: 2px;
+    border-radius: var(--r-control);
+  }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---- app bar ----------------------------------------------------- */
+  .appbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 12px;
+    height: 60px; padding: 0 20px;
+    background: rgb(244 242 238 / 0.86);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .back {
+    display: grid; place-items: center;
+    width: 36px; height: 36px; border-radius: var(--r-pill);
+    color: var(--muted);
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .back:hover { background: var(--well); color: var(--ink); }
+
+  .trackhead { min-width: 0; display: flex; flex-direction: column; }
+  .trackhead h1 {
+    margin: 0; font-size: 16px; font-weight: 650; line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .trackhead .sub { font-size: 12px; color: var(--muted); line-height: 1.3; }
+
+  .appbar .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 36px; padding: 0 14px;
+    border-radius: var(--r-pill);
+    font-size: 13px; font-weight: 550;
+    color: var(--muted);
+    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+  .btn:hover { background: var(--well); color: var(--ink); }
+  .btn-tinted {
+    background: var(--accent-soft); color: var(--accent-ink);
+  }
+  .btn-tinted:hover { background: #f2dfbc; color: var(--accent-ink); }
+  .avatar {
+    width: 32px; height: 32px; border-radius: var(--r-pill);
+    background: var(--accent); color: var(--on-accent);
+    display: grid; place-items: center;
+    font-size: 13px; font-weight: 700;
+  }
+
+  /* ---- layout ------------------------------------------------------ */
+  .wrap {
+    max-width: 1280px; margin: 0 auto;
+    padding: 20px 20px 40px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 408px; gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 1020px) { .wrap { grid-template-columns: 1fr; } }
+
+  /* ---- player card ------------------------------------------------- */
+  .player {
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+  .video {
+    position: relative; aspect-ratio: 16 / 9;
+    background:
+      radial-gradient(85% 70% at 50% 38%, rgb(255 214 140 / 0.10), transparent 70%),
+      linear-gradient(165deg, #1d1810 0%, #110d08 48%, #0a0805 100%);
+    display: grid; place-items: center;
+    box-shadow: inset 0 0 120px rgb(0 0 0 / 0.55);
+  }
+  .video .bigplay {
+    width: 72px; height: 72px; border-radius: var(--r-pill);
+    background: var(--accent); color: var(--on-accent);
+    display: grid; place-items: center;
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.45);
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+  }
+  .video .bigplay:hover { transform: scale(1.06); }
+  body.playing .video .bigplay { opacity: 0; pointer-events: none; transform: scale(0.9); }
+  .video .overlay {
+    position: absolute; inset: auto 0 0 0;
+    padding: 36px 16px 12px;
+    background: linear-gradient(transparent, rgb(0 0 0 / 0.55));
+    color: rgb(255 255 255 / 0.92);
+    font-size: 13px; font-weight: 550;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .video .overlay .yt { margin-left: auto; font-size: 11px; color: rgb(255 255 255 / 0.65); font-weight: 450; }
+
+  .controls { padding: 14px 18px 16px; }
+
+  /* seek row */
+  .seekrow { display: flex; align-items: center; gap: 12px; }
+  .time { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .time.cur { color: var(--accent-ink); font-weight: 600; min-width: 44px; }
+  .time.dur { color: var(--muted); min-width: 44px; text-align: right; }
+  .seek { position: relative; flex: 1; height: 28px; cursor: pointer; touch-action: none; }
+  .seek .track {
+    position: absolute; top: 50%; left: 0; right: 0; height: 6px;
+    transform: translateY(-50%);
+    background: var(--well); border-radius: var(--r-pill);
+  }
+  .seek .fill {
+    position: absolute; top: 50%; left: 0; height: 6px;
+    transform: translateY(-50%);
+    background: var(--accent); border-radius: var(--r-pill);
+    width: 11%;
+  }
+  .seek .thumb {
+    position: absolute; top: 50%;
+    width: 14px; height: 14px; border-radius: var(--r-pill);
+    background: var(--card); border: 3.5px solid var(--accent);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 4px rgb(34 29 21 / 0.25);
+    transition: transform 120ms ease;
+    left: 11%;
+  }
+  .seek:hover .thumb { transform: translate(-50%, -50%) scale(1.2); }
+
+  /* transport row */
+  .transport {
+    margin-top: 10px;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  }
+  .t-left { justify-self: start; }
+  .t-mid { display: flex; align-items: center; gap: 10px; }
+  .t-right { justify-self: end; display: flex; align-items: center; gap: 10px; }
+
+  .chip-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 30px; padding: 0 11px;
+    border-radius: var(--r-pill);
+    background: var(--well); color: var(--muted);
+    font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .chip-btn:hover { background: var(--hairline); color: var(--ink); }
+
+  .tbtn {
+    display: grid; place-items: center;
+    width: 40px; height: 40px; border-radius: var(--r-pill);
+    color: var(--muted);
+    transition: background 150ms ease, color 150ms ease, transform 80ms ease;
+  }
+  .tbtn:hover { background: var(--well); color: var(--ink); }
+  .tbtn:active { transform: scale(0.94); }
+  .tbtn svg { display: block; }
+  .tbtn .lbl {
+    position: absolute; font-size: 8.5px; font-weight: 700;
+    font-family: var(--mono); margin-top: 1px;
+  }
+  .tbtn.skip { position: relative; }
+
+  .playbtn {
+    display: grid; place-items: center;
+    width: 52px; height: 52px; border-radius: var(--r-pill);
+    background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 2px 8px rgb(204 122 10 / 0.45);
+    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1), filter 150ms ease;
+  }
+  .playbtn:hover { filter: brightness(1.06); transform: scale(1.04); }
+  .playbtn:active { transform: scale(0.96); }
+  .playbtn .icon-pause, body.playing .playbtn .icon-play { display: none; }
+  body.playing .playbtn .icon-pause { display: block; }
+
+  .vol { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .vol .vtrack { position: relative; width: 72px; height: 24px; cursor: pointer; }
+  .vol .vtrack .track {
+    position: absolute; top: 50%; left: 0; right: 0; height: 5px;
+    transform: translateY(-50%);
+    background: var(--well); border-radius: var(--r-pill);
+  }
+  .vol .vtrack .fill {
+    position: absolute; top: 50%; left: 0; width: 70%; height: 5px;
+    transform: translateY(-50%);
+    background: var(--muted); border-radius: var(--r-pill);
+  }
+
+  .hintline {
+    margin-top: 12px; text-align: center;
+    font-size: 12px; color: var(--muted);
+  }
+  .hintline kbd {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--well); border: 1px solid var(--hairline);
+    border-bottom-width: 2px; border-radius: 6px;
+    padding: 1px 6px; margin: 0 1px;
+  }
+
+  /* ---- overview strip ---------------------------------------------- */
+  .overview {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 18px 16px;
+  }
+  .overview .head {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 12px; color: var(--muted); margin-bottom: 8px;
+  }
+  .strip { position: relative; height: 44px; background: var(--well); border-radius: 12px; cursor: pointer; }
+  .strip .marker {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 10px; height: 10px; border-radius: var(--r-pill);
+    border: 2px solid var(--card);
+    box-shadow: 0 1px 3px rgb(34 29 21 / 0.25);
+  }
+  .strip .range {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    height: 10px; border-radius: var(--r-pill); opacity: 0.45;
+  }
+  .strip .playhead {
+    position: absolute; top: 5px; bottom: 5px; width: 2.5px;
+    background: var(--accent); border-radius: var(--r-pill);
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.8);
+    left: 11%;
+  }
+
+  /* ---- notes column ------------------------------------------------ */
+  .notes-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 2px 4px 12px;
+  }
+  .notes-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+  .notes-head .count { color: var(--muted); font-size: 13px; }
+  .addnote {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 36px; padding: 0 15px;
+    border-radius: var(--r-pill);
+    background: var(--accent); color: var(--on-accent);
+    font-size: 13px; font-weight: 650;
+    box-shadow: 0 2px 8px rgb(204 122 10 / 0.35);
+    transition: filter 150ms ease, transform 120ms ease;
+  }
+  .addnote:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .addnote .at { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; opacity: 0.8; }
+
+  .notelist { display: flex; flex-direction: column; gap: 10px; }
+
+  .note {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    padding: 13px 16px 14px;
+    cursor: pointer;
+    transition: box-shadow 180ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease;
+  }
+  .note:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+  .note.active {
+    border-color: rgb(204 122 10 / 0.55);
+    box-shadow: 0 0 0 3px rgb(204 122 10 / 0.14), var(--shadow-lift);
+  }
+
+  .note .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .tc {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 11px;
+    border-radius: var(--r-pill);
+    font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: filter 150ms ease;
+  }
+  .tc:hover { filter: brightness(0.96); }
+  .tc .len { font-weight: 450; opacity: 0.75; font-size: 11.5px; }
+  .tc-teal   { background: var(--teal-soft);   color: var(--teal-ink); }
+  .tc-sky    { background: var(--sky-soft);    color: var(--sky-ink); }
+  .tc-rose   { background: var(--rose-soft);   color: var(--rose-ink); }
+  .tc-violet { background: var(--violet-soft); color: var(--violet-ink); }
+  .tc-orange { background: var(--orange-soft); color: var(--orange-ink); }
+
+  .pill {
+    display: inline-flex; align-items: center;
+    height: 24px; padding: 0 10px;
+    border-radius: var(--r-pill);
+    background: var(--well); color: var(--muted);
+    font-size: 12px; font-weight: 550;
+  }
+  .pill.bar { font-family: var(--mono); font-weight: 500; font-size: 11.5px; }
+
+  .nowplaying[hidden] { display: none; }
+  .nowplaying {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 24px; padding: 0 10px;
+    border-radius: var(--r-pill);
+    background: var(--accent-soft); color: var(--accent-ink);
+    font-size: 12px; font-weight: 650;
+  }
+  .nowplaying .dot {
+    width: 7px; height: 7px; border-radius: var(--r-pill);
+    background: var(--accent);
+  }
+  body.playing .nowplaying .dot { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+
+  .note .body {
+    margin: 9px 1px 0;
+    font-size: 14px; line-height: 1.6;
+    max-width: 68ch;
+  }
+  .note .body b { font-weight: 650; }
+
+  /* hover actions */
+  .note .rowactions {
+    position: absolute; top: 11px; right: 12px;
+    display: flex; gap: 2px;
+    opacity: 0; transition: opacity 150ms ease;
+  }
+  .note:hover .rowactions, .note:focus-within .rowactions { opacity: 1; }
+  .iconbtn {
+    display: grid; place-items: center;
+    width: 30px; height: 30px; border-radius: var(--r-pill);
+    color: var(--muted);
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .iconbtn:hover { background: var(--well); color: var(--ink); }
+  .iconbtn.del:hover { background: #fbe9e7; color: var(--danger); }
+
+  .endhint {
+    text-align: center; padding: 18px 8px 4px;
+    font-size: 12.5px; color: var(--muted);
+  }
+  .endhint kbd {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--card); border: 1px solid var(--edge);
+    border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <button class="back" aria-label="Back to library" title="Back to the library">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+  </button>
+  <div class="trackhead">
+    <h1>Dvořák — Symphony No. 9 “From the New World”, II. Largo</h1>
+    <span class="sub">In <strong>Year 10 — Romantic era</strong> · edited 2 min ago</span>
+  </div>
+  <div class="actions">
+    <button class="btn" title="Export the notes as a PDF">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button class="btn btn-tinted" title="Share this track">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+      Share
+    </button>
+    <span class="avatar" title="L. Chen">L</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ---- player ---------------------------------------------------- -->
+  <section class="player" aria-label="Player">
+    <div class="video">
+      <button class="bigplay" aria-label="Play" onclick="togglePlay()">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+      </button>
+      <div class="overlay">
+        <span>Czech Philharmonic · Jiří Bělohlávek</span>
+        <span class="yt">Watch on YouTube</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="seekrow">
+        <span class="time cur" id="cur">1:24</span>
+        <div class="seek" id="seek" role="slider" tabindex="0" aria-label="Seek"
+             aria-valuemin="0" aria-valuemax="754" aria-valuenow="84">
+          <div class="track"></div>
+          <div class="fill" id="seekfill"></div>
+          <div class="thumb" id="seekthumb"></div>
+        </div>
+        <span class="time dur">12:34</span>
+      </div>
+
+      <div class="transport">
+        <div class="t-left">
+          <button class="chip-btn" title="Playback speed">1×
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div class="t-mid">
+          <button class="tbtn" title="Jump to the previous note" aria-label="Previous note">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm12 0-8.5 6L18 18z"/></svg>
+          </button>
+          <button class="tbtn skip" title="Back 5 seconds" aria-label="Back 5 seconds" onclick="nudge(-5)">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5V2.5L8 5.75 12 9V6.5a6 6 0 1 1-6 6"/></svg>
+            <span class="lbl">5</span>
+          </button>
+          <button class="playbtn" aria-label="Play or pause" onclick="togglePlay()">
+            <svg class="icon-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+            <svg class="icon-pause" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.6v14H7zm6.4 0H17v14h-3.6z"/></svg>
+          </button>
+          <button class="tbtn skip" title="Forward 5 seconds" aria-label="Forward 5 seconds" onclick="nudge(5)">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5V2.5l4 3.25L12 9V6.5a6 6 0 1 0 6 6"/></svg>
+            <span class="lbl">5</span>
+          </button>
+          <button class="tbtn" title="Jump to the next note" aria-label="Next note">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+          </button>
+        </div>
+        <div class="t-right">
+          <div class="vol" title="Volume">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.6 5.4a9.4 9.4 0 0 1 0 13.2"/></svg>
+            <div class="vtrack"><div class="track"></div><div class="fill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="hintline"><kbd>Space</kbd> play · <kbd>N</kbd> note at the playhead · <kbd>?</kbd> all shortcuts</p>
+    </div>
+
+    <div class="overview">
+      <div class="head">
+        <span style="font-weight:600; color:var(--ink)">Overview</span>
+        <span>5 notes pinned along the track. Click anywhere to jump.</span>
+      </div>
+      <div class="strip" id="strip" title="Click to jump">
+        <div class="playhead" id="playhead"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- notes ------------------------------------------------------ -->
+  <section aria-label="Notes">
+    <div class="notes-head">
+      <h2>Notes</h2><span class="count">5</span>
+      <button class="addnote" title="Add a note at the playhead (N)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add note <span class="at" id="addat">at 1:24</span>
+      </button>
+    </div>
+
+    <div class="notelist" id="notelist"></div>
+
+    <p class="endhint">Press <kbd>N</kbd> while listening to pin the next note, or <kbd>I</kbd> / <kbd>O</kbd> to mark a passage.</p>
+  </section>
+
+</div>
+
+<script>
+  /* ---------------- demo model ---------------- */
+  const DURATION = 754;                  // 12:34
+  let t = 84;                            // 1:24
+  let playing = false;
+
+  const NOTES = [
+    { id: 'n1', start: 0,   end: 33,  hue: 'sky',    tag: 'Form',            bar: 'bb. 1–4',
+      html: '<b>Introduction.</b> Seven solemn chords in the low brass: the door into the movement. Ask the class to count them, and to listen for the tuba anchoring the last one.' },
+    { id: 'n2', start: 34,  end: 130, hue: 'teal',   tag: 'Instrumentation', bar: 'b. 7',
+      html: '<b>Theme A, cor anglais.</b> The famous melody over muted strings. Note how the bassoon shadows the second phrase an octave below.' },
+    { id: 'n3', start: 168, end: null, hue: 'rose',   tag: 'Dynamics',        bar: 'b. 46',
+      html: '<i>pp</i>: the strings take the theme back, thinned to a whisper. What changed besides the volume? (Texture: the winds drop out.)' },
+    { id: 'n4', start: 252, end: null, hue: 'violet', tag: 'Harmony',         bar: 'reh. 4',
+      html: 'Modulation to C-sharp minor opens the restless middle section. The walking line in the cellos and basses is new; nothing in the opening prepared it.' },
+    { id: 'n5', start: 470, end: null, hue: 'orange', tag: 'Form',            bar: 'b. 90',
+      html: '<b>Theme A returns</b>, now shared between solo violin, solo cello and the cor anglais. Compare directly with 0:34: same melody, chamber-music scoring.' },
+  ];
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  /* ---------------- render notes ---------------- */
+  const list = document.getElementById('notelist');
+  for (const n of NOTES) {
+    const el = document.createElement('article');
+    el.className = 'note';
+    el.id = `note-${n.id}`;
+    el.tabIndex = 0;
+    const range = n.end != null;
+    el.innerHTML = `
+      <div class="meta">
+        <button class="tc tc-${n.hue}" title="Jump to ${fmt(n.start)}" onclick="seekTo(${n.start}); event.stopPropagation()">
+          ${fmt(n.start)}${range ? `–${fmt(n.end)} <span class="len">· ${fmt(n.end - n.start)}</span>` : ''}
+        </button>
+        <span class="pill bar">${n.bar}</span>
+        <span class="pill">${n.tag}</span>
+        <span class="nowplaying" hidden><span class="dot"></span>Playing</span>
+      </div>
+      <div class="rowactions">
+        <button class="iconbtn" title="Edit note" aria-label="Edit note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
+        <button class="iconbtn del" title="Delete note" aria-label="Delete note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <div class="body">${n.html}</div>`;
+    el.addEventListener('click', () => seekTo(n.start));
+    list.appendChild(el);
+  }
+
+  /* ---------------- overview markers ---------------- */
+  const strip = document.getElementById('strip');
+  const HUE_FILL = { teal: 'var(--teal)', sky: 'var(--sky)', rose: 'var(--rose)', violet: 'var(--violet)', orange: 'var(--orange)' };
+  for (const n of NOTES) {
+    if (n.end != null) {
+      const r = document.createElement('div');
+      r.className = 'range';
+      r.style.left = `${(n.start / DURATION) * 100}%`;
+      r.style.width = `${((n.end - n.start) / DURATION) * 100}%`;
+      r.style.background = HUE_FILL[n.hue];
+      strip.appendChild(r);
+    }
+    const m = document.createElement('div');
+    m.className = 'marker';
+    m.style.left = `${(n.start / DURATION) * 100}%`;
+    m.style.background = HUE_FILL[n.hue];
+    m.title = `${fmt(n.start)} — ${n.tag}`;
+    strip.appendChild(m);
+  }
+  strip.addEventListener('click', (e) => {
+    const r = strip.getBoundingClientRect();
+    seekTo(((e.clientX - r.left) / r.width) * DURATION);
+  });
+
+  /* ---------------- playback simulation ---------------- */
+  function paint() {
+    const f = Math.min(1, Math.max(0, t / DURATION)) * 100;
+    document.getElementById('cur').textContent = fmt(t);
+    document.getElementById('addat').textContent = `at ${fmt(t)}`;
+    document.getElementById('seekfill').style.width = `${f}%`;
+    document.getElementById('seekthumb').style.left = `${f}%`;
+    document.getElementById('playhead').style.left = `${f}%`;
+    document.getElementById('seek').setAttribute('aria-valuenow', Math.round(t));
+    for (const n of NOTES) {
+      const active = n.end != null ? t >= n.start && t < n.end
+                                   : t >= n.start && t < n.start + 12;
+      const el = document.getElementById(`note-${n.id}`);
+      el.classList.toggle('active', active);
+      el.querySelector('.nowplaying').hidden = !active;
+    }
+  }
+  function togglePlay() {
+    playing = !playing;
+    document.body.classList.toggle('playing', playing);
+  }
+  function seekTo(sec) { t = Math.min(DURATION, Math.max(0, sec)); paint(); }
+  function nudge(d) { seekTo(t + d); }
+  setInterval(() => { if (playing) { t = Math.min(DURATION, t + 0.25); paint(); } }, 250);
+
+  const seek = document.getElementById('seek');
+  let dragging = false;
+  const fromX = (x) => {
+    const r = seek.getBoundingClientRect();
+    seekTo(((x - r.left) / r.width) * DURATION);
+  };
+  seek.addEventListener('pointerdown', (e) => { dragging = true; fromX(e.clientX); seek.setPointerCapture(e.pointerId); });
+  seek.addEventListener('pointermove', (e) => { if (dragging) fromX(e.clientX); });
+  seek.addEventListener('pointerup', () => { dragging = false; });
+  seek.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') nudge(5);
+    if (e.key === 'ArrowLeft') nudge(-5);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePlay(); }
+  });
+
+  paint();
+</script>
+</body>
+</html>

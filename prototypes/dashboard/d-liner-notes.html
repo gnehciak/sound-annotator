@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>D — Liner Notes</title>
+<style>
+  :root {
+    --page: #ffffff; --panel: #f5f5f2; --raised: #f0efeb; --inset: #e5e3dc;
+    --line: #d8d5ca; --line-mid: #b8b4a6; --line-strong: #84806f;
+    --fg: #2a2620; --fg-strong: #1c1a16; --muted: #5f5646;
+    --accent: #cc7a0a; --accent-ink: #874e05;
+    --teal: #1d6e64; --violet: #5b3fb0; --rose: #b03a52; --sky: #2b6499; --orange: #a85408;
+    --serif: 'Iowan Old Style', 'Palatino Nova', Palatino, Georgia, serif;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  header {
+    height: 52px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; border-bottom: 1px solid var(--line-mid); background: var(--panel);
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; font: 600 11px var(--mono); letter-spacing: .25em; color: var(--muted); text-transform: uppercase; }
+  .wordmark i { width: 8px; height: 8px; background: var(--accent); display: block; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line-mid); display: grid; place-items: center; font: 600 10px var(--mono); color: var(--muted); }
+
+  .content { max-width: 860px; margin: 0 auto; padding: 56px 32px 96px; }
+
+  .masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 2px solid var(--fg-strong); }
+  .masthead h1 { font: 400 40px/1.1 var(--serif); color: var(--fg-strong); letter-spacing: -.01em; }
+  .masthead h1 em { font-style: italic; }
+  .mast-meta { text-align: right; }
+  .mast-meta .stat { font: 500 11px var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+  .new-track {
+    display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px;
+    background: var(--accent); color: #fff; border: none; border-radius: 2px;
+    font: 600 13px var(--sans); padding: 9px 15px; cursor: pointer;
+  }
+  .intro { padding: 18px 0 6px; font: 400 15px/1.6 var(--serif); font-style: italic; color: var(--muted); }
+
+  section { margin-top: 38px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .sec-head h2 { font: 400 23px var(--serif); color: var(--fg-strong); }
+  .sec-head .count { font: 500 10px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .sec-head .rule { flex: 1; border-bottom: 1px solid var(--line-mid); transform: translateY(-4px); }
+
+  .row {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 10px; margin: 0 -10px; border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .row.hover { background: var(--raised); }
+  .thumb { width: 56px; height: 56px; flex: none; background: var(--inset); border: 1px solid var(--line-mid); position: relative; overflow: hidden; }
+  .thumb svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .row-body { flex: 1; min-width: 0; }
+  .row-title { font: 400 19px var(--serif); color: var(--fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-sub { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+  .row-right { flex: none; text-align: right; }
+  .row-notes { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+  .row-dur { margin-top: 4px; font: 500 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .shared {
+    display: inline-block; margin-left: 8px; padding: 1px 6px;
+    border: 1px solid rgb(204 122 10 / .5); border-radius: 2px;
+    font: 500 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink);
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wordmark"><i></i>Sound Annotator</div>
+  <div class="avatar">LC</div>
+</header>
+
+<div class="content">
+  <div class="masthead">
+    <h1>The <em>listening</em> library</h1>
+    <div class="mast-meta">
+      <button class="new-track">＋ New track</button>
+      <div class="stat">12 tracks · 197 notes</div>
+    </div>
+  </div>
+  <p class="intro">Every track you have marked up, arranged by programme. Click a piece to step back into its notes.</p>
+
+  <section>
+    <div class="sec-head"><h2>Year 10 — Set Works</h2><span class="rule"></span><span class="count">4 tracks</span></div>
+    <div class="row">
+      <div class="thumb" data-seed="41" data-hue="#b03a52"></div>
+      <div class="row-body">
+        <div class="row-title">Killer Queen — Queen</div>
+        <div class="row-sub">Annotated 4 days ago · vocals, layering, word-painting</div>
+      </div>
+      <div class="row-right"><div class="row-notes">27 notes</div><div class="row-dur">3:01</div></div>
+    </div>
+    <div class="row hover">
+      <div class="thumb" data-seed="53" data-hue="#a85408"></div>
+      <div class="row-body">
+        <div class="row-title">Defying Gravity — Schwartz</div>
+        <div class="row-sub">Annotated last week · belt register, key change, orchestration</div>
+      </div>
+      <div class="row-right"><div class="row-notes">19 notes</div><div class="row-dur">5:58</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="61" data-hue="#1d6e64"></div>
+      <div class="row-body">
+        <div class="row-title">Music for a While — Purcell</div>
+        <div class="row-sub">Annotated last week · ground bass, ornamentation</div>
+      </div>
+      <div class="row-right"><div class="row-notes">14 notes</div><div class="row-dur">4:06</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="73" data-hue="#2b6499"></div>
+      <div class="row-body">
+        <div class="row-title">Release — Afro Celt Sound System</div>
+        <div class="row-sub">Annotated 2 weeks ago · fusion textures, drones</div>
+      </div>
+      <div class="row-right"><div class="row-notes">8 notes</div><div class="row-dur">7:00</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Jazz Unit</h2><span class="rule"></span><span class="count">3 tracks</span></div>
+    <div class="row">
+      <div class="thumb" data-seed="83" data-hue="#2b6499"></div>
+      <div class="row-body">
+        <div class="row-title">So What — Miles Davis</div>
+        <div class="row-sub">Annotated yesterday · modal harmony, solo structure</div>
+      </div>
+      <div class="row-right"><div class="row-notes">18 notes</div><div class="row-dur">9:22</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="97" data-hue="#5b3fb0"></div>
+      <div class="row-body">
+        <div class="row-title">Take Five — Dave Brubeck</div>
+        <div class="row-sub">Annotated 2 weeks ago · 5/4 metre, sax solo</div>
+      </div>
+      <div class="row-right"><div class="row-notes">9 notes</div><div class="row-dur">5:24</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="103" data-hue="#b03a52"></div>
+      <div class="row-body">
+        <div class="row-title">Blue Rondo à la Turk — Brubeck</div>
+        <div class="row-sub">Annotated 3 weeks ago · 9/8 groupings, form</div>
+      </div>
+      <div class="row-right"><div class="row-notes">11 notes</div><div class="row-dur">6:44</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Film Music</h2><span class="rule"></span><span class="count">2 tracks</span></div>
+    <div class="row">
+      <div class="thumb" data-seed="113" data-hue="#1d6e64"></div>
+      <div class="row-body">
+        <div class="row-title">Duel of the Fates — John Williams</div>
+        <div class="row-sub">Annotated a month ago · ostinato, choir, leitmotif</div>
+      </div>
+      <div class="row-right"><div class="row-notes">13 notes</div><div class="row-dur">4:14</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="127" data-hue="#2b6499"></div>
+      <div class="row-body">
+        <div class="row-title">Time — Hans Zimmer</div>
+        <div class="row-sub">Annotated a month ago · additive layering, pedal point</div>
+      </div>
+      <div class="row-right"><div class="row-notes">16 notes</div><div class="row-dur">4:35</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Unfiled</h2><span class="rule"></span><span class="count">3 tracks</span></div>
+    <div class="row">
+      <div class="thumb" data-seed="11" data-hue="#1d6e64"></div>
+      <div class="row-body">
+        <div class="row-title">Boléro — Maurice Ravel</div>
+        <div class="row-sub">Annotated 2 hours ago · instrumentation, one long crescendo</div>
+      </div>
+      <div class="row-right"><div class="row-notes">24 notes</div><div class="row-dur">15:50</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="23" data-hue="#5b3fb0"></div>
+      <div class="row-body">
+        <div class="row-title">Clair de Lune — Debussy<span class="shared">Shared</span></div>
+        <div class="row-sub">Annotated 3 days ago · planing, pedalling, rubato</div>
+      </div>
+      <div class="row-right"><div class="row-notes">31 notes</div><div class="row-dur">5:12</div></div>
+    </div>
+    <div class="row">
+      <div class="thumb" data-seed="37" data-hue="#a85408"></div>
+      <div class="row-body">
+        <div class="row-title">Also sprach Zarathustra — Strauss</div>
+        <div class="row-sub">Annotated 3 weeks ago · fanfare, organ pedal</div>
+      </div>
+      <div class="row-right"><div class="row-notes">7 notes</div><div class="row-dur">1:46</div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+  // Small print-figure waveforms for the index thumbnails.
+  function art(seed, hue) {
+    let s = seed * 7919 + 17;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const W = 56, H = 56, n = 12, bw = 2.4;
+    const gap = (W - 14 - n * bw) / (n - 1);
+    let bars = '';
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const env = Math.sin(t * Math.PI) ** 0.6;
+      const bh = 4 + rnd() * 30 * (0.3 + 0.7 * env);
+      const x = 7 + i * (bw + gap);
+      bars += `<rect x="${x.toFixed(1)}" y="${(H/2 - bh/2).toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="1" fill="${hue}"/>`;
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${bars}</svg>`;
+  }
+  document.querySelectorAll('.thumb').forEach(c => {
+    c.insertAdjacentHTML('afterbegin', art(+c.dataset.seed, c.dataset.hue));
+  });
+</script>
+</body>
+</html>
