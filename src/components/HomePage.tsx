@@ -473,6 +473,11 @@ function TrackTile({
   onMove: (folderId: string | null) => void
 }) {
   const n = p.annotations.length
+  // YouTube tracks lead with the video's own thumbnail — derived straight from
+  // the stored videoId (static image CDN, no API). Hidden if it 404s (deleted
+  // or private video), leaving the plain text tile.
+  const videoId = p.source?.type === 'youtube' ? p.source.videoId : undefined
+  const [thumbBroken, setThumbBroken] = useState(false)
   return (
     <div
       draggable
@@ -483,6 +488,20 @@ function TrackTile({
       onClick={onOpen}
       className="group flex cursor-pointer flex-col gap-2 rounded border border-line bg-panel p-3 transition-colors hover:border-line-strong"
     >
+      {videoId && !thumbBroken && (
+        /* Full-bleed strip above the body, hairline below — reads as the
+           tile's "viewer screen" (an inset well), not a floating card image. */
+        <div className="-mx-3 -mt-3 border-b border-line bg-inset">
+          <img
+            src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            onError={() => setThumbBroken(true)}
+            className="aspect-video w-full rounded-t-sm object-cover"
+          />
+        </div>
+      )}
       <div className="flex items-start gap-2">
         <span aria-hidden className="font-mono text-xs text-accentink/70">
           {sourceGlyph(p)}
