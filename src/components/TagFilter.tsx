@@ -6,6 +6,8 @@ import { usePresence } from '../lib/usePresence'
 interface Props {
   /** Every tag in use across the project's notes, in display order. */
   tags: string[]
+  /** How many notes carry each tag, keyed by the stored tag. */
+  counts: Map<string, number>
   /** Currently selected tags (empty = show all). A note matches any of them. */
   selected: Set<string>
   onChange: (next: Set<string>) => void
@@ -16,7 +18,7 @@ interface Props {
  * of the tags actually used in this project. Picking one or more narrows the
  * list to notes carrying any selected tag (OR). Mirrors TagPicker's dropdown.
  */
-export default function TagFilter({ tags, selected, onChange }: Props) {
+export default function TagFilter({ tags, counts, selected, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const pop = usePresence(open)
   const ref = useRef<HTMLDivElement>(null)
@@ -106,6 +108,9 @@ export default function TagFilter({ tags, selected, onChange }: Props) {
                   />
                   <span className="flex-1 truncate">{c.label}</span>
                   {on && <Check size={12} className="shrink-0 text-accentink" />}
+                  <span className="shrink-0 tabular-nums text-fg">
+                    {counts.get(t) ?? 0}
+                  </span>
                 </button>
               )
             })

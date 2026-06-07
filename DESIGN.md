@@ -205,7 +205,9 @@ alone, the dot + row tint + chip carry it.)
 
 Light is **"The Daylit Station": a white score on the instrument bench** —
 the page and canvas are literal white, framed by chrome tinted toward the
-active palette.
+active palette, and anchored by a **dark masthead**: the global header is the
+one zone that keeps the active palette's dark-theme chrome (see the
+Dark-Masthead Rule below).
 
 Light surface ramp (amber palette shown; the other palettes keep the same
 structure with their own neutral tint — see `src/index.css`) — the ramp
@@ -217,7 +219,7 @@ edges draw crisply:
 **inset** `#e5e3dc` · **border** `#b8b4a6` · **border-strong** `#84806f` ·
 **text** `#2a2620` · **muted** `#5f5646`.
 
-Three light-specific rules, all WCAG-AA verified:
+Four light-specific rules, all WCAG-AA verified:
 
 - **The White-Page Rule.** The notes list/editor and the canvas are **literal
   white** in light (`--note` = ink = `#ffffff`); the chrome framing them carries
@@ -241,7 +243,19 @@ Three light-specific rules, all WCAG-AA verified:
 - **The Hue-As-Data-Holds Rule.** The note/tag/element hues stay raw as **fills**
   in both themes; used as **text or a 1px border** on the white page they are
   mixed toward ink for AA (`src/lib/noteColors.ts` → `hueText`). The LED glow is
-  dropped in light (a glow is a dark-screen affordance).
+  dropped in light (a glow is a dark-screen affordance) — except inside the
+  dark masthead, which is a dark screen and keeps it.
+- **The Dark-Masthead Rule.** The global header keeps the active palette's
+  **dark**-theme chrome in light mode: the `.chrome-dark` zone class in
+  `src/index.css` re-applies the dark token blocks to that one element, so its
+  whole subtree (LED clock + glow, level meter, toggles, save status) restyles
+  through the same variables with no component changes. One dark bar anchors
+  the white page; the contrast pairs inside it are exactly the dark theme's,
+  already AA-verified. The zone is the masthead only — the track sub-bar,
+  panel title bars, and transport stay light. Popovers that portal to <body>
+  (theme menu) deliberately escape the zone and stay light. (Chosen 2026-06-08
+  from five mocked variants — mid-gray chrome, dark masthead, dark title-bar
+  strips, full dark chrome — over "everything near-white reads flat".)
 
 ## 3. Typography
 
@@ -341,15 +355,29 @@ controls (Set start / Set end / Clear end, delete, and the formatting toolbar)
 are hidden at rest and revealed on hover or focus, keeping the resting state
 quiet.
 
-### Navigation (Library)
-The signed-in landing view: every track is a flat Panel tile (hairline border,
-squared corners — no soft cards), grouped into folders with Drive semantics
-(folder tiles at the root, drill in to see a folder's tracks). A monospace
-glyph (▶ / ♪) marks the source type; meta lines (note count, updated-ago) are
-monospace Label style. Per-tile controls (move to folder, delete) are hidden at
-rest and revealed on hover/focus. Amber appears only on the primary New-track
-action, the Shared chip, and the drag-and-drop drop highlight. The wordmark and
-a Home button return here from the editor.
+### Navigation (Library) — "Station Cards"
+The signed-in landing view. Still flat Panel tiles (hairline border, squared
+corners — no soft cards), grouped into folders with Drive semantics (folder
+cards at the root, drill in to see a folder's tracks), but the surface warmed
+for a wider audience (2026-06-08) without leaving the system:
+
+- **Cover-led tiles.** Every track leads with its cover in an inset "viewer
+  screen" well (hairline below): the YouTube thumbnail, or — for audio files,
+  sourceless tracks, and dead thumbs — a deterministic waveform mark generated
+  from the track id in the id's note hue (`hueText`-mixed in light).
+- **The cue line.** Under each cover, a slim strip draws every note as a tick
+  at its real position in the track, in the note's own colour (positions
+  normalise against the last note; hues `hueText`-mixed in light). Colour
+  stays data — the line is the track's annotation fingerprint at a glance.
+- **Hue-coded folder cards** (id-derived hue icon, track + note tallies) plus
+  a dashed New-folder card; a time-of-day greeting and a prominent inset
+  search well sit above. Inside a folder the greeting yields to the Library
+  crumb (also the unfile drop target).
+- Meta lines stay monospace Label style; a glyph (▶ / ♪) still marks the
+  source; per-tile controls (move to folder, delete) stay hidden at rest and
+  revealed on hover/focus. Amber appears only on the primary New-track action,
+  the Shared chip, and the drag-and-drop drop highlight. The wordmark and a
+  Home button return here from the editor.
 
 ## 6. Do's and Don'ts
 

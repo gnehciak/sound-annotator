@@ -237,26 +237,9 @@ export function saveWindowMode(mode: 'dock' | 'modal'): void {
   }
 }
 
-// Auto-cue on click — when on, clicking a note in the list moves the playhead
-// to it (and opens it). Off leaves the playhead where it is; ⌘/Ctrl-click still
-// cues on demand. A workspace preference; defaults off (clicking just edits).
-const AUTO_SEEK_KEY = 'sound-annotator:auto-seek'
-
-export function loadAutoSeek(): boolean {
-  try {
-    return localStorage.getItem(AUTO_SEEK_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function saveAutoSeek(on: boolean): void {
-  try {
-    localStorage.setItem(AUTO_SEEK_KEY, on ? '1' : '0')
-  } catch {
-    /* ignore */
-  }
-}
+// Retired key: 'sound-annotator:auto-seek' — auto-cue used to be a standalone
+// toggle; it now rides the note-order switch (off for Timeline, on for
+// Auto/Live), so nothing reads or writes it anymore.
 
 // Overview timeline zoom — 'fit' (whole track) or a gridline unit in seconds
 // (e.g. 30 → 30-second divisions). A workspace preference remembered across

@@ -11,8 +11,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { Folder, Project } from '../types'
+import type { Annotation, Folder, Project } from '../types'
 import { formatRelativeTime } from '../lib/format'
+import { colorForId, hueText } from '../lib/noteColors'
+import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
+import { useAuth } from '../lib/auth'
 import Popover from './Popover'
 
 interface Props {
@@ -45,6 +48,12 @@ const hasTrack = (e: React.DragEvent) =>
 const sourceGlyph = (p: Project) =>
   p.source?.type === 'youtube' ? '▶' : p.source?.type === 'audio' ? '♪' : '·'
 
+/** Time-of-day salutation for the library greeting. */
+const salutation = () => {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
+
 /**
  * The home page: the signed-in landing view listing every track as a tile,
  * grouped into flat folders (Drive semantics — the root shows folder tiles
@@ -52,6 +61,12 @@ const sourceGlyph = (p: Project) =>
  * Tracks move between folders by drag-and-drop onto a folder tile (or the
  * Library crumb to unfile) and through each tile's "move to" menu. All data
  * mutations live in App; this component owns only ephemeral UI state.
+ *
+ * Visual scheme ("Station Cards"): every track leads with its cover — the
+ * YouTube thumbnail, or a waveform mark generated from the track id — over a
+ * slim cue line drawing each note as a tick at its real position in its own
+ * hue. Folders are hue-coded cards. Same flush-panel/hairline language as the
+ * editor; the warmth comes from the covers and the note colors, not the chrome.
  */
 export default function HomePage({
   projects,
@@ -66,6 +81,8 @@ export default function HomePage({
   onRenameFolder,
   onDeleteFolder,
 }: Props) {
+  const theme = useResolvedTheme()
+  const { user } = useAuth()
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -92,114 +109,28 @@ export default function HomePage({
     ? sorted.filter((p) => p.title.toLowerCase().includes(q))
     : sorted.filter((p) => folderOf(p) === (openFolder?.id ?? null))
 
+  // Per-folder track + note tallies for the folder cards' meta line.
   const counts = useMemo(() => {
-    const m = new Map<string | null, number>()
+    const m = new Map<string | null, { tracks: number; notes: number }>()
     for (const p of projects) {
       const k = p.folderId && folderIds.has(p.folderId) ? p.folderId : null
-      m.set(k, (m.get(k) ?? 0) + 1)
+      const c = m.get(k) ?? { tracks: 0, notes: 0 }
+      c.tracks += 1
+      c.notes += p.annotations.length
+      m.set(k, c)
     }
     return m
   }, [projects, folderIds])
 
   const empty = projects.length === 0 && folders.length === 0
+  const firstName = user?.displayName?.trim().split(/\s+/)[0]
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 animate-fade-in flex-col">
-      {/* Sub-bar: breadcrumbs + search + create actions (mirrors the editor's). */}
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-ink/60 px-3">
-        {openFolder ? (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {/* The root crumb doubles as the "unfile" drop target. */}
-            <button
-              type="button"
-              onClick={() => onOpenFolder(null)}
-              onDragOver={(e) => {
-                if (!hasTrack(e)) return
-                e.preventDefault()
-                e.dataTransfer.dropEffect = 'move'
-                setCrumbOver(true)
-              }}
-              onDragLeave={() => setCrumbOver(false)}
-              onDrop={(e) => {
-                if (!hasTrack(e)) return
-                e.preventDefault()
-                setCrumbOver(false)
-                onMoveTrack(e.dataTransfer.getData(TRACK_MIME), null)
-              }}
-              title="Back to the library (drop a track here to move it out)"
-              className={`press rounded border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors ${
-                crumbOver
-                  ? 'border-accent bg-accent/10 text-accentink'
-                  : 'border-transparent text-muted hover:text-fg'
-              }`}
-            >
-              Library
-            </button>
-            <span aria-hidden className="text-muted">
-              ›
-            </span>
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold tracking-wide text-fg">
-              <FolderIcon size={13} className="shrink-0 text-accentink/70" />
-              {openFolder.name}
-            </span>
-          </div>
-        ) : (
-          <span className="flex-1 truncate px-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-            Library
-          </span>
-        )}
-
-        {!empty && (
-          <div className="relative shrink-0">
-            <Search
-              size={13}
-              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted"
-            />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-              placeholder="Search tracks…"
-              aria-label="Search all tracks"
-              className="w-36 rounded border border-line bg-inset py-1 pl-7 pr-6 text-sm text-fg outline-none transition-colors placeholder:text-muted/70 focus:border-accent min-[720px]:w-60"
-            />
-            {searching && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                title="Clear search"
-                aria-label="Clear search"
-                className="press absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-fg"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-        )}
-        {!openFolder && (
-          <button
-            type="button"
-            onClick={() => setRenamingId(onCreateFolder())}
-            className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line bg-raised px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
-          >
-            <FolderPlus size={13} />
-            <span className="hidden sm:inline">New folder</span>
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onCreateTrack}
-          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
-        >
-          <Plus size={13} />
-          <span className="hidden sm:inline">New track</span>
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+      <div className="flex-1 overflow-y-auto">
         {empty ? (
           /* First run: nothing at all yet — the old editor empty state's hero. */
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="text-5xl">🎛️</div>
             <h2 className="text-lg font-semibold text-fg">
               Annotate a piece of music
@@ -217,19 +148,115 @@ export default function HomePage({
             </button>
           </div>
         ) : (
-          <>
-            {/* Folder tiles — root only, and hidden while a search is on. */}
-            {!searching && !openFolder && folders.length > 0 && (
-              <section className="mb-6">
-                <h2 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+          <div className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6">
+            {/* Top block: greeting at the root, breadcrumb inside a folder. */}
+            <div className="mb-6 flex items-start justify-between gap-4">
+              {openFolder ? (
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {/* The root crumb doubles as the "unfile" drop target. */}
+                    <button
+                      type="button"
+                      onClick={() => onOpenFolder(null)}
+                      onDragOver={(e) => {
+                        if (!hasTrack(e)) return
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setCrumbOver(true)
+                      }}
+                      onDragLeave={() => setCrumbOver(false)}
+                      onDrop={(e) => {
+                        if (!hasTrack(e)) return
+                        e.preventDefault()
+                        setCrumbOver(false)
+                        onMoveTrack(e.dataTransfer.getData(TRACK_MIME), null)
+                      }}
+                      title="Back to the library (drop a track here to move it out)"
+                      className={`press rounded border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors ${
+                        crumbOver
+                          ? 'border-accent bg-accent/10 text-accentink'
+                          : 'border-transparent text-muted hover:text-fg'
+                      }`}
+                    >
+                      Library
+                    </button>
+                    <span aria-hidden className="text-muted">
+                      ›
+                    </span>
+                    <h1 className="flex min-w-0 items-center gap-2 truncate text-xl font-semibold tracking-tight text-fg-strong">
+                      <FolderIcon
+                        size={16}
+                        className="shrink-0"
+                        style={{
+                          color: hueText(colorForId(openFolder.id), theme),
+                        }}
+                      />
+                      {openFolder.name}
+                    </h1>
+                  </div>
+                </div>
+              ) : (
+                <div className="min-w-0">
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-fg-strong">
+                    {salutation()}
+                    {firstName ? `, ${firstName}` : ''}
+                  </h1>
+                  <p className="mt-1 text-[13px] text-muted">
+                    Pick up a track, or bring in something new to annotate.
+                  </p>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={onCreateTrack}
+                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
+              >
+                <Plus size={13} />
+                <span className="hidden sm:inline">New track</span>
+              </button>
+            </div>
+
+            {/* Search well — spans every folder, like the old sub-bar's. */}
+            <div className="relative mb-8 max-w-[520px]">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+                placeholder="Search your tracks…"
+                aria-label="Search all tracks"
+                className="bevel-inset w-full rounded border border-line bg-inset py-2 pl-9 pr-8 text-sm text-fg outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
+              />
+              {searching && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  title="Clear search"
+                  aria-label="Clear search"
+                  className="press absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-fg"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Folder cards — root only, and hidden while a search is on. */}
+            {!searching && !openFolder && (
+              <section className="mb-8">
+                <h2 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
                   Folders
                 </h2>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
                   {folders.map((f) => (
                     <FolderTile
                       key={f.id}
                       folder={f}
-                      count={counts.get(f.id) ?? 0}
+                      theme={theme}
+                      tracks={counts.get(f.id)?.tracks ?? 0}
+                      notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
@@ -242,12 +269,19 @@ export default function HomePage({
                       onDropTrack={(id) => onMoveTrack(id, f.id)}
                     />
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setRenamingId(onCreateFolder())}
+                    className="press flex min-h-[58px] items-center justify-center gap-2 rounded border border-dashed border-line font-mono text-[11px] uppercase tracking-wider text-muted hover:border-line-strong hover:text-fg"
+                  >
+                    <FolderPlus size={13} /> New folder
+                  </button>
                 </div>
               </section>
             )}
 
             <section>
-              <h2 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+              <h2 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
                 {searching
                   ? `Results — ${visible.length}`
                   : openFolder
@@ -260,7 +294,7 @@ export default function HomePage({
                     No tracks match “{query.trim()}”.
                   </p>
                 ) : openFolder ? (
-                  <div className="flex flex-col items-center gap-3 border border-dashed border-line py-12 text-center">
+                  <div className="flex flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center">
                     <FolderIcon size={22} className="text-muted/50" />
                     <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
                       Nothing in this folder yet
@@ -283,11 +317,12 @@ export default function HomePage({
                   </p>
                 )
               ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
                   {visible.map((p) => (
                     <TrackTile
                       key={p.id}
                       project={p}
+                      theme={theme}
                       folders={folders}
                       // Search results span folders — label each with its home.
                       folderName={
@@ -307,10 +342,97 @@ export default function HomePage({
                 </div>
               )}
             </section>
-          </>
+          </div>
         )}
       </div>
     </main>
+  )
+}
+
+/* ---- cover art + cue line ------------------------------------------------- */
+
+/**
+ * Waveform mark for tracks without a thumbnail (audio files, no source yet,
+ * or a dead YouTube thumb). Deterministic from the track id — the same hue
+ * rotation the notes use, bars from a seeded LCG — so a track keeps its cover.
+ */
+function WaveArt({ id, theme }: { id: string; theme: ResolvedTheme }) {
+  const bars = useMemo(() => {
+    let h = 0
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+    const n = 26
+    const W = 320
+    const H = 180
+    const bw = 4
+    const gap = (W - 60 - n * bw) / (n - 1)
+    const out: { x: number; y: number; w: number; h: number }[] = []
+    // Seeded LCG, advanced inline per bar (no closure — keeps the memo pure).
+    let s = (h || 1) >>> 0
+    for (let i = 0; i < n; i++) {
+      s = (s * 1103515245 + 12345) % 2147483648
+      const t = i / (n - 1)
+      const env = Math.sin(t * Math.PI) ** 0.6
+      const bh = 8 + (s / 2147483648) * 80 * (0.3 + 0.7 * env)
+      out.push({ x: 30 + i * (bw + gap), y: H / 2 - bh / 2, w: bw, h: bh })
+    }
+    return out
+  }, [id])
+  // hueText keeps the bars crisp on the pale inset well in light mode.
+  const hue = hueText(colorForId(id), theme)
+  return (
+    <svg
+      viewBox="0 0 320 180"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+      className="absolute inset-0 h-full w-full"
+    >
+      {bars.map((b, i) => (
+        <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} fill={hue} />
+      ))}
+    </svg>
+  )
+}
+
+/**
+ * The cue line: every note drawn as a tick at its position in the track, in
+ * its own colour — the simplified annotation fingerprint. Positions normalise
+ * against the last note (track duration isn't stored), which keeps relative
+ * spacing honest. Notes with no siblings still read as "annotated".
+ */
+function CueLine({
+  notes,
+  theme,
+}: {
+  notes: Annotation[]
+  theme: ResolvedTheme
+}) {
+  const ticks = useMemo(() => {
+    if (notes.length === 0) return []
+    const last = Math.max(...notes.map((n) => n.end ?? n.start), 1)
+    const scale = last * 1.04 // small right pad so the last tick isn't flush
+    return notes.map((n) => ({
+      x: 4 + (n.start / scale) * 989,
+      color: hueText(n.color ?? colorForId(n.id), theme),
+    }))
+  }, [notes, theme])
+  return (
+    <svg
+      viewBox="0 0 1000 100"
+      preserveAspectRatio="none"
+      aria-hidden
+      className="h-full w-full"
+    >
+      <rect
+        x={0}
+        y={46}
+        width={1000}
+        height={8}
+        style={{ fill: 'rgb(var(--text) / 0.1)' }}
+      />
+      {ticks.map((t, i) => (
+        <rect key={i} x={t.x} y={16} width={7} height={68} fill={t.color} />
+      ))}
+    </svg>
   )
 }
 
@@ -318,7 +440,9 @@ export default function HomePage({
 
 function FolderTile({
   folder,
-  count,
+  theme,
+  tracks,
+  notes,
   renaming,
   onOpen,
   onStartRename,
@@ -328,7 +452,9 @@ function FolderTile({
   onDropTrack,
 }: {
   folder: Folder
-  count: number
+  theme: ResolvedTheme
+  tracks: number
+  notes: number
   renaming: boolean
   onOpen: () => void
   onStartRename: () => void
@@ -341,6 +467,9 @@ function FolderTile({
   // Esc cancels the rename, but the input's unmount still fires blur — the
   // flag keeps that trailing blur from committing anyway.
   const cancelledRef = useRef(false)
+  // Folder identity hue: same stable id-derived rotation the notes use.
+  const hue = colorForId(folder.id)
+  const hueInk = hueText(hue, theme)
 
   return (
     <div
@@ -363,13 +492,19 @@ function FolderTile({
         setOver(false)
         onDropTrack(e.dataTransfer.getData(TRACK_MIME))
       }}
-      className={`group flex cursor-pointer items-center gap-2.5 rounded border p-3 transition-colors ${
+      className={`group flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
         over
           ? 'border-accent bg-accent/10'
           : 'border-line bg-panel hover:border-line-strong'
       }`}
     >
-      <FolderIcon size={16} className="shrink-0 text-accentink/70" />
+      <div
+        aria-hidden
+        className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded"
+        style={{ background: `color-mix(in srgb, ${hue} 13%, transparent)` }}
+      >
+        <FolderIcon size={16} style={{ color: hueInk }} />
+      </div>
       <div className="min-w-0 flex-1">
         {renaming ? (
           <input
@@ -404,13 +539,14 @@ function FolderTile({
               onOpen()
             }}
             title={folder.name}
-            className="block w-full truncate text-left text-sm font-semibold tracking-wide text-fg"
+            className="block w-full truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
           >
             {folder.name}
           </button>
         )}
         <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">
-          {count} {count === 1 ? 'track' : 'tracks'}
+          {tracks} {tracks === 1 ? 'track' : 'tracks'}
+          {notes > 0 && ` · ${notes} ${notes === 1 ? 'note' : 'notes'}`}
         </p>
       </div>
       {!renaming && (
@@ -433,10 +569,10 @@ function FolderTile({
               e.stopPropagation()
               // Deleting never deletes tracks — they fall back to the library.
               if (
-                count === 0 ||
+                tracks === 0 ||
                 confirm(
-                  `Delete folder “${folder.name}”? Its ${count} ${
-                    count === 1 ? 'track moves' : 'tracks move'
+                  `Delete folder “${folder.name}”? Its ${tracks} ${
+                    tracks === 1 ? 'track moves' : 'tracks move'
                   } back to the library.`,
                 )
               )
@@ -458,6 +594,7 @@ function FolderTile({
 
 function TrackTile({
   project: p,
+  theme,
   folders,
   folderName,
   onOpen,
@@ -465,6 +602,7 @@ function TrackTile({
   onMove,
 }: {
   project: Project
+  theme: ResolvedTheme
   folders: Folder[]
   /** Shown as a chip on cross-folder search results (null hides it). */
   folderName: string | null
@@ -474,8 +612,8 @@ function TrackTile({
 }) {
   const n = p.annotations.length
   // YouTube tracks lead with the video's own thumbnail — derived straight from
-  // the stored videoId (static image CDN, no API). Hidden if it 404s (deleted
-  // or private video), leaving the plain text tile.
+  // the stored videoId (static image CDN, no API). A 404 (deleted or private
+  // video) falls back to the generated waveform mark, like audio tracks.
   const videoId = p.source?.type === 'youtube' ? p.source.videoId : undefined
   const [thumbBroken, setThumbBroken] = useState(false)
   return (
@@ -486,23 +624,28 @@ function TrackTile({
         e.dataTransfer.effectAllowed = 'move'
       }}
       onClick={onOpen}
-      className="group flex cursor-pointer flex-col gap-2 rounded border border-line bg-panel p-3 transition-colors hover:border-line-strong"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded border border-line bg-panel transition-colors hover:border-line-strong"
     >
-      {videoId && !thumbBroken && (
-        /* Full-bleed strip above the body, hairline below — reads as the
-           tile's "viewer screen" (an inset well), not a floating card image. */
-        <div className="-mx-3 -mt-3 border-b border-line bg-inset">
+      {/* Cover — the tile's "viewer screen": an inset well under a hairline. */}
+      <div className="relative aspect-video w-full border-b border-line bg-inset">
+        {videoId && !thumbBroken ? (
           <img
             src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
             alt=""
             loading="lazy"
             draggable={false}
             onError={() => setThumbBroken(true)}
-            className="aspect-video w-full rounded-t-sm object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
-        </div>
-      )}
-      <div className="flex items-start gap-2">
+        ) : (
+          <WaveArt id={p.id} theme={theme} />
+        )}
+      </div>
+      {/* Cue line — the track's notes at their real positions. */}
+      <div className="mx-3 mt-2.5 h-3 shrink-0">
+        <CueLine notes={p.annotations} theme={theme} />
+      </div>
+      <div className="flex items-start gap-2 px-3 pt-1.5">
         <span aria-hidden className="font-mono text-xs text-accentink/70">
           {sourceGlyph(p)}
         </span>
@@ -513,7 +656,7 @@ function TrackTile({
             onOpen()
           }}
           title={p.title}
-          className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-fg"
+          className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
         >
           {p.title}
         </button>
@@ -533,7 +676,7 @@ function TrackTile({
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-3 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
         <span>
           {n} {n === 1 ? 'note' : 'notes'}
         </span>

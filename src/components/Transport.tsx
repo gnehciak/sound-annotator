@@ -8,8 +8,6 @@ import {
   ChevronsRight,
   ChevronDown,
   Check,
-  SkipBack,
-  SkipForward,
   Volume2,
   Volume1,
   VolumeX,
@@ -28,7 +26,6 @@ interface Props {
   /** Current volume, 0–1. */
   volume: number
   muted: boolean
-  hasNotes: boolean
   readOnly?: boolean
   onPlayPause: () => void
   onSeek: (t: number) => void
@@ -37,8 +34,6 @@ interface Props {
   onSetRate: (rate: number) => void
   onSetVolume: (v: number) => void
   onToggleMute: () => void
-  onPrevNote: () => void
-  onNextNote: () => void
 }
 
 export default function Transport({
@@ -48,7 +43,6 @@ export default function Transport({
   playbackRate,
   volume,
   muted,
-  hasNotes,
   readOnly = false,
   onPlayPause,
   onSeek,
@@ -56,8 +50,6 @@ export default function Transport({
   onSetRate,
   onSetVolume,
   onToggleMute,
-  onPrevNote,
-  onNextNote,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -186,15 +178,16 @@ export default function Transport({
           />
         </div>
 
-        <span className="shrink-0 font-mono text-xs text-muted">
+        <span className="shrink-0 font-mono text-sm text-muted">
           {formatTime(duration)}
         </span>
+      </div>
 
-        {/* playback speed — a dropdown; a non-default rate flags amber on the trigger.
-           `flex items-center` (not a bare block) so the inline-flex button isn't
-           dropped onto the wrapper's text baseline — that left it sitting low
-           relative to the bare time readouts. */}
-        <div ref={speedRef} className="relative flex shrink-0 items-center">
+      {/* row 1: playback — speed in the left corner, volume in the right,
+         icon-only ±1s/±5s nudges around play in the center */}
+      <div className="flex items-center gap-1.5">
+        {/* playback speed — a dropdown; a non-default rate flags amber on the trigger */}
+        <div ref={speedRef} className="relative flex flex-1 items-center justify-start">
           <button
             type="button"
             onClick={() => setSpeedOpen((o) => !o)}
@@ -219,7 +212,7 @@ export default function Transport({
             <div
               role="listbox"
               aria-label="Playback speed"
-              className="absolute right-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in overflow-hidden rounded border border-line bg-panel shadow-lg shadow-black/40"
+              className="absolute left-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in overflow-hidden rounded border border-line bg-panel shadow-lg shadow-black/40"
             >
               {RATES.map((r) => (
                 <button
@@ -245,74 +238,57 @@ export default function Transport({
           )}
         </div>
 
-        <VolumeControl
-          volume={volume}
-          muted={muted}
-          onSetVolume={onSetVolume}
-          onToggleMute={onToggleMute}
-        />
-      </div>
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
+          <button
+            onClick={() => onStep(-5)}
+            aria-label="Back 5 seconds"
+            title="Jump back 5 seconds (Shift ←)"
+            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+          >
+            <ChevronsLeft size={13} />
+          </button>
+          <button
+            onClick={() => onStep(-1)}
+            aria-label="Back 1 second"
+            title="Jump back 1 second (←)"
+            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            onClick={onPlayPause}
+            title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+            className="press inline-flex h-7 w-24 items-center justify-center gap-1.5 bg-accent text-sm font-bold text-onaccent hover:brightness-110"
+          >
+            {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button
+            onClick={() => onStep(1)}
+            aria-label="Forward 1 second"
+            title="Jump forward 1 second (→)"
+            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+          >
+            <ChevronRight size={13} />
+          </button>
+          <button
+            onClick={() => onStep(5)}
+            aria-label="Forward 5 seconds"
+            title="Jump forward 5 seconds (Shift →)"
+            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+          >
+            <ChevronsRight size={13} />
+          </button>
+        </div>
 
-      {/* row 1: playback (flanked by prev/next-note jumps) */}
-      <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <button
-          onClick={onPrevNote}
-          disabled={!hasNotes}
-          aria-label="Previous note"
-          title="Jump to the previous note (↑)"
-          className="press inline-flex items-center border border-line px-2 py-1.5 text-muted hover:border-line-strong hover:text-fg disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
-        >
-          <SkipBack size={13} />
-        </button>
-        <button
-          onClick={() => onStep(-5)}
-          aria-label="Back 5 seconds"
-          title="Jump back 5 seconds (Shift ←)"
-          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
-        >
-          <ChevronsLeft size={13} /> 5s
-        </button>
-        <button
-          onClick={() => onStep(-1)}
-          aria-label="Back 1 second"
-          title="Jump back 1 second (←)"
-          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
-        >
-          <ChevronLeft size={13} /> 1s
-        </button>
-        <button
-          onClick={onPlayPause}
-          title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-          className="press bevel-raised inline-flex w-24 items-center justify-center gap-1.5 bg-accent py-1.5 text-sm font-bold text-onaccent hover:brightness-110"
-        >
-          {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <button
-          onClick={() => onStep(1)}
-          aria-label="Forward 1 second"
-          title="Jump forward 1 second (→)"
-          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
-        >
-          1s <ChevronRight size={13} />
-        </button>
-        <button
-          onClick={() => onStep(5)}
-          aria-label="Forward 5 seconds"
-          title="Jump forward 5 seconds (Shift →)"
-          className="press inline-flex items-center gap-1 border border-line px-2 py-1.5 font-mono text-xs text-muted hover:border-line-strong hover:text-fg"
-        >
-          5s <ChevronsRight size={13} />
-        </button>
-        <button
-          onClick={onNextNote}
-          disabled={!hasNotes}
-          aria-label="Next note"
-          title="Jump to the next note (↓)"
-          className="press inline-flex items-center border border-line px-2 py-1.5 text-muted hover:border-line-strong hover:text-fg disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
-        >
-          <SkipForward size={13} />
-        </button>
+        <div className="flex flex-1 items-center justify-end">
+          <VolumeControl
+            volume={volume}
+            muted={muted}
+            onSetVolume={onSetVolume}
+            onToggleMute={onToggleMute}
+          />
+        </div>
       </div>
     </div>
 
@@ -338,10 +314,12 @@ export default function Transport({
 }
 
 /**
- * Mute toggle + a compact drag/click volume slider, styled like the seek bar.
- * Drives the loaded player's volume (YouTube via the IFrame API, audio via
- * wavesurfer). The slider also takes arrow keys when focused — stopPropagation
- * keeps those off the global ←/→ seek shortcuts.
+ * Collapsed-by-default volume: just the speaker icon; a click opens a small
+ * popover holding a vertical drag/click slider (volume rises upward). While
+ * open, the icon doubles as the mute toggle; outside click or Escape
+ * dismisses it. Drives the loaded player's volume (YouTube via the
+ * IFrame API, audio via wavesurfer). The slider also takes arrow keys when
+ * focused — stopPropagation keeps those off the global ←/→ seek shortcuts.
  */
 function VolumeControl({
   volume,
@@ -354,43 +332,67 @@ function VolumeControl({
   onSetVolume: (v: number) => void
   onToggleMute: () => void
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
+  const [open, setOpen] = useState(false)
   const level = muted ? 0 : volume
   const pct = Math.round(level * 100)
   const Icon = level === 0 ? VolumeX : level < 0.5 ? Volume1 : Volume2
 
-  const setFromX = (clientX: number) => {
+  // Collapse the revealed slider on outside click / Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // Vertical track: volume rises toward the top, so invert against rect.bottom.
+  const setFromY = (clientY: number) => {
     const el = trackRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    onSetVolume(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)))
+    onSetVolume(Math.min(1, Math.max(0, (rect.bottom - clientY) / rect.height)))
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <div ref={wrapRef} className="relative flex shrink-0 items-center">
       <button
         type="button"
-        onClick={onToggleMute}
-        aria-label={muted ? 'Unmute' : 'Mute'}
-        aria-pressed={muted}
-        title={muted ? 'Unmute' : 'Mute'}
+        onClick={() => (open ? onToggleMute() : setOpen(true))}
+        aria-label={open ? (muted ? 'Unmute' : 'Mute') : 'Volume'}
+        aria-expanded={open}
+        title={open ? (muted ? 'Unmute' : 'Mute') : `Volume ${pct}%`}
         className={`press ${muted ? 'text-accentink' : 'text-muted hover:text-fg'}`}
       >
         <Icon size={15} />
       </button>
+      {open && (
+      // Static -translate-x-1/2 centering lives on this outer wrapper because
+      // panel-in fills `transform: none` and would clobber it on the same node.
+      <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
+      <div className="animate-panel-in rounded border border-line bg-panel py-2 shadow-lg shadow-black/40">
       <div
         ref={trackRef}
         role="slider"
         tabIndex={0}
         aria-label="Volume"
+        aria-orientation="vertical"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
         title={`Volume ${pct}%`}
         onPointerDown={(e) => {
           draggingRef.current = true
-          setFromX(e.clientX)
+          setFromY(e.clientY)
           try {
             e.currentTarget.setPointerCapture(e.pointerId)
           } catch {
@@ -398,7 +400,7 @@ function VolumeControl({
           }
         }}
         onPointerMove={(e) => {
-          if (draggingRef.current) setFromX(e.clientX)
+          if (draggingRef.current) setFromY(e.clientY)
         }}
         onPointerUp={(e) => {
           draggingRef.current = false
@@ -419,19 +421,22 @@ function VolumeControl({
             onSetVolume(Math.max(0, level - 0.05))
           }
         }}
-        className="group relative w-16 cursor-pointer touch-none py-2 outline-none"
+        className="group relative h-20 cursor-pointer touch-none px-2.5 outline-none"
       >
-        <div className="h-1.5 w-full overflow-hidden rounded-full border border-line bg-inset group-focus-visible:border-accent">
+        <div className="relative h-full w-1.5 overflow-hidden rounded-full border border-line bg-inset group-focus-visible:border-accent">
           <div
-            className="h-full rounded-full bg-accent"
-            style={{ width: `${pct}%` }}
+            className="absolute bottom-0 w-full rounded-full bg-accent"
+            style={{ height: `${pct}%` }}
           />
         </div>
         <div
-          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
-          style={{ left: `${pct}%` }}
+          className="absolute left-1/2 h-3 w-3 -translate-x-1/2 translate-y-1/2 rounded-full border border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
+          style={{ bottom: `${pct}%` }}
         />
       </div>
+      </div>
+      </div>
+      )}
     </div>
   )
 }

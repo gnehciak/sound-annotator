@@ -29,7 +29,9 @@ peak / danger / onbright / rowsel`). Per-note colors live in
 
 **Themes** flow off that one token set, on two axes: `data-theme` (mode:
 dark, the default, or light — white-page: literal-white page/canvas framed by
-tinted chrome; the light ramp inverts so raised shades below panel) and
+tinted chrome; the light ramp inverts so raised shades below panel; the global
+header keeps dark chrome via the `.chrome-dark` zone class — the "dark
+masthead") and
 `data-palette` (signal hue: amber default / cyan / vermilion / violet / mono),
 both on `<html>`. A boot script in `index.html` paints both flash-free before render;
 `src/lib/theme.ts` is the runtime (`useTheme` controller, `useResolvedTheme`

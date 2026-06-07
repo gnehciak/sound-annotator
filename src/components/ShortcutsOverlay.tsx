@@ -5,8 +5,8 @@ const GROUPS = [
     title: 'Transport',
     items: [
       { keys: ['Space'], label: 'Play / pause' },
-      { keys: ['←', '→'], label: 'Seek 1 second' },
-      { keys: ['⇧', '←', '→'], label: 'Seek 5 seconds' },
+      { keys: ['↑', '↓'], label: 'Nudge 1 second' },
+      { keys: ['←', '→'], label: 'Seek 5 seconds' },
     ],
   },
   {
@@ -15,7 +15,7 @@ const GROUPS = [
       { keys: ['N'], label: 'Add note at current time' },
       { keys: ['I'], label: 'Mark section start' },
       { keys: ['O'], label: 'Mark section end' },
-      { keys: ['↑', '↓'], label: 'Previous / next note' },
+      { keys: ['[', ']'], label: 'Previous / next note' },
     ],
   },
   {

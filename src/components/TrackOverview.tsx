@@ -3,7 +3,6 @@ import { ZoomIn, ZoomOut, Crosshair, ChevronDown, ChevronRight } from 'lucide-re
 import type { Annotation } from '../types'
 import { colorForId, hueText } from '../lib/noteColors'
 import { formatTime, noteLabel, notePreview } from '../lib/format'
-import { resolveTag, tagsOf } from '../lib/tags'
 import { loadOverviewZoom, saveOverviewZoom, type OverviewZoom } from '../lib/storage'
 import { useResolvedTheme } from '../lib/theme'
 
@@ -175,20 +174,6 @@ export default function TrackOverview({
         })),
     [annotations],
   )
-
-  const tagCounts = useMemo(() => {
-    const m = new Map<string, { label: string; color: string; count: number }>()
-    for (const a of annotations) {
-      for (const t of tagsOf(a)) {
-        const info = resolveTag(t)
-        if (!info) continue
-        const e = m.get(t)
-        if (e) e.count++
-        else m.set(t, { label: info.label, color: info.color, count: 1 })
-      }
-    }
-    return [...m.values()].sort((a, b) => b.count - a.count)
-  }, [annotations])
 
   const usableBase = Math.max(0, railW - PAD * 2)
   const effZoom = effectiveZoomOf(zoom, usableBase, duration)
@@ -627,22 +612,6 @@ export default function TrackOverview({
         )}
       </div>
 
-      {/* Session readout — just the tag tallies (slides with the timeline). */}
-      {tagCounts.length > 0 && (
-        <div className="shrink-0 border-t border-line bg-inset/40 px-3 py-1.5">
-          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
-            {tagCounts.map((t) => (
-              <span key={t.label} className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.color }} />
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                  {t.label}
-                </span>
-                <span className="font-mono text-[10px] tabular-nums text-fg">{t.count}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
        </div>
       </div>
 

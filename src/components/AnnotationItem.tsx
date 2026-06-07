@@ -1,7 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { Play, ArrowUp, ArrowDown, RotateCw } from 'lucide-react'
 import type { Annotation } from '../types'
-import { noteLabel, formatTime } from '../lib/format'
+import { noteLabel } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
@@ -295,20 +295,7 @@ export default function AnnotationItem({
           )
         })}
 
-        {isRange && (
-          <span className="font-mono text-[10px] text-muted" title="How long this section lasts">
-            ({formatTime(annotation.end! - annotation.start)} long)
-          </span>
-        )}
-
         <div className="flex-1" />
-
-        {active && (
-          <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-accentink">
-            <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
-            playing
-          </span>
-        )}
       </div>
 
       {/* body preview — text rendered read-only, then a summary line per block */}

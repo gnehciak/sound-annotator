@@ -1,41 +1,39 @@
-import { Crosshair, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import type { NoteOrder } from '../lib/storage'
 import TagFilter from './TagFilter'
 
 /**
- * The inline controls in the Notes panel header: tag filter, list-order switch,
- * and auto-cue. All are view preferences (they never mutate notes), so they live
- * here once and are rendered by both the editor (App) and the read-only
- * ShareViewer. Wired to {@link useNotesView}. Auto-pin has no control of its own
- * — it's coupled to the order (on for Live/Auto, off for Timeline).
+ * The inline controls in the Notes panel header: search, tag filter, and the
+ * list-order switch. All are view preferences (they never mutate notes), so they
+ * live here once and are rendered by both the editor (App) and the read-only
+ * ShareViewer. Wired to {@link useNotesView}. Auto-pin and auto-cue have no
+ * controls of their own — both are coupled to the order (on for Live/Auto, off
+ * for Timeline).
  */
 export default function NotesHeaderControls({
   filterTags,
+  filterTagCounts,
   activeFilter,
   onTagFilter,
   noteOrder,
   onNoteOrder,
-  autoSeek,
-  onToggleAutoSeek,
   searchOpen,
   searchActive,
   onToggleSearch,
   viewOnly = false,
 }: {
   filterTags: string[]
+  filterTagCounts: Map<string, number>
   activeFilter: Set<string>
   onTagFilter: (next: Set<string>) => void
   noteOrder: NoteOrder
   onNoteOrder: (mode: NoteOrder) => void
-  autoSeek: boolean
-  onToggleAutoSeek: () => void
   /** Whether the search row is open, and whether it currently has a query. */
   searchOpen: boolean
   searchActive: boolean
   onToggleSearch: () => void
   /**
-   * View-only mode: drops the editor-specific controls — no auto-cue toggle
-   * (note clicks just play) and no 'auto' order (only Timeline / Live).
+   * View-only mode: drops the 'auto' order (only Timeline / Live).
    */
   viewOnly?: boolean
 }) {
@@ -59,32 +57,17 @@ export default function NotesHeaderControls({
       >
         <Search size={14} />
       </button>
-      <TagFilter tags={filterTags} selected={activeFilter} onChange={onTagFilter} />
+      <TagFilter
+        tags={filterTags}
+        counts={filterTagCounts}
+        selected={activeFilter}
+        onChange={onTagFilter}
+      />
       <NoteOrderControl
         value={noteOrder}
         onChange={onNoteOrder}
         options={orderOptions}
       />
-      {!viewOnly && (
-        <button
-          type="button"
-          onClick={onToggleAutoSeek}
-          aria-pressed={autoSeek}
-          title={
-            autoSeek
-              ? 'Auto-cue on: clicking a note moves the playhead to it — click to turn off (⌘-click still cues)'
-              : 'Auto-cue off: clicking a note just opens it — ⌘-click to cue the playhead, or click to turn on'
-          }
-          aria-label="Move the playhead to a note when you click it"
-          className={`press rounded-sm p-1 ${
-            autoSeek
-              ? 'bg-raised text-accentink'
-              : 'text-muted hover:bg-raised hover:text-fg'
-          }`}
-        >
-          <Crosshair size={14} />
-        </button>
-      )}
     </div>
   )
 }
@@ -101,18 +84,20 @@ const NOTE_ORDER_OPTIONS: {
   {
     value: 'timeline',
     label: 'Timeline',
-    title: 'Timeline — always chronological (start-time) order; the list stays put',
+    title:
+      'Timeline — always chronological (start-time) order; the list stays put and clicking a note leaves the playhead alone (⌘-click cues)',
   },
   {
     value: 'auto',
     label: 'Auto',
     title:
-      'Auto — follows the playhead while playing (pins it to the top), chronological when paused',
+      'Auto — follows the playhead while playing (pins it to the top), chronological when paused; clicking a note cues the playhead',
   },
   {
     value: 'live',
     label: 'Live',
-    title: 'Live — always reorders around the playhead and pins the playing note to the top',
+    title:
+      'Live — always reorders around the playhead and pins the playing note to the top; clicking a note cues the playhead',
   },
 ]
 

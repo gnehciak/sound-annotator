@@ -42,14 +42,12 @@ import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
-  Home,
-  Keyboard,
+  ArrowLeft,
   LogOut,
   Eye,
   Pencil,
   Check,
   Play,
-  Music,
   Proportions,
   Undo2,
   Redo2,
@@ -404,9 +402,9 @@ export default function App() {
     changeNoteOrder,
     autoPin,
     autoSeek,
-    toggleAutoSeek,
     setTagFilter,
     filterTags,
+    filterTagCounts,
     activeFilter,
     search,
     setSearch,
@@ -727,6 +725,15 @@ export default function App() {
     resetHistory(projects, null)
     syncUrl(null)
   }
+  /** Back from the editor: home, landed inside the track's folder (root when
+      it has none — or when its folderId is foreign/stale and we don't own it). */
+  function goBack() {
+    const folderId = current?.folderId ?? null
+    setOpenFolderId(
+      folderId && folders.some((f) => f.id === folderId) ? folderId : null,
+    )
+    goHome()
+  }
 
   function createProject() {
     const p: Project = {
@@ -1010,8 +1017,9 @@ export default function App() {
     }
     setSelectedNoteId(id)
     // Cue the playhead to the note only when asked: a ⌘/Ctrl-click, or when the
-    // "auto-cue on click" toggle is on. Plain clicks leave the playhead put so
-    // editing doesn't keep jumping the player around. Never auto-plays.
+    // order is Auto/Live (auto-cue rides the order switch). In Timeline, plain
+    // clicks leave the playhead put so editing doesn't keep jumping the player
+    // around. Never auto-plays.
     if ((seekToo || autoSeek) && note) seek(note.start)
     // A modal inspector covers the transport, so pause when it'll open as one.
     if (effectiveWindowMode === 'modal') pause()
@@ -1125,17 +1133,25 @@ export default function App() {
         break
       case 'ArrowLeft':
         e.preventDefault()
-        step(e.shiftKey ? -5 : -1)
+        step(-5)
         break
       case 'ArrowRight':
         e.preventDefault()
-        step(e.shiftKey ? 5 : 1)
+        step(5)
         break
       case 'ArrowUp':
         e.preventDefault()
-        jumpNote(-1)
+        step(1)
         break
       case 'ArrowDown':
+        e.preventDefault()
+        step(-1)
+        break
+      case '[':
+        e.preventDefault()
+        jumpNote(-1)
+        break
+      case ']':
         e.preventDefault()
         jumpNote(1)
         break
@@ -1273,9 +1289,21 @@ export default function App() {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* ---- Global header ---- */}
-      <header className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2 sm:gap-3 sm:px-4">
-        {/* The wordmark doubles as the way home (with an explicit button beside
-            it while a track is open). */}
+      {/* `chrome-dark`: in light mode the masthead keeps the active palette's
+          dark-theme chrome (see index.css) — a dark bar anchoring the white
+          page; the LED clock gets its glow back. No-op in dark mode.
+          While the open track is editable ("armed"), the chrome takes the
+          signal — `masthead-armed` washes it accent with an accent hairline,
+          echoing the lit Edit key. View mode / the lock return it to panel. */}
+      <header
+        className={`chrome-dark flex items-center gap-2 border-b px-3 py-2 transition-colors duration-150 sm:gap-3 sm:px-4 ${
+          view === 'track' && !effectiveViewOnly
+            ? 'masthead-armed'
+            : 'border-line bg-panel'
+        }`}
+      >
+        {/* The wordmark doubles as the way home (the title sub-bar's back
+            arrow is the explicit route while a track is open). */}
         <button
           type="button"
           onClick={goHome}
@@ -1287,79 +1315,12 @@ export default function App() {
             Sound&nbsp;Annotator
           </span>
         </button>
-        {view === 'track' && (
-          <button
-            type="button"
-            onClick={goHome}
-            title="Back to the library"
-            aria-label="Back to the library"
-            className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
-          >
-            <Home size={16} />
-          </button>
-        )}
         {view === 'track' && viewOnly && !lockBlocked && (
-          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
+          <span className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-1.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
             <Eye size={11} /> View only
           </span>
         )}
-        {/* Edit-lock banner: someone else (or another tab) holds this track's
-            edit lock, or the owner turned link editing off — read-only until
-            it frees up or is taken over. */}
-        {view === 'track' && lockBlocked && (
-          <span
-            role="status"
-            className="flex min-w-0 items-center gap-1.5 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink"
-          >
-            <Pencil size={11} className="shrink-0" />
-            <span className="truncate">
-              {editLock.state === 'other'
-                ? `${lockHolderLabel ?? 'Someone'} is editing`
-                : 'Editing turned off'}
-            </span>
-          </span>
-        )}
-        {view === 'track' && editLock.state === 'other' && (
-          <button
-            type="button"
-            onClick={editLock.takeOver}
-            title="Take over editing — the other session becomes read-only"
-            className="press shrink-0 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-accent hover:text-accentink"
-          >
-            Take over
-          </button>
-        )}
         <div className="flex-1" />
-        {/* Save indicator: editing… (dirty, debouncing) → saving… (write in
-            flight) → saved. Driven by the persistence effect above. */}
-        {saveStatus !== 'idle' && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted"
-          >
-            {saveStatus === 'editing' && (
-              <>
-                <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-                Editing…
-              </>
-            )}
-            {saveStatus === 'saving' && (
-              <>
-                <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
-                Saving…
-              </>
-            )}
-            {saveStatus === 'saved' && (
-              <span className="flex items-center gap-1 text-meter">
-                <Check size={12} /> Saved
-              </span>
-            )}
-            {saveStatus === 'error' && (
-              <span className="text-accentink">Save failed</span>
-            )}
-          </div>
-        )}
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
             body keeps its own in-editor undo. ⌘Z / ⌘⇧Z (Ctrl on Win/Linux). */}
@@ -1375,7 +1336,7 @@ export default function App() {
               disabled={!canUndo}
               title="Undo (⌘Z)"
               aria-label="Undo"
-              className="press rounded-[1px] p-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+              className="press flex h-6 items-center rounded-[1px] px-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
             >
               <Undo2 size={15} />
             </button>
@@ -1385,15 +1346,16 @@ export default function App() {
               disabled={!canRedo}
               title="Redo (⌘⇧Z)"
               aria-label="Redo"
-              className="press rounded-[1px] p-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+              className="press flex h-6 items-center rounded-[1px] px-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
             >
               <Redo2 size={15} />
             </button>
           </div>
         )}
-        {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
-            fill keeps amber pure; the active View segment carries amber text to
-            echo the view-only state. The 'V' key still flips it. */}
+        {/* Mode toggle: a squared segmented switch (pencil | eye), icon-only.
+            The Edit key lights solid accent while armed — the header wash
+            echoes it; the active View segment stays a tonal fill with accent
+            text. The 'V' key still flips it. */}
         {view === 'track' && !lockBlocked && (
           <div
             role="group"
@@ -1405,34 +1367,59 @@ export default function App() {
               onClick={() => setViewMode(false)}
               aria-pressed={!viewOnly}
               title="Edit mode (V)"
-              className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-                viewOnly ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
+              aria-label="Edit mode"
+              className={`press flex h-6 w-8 items-center justify-center rounded-[1px] transition-colors duration-150 ${
+                viewOnly ? 'text-muted hover:text-fg' : 'bg-accent text-onaccent'
               }`}
             >
-              <Pencil size={12} /> Edit
+              <Pencil size={14} />
             </button>
             <button
               type="button"
               onClick={() => setViewMode(true)}
               aria-pressed={viewOnly}
               title="View-only mode (V)"
-              className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+              aria-label="View-only mode"
+              className={`press flex h-6 w-8 items-center justify-center rounded-[1px] transition-colors duration-150 ${
                 viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
               }`}
             >
-              <Eye size={12} /> View
+              <Eye size={14} />
             </button>
           </div>
         )}
-        {view === 'track' && (
-          <button
-            onClick={() => setShowHelp(true)}
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-            className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+        {/* Edit lock: someone else (or another tab) holds this track's edit
+            lock, or the owner turned link editing off. The status — and Take
+            over, which makes the other session read-only — sits in the mode
+            toggle's slot (the toggle is hidden while locked). */}
+        {view === 'track' && lockBlocked && (
+          <div
+            role="group"
+            aria-label="Edit lock"
+            className="flex min-w-0 items-center gap-px rounded-sm border border-line bg-inset p-px"
           >
-            <Keyboard size={16} />
-          </button>
+            <span
+              role="status"
+              className="flex h-6 min-w-0 items-center gap-1.5 rounded-[1px] bg-accent/10 px-2 font-mono text-[10px] uppercase tracking-wider text-accentink"
+            >
+              <Pencil size={12} className="shrink-0" />
+              <span className="truncate">
+                {editLock.state === 'other'
+                  ? `${lockHolderLabel ?? 'Someone'} is editing`
+                  : 'Editing turned off'}
+              </span>
+            </span>
+            {editLock.state === 'other' && (
+              <button
+                type="button"
+                onClick={editLock.takeOver}
+                title="Take over editing — the other session becomes read-only"
+                className="press flex h-6 shrink-0 items-center whitespace-nowrap rounded-[1px] px-2 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:bg-raised hover:text-accentink"
+              >
+                Take over
+              </button>
+            )}
+          </div>
         )}
         <ThemeToggle
           pref={themePref}
@@ -1475,7 +1462,7 @@ export default function App() {
               aria-label="Sign out"
               className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
             >
-              <LogOut size={15} />
+              <LogOut size={16} />
             </button>
           </div>
         )}
@@ -1502,49 +1489,89 @@ export default function App() {
         />
       ) : (
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Sub-bar: track title + source badge + per-track tools. */}
+          {/* Sub-bar: track title + per-track tools. */}
           <div className="flex h-11 items-center gap-2 border-b border-line bg-ink/60 px-3">
+            {/* Back to where the track lives: its folder, or the root library. */}
+            <button
+              type="button"
+              onClick={goBack}
+              title={`Back to ${
+                folders.find((f) => f.id === current.folderId)?.name ??
+                'the library'
+              }`}
+              aria-label="Back"
+              className="press -ml-1 shrink-0 rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+            >
+              <ArrowLeft size={16} />
+            </button>
             {effectiveViewOnly ? (
-              <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-wide text-fg">
+              <span className="min-w-0 truncate px-1 text-sm font-semibold tracking-wide text-fg">
                 {current.title}
               </span>
             ) : (
-              <input
-                value={current.title}
-                onChange={(e) =>
-                  commitProject(
-                    current.id,
-                    { title: e.target.value },
-                    { coalesceKey: `title:${current.id}` },
-                  )
-                }
-                aria-label="Track title"
-                className="min-w-0 flex-1 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg"
-              />
+              /* The input hugs its text — an invisible twin of the title sets
+                 the grid cell's width — and a pencil fades in on hover (and
+                 while editing) as the "this is editable" cue. */
+              <div className="group flex min-w-0 items-center gap-1.5">
+                <div className="inline-grid min-w-0">
+                  <span
+                    aria-hidden
+                    className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre px-1 text-sm font-semibold tracking-wide"
+                  >
+                    {current.title || 'Untitled track'}
+                  </span>
+                  <input
+                    value={current.title}
+                    onChange={(e) =>
+                      commitProject(
+                        current.id,
+                        { title: e.target.value },
+                        { coalesceKey: `title:${current.id}` },
+                      )
+                    }
+                    placeholder="Untitled track"
+                    aria-label="Track title"
+                    className="col-start-1 row-start-1 w-full min-w-0 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg placeholder:text-muted"
+                  />
+                </div>
+                <Pencil
+                  size={12}
+                  aria-hidden
+                  className="shrink-0 text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
+                />
+              </div>
             )}
-            {current.source &&
-              (current.source.type === 'youtube' ? (
-                <a
-                  href={
-                    current.source.youtubeUrl ??
-                    (current.source.videoId
-                      ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                      : undefined)
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open the original video on YouTube (new tab)"
-                  className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
-                >
-                  <Play size={12} />
-                  YouTube
-                </a>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                  <Music size={12} />
-                  Audio file
-                </span>
-              ))}
+            {/* Save indicator: editing… (dirty, debouncing) → saving… (write in
+                flight) → saved. Driven by the persistence effect above. */}
+            {saveStatus !== 'idle' && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted"
+              >
+                {saveStatus === 'editing' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+                    Editing…
+                  </>
+                )}
+                {saveStatus === 'saving' && (
+                  <>
+                    <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
+                    Saving…
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <span className="flex items-center gap-1 text-meter">
+                    <Check size={12} /> Saved
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className="text-accentink">Save failed</span>
+                )}
+              </div>
+            )}
+            <div className="min-w-0 flex-1" />
             {current.source && (
               <button
                 type="button"
@@ -1614,7 +1641,26 @@ export default function App() {
               >
                 <TitleBar
                   left="Player"
-                  right={current.source.type === 'youtube' ? 'YouTube' : 'Audio'}
+                  right={current.source.type === 'youtube' ? undefined : 'Audio'}
+                  actions={
+                    current.source.type === 'youtube' ? (
+                      <a
+                        href={
+                          current.source.youtubeUrl ??
+                          (current.source.videoId
+                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                            : undefined)
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open the original video on YouTube (new tab)"
+                        className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                      >
+                        <Play size={12} />
+                        YouTube
+                      </a>
+                    ) : undefined
+                  }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
                   <div
@@ -1659,7 +1705,6 @@ export default function App() {
                     playbackRate={playbackRate}
                     volume={volume}
                     muted={muted}
-                    hasNotes={(current.annotations.length ?? 0) > 0}
                     readOnly={effectiveViewOnly}
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
@@ -1667,8 +1712,6 @@ export default function App() {
                     onSetRate={setPlaybackRate}
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
-                    onPrevNote={() => jumpNote(-1)}
-                    onNextNote={() => jumpNote(1)}
                   />
                 </div>
 
@@ -1708,23 +1751,19 @@ export default function App() {
                 className={`flex min-w-0 flex-1 flex-col ${splitVariant.notes}`}
               >
                 <TitleBar
-                  left="Notes"
-                  right={
+                  left={`Notes (${
                     isFiltered
                       ? `${visibleAnnotations.length} / ${current.annotations.length}`
-                      : `${current.annotations.length} ${
-                          current.annotations.length === 1 ? 'note' : 'notes'
-                        }`
-                  }
+                      : current.annotations.length
+                  })`}
                   actions={
                     <NotesHeaderControls
                       filterTags={filterTags}
+                      filterTagCounts={filterTagCounts}
                       activeFilter={activeFilter}
                       onTagFilter={setTagFilter}
                       noteOrder={noteOrder}
                       onNoteOrder={changeNoteOrder}
-                      autoSeek={autoSeek}
-                      onToggleAutoSeek={toggleAutoSeek}
                       searchOpen={searchOpen}
                       searchActive={search.trim() !== ''}
                       onToggleSearch={toggleSearch}

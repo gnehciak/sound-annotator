@@ -17,10 +17,20 @@
    text/fill share one amber); they diverge only in light, where
    bright amber on a pale surface fails AA as text.
 
+   Zone class: `.chrome-dark` re-applies the dark blocks to ONE
+   element inside the light theme — the element (and its subtree)
+   keeps full dark-theme tokens for the active palette while the
+   rest of the page stays light. Used by the global header: light
+   mode's "dark masthead". Children restyle through the same vars
+   (LED clock + glow, meter, toggles) with no component changes;
+   portalled popovers escape the zone and stay light, which is
+   right — they float over light content.
+
    DARK — "The Listening Station" (warm-dark studio gear). Default.
    ============================================================ */
 :root,
-[data-theme='dark'] {
+[data-theme='dark'],
+[data-theme='light'] .chrome-dark {
   --bg-ink: 26 24 19; /* #1a1813 base */
   --bg-panel: 33 31 24; /* #211f18 panel */
   --bg-raised: 42 39 31; /* #2a271f raised control */
@@ -109,7 +119,8 @@
    ============================================================ */
 
 /* CYAN — "Scope": phosphor trace on cool graphite. */
-[data-theme='dark'][data-palette='cyan'] {
+[data-theme='dark'][data-palette='cyan'],
+[data-theme='light'][data-palette='cyan'] .chrome-dark {
   --bg-ink: 19 22 25; /* #131619 */
   --bg-panel: 25 29 33; /* #191d21 */
   --bg-raised: 32 38 43; /* #20262b */
@@ -142,7 +153,8 @@
 /* VERMILION — "Tally": broadcast REC light on neutral studio gray.
    Danger shifts to pink here so delete affordances never read as
    the signal red. */
-[data-theme='dark'][data-palette='vermilion'] {
+[data-theme='dark'][data-palette='vermilion'],
+[data-theme='light'][data-palette='vermilion'] .chrome-dark {
   --bg-ink: 23 21 20; /* #171514 */
   --bg-panel: 30 27 26; /* #1e1b1a */
   --bg-raised: 38 34 32; /* #262220 */
@@ -180,7 +192,8 @@
    the meter bars themselves go gray. The light accent is the one
    place --on-accent diverges from --on-bright: a near-black fill
    needs white text, while data-hue chips keep dark text. */
-[data-theme='dark'][data-palette='mono'] {
+[data-theme='dark'][data-palette='mono'],
+[data-theme='light'][data-palette='mono'] .chrome-dark {
   --bg-ink: 22 22 22; /* #161616 */
   --bg-panel: 29 29 29; /* #1d1d1d */
   --bg-raised: 38 38 38; /* #262626 */
@@ -215,7 +228,8 @@
 }
 
 /* VIOLET — "Lab": synth-hardware violet on neutral-cool gray. */
-[data-theme='dark'][data-palette='violet'] {
+[data-theme='dark'][data-palette='violet'],
+[data-theme='light'][data-palette='violet'] .chrome-dark {
   --bg-ink: 22 21 24; /* #161518 */
   --bg-panel: 28 27 31; /* #1c1b1f */
   --bg-raised: 36 34 40; /* #242228 */
@@ -257,6 +271,19 @@ body {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Armed masthead: while the open track is editable, the header chrome
+   takes the signal — an opaque accent-over-panel mix (opaque so the
+   light theme's dark masthead stays a dark bar; see .chrome-dark) with
+   an accent hairline. Follows the active palette via the tokens. */
+.masthead-armed {
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--accent)) 18%,
+    rgb(var(--bg-panel))
+  );
+  border-color: rgb(var(--accent) / 0.6);
 }
 
 /* LED-style readout (the transport/header clock) */

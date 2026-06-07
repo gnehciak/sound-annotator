@@ -68,6 +68,13 @@ export function tagsUsedIn(notes: TaggedNote[]): string[] {
   return [...presets, ...customTagsUsedIn(notes)]
 }
 
+/** How many notes carry each tag, keyed by the stored tag (preset id or custom text). */
+export function tagCountsIn(notes: TaggedNote[]): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const n of notes) for (const t of tagsOf(n)) m.set(t, (m.get(t) ?? 0) + 1)
+  return m
+}
+
 /** Resolve a stored tag (preset id or custom text) to a display label + color. */
 export function resolveTag(tag?: string): { label: string; color: string } | undefined {
   if (!tag) return undefined

@@ -165,10 +165,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     noteOrder,
     changeNoteOrder,
     autoPin,
-    autoSeek,
-    toggleAutoSeek,
     setTagFilter,
     filterTags,
+    filterTagCounts,
     activeFilter,
     search,
     setSearch,
@@ -229,21 +228,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     },
     [annotations, seek],
-  )
-
-  // Seek to the note before/after the playhead (mirrors the editor's jumpNote).
-  const jumpNote = useCallback(
-    (dir: 1 | -1) => {
-      if (annotations.length === 0) return
-      const sorted = [...annotations].sort((a, b) => a.start - b.start)
-      const eps = 0.3
-      const target =
-        dir === 1
-          ? sorted.find((a) => a.start > currentTime + eps)
-          : [...sorted].reverse().find((a) => a.start < currentTime - eps)
-      if (target) seekToNote(target.id)
-    },
-    [annotations, currentTime, seekToNote],
   )
 
   const regionSpecs = useMemo(
@@ -319,8 +303,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
+      {/* Header — `chrome-dark`: light mode's dark masthead (see index.css). */}
+      <header className="chrome-dark flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
         <span className="text-accentink">◉</span>
         <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator
@@ -405,7 +389,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   playbackRate={playbackRate}
                   volume={volume}
                   muted={muted}
-                  hasNotes={annotations.length > 0}
                   readOnly
                   onPlayPause={() => (isPlaying ? pause() : play())}
                   onSeek={seek}
@@ -413,8 +396,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   onSetRate={setPlaybackRate}
                   onSetVolume={changeVolume}
                   onToggleMute={toggleMute}
-                  onPrevNote={() => jumpNote(-1)}
-                  onNextNote={() => jumpNote(1)}
                 />
               </>
             ) : (
@@ -454,21 +435,19 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         {/* Notes column — the fixed-width column. */}
         <div className={`flex min-w-0 flex-1 flex-col ${NOTES_SPLIT_660.notes}`}>
           <TitleBar
-            left="Notes"
-            right={
+            left={`Notes (${
               isFiltered
                 ? `${visibleAnnotations.length} / ${annotations.length}`
-                : `${annotations.length} ${annotations.length === 1 ? 'note' : 'notes'}`
-            }
+                : annotations.length
+            })`}
             actions={
               <NotesHeaderControls
                 filterTags={filterTags}
+                filterTagCounts={filterTagCounts}
                 activeFilter={activeFilter}
                 onTagFilter={setTagFilter}
                 noteOrder={noteOrder}
                 onNoteOrder={changeNoteOrder}
-                autoSeek={autoSeek}
-                onToggleAutoSeek={toggleAutoSeek}
                 searchOpen={searchOpen}
                 searchActive={search.trim() !== ''}
                 onToggleSearch={toggleSearch}

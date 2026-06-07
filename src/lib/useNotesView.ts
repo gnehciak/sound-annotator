@@ -1,22 +1,21 @@
 import { useMemo, useState } from 'react'
 import type { Annotation } from '../types'
-import { tagsUsedIn, tagsOf, resolveTag } from './tags'
+import { tagsUsedIn, tagsOf, resolveTag, tagCountsIn } from './tags'
 import { noteLabel, notePlainText } from './format'
 import {
   loadNoteOrder,
   saveNoteOrder,
   loadViewNoteOrder,
   saveViewNoteOrder,
-  loadAutoSeek,
-  saveAutoSeek,
   type NoteOrder,
 } from './storage'
 
 /**
  * The notes-list view state shared by the editor (App) and the read-only
- * ShareViewer: tag filter, list ordering, auto-pin and auto-cue — none of which
- * mutate notes, so both modes can own the same controls. Persisted via the same
- * storage keys, so a preference set in one place carries to the other.
+ * ShareViewer: tag filter, list ordering, and the order-coupled auto-pin /
+ * auto-cue — none of which mutate notes, so both modes can own the same
+ * controls. Persisted via the same storage keys, so a preference set in one
+ * place carries to the other.
  *
  * Pass the current track's annotations; `visibleAnnotations` is them narrowed to
  * the active tag filter, and `filterTags` is every tag in use (the filter menu).
@@ -31,12 +30,12 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
   const [editOrder, setEditOrder] = useState<NoteOrder>(loadNoteOrder)
   const [viewOrder, setViewOrder] = useState<NoteOrder>(loadViewNoteOrder)
   const noteOrder = viewOnly ? viewOrder : editOrder
-  // Auto-pin (scrolling the playing note to the top) is coupled to the order in
-  // both modes — on for Live and Auto, off for Timeline. There's no separate
-  // toggle: the one order switch drives both ordering and pinning.
+  // Auto-pin (scrolling the playing note to the top) and auto-cue (clicking a
+  // note moves the playhead to it) are both coupled to the order — on for Live
+  // and Auto, off for Timeline. There's no separate toggle: the one order
+  // switch drives ordering, pinning, and cue-on-click together.
   const autoPin = noteOrder !== 'timeline'
-  // When on, clicking a note in the list cues the playhead to it.
-  const [autoSeek, setAutoSeek] = useState(loadAutoSeek)
+  const autoSeek = noteOrder !== 'timeline'
   // Tags the notes list is filtered to (empty = show all).
   const [tagFilter, setTagFilter] = useState<Set<string>>(() => new Set())
   // Free-text search query (empty = show all). Composes with the tag filter.
@@ -51,16 +50,10 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
       setEditOrder(mode)
     }
   }
-  function toggleAutoSeek() {
-    setAutoSeek((on) => {
-      const next = !on
-      saveAutoSeek(next)
-      return next
-    })
-  }
-
   // Every tag in use across these notes — the filter's menu.
   const filterTags = useMemo(() => tagsUsedIn(annotations), [annotations])
+  // How many notes carry each tag — the tally beside each filter entry.
+  const filterTagCounts = useMemo(() => tagCountsIn(annotations), [annotations])
   // The selection narrowed to tags still in use: a tag whose last note was
   // retagged or deleted silently drops out, so the filter never gets stuck
   // hiding everything by a ghost tag. Derived (not stored) to stay in sync.
@@ -122,9 +115,9 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
     changeNoteOrder,
     autoPin,
     autoSeek,
-    toggleAutoSeek,
     setTagFilter,
     filterTags,
+    filterTagCounts,
     activeFilter,
     search,
     setSearch,
