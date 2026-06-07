@@ -3,12 +3,19 @@ import { Eye, ExternalLink } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
-import { loadVolume, saveVolume, DEFAULT_VOLUME } from '../lib/storage'
+import {
+  loadVolume,
+  saveVolume,
+  DEFAULT_VOLUME,
+  loadOverviewOpen,
+  saveOverviewOpen,
+} from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
 import Transport from './Transport'
+import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
 import TitleBar from './TitleBar'
 import NotesHeaderControls from './NotesHeaderControls'
@@ -47,6 +54,16 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [muted, setMuted] = useState(false)
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
+  // Overview strip open/closed — shares the editor's persisted preference.
+  const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+
+  function toggleOverview() {
+    setOverviewOpen((on) => {
+      const next = !on
+      saveOverviewOpen(next)
+      return next
+    })
+  }
 
   // Reveal/dismiss the notes search; closing clears the query (see App).
   function toggleSearch() {
@@ -91,8 +108,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   }, [])
 
   // Drive --player-max-h from the player area's measured height so the 16:9 video
-  // fills the space the overview rail used to occupy (capped + centred) instead
-  // of the default 50vh. Guarded against re-applying so it can't loop.
+  // fills the room the overview strip leaves (capped + centred) instead of the
+  // default 50vh. Guarded against re-applying so it can't loop.
   const playerAreaRoRef = useRef<ResizeObserver | null>(null)
   const playerMaxHRef = useRef(-1)
   const setPlayerArea = useCallback((el: HTMLDivElement | null) => {
@@ -322,8 +339,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         className={`flex min-h-0 flex-1 flex-col ${NOTES_SPLIT_660.row}`}
         style={splitStyle}
       >
-        {/* Player column — the flex column. The read-only view has no overview
-            rail, so the player fills the freed height; the transport pins below. */}
+        {/* Player column — the flex column. The video fills the room the short
+            overview strip leaves; the transport pins below. */}
         <div
           className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${NOTES_SPLIT_660.player}`}
         >
@@ -385,6 +402,23 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               </div>
             )}
           </div>
+
+          {/* A short, toggleable timeline strip below the player — the same
+              map the editor shows. Clicking scrubs, flags seek to their note. */}
+          {hasPlayer && (
+            <TrackOverview
+              className="shrink-0"
+              resetKey={project.id}
+              annotations={annotations}
+              duration={duration}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              open={overviewOpen}
+              onToggleOpen={toggleOverview}
+              onSeek={seek}
+              onSeekNote={seekToNote}
+            />
+          )}
         </div>
 
         {/* Drag handle — resize the split (double-click to reset). */}
