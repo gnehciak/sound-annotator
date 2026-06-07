@@ -32,7 +32,7 @@ export function hueText(hex: string, theme: 'light' | 'dark'): string {
   const b = parseInt(h.slice(4, 6), 16)
   if ([r, g, b].some(Number.isNaN)) return hex
   // Mix toward ink (26 24 19); tuned so the lightest hues (amber, green) still
-  // clear AA as text on the warm note page (#f3efe6).
+  // clear AA as text on the white note page.
   const k = 0.55
   return `rgb(${clamp255(r + (26 - r) * k)} ${clamp255(g + (24 - g) * k)} ${clamp255(b + (19 - b) * k)})`
 }

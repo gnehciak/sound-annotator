@@ -619,7 +619,7 @@ export default function TrackOverview({
                 style={{ top: PAD_V, bottom: PAD_V, left: 0 }}
               />
               <span
-                className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-accent shadow-[0_0_6px_rgb(245_166_35/0.7)]"
+                className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-accent shadow-[0_0_6px_rgb(var(--accent)/0.7)]"
                 style={{ top: spineY, left: 0 }}
               />
             </div>

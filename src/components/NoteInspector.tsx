@@ -208,7 +208,7 @@ export default function NoteInspector({
           >
             <span
               className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
-                annotation.structure ? 'left-3 bg-onbright' : 'left-0.5 bg-muted'
+                annotation.structure ? 'left-3 bg-onaccent' : 'left-0.5 bg-muted'
               }`}
             />
           </span>

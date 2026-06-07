@@ -283,7 +283,7 @@ export default function Transport({
         <button
           onClick={onPlayPause}
           title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-          className="press bevel-raised inline-flex w-24 items-center justify-center gap-1.5 bg-accent py-1.5 text-sm font-bold text-onbright hover:brightness-110"
+          className="press bevel-raised inline-flex w-24 items-center justify-center gap-1.5 bg-accent py-1.5 text-sm font-bold text-onaccent hover:brightness-110"
         >
           {isPlaying ? <Pause size={15} /> : <Play size={15} />}
           {isPlaying ? 'Pause' : 'Play'}

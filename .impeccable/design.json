@@ -30,20 +30,27 @@
     },
     "themes": {
       "default": "dark",
-      "mechanism": "Set `data-theme` on <html>. 'system' (default) follows the OS and is resolved to light/dark in JS (src/lib/theme.ts); a flash-free boot script in index.html paints it before first render. The Tailwind semantic colors read CSS variables, so both themes flow from one set of tokens.",
+      "mechanism": "Two axes: `data-theme` (mode: dark/light, 'system' follows the OS) and `data-palette` (signal hue: amber/cyan/vermilion/violet, default amber) on <html>, both resolved in JS (src/lib/theme.ts) and painted flash-free by a boot script in index.html. The Tailwind semantic colors read CSS variables, so every mode x palette combo flows from one token vocabulary; palette blocks in src/index.css only redefine what differs (bevels/glow/meter/motion inherit, the LED glow auto-follows via var(--accent-ink)).",
+      "palettes": {
+        "amber": { "accent": { "dark": "#f5a623", "light": "#cc7a0a" }, "feel": "warm studio gear (default); light chrome is de-yellowed stone" },
+        "cyan": { "accent": { "dark": "#35e0d8", "light": "#139087" }, "feel": "Scope: phosphor trace on cool graphite" },
+        "vermilion": { "accent": { "dark": "#ff5640", "light": "#df5127" }, "feel": "Tally: broadcast REC light on neutral gray; danger shifts to pink (#f472b6 dark / #be185d light) so deletes never read as the signal red" },
+        "violet": { "accent": { "dark": "#b497ff", "light": "#9366ed" }, "feel": "Lab: synth-hardware violet on neutral-cool gray" },
+        "mono": { "accent": { "dark": "#f0f0f0", "light": "#2b2b2b" }, "feel": "Print: achromatic signal on pure grayscale; color survives only as data (note hues) and alarms (danger, red meter peak; meter bars go gray). The one palette where --on-accent (text on the signal fill) diverges from --on-bright (text on data-hue chips): the near-black light accent carries white text" }
+      },
       "dark": {
         "displayName": "The Listening Station (warm-dark studio gear)",
         "tokens": { "ink": "#1a1813", "panel": "#211f18", "raised": "#2a271f", "inset": "#131210", "note": "#1a1813", "border": "#38342b", "border-strong": "#4d473a", "text": "#e9e4d8", "text-strong": "#ffffff", "muted": "#a89e8a", "accent": "#f5a623", "accent-ink": "#f5a623", "meter": "#9ccb63", "peak": "#ef6f6f", "danger": "#fb7185", "on-bright": "#1a1813", "row-sel": "#2a271f" }
       },
       "light": {
-        "displayName": "The Daylit Station (near-white warm chrome framing a warm-paper note page)",
-        "tokens": { "ink": "#f3efe6", "panel": "#faf8f3", "raised": "#fefdfb", "inset": "#e3dccc", "note": "#f3efe6", "border": "#beb295", "border-strong": "#8e826a", "text": "#2a2620", "text-strong": "#1c1a16", "muted": "#5f5646", "accent": "#cc7a0a", "accent-ink": "#874e05", "meter": "#4f7d26", "peak": "#c2433b", "danger": "#be123c", "on-bright": "#1a1813", "row-sel": "#f6e9c4" }
+        "displayName": "The Daylit Station (a white score on a warm bench: literal-white page/canvas framed by faintly warm chrome)",
+        "tokens": { "ink": "#ffffff", "panel": "#f5f5f2", "raised": "#f0efeb", "inset": "#e5e3dc", "note": "#ffffff", "border": "#b8b4a6", "border-strong": "#84806f", "text": "#2a2620", "text-strong": "#1c1a16", "muted": "#5f5646", "accent": "#cc7a0a", "accent-ink": "#874e05", "meter": "#4f7d26", "peak": "#c2433b", "danger": "#be123c", "on-bright": "#1a1813", "row-sel": "#f0efeb" }
       },
       "rules": [
         "Two ambers: `--accent` is the bright signal for FILLS/graphics (Play, spines, dots, progress); `--accent-ink` is the AA-safe amber for TEXT/LED/links/focus. Identical in dark, divergent in light (bright amber fails AA as text on a pale surface).",
-        "The note page (`--note` / `bg-note`) is the warm base tone in light (NOT stark white — that read too clinical against the warm theme); it equals ink in dark. It is the deepest warm surface, with chrome panels lifting lighter around it.",
+        "The note page and canvas (`--note` / `bg-note` = ink) are LITERAL WHITE in light; warmth lives in the chrome, wells, borders, and amber, never the page. The light ramp INVERTS: raised sits a shade BELOW panel (on paper, controls shade rather than lift), so raised states stay visible against white. (History: white read clinical against the original all-warm flat ramp; once hairlines were darkened to carry structure, the user chose white — 2026-06-07.)",
         "`--on-bright` is the text that sits ON an amber/hue fill (timecode labels, the Play button): dark in both themes.",
-        "`--row-sel` is the selected/active note row: = raised in dark, a warm highlight on light (raised would vanish into the white page).",
+        "`--row-sel` is the selected/active note row: = raised in dark; on light it is neutral stone in Amber (the user rejected the cream/yellow field — the playing dot + chip carry the signal) and a pale signal-tinted wash in the other palettes.",
         "Note/tag/element hues stay raw as FILLS; used as TEXT or a 1px border on the white page they are mixed toward ink for AA (src/lib/noteColors.ts `hueText`).",
         "Every light pair is WCAG AA verified: body/muted/placeholder/amber-text >= 4.5:1, non-text graphics >= 3:1."
       ]

@@ -27,15 +27,17 @@ note / line / line-strong / fg / fg-strong / muted / accent / accentink / meter 
 peak / danger / onbright / rowsel`). Per-note colors live in
 `src/lib/noteColors.ts`. Retune the whole theme from those files.
 
-**Dark + light themes** flow off that one token set. `src/index.css` has a
-`:root, [data-theme='dark']` block (warm-dark, the default) and a
-`[data-theme='light']` block (warm-paper — every surface warm, incl. the notes). The
-theme is `data-theme` on `<html>`: a boot script in `index.html` paints it
-flash-free before render, and `src/lib/theme.ts` is the runtime (System / Light /
-Dark; `useTheme` controller, `useResolvedTheme` subscriber for canvas, `cssRgb`
-reader). Amber splits into `--accent` (bright fills) and `--accent-ink` (AA text)
-— identical in dark, divergent in light. See DESIGN.md §2 "Two Themes". Keep both
-blocks in sync when adding a token, and AA-verify any new light pair.
+**Themes** flow off that one token set, on two axes: `data-theme` (mode:
+dark, the default, or light — white-page: literal-white page/canvas framed by
+tinted chrome; the light ramp inverts so raised shades below panel) and
+`data-palette` (signal hue: amber default / cyan / vermilion / violet / mono),
+both on `<html>`. A boot script in `index.html` paints both flash-free before render;
+`src/lib/theme.ts` is the runtime (`useTheme` controller, `useResolvedTheme`
+mode subscriber, `useThemeKey` mode+palette key for canvas painters, `cssRgb`
+reader). The signal splits into `--accent` (fills) and `--accent-ink` (AA text)
+— identical in dark, divergent in light. See DESIGN.md §2 "Themes & Palettes".
+When adding a token, set it in the two mode blocks and audit the six palette
+blocks (they inherit anything not redefined); AA-verify any new light pair.
 
 For design tasks, invoke the impeccable skill (e.g. `/impeccable critique`,
 `/impeccable audit`, `/impeccable polish`, `/impeccable live`). It reads

@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { loadTheme, saveTheme, type ThemePref } from './storage'
+import {
+  loadPalette,
+  loadTheme,
+  savePalette,
+  saveTheme,
+  PALETTES,
+  type Palette,
+  type ThemePref,
+} from './storage'
 import { useMediaQuery } from './useMediaQuery'
 
-export type { ThemePref }
+export type { Palette, ThemePref }
+export { PALETTES }
 export type ResolvedTheme = 'light' | 'dark'
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
@@ -21,9 +30,10 @@ export function applyTheme(theme: ResolvedTheme): void {
   el.style.colorScheme = theme
 }
 
-// System → Light → Dark → System. The order the header button cycles through.
-export function nextTheme(pref: ThemePref): ThemePref {
-  return pref === 'system' ? 'light' : pref === 'light' ? 'dark' : 'system'
+// Paint the signal palette onto <html>. Same contract as applyTheme: the boot
+// script does the first paint, this keeps later switches in sync.
+export function applyPalette(palette: Palette): void {
+  document.documentElement.dataset.palette = palette
 }
 
 /**
@@ -34,6 +44,7 @@ export function nextTheme(pref: ThemePref): ThemePref {
  */
 export function useTheme() {
   const [pref, setPrefState] = useState<ThemePref>(loadTheme)
+  const [palette, setPaletteState] = useState<Palette>(loadPalette)
   const systemDark = useMediaQuery(DARK_QUERY)
   const resolved: ResolvedTheme =
     pref === 'system' ? (systemDark ? 'dark' : 'light') : pref
@@ -43,8 +54,14 @@ export function useTheme() {
     saveTheme(pref)
   }, [resolved, pref])
 
+  useEffect(() => {
+    applyPalette(palette)
+    savePalette(palette)
+  }, [palette])
+
   const setPref = useCallback((p: ThemePref) => setPrefState(p), [])
-  return { pref, setPref, resolved }
+  const setPalette = useCallback((p: Palette) => setPaletteState(p), [])
+  return { pref, setPref, resolved, palette, setPalette }
 }
 
 /**
@@ -69,6 +86,27 @@ export function useResolvedTheme(): ResolvedTheme {
     return () => obs.disconnect()
   }, [])
   return theme
+}
+
+/**
+ * Read-only subscriber to the full token context (mode + palette) as one
+ * cache-key string, e.g. 'dark/cyan'. For painters that re-read tokens via
+ * cssRgb (canvas, wavesurfer): depend on this instead of useResolvedTheme so
+ * a palette switch re-paints too, not just a light/dark flip.
+ */
+export function useThemeKey(): string {
+  const read = () => {
+    const el = document.documentElement
+    return `${el.dataset.theme === 'light' ? 'light' : 'dark'}/${el.dataset.palette ?? 'amber'}`
+  }
+  const [key, setKey] = useState<string>(read)
+  useEffect(() => {
+    const el = document.documentElement
+    const obs = new MutationObserver(() => setKey(read()))
+    obs.observe(el, { attributes: true, attributeFilter: ['data-theme', 'data-palette'] })
+    return () => obs.disconnect()
+  }, [])
+  return key
 }
 
 // Read a `--token` (space-separated RGB channels) as a paintable `rgb(...)`

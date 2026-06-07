@@ -36,7 +36,8 @@
   --meter: 156 203 99; /* #9ccb63 level-meter green */
   --peak: 239 111 111; /* #ef6f6f meter peak (was hardcoded) */
   --danger: 251 113 133; /* #fb7185 rose-400 — delete affordances */
-  --on-bright: 26 24 19; /* text that sits ON an amber/hue fill — dark in both themes */
+  --on-bright: 26 24 19; /* text that sits ON a data-hue fill (timecode chips) — dark in both themes */
+  --on-accent: var(--on-bright); /* text ON the signal fill (Play, sign-in, copy). Same as on-bright except in mono, where the light accent is near-black and needs white text */
   --row-sel: 42 39 31; /* selected/active note row — = raised in dark */
 
   /* Theme-tuned bevels/glows (see DESIGN.md §4). */
@@ -54,21 +55,24 @@
 }
 
 /* ============================================================
-   LIGHT — "Daylit Station": near-white warm chrome framing a
-   warm-paper note page. Same doctrines, lights on. Surface ramp
-   keeps its relative order (inset < ink < panel < raised) but with
-   a wider tonal spread and darker hairlines than dark, so panel
-   edges draw crisply on the pale surfaces. Body, muted,
-   placeholder, and amber-ink are AA-verified on every surface.
+   LIGHT — "Daylit Station": a literal-white page/canvas framed by
+   faintly warm chrome. The tonal ramp INVERTS in this theme: the
+   page (ink/note) is the lightest surface and depth goes DOWN from
+   it (ink > panel > raised > inset) — on paper, controls and wells
+   shade rather than lift, which keeps raised states visible against
+   white. Structure is carried by the darker hairlines plus the warm
+   chrome zoning. Warmth lives in the chrome, wells, borders, and
+   amber — not the page. Body, muted, placeholder, and amber-ink are
+   AA-verified on every surface.
    ============================================================ */
 [data-theme='light'] {
-  --bg-ink: 243 239 230; /* #f3efe6 warm base canvas */
-  --bg-panel: 250 248 243; /* #faf8f3 panels (sidebar/header/transport) */
-  --bg-raised: 254 253 251; /* #fefdfb controls / title bars (lightest, near-white warm) */
-  --bg-inset: 227 220 204; /* #e3dccc recessed wells / inputs — held low so wells recess under the whiter chrome */
-  --surface-note: 243 239 230; /* #f3efe6 warm note page (= base); not stark white */
-  --border: 190 178 149; /* #beb295 hairlines — ~2:1 on panel so edges draw */
-  --border-strong: 142 130 106; /* #8e826a hover/active edges — ≥3:1 on ink + panel */
+  --bg-ink: 255 255 255; /* #ffffff literal-white canvas + body */
+  --bg-panel: 245 245 242; /* #f5f5f2 stone chrome (sidebar/header/transport) — de-yellowed */
+  --bg-raised: 240 239 235; /* #f0efeb controls / title bars — a shade BELOW panel: on paper, controls shade rather than lift, so raised states stay visible on the white page */
+  --bg-inset: 229 227 220; /* #e5e3dc recessed wells / inputs — the deepest step */
+  --surface-note: 255 255 255; /* #ffffff white note page (= ink) */
+  --border: 184 180 166; /* #b8b4a6 hairlines — ~2:1 on white so edges draw */
+  --border-strong: 132 128 111; /* #84806f hover/active edges — ≥3:1 on ink + panel */
   --text: 42 38 32; /* #2a2620 warm near-black */
   --text-strong: 28 26 22; /* #1c1a16 h1 / emphasis */
   --text-muted: 95 86 70; /* #5f5646 labels/placeholder — AA on every surface incl. inset */
@@ -77,8 +81,9 @@
   --meter: 79 125 38; /* #4f7d26 light-safe meter green */
   --peak: 194 67 59; /* #c2433b meter peak */
   --danger: 190 18 60; /* #be123c rose-700 — delete affordances, AA on chrome */
-  --on-bright: 26 24 19; /* text on amber/hue fills stays dark on light too */
-  --row-sel: 246 233 196; /* #f6e9c4 warm highlight — chroma-led so it reads on the lighter page */
+  --on-bright: 26 24 19; /* text on data-hue fills stays dark on light too */
+  --on-accent: var(--on-bright); /* see dark block — diverges only in mono */
+  --row-sel: 240 239 235; /* #f0efeb neutral stone highlight (= raised) — the playing dot + amber chip carry the signal, not a cream field */
 
   --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.12);
   --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.7),
@@ -88,6 +93,156 @@
     0 1px 0 rgb(0 0 0 / 0.16);
 
   color-scheme: light;
+}
+
+/* ============================================================
+   PALETTES — the signal hue is selectable via `data-palette` on
+   <html> (boot script + lib/theme.ts), default 'amber' = the two
+   blocks above. Each palette retunes the signal color and the
+   neutral tint for both modes; anything not redefined (bevels,
+   LED glow, meter, motion) inherits from the mode blocks above —
+   the glow auto-follows because it reads var(--accent-ink).
+   Every palette satisfies the same AA contract as amber: light
+   accent fills carry dark on-bright text ≥4.5 and sit ≥3:1 on
+   white + panel; accent-ink ≥4.5 as text everywhere incl. inset;
+   muted ≥4.5 on every surface in both modes.
+   ============================================================ */
+
+/* CYAN — "Scope": phosphor trace on cool graphite. */
+[data-theme='dark'][data-palette='cyan'] {
+  --bg-ink: 19 22 25; /* #131619 */
+  --bg-panel: 25 29 33; /* #191d21 */
+  --bg-raised: 32 38 43; /* #20262b */
+  --bg-inset: 14 17 19; /* #0e1113 */
+  --surface-note: 19 22 25;
+  --border: 45 53 59; /* #2d353b */
+  --border-strong: 69 82 92; /* #45525c */
+  --text: 221 228 233; /* #dde4e9 */
+  --text-muted: 147 161 172; /* #93a1ac */
+  --accent: 53 224 216; /* #35e0d8 phosphor cyan */
+  --accent-ink: 53 224 216;
+  --on-bright: 16 19 20; /* #101314 */
+  --row-sel: 32 38 43;
+}
+[data-theme='light'][data-palette='cyan'] {
+  --bg-panel: 241 244 244; /* #f1f4f4 cool chrome */
+  --bg-raised: 235 239 238; /* #ebefee */
+  --bg-inset: 221 228 227; /* #dde4e3 */
+  --border: 169 184 181; /* #a9b8b5 */
+  --border-strong: 116 130 127; /* #74827f */
+  --text: 32 38 42; /* #20262a */
+  --text-strong: 20 24 27; /* #14181b */
+  --text-muted: 77 89 97; /* #4d5961 */
+  --accent: 19 144 135; /* #139087 */
+  --accent-ink: 17 94 89; /* #115e59 */
+  --on-bright: 16 19 20;
+  --row-sel: 223 243 240; /* #dff3f0 */
+}
+
+/* VERMILION — "Tally": broadcast REC light on neutral studio gray.
+   Danger shifts to pink here so delete affordances never read as
+   the signal red. */
+[data-theme='dark'][data-palette='vermilion'] {
+  --bg-ink: 23 21 20; /* #171514 */
+  --bg-panel: 30 27 26; /* #1e1b1a */
+  --bg-raised: 38 34 32; /* #262220 */
+  --bg-inset: 16 15 14; /* #100f0e */
+  --surface-note: 23 21 20;
+  --border: 55 50 47; /* #37322f */
+  --border-strong: 79 72 67; /* #4f4843 */
+  --text: 232 227 224; /* #e8e3e0 */
+  --text-muted: 163 154 148; /* #a39a94 */
+  --accent: 255 86 64; /* #ff5640 tally red */
+  --accent-ink: 255 86 64;
+  --danger: 244 114 182; /* #f472b6 pink-400 */
+  --on-bright: 23 17 16; /* #171110 */
+  --row-sel: 38 34 32;
+}
+[data-theme='light'][data-palette='vermilion'] {
+  --bg-panel: 245 242 240; /* #f5f2f0 */
+  --bg-raised: 240 235 232; /* #f0ebe8 */
+  --bg-inset: 231 224 220; /* #e7e0dc */
+  --border: 192 177 169; /* #c0b1a9 */
+  --border-strong: 141 125 116; /* #8d7d74 */
+  --text: 38 33 31; /* #26211f */
+  --text-strong: 26 21 18; /* #1a1512 */
+  --text-muted: 93 83 78; /* #5d534e */
+  --accent: 223 81 39; /* #df5127 */
+  --accent-ink: 163 42 18; /* #a32a12 */
+  --danger: 190 24 93; /* #be185d pink-700 */
+  --on-bright: 23 17 16;
+  --row-sel: 253 233 227; /* #fde9e3 */
+}
+
+/* MONO — "Print": pure-grayscale chrome and an achromatic signal
+   (bright white on dark, near-black on light). Color survives only
+   as data (note hues) and alarms (danger, the meter's red peak);
+   the meter bars themselves go gray. The light accent is the one
+   place --on-accent diverges from --on-bright: a near-black fill
+   needs white text, while data-hue chips keep dark text. */
+[data-theme='dark'][data-palette='mono'] {
+  --bg-ink: 22 22 22; /* #161616 */
+  --bg-panel: 29 29 29; /* #1d1d1d */
+  --bg-raised: 38 38 38; /* #262626 */
+  --bg-inset: 16 16 16; /* #101010 */
+  --surface-note: 22 22 22;
+  --border: 51 51 51; /* #333333 */
+  --border-strong: 79 79 79; /* #4f4f4f */
+  --text: 230 230 230; /* #e6e6e6 */
+  --text-muted: 160 160 160; /* #a0a0a0 */
+  --accent: 240 240 240; /* #f0f0f0 white signal */
+  --accent-ink: 240 240 240;
+  --meter: 184 184 184; /* #b8b8b8 gray bars; the red peak lamp stays */
+  --on-bright: 22 22 22; /* #161616 */
+  --on-accent: 22 22 22;
+  --row-sel: 38 38 38;
+}
+[data-theme='light'][data-palette='mono'] {
+  --bg-panel: 242 242 242; /* #f2f2f2 */
+  --bg-raised: 236 236 236; /* #ececec */
+  --bg-inset: 224 224 224; /* #e0e0e0 */
+  --border: 178 178 178; /* #b2b2b2 */
+  --border-strong: 122 122 122; /* #7a7a7a */
+  --text: 34 34 34; /* #222222 */
+  --text-strong: 17 17 17; /* #111111 */
+  --text-muted: 85 85 85; /* #555555 */
+  --accent: 43 43 43; /* #2b2b2b near-black signal */
+  --accent-ink: 17 17 17; /* #111111 — links keep their underline */
+  --meter: 107 107 107; /* #6b6b6b */
+  --on-bright: 22 22 22;
+  --on-accent: 255 255 255; /* white text on the near-black signal fill */
+  --row-sel: 236 236 236; /* = raised */
+}
+
+/* VIOLET — "Lab": synth-hardware violet on neutral-cool gray. */
+[data-theme='dark'][data-palette='violet'] {
+  --bg-ink: 22 21 24; /* #161518 */
+  --bg-panel: 28 27 31; /* #1c1b1f */
+  --bg-raised: 36 34 40; /* #242228 */
+  --bg-inset: 15 14 17; /* #0f0e11 */
+  --surface-note: 22 21 24;
+  --border: 50 47 56; /* #322f38 */
+  --border-strong: 73 66 89; /* #494259 */
+  --text: 229 226 234; /* #e5e2ea */
+  --text-muted: 155 148 168; /* #9b94a8 */
+  --accent: 180 151 255; /* #b497ff */
+  --accent-ink: 180 151 255;
+  --on-bright: 21 18 26; /* #15121a */
+  --row-sel: 36 34 40;
+}
+[data-theme='light'][data-palette='violet'] {
+  --bg-panel: 243 242 246; /* #f3f2f6 */
+  --bg-raised: 237 236 242; /* #edecf2 */
+  --bg-inset: 227 224 234; /* #e3e0ea */
+  --border: 179 173 196; /* #b3adc4 */
+  --border-strong: 126 119 144; /* #7e7790 */
+  --text: 33 30 38; /* #211e26 */
+  --text-strong: 23 20 27; /* #17141b */
+  --text-muted: 86 79 99; /* #564f63 */
+  --accent: 147 102 237; /* #9366ed */
+  --accent-ink: 91 33 182; /* #5b21b6 */
+  --on-bright: 21 18 26;
+  --row-sel: 236 231 250; /* #ece7fa */
 }
 
 html,

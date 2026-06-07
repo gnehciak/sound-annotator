@@ -27,6 +27,7 @@ export default {
         danger: 'rgb(var(--danger) / <alpha-value>)',
         // Text that sits on an amber/hue fill — dark in both themes.
         onbright: 'rgb(var(--on-bright) / <alpha-value>)',
+        onaccent: 'rgb(var(--on-accent) / <alpha-value>)',
         // Selected/active note row — = raised in dark, a warm highlight on the
         // white note page in light (where raised would vanish into the page).
         rowsel: 'rgb(var(--row-sel) / <alpha-value>)',

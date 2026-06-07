@@ -8,9 +8,10 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <title>Sound Annotator</title>
-    <!-- Resolve the theme before first paint so there's no light/dark flash.
+    <!-- Resolve the theme + palette before first paint so there's no flash.
          Mirrors lib/theme.ts: 'system' (default) follows the OS; 'light' /
-         'dark' are explicit overrides. Classic (blocking) script on purpose. -->
+         'dark' are explicit overrides; the palette picks the signal hue.
+         Classic (blocking) script on purpose. -->
     <script>
       ;(function () {
         try {
@@ -22,8 +23,16 @@
           var theme = dark ? 'dark' : 'light'
           document.documentElement.dataset.theme = theme
           document.documentElement.style.colorScheme = theme
+          var palette = localStorage.getItem('sound-annotator:palette')
+          if (
+            ['amber', 'cyan', 'vermilion', 'violet', 'mono'].indexOf(palette) <
+            0
+          )
+            palette = 'amber'
+          document.documentElement.dataset.palette = palette
         } catch (e) {
           document.documentElement.dataset.theme = 'dark'
+          document.documentElement.dataset.palette = 'amber'
         }
       })()
     </script>

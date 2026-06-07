@@ -60,7 +60,7 @@ function SignIn() {
         <button
           onClick={go}
           disabled={busy}
-          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 bg-accent py-2.5 text-sm font-bold text-onbright hover:brightness-110 disabled:opacity-60"
+          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 bg-accent py-2.5 text-sm font-bold text-onaccent hover:brightness-110 disabled:opacity-60"
         >
           <LogIn size={16} />
           {busy ? 'Opening…' : 'Continue with Google'}

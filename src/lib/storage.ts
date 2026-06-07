@@ -47,6 +47,32 @@ export function saveTheme(pref: ThemePref): void {
   }
 }
 
+// Signal-color palette — the second theme axis (mode picks dark/light, the
+// palette picks the hue family). Painted flash-free by the same boot script.
+export const PALETTES = ['amber', 'cyan', 'vermilion', 'violet', 'mono'] as const
+export type Palette = (typeof PALETTES)[number]
+
+const PALETTE_KEY = 'sound-annotator:palette'
+
+export function loadPalette(): Palette {
+  try {
+    const v = localStorage.getItem(PALETTE_KEY)
+    return (PALETTES as readonly string[]).includes(v ?? '')
+      ? (v as Palette)
+      : 'amber'
+  } catch {
+    return 'amber'
+  }
+}
+
+export function savePalette(palette: Palette): void {
+  try {
+    localStorage.setItem(PALETTE_KEY, palette)
+  } catch {
+    /* ignore */
+  }
+}
+
 // Width (px) of the notes pane in the player|notes split — a workspace
 // preference shared across tracks. Notes is the fixed column; the player
 // absorbs window-resize changes (and inspector-drag changes when docked).

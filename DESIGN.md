@@ -131,6 +131,9 @@ palette reserved for note identity.
 - **Signal Amber** (#f5a623): The only voice color. Marks the present moment and
   the primary action: the playhead, the active ("now playing") note, the Play button,
   the active track's spine, the LED readout glow. Used sparingly by design.
+  The signal *hue* is user-selectable (see "Themes & Palettes" below): Amber is
+  the default of four palettes (Amber / Cyan / Vermilion / Violet). Everything
+  said about amber holds for whichever signal hue is active.
 
 ### Secondary
 - **Meter Green** (#9ccb63): Reserved for the output level meter, reading like an
@@ -154,51 +157,87 @@ Reserved exclusively for distinguishing notes. Never used as UI accents.
   secondary text, inactive items.
 
 ### Named Rules
-**The Amber-Is-Now Rule.** Amber means the present moment or the primary action,
-nothing else. It is forbidden as a decorative fill. If more than roughly 10% of a
-screen is amber, something non-temporal has stolen the signal color.
+**The Signal-Is-Now Rule** (née Amber-Is-Now). The active palette's signal color
+means the present moment or the primary action, nothing else. It is forbidden as
+a decorative fill. If more than roughly 10% of a screen is the signal color,
+something non-temporal has stolen it.
 
 **The Color-Is-Data Rule.** Hue only ever encodes identity (which note), never
 emotion or hierarchy. Any color-coded element must also carry a text label
 (timecode), so it reads correctly on a dim projector and for colorblind users.
 
-### Two Themes (Dark / Light)
+### Themes & Palettes (Dark / Light × Amber / Cyan / Vermilion / Violet / Mono)
 
-The system ships **dark** (default, above) and **light** off one set of CSS
-variables. Light is **"The Daylit Station": a warm-paper studio with the lights
-on**, not a generic light web app — every surface stays warm, including the notes
-area. The user picks System / Light / Dark from a header icon button;
-`System` follows the OS. The theme is `data-theme` on `<html>` (a boot script in
-`index.html` paints it before first render, so there's no flash); tokens live in
-`src/index.css`, the runtime in `src/lib/theme.ts`.
+The theme has **two axes** off one set of CSS variables: the **mode** (dark,
+default, described above; or light) and the **signal palette** (which hue plays
+the "now" role, plus a matching neutral tint). Both are picked from the header
+theme dropdown; `System` follows the OS for the mode. The axes are `data-theme`
+and `data-palette` on `<html>` (a boot script in `index.html` paints both before
+first render, so there's no flash); tokens live in `src/index.css`, the runtime
+in `src/lib/theme.ts`. Palette blocks only redefine what differs — bevels, LED
+glow, meter, and motion inherit from the mode blocks (the glow auto-follows the
+palette because it reads `var(--accent-ink)`).
 
-Light surface ramp (warm, keeps the relative order inset < ink < panel < raised,
-but with a wider tonal spread than dark — chrome lifts to near-white warm while
-the inset wells hold their depth — and deliberately darker hairlines, so panel
-edges draw crisply on the pale surfaces instead of melting together):
-**ink** `#f3efe6` · **panel** `#faf8f3` · **raised** `#fefdfb` · **inset**
-`#e3dccc` · **border** `#beb295` · **border-strong** `#8e826a` · **text**
-`#2a2620` · **muted** `#5f5646`.
+The four palettes (signal fill, dark / light):
+
+- **Amber** (default) — `#f5a623` / `#cc7a0a` on warm-dark studio neutrals;
+  light chrome is de-yellowed stone.
+- **Cyan** "Scope" — `#35e0d8` / `#139087` on cool graphite; phosphor-trace feel.
+- **Vermilion** "Tally" — `#ff5640` / `#df5127` on neutral studio gray;
+  broadcast REC-light feel. **Danger shifts to pink** (`#f472b6` dark /
+  `#be185d` light) in this palette only, so delete affordances never read as
+  the signal red.
+- **Violet** "Lab" — `#b497ff` / `#9366ed` on neutral-cool gray; synth-hardware
+  feel.
+- **Mono** "Print" — `#f0f0f0` / `#2b2b2b` on pure grayscale chrome; the signal
+  is achromatic (bright white on dark, near-black on light). Color survives
+  only as data (note hues) and alarms (danger, the meter's red peak); the meter
+  bars go gray. Mono is the one palette where `--on-accent` (text on the signal
+  fill: Play, sign-in, copy, the toggle knob) diverges from `--on-bright` (text
+  on data-hue chips, always dark): the near-black light accent carries white
+  text.
+
+The note **data palette** (teal/violet/rose/sky/orange) is palette-independent:
+hue-as-identity must stay stable when the signal hue changes. (Known softness:
+in the Cyan palette a teal note spine sits near the signal hue, and likewise
+violet notes in the Violet palette — the playing state never relies on hue
+alone, the dot + row tint + chip carry it.)
+
+Light is **"The Daylit Station": a white score on the instrument bench** —
+the page and canvas are literal white, framed by chrome tinted toward the
+active palette.
+
+Light surface ramp (amber palette shown; the other palettes keep the same
+structure with their own neutral tint — see `src/index.css`) — the ramp
+**inverts** vs dark: the white page is the lightest surface and depth shades
+*down* from it (on paper, controls and wells shade rather than lift, which
+keeps raised states visible against white), with deliberately dark hairlines so
+edges draw crisply:
+**ink / note** `#ffffff` · **panel** `#f5f5f2` · **raised** `#f0efeb` ·
+**inset** `#e5e3dc` · **border** `#b8b4a6` · **border-strong** `#84806f` ·
+**text** `#2a2620` · **muted** `#5f5646`.
 
 Three light-specific rules, all WCAG-AA verified:
 
-- **The Warm-Note-Page Rule.** The notes list and editor sit on a dedicated
-  `--note` surface. It is the warm base tone (`#f3efe6`) in light — *not* stark
-  white — so the notes read as part of the warm instrument, the deepest warm
-  surface with the chrome panels lifting lighter around it (the same relationship
-  dark uses). (`--note` equals ink in dark.) The active/selected row uses
-  `--row-sel`, a chroma-led warm highlight (`#f6e9c4`) that reads against
-  the warm page; it equals `raised` in dark. (Note: a pure-white page was tried so
-  pasted white-bg screenshots would blend, but it read too clinical against the
-  warm theme, so warmth wins; a pasted white screenshot shows its own edges.)
-- **The Two-Amber Rule.** Amber stays the only signal, but splits by job:
-  `--accent` is the bright signal for **fills and graphics** (Play, spines, dots,
-  progress; `#cc7a0a` in light), and `--accent-ink` is the contrast-safe amber for
-  **text, the LED readout, links, and the focus ring** (`#874e05` in light). They
-  are **identical in dark**, so dark is unchanged and the split only exists where
-  bright amber would fail AA as text on a pale surface. `--on-bright` is the
-  always-dark text that sits *on* an amber/hue fill (timecode labels, the Play
-  button).
+- **The White-Page Rule.** The notes list/editor and the canvas are **literal
+  white** in light (`--note` = ink = `#ffffff`); the chrome framing them carries
+  the active palette's tint. Tint lives in the chrome, wells, borders, and the
+  signal color — never the page. The active/selected row uses `--row-sel`
+  (equals `raised` in dark): a neutral stone in Amber light (the playing dot +
+  chip carry the signal, not a cream field — the user rejected the yellow
+  field), a pale signal-tinted wash in the other palettes. (History: white was
+  tried first and read clinical against the then-all-warm flat ramp; a warm
+  page held for a while, but once the hairlines were darkened to carry the
+  structure, white won — 2026-06-07.)
+- **The Two-Signal Rule** (née Two-Amber). The signal stays singular, but splits
+  by job in every palette: `--accent` is the signal for **fills and graphics**
+  (Play, spines, dots, progress; e.g. `#cc7a0a` in amber light), and
+  `--accent-ink` is the contrast-safe variant for **text, the LED readout,
+  links, and the focus ring** (e.g. `#874e05` in amber light). They are
+  **identical in dark**; the split only exists where a fill-strength signal
+  would fail AA as text on a pale surface. Every light accent fill is also tuned
+  so the dark `--on-bright` text on it (timecode chips, the Play button) clears
+  4.5:1 while the fill itself holds ≥3:1 on white and panel.
 - **The Hue-As-Data-Holds Rule.** The note/tag/element hues stay raw as **fills**
   in both themes; used as **text or a 1px border** on the white page they are
   mixed toward ink for AA (`src/lib/noteColors.ts` → `hueText`). The LED glow is

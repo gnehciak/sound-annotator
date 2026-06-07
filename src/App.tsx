@@ -106,9 +106,15 @@ const STEP_WINDOW = 1200
 
 export default function App() {
   const { user, signOut } = useAuth()
-  // Color theme controller (System / Light / Dark). Owns <html data-theme>.
-  const { pref: themePref, setPref: setThemePref, resolved: resolvedTheme } =
-    useTheme()
+  // Color theme controller (System / Light / Dark mode + signal palette).
+  // Owns <html data-theme> and <html data-palette>.
+  const {
+    pref: themePref,
+    setPref: setThemePref,
+    resolved: resolvedTheme,
+    palette,
+    setPalette,
+  } = useTheme()
   // Project data + the open-track id live behind an undo/redo history. `commit`
   // is the undoable mutation primitive; `setProjects` is raw (no history) for
   // hydration, text-body edits, and project lifecycle.
@@ -1397,7 +1403,9 @@ export default function App() {
         <ThemeToggle
           pref={themePref}
           resolved={resolvedTheme}
+          palette={palette}
           onChange={setThemePref}
+          onPaletteChange={setPalette}
         />
         {view === 'track' && (
           <span className="hidden min-[860px]:block">

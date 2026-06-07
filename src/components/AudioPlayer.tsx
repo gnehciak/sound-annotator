@@ -3,7 +3,7 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin, { type Region } from 'wavesurfer.js/plugins/regions'
 import type { PlayerHandle } from '../types'
 import { colorForId } from '../lib/noteColors'
-import { useResolvedTheme, cssRgb } from '../lib/theme'
+import { useThemeKey, cssRgb } from '../lib/theme'
 
 export interface RegionSpec {
   id: string
@@ -37,7 +37,7 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
   ref,
 ) {
   const { url } = props
-  const theme = useResolvedTheme()
+  const themeKey = useThemeKey()
   const containerRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
   const regionsRef = useRef<RegionsPlugin | null>(null)
@@ -173,15 +173,15 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
     wsRef.current?.setVolume(props.volume)
   }, [props.volume])
 
-  // Re-paint the waveform when the theme flips: the canvas was drawn with the
-  // old token colors and won't follow the CSS variables on its own.
+  // Re-paint the waveform when the theme OR palette flips: the canvas was
+  // drawn with the old token colors and won't follow the CSS vars on its own.
   useEffect(() => {
     wsRef.current?.setOptions({
       waveColor: cssRgb('--border-strong'),
       progressColor: cssRgb('--accent'),
       cursorColor: cssRgb('--text'),
     })
-  }, [theme])
+  }, [themeKey])
 
   // View-only locks the waveform: no drag-to-create, and existing ranges can't
   // be moved or resized. Re-runs after the player (re)mounts on a url change.

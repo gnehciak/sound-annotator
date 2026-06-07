@@ -292,7 +292,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </p>
           <a
             href={window.location.pathname}
-            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 bg-accent px-4 py-2 text-sm font-bold text-onbright hover:brightness-110"
+            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 bg-accent px-4 py-2 text-sm font-bold text-onaccent hover:brightness-110"
           >
             Open Sound Annotator
           </a>
