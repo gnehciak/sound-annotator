@@ -1,15 +1,16 @@
 // Export a project to a print-ready document the browser turns into a PDF.
 //
 // No server and no PDF library: we build a self-contained HTML document (inline
-// styles, note images referenced by their Cloud Storage URLs) in a hidden
-// iframe, then trigger the browser's print dialog — "Save as PDF" produces the
-// file. The document is a light, paper-styled report. Page 1 is a cover: brand
-// bar, title, video thumbnail, and a keyed meta block (source / project link /
-// note count / annotated range / export date) pinned to the page foot. The
-// notes start on page 2 as a Time / Tags / Content table. Rich-text notes
-// render as-is (TipTap HTML, including pasted images); musical-elements (and
-// any future window plugin) blocks render as a labelled spec line beneath the
-// text.
+// styles, note images referenced by their Cloud Storage URLs) and open it in a
+// new tab, where a screen-only "Save as PDF" button triggers the browser's
+// print dialog. The document's <title> is the track title, so the dialog
+// suggests "{track}.pdf" as the filename. The document is a light, paper-styled
+// report. Page 1 is a cover: brand bar, title, video thumbnail, and a keyed
+// meta block (source / project link / note count / annotated range / export
+// date) pinned to the page foot. The notes start on page 2 as a Time / Tags /
+// Content table. Rich-text notes render as-is (TipTap HTML, including pasted
+// images); musical-elements (and any future window plugin) blocks render as a
+// labelled spec line beneath the text.
 import type { Annotation, Project } from '../types'
 import { formatTime, noteLabel } from './format'
 import { resolveTag, tagsOf } from './tags'
@@ -62,6 +63,14 @@ function specLines(note: Annotation): { label: string; text: string }[] {
     if (text) out.push({ label: plugin?.label ?? block.type, text })
   }
   return out
+}
+
+/**
+ * The export document's <title>: the tab name, and what print dialogs suggest
+ * as the PDF filename ("{title}.pdf") — scrub filesystem-hostile characters.
+ */
+function exportName(project: Project): string {
+  return (project.title || 'Untitled track').replace(/[\\/:*?"<>|]/g, '-')
 }
 
 /** The read-only share/view link for a project (mirrors SharePanel). */
@@ -137,8 +146,9 @@ function coverBlock(project: Project, notes: Annotation[]): string {
   let sourceRow = ''
   if (source?.type === 'youtube' && source.videoId) {
     const id = source.videoId
-    // hqdefault always exists (so it loads before the print fires); it's 4:3
-    // with letterbox bars, which the 16:9 cover-crop wrapper trims off.
+    // hqdefault always exists (so it's reliably there by the time the user
+    // prints); it's 4:3 with letterbox bars, which the 16:9 cover-crop
+    // wrapper trims off.
     thumb = `<div class="thumb-wrap"><img class="thumb" alt="Video thumbnail"
       src="https://img.youtube.com/vi/${id}/hqdefault.jpg" /></div>`
     const url = youtubeUrl(source)
@@ -395,6 +405,37 @@ const STYLES = `
     border: 1px dashed #d2c9b6;
     border-radius: 6px;
   }
+  /* Screen-only chrome — the report opens in a tab and printing is user-
+     initiated. Render as a paper sheet on a warm desk, with a fixed
+     Save-as-PDF button; none of it survives into the print itself. */
+  @media screen {
+    html { background: #e9e2d2; }
+    body {
+      max-width: 860px;
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 52px 56px 64px;
+      box-shadow: 0 0 0 1px #d2c9b6, 0 18px 48px rgba(28, 26, 22, 0.18);
+    }
+    /* On screen there are no sheets to fill — let the cover hug its content. */
+    .cover { min-height: 0; margin-bottom: 48px; }
+    .cover-meta { margin-top: 28px; }
+  }
+  .print-bar { position: fixed; top: 14px; right: 14px; }
+  .print-bar button {
+    padding: 9px 16px;
+    border: 0;
+    border-radius: 5px;
+    background: #e08a0c;
+    color: #1c1a16;
+    font: 600 11px/1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(28, 26, 22, 0.3);
+  }
+  .print-bar button:hover { background: #c97c0a; }
+  @media print { .print-bar { display: none; } }
 `
 
 /** Build the full, self-contained print document for a project. */
@@ -420,56 +461,38 @@ export function buildExportHtml(project: Project): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(project.title || 'Untitled track')} — Sound Annotator</title>
+  <title>${esc(exportName(project))}</title>
   <style>${STYLES}</style>
 </head>
 <body>
+  <div class="print-bar">
+    <button type="button" onclick="window.print()" title="Print → Save as PDF (⌘P)">Save as PDF</button>
+  </div>
   ${coverBlock(project, notes)}
   <div class="report-title">${esc(project.title || 'Untitled track')}</div>
   <div class="section"><h2>Notes</h2><span class="count">${count}</span></div>
   ${body}
-  <script>
-    // Print once everything (incl. the thumbnail) has loaded, then tidy up the
-    // hidden iframe after the dialog closes. window.onload waits for images;
-    // an image 404 fires onerror (handled inline) so load still resolves.
-    window.onload = function () {
-      window.onafterprint = function () {
-        var f = window.frameElement
-        if (f && f.parentNode) f.parentNode.removeChild(f)
-      }
-      setTimeout(function () { window.focus(); window.print() }, 80)
-    }
-  </script>
 </body>
 </html>`
 }
 
 /**
- * Export a project to PDF via the browser's print dialog. Renders the document
- * into a hidden, same-origin iframe and prints it (the iframe removes itself
- * once the dialog closes); a long fallback timer guards against the rare browser
- * that never fires `afterprint`. No-op without a window (SSR safety).
+ * Export a project to PDF: open the print-ready report in a new tab (no print
+ * dialog is forced). The user saves it from there — the in-page "Save as PDF"
+ * button or ⌘P — and the document title makes the dialog suggest
+ * "{track title}.pdf". No-op without a window (SSR safety).
  */
 export function exportProjectPdf(project: Project): void {
-  if (typeof document === 'undefined') return
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'
-  document.body.appendChild(iframe)
-
-  const doc = iframe.contentWindow?.document
-  if (!doc) {
-    iframe.remove()
+  if (typeof window === 'undefined') return
+  const blob = new Blob([buildExportHtml(project)], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, '_blank')
+  if (!tab) {
+    URL.revokeObjectURL(url)
+    alert('The report tab was blocked — allow pop-ups for this site and try again.')
     return
   }
-  doc.open()
-  doc.write(buildExportHtml(project))
-  doc.close()
-
-  // Safety net: if afterprint never fires, drop the leaked iframe much later
-  // (long enough not to interrupt a still-open print dialog).
-  setTimeout(() => {
-    if (iframe.isConnected) iframe.remove()
-  }, 600000)
+  // The tab keeps its document after revocation; the URL only needs to outlive
+  // the navigation (generous, so a slow tab spin-up can't lose the report).
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
