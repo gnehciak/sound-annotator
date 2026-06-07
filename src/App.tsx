@@ -283,6 +283,15 @@ export default function App() {
   // Deriving from `current` (not just currentId) self-heals a dangling id.
   const view: 'home' | 'track' = current ? 'track' : 'home'
 
+  // Tab title follows the page: "{track} — Sound Annotator" in the editor
+  // (kept live through renames — `current` is replaced on every edit), the
+  // bare app name on the library. ShareViewer handles `?view=` links itself.
+  useEffect(() => {
+    document.title = current
+      ? `${current.title || 'Untitled track'} — Sound Annotator`
+      : 'Sound Annotator'
+  }, [current])
+
   // Keep the help modal mounted through its fade-out.
   const help = usePresence(showHelp)
 
