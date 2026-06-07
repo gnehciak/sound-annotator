@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, ExternalLink } from 'lucide-react'
+import { Eye, ExternalLink, Pencil } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
@@ -321,6 +321,18 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
           {project.title}
         </span>
+        {/* The owner set the link role to "Can edit": hand off to the full
+            editor (the Gate signs the visitor in; App then loads this track
+            by id and the edit lock serializes who edits). */}
+        {project.editableByLink && (
+          <a
+            href={`${window.location.pathname}?track=${project.id}`}
+            title="Edit this track's notes — you'll be asked to sign in with Google"
+            className="press inline-flex shrink-0 items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-accentink hover:border-accent"
+          >
+            <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
+          </a>
+        )}
         <ExportPdfButton project={project} />
         <CopyProjectButton project={project} />
         <a

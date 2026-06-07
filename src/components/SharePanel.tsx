@@ -1,29 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
-import { Share2, Check, Copy, Globe, Lock } from 'lucide-react'
+import { Share2, Check, Copy, Globe, Lock, Eye, Pencil } from 'lucide-react'
 import type { Project } from '../types'
 
 interface Props {
   project: Project
-  onToggleShare: (shared: boolean) => void
+  /** Persist a sharing change; both flags travel together so a role flip and
+   *  the switch are each one write. */
+  onChange: (patch: { shared: boolean; editableByLink: boolean }) => void
 }
 
-/** Read-only link to this project's share viewer (same app, `?view=` route). */
+/** Link to this project's share viewer (same app, `?view=` route). */
 function shareUrl(id: string): string {
   const { origin, pathname } = window.location
   return `${origin}${pathname}?view=${id}`
 }
 
 /**
- * Sub-bar control that turns a project into a read-only shared link. Opening the
- * panel reveals a single switch — "Anyone with the link can view" — and, once on,
- * the copyable link. Toggling persists `shared` on the project (the parent saves
- * it), which flips the firestore.rules read gate.
+ * Sub-bar control for sharing a project by link, Google-Docs style. Opening
+ * the panel reveals the "Anyone with the link" switch and, once on, a role —
+ * **Can view** (read-only viewer, no sign-in) or **Can edit** (signed-in
+ * visitors may edit notes/title, one session at a time via the edit lock) —
+ * plus the copyable link. The parent persists the flags, which flip the
+ * firestore.rules gates.
  */
-export default function SharePanel({ project, onToggleShare }: Props) {
+export default function SharePanel({ project, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const shared = project.shared === true
+  const canEdit = shared && project.editableByLink === true
   const url = shareUrl(project.id)
 
   // Close on outside-click or Escape.
@@ -56,7 +61,7 @@ export default function SharePanel({ project, onToggleShare }: Props) {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title={shared ? 'Shared — manage link' : 'Share a read-only link'}
+        title={shared ? 'Shared — manage link' : 'Share this track by link'}
         className={`press inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
           shared
             ? 'border-accent/60 bg-accent/10 text-accentink'
@@ -80,16 +85,20 @@ export default function SharePanel({ project, onToggleShare }: Props) {
                 Anyone with the link
               </p>
               <p className="mt-0.5 text-[11px] leading-snug text-muted">
-                {shared
-                  ? 'Can open this track read-only — no sign-in needed.'
-                  : 'Turn on to create a read-only link you can send.'}
+                {!shared
+                  ? 'Turn on to create a link you can send.'
+                  : canEdit
+                    ? 'Can edit the notes after signing in with Google — one person at a time.'
+                    : 'Can open this track read-only — no sign-in needed.'}
               </p>
             </div>
             {/* Switch */}
             <button
               role="switch"
               aria-checked={shared}
-              onClick={() => onToggleShare(!shared)}
+              onClick={() =>
+                onChange({ shared: !shared, editableByLink: false })
+              }
               title={shared ? 'Stop sharing' : 'Start sharing'}
               className={`press relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors ${
                 shared ? 'border-accent bg-accent/30' : 'border-line bg-inset'
@@ -104,23 +113,66 @@ export default function SharePanel({ project, onToggleShare }: Props) {
           </div>
 
           {shared && (
-            <div className="mt-3 flex items-center gap-1.5">
-              <input
-                readOnly
-                value={url}
-                onFocus={(e) => e.currentTarget.select()}
-                aria-label="Read-only share link"
-                className="led min-w-0 flex-1 rounded border border-line bg-inset px-2 py-1 font-mono text-[11px] text-fg outline-none focus:border-accent"
-              />
-              <button
-                onClick={copy}
-                title="Copy link"
-                className="press inline-flex shrink-0 items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
+            <>
+              {/* Link role — view-only or link-editing (Docs-style). */}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                  Link role
+                </span>
+                <div
+                  role="group"
+                  aria-label="Link permission"
+                  className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange({ shared: true, editableByLink: false })
+                    }
+                    aria-pressed={!canEdit}
+                    title="Anyone with the link can view"
+                    className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                      canEdit ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
+                    }`}
+                  >
+                    <Eye size={11} /> Can view
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChange({ shared: true, editableByLink: true })
+                    }
+                    aria-pressed={canEdit}
+                    title="Anyone with the link can edit (sign-in required)"
+                    className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                      canEdit
+                        ? 'bg-raised text-accentink'
+                        : 'text-muted hover:text-fg'
+                    }`}
+                  >
+                    <Pencil size={11} /> Can edit
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5">
+                <input
+                  readOnly
+                  value={url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Share link"
+                  className="led min-w-0 flex-1 rounded border border-line bg-inset px-2 py-1 font-mono text-[11px] text-fg outline-none focus:border-accent"
+                />
+                <button
+                  onClick={copy}
+                  title="Copy link"
+                  className="press inline-flex shrink-0 items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}

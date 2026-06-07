@@ -74,6 +74,13 @@ export interface Annotation {
 export interface Project {
   id: string
   title: string
+  /**
+   * Uid of the account that owns this project. Set on load (toProject); absent
+   * only on a freshly created, never-saved project (the creator owns it).
+   * A project whose ownerId differs from the signed-in uid is "foreign" — one
+   * opened through an editable share link — and gets reduced powers in the UI.
+   */
+  ownerId?: string
   source?: ProjectSource
   annotations: Annotation[]
   updatedAt: number
@@ -83,6 +90,13 @@ export interface Project {
    * panel. See firestore.rules — shared docs are world-readable by id.
    */
   shared?: boolean
+  /**
+   * When true, anyone holding the link can also *edit* the project's notes and
+   * title after signing in — one session at a time, serialized by the edit
+   * lock (see lib/editLock.ts and firestore.rules). The Share panel's
+   * "Can edit" role. Only the owner can flip this.
+   */
+  editableByLink?: boolean
   /**
    * Id of the home-page folder this track lives in, or null/absent for the
    * root library ("unfiled"). Folders live in their own `folders` collection

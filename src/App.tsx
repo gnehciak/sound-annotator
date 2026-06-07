@@ -20,7 +20,13 @@ import {
   loadWindowMode,
   saveWindowMode,
 } from './lib/storage'
-import { fetchProjects, saveProject, deleteProjectDoc } from './lib/projectStore'
+import {
+  fetchProjects,
+  fetchSharedProject,
+  saveProject,
+  deleteProjectDoc,
+} from './lib/projectStore'
+import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
 import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
@@ -222,13 +228,6 @@ export default function App() {
     }
   }
 
-  // Switching to view-only deselects any open note, so nothing stays
-  // highlighted/inspected. An effect (rather than clearing at each toggle site)
-  // covers every path in: the View button, the V shortcut, and a saved state.
-  useEffect(() => {
-    if (viewOnly) setSelectedNoteId(null)
-  }, [viewOnly])
-
   // Remember the chosen volume across sessions (mute is intentionally transient).
   useEffect(() => {
     saveVolume(volume)
@@ -306,6 +305,73 @@ export default function App() {
     projectsRef.current = projects
   }, [projects])
 
+  // ---- edit lock (one session edits at a time) ---------------------------
+  // A track open in the editor claims the project's edit lock (lib/editLock):
+  // a second tab — or another user, via an editable share link — sees a
+  // "being edited" banner and goes read-only instead of clobbering notes.
+  const currentIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    currentIdRef.current = currentId
+  }, [currentId])
+
+  // A "foreign" track came in through an editable share link: another
+  // account owns it, so share/source/folder powers are off the table here.
+  const isForeign =
+    !!user && !!current?.ownerId && current.ownerId !== user.uid
+  // The owner switched the link back to view-only while we were in it.
+  const foreignRevoked = isForeign && current?.editableByLink !== true
+
+  // While locked out, each server snapshot replaces our copy of the project,
+  // so the read-only view tracks the live editor and a take-over starts from
+  // their latest content. Re-baselining (not just setProjects) also empties
+  // the undo stacks — a stale frame must not resurrect overwritten notes.
+  const handleRemoteData = useCallback(
+    (remote: Project) => {
+      persistedRef.current.set(remote.id, remote)
+      if (!projectsRef.current.some((p) => p.id === remote.id)) return
+      resetHistory(
+        projectsRef.current.map((p) => (p.id === remote.id ? remote : p)),
+        currentIdRef.current,
+      )
+    },
+    [resetHistory],
+  )
+
+  // View mode doesn't claim the lock: someone passively watching a track
+  // (a projector, a quick look) must never block whoever wants to edit.
+  // Flipping back to Edit re-engages — and only then surfaces the banner if
+  // someone else holds it.
+  const editLock = useEditLock({
+    projectId: current?.id ?? null,
+    user,
+    enabled: !!current && !!user && !foreignRevoked && !viewOnly,
+    onRemoteData: handleRemoteData,
+  })
+  const lockBlocked =
+    editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
+  // Read-only for any reason: the user's own View toggle, or the lock.
+  const effectiveViewOnly = viewOnly || lockBlocked
+  // Mirrors for the debounced save (fires outside React's data flow).
+  const lockBlockedRef = useRef(false)
+  lockBlockedRef.current = lockBlocked
+  const lockClaimRef = useRef(editLock.claim)
+  lockClaimRef.current = editLock.claim
+  // The lock holder's label; their own account in a second tab is the
+  // commonest case, so call that out instead of showing them their own name.
+  const lockHolderLabel =
+    editLock.holder &&
+    (user && editLock.holder.uid === user.uid
+      ? 'Another tab'
+      : editLock.holder.name)
+
+  // Going read-only (View toggle or lock) deselects any open note, so nothing
+  // stays highlighted/inspected. An effect (rather than clearing at each
+  // toggle site) covers every path in: the View button, the V shortcut, a
+  // saved state, and losing the edit lock.
+  useEffect(() => {
+    if (effectiveViewOnly) setSelectedNoteId(null)
+  }, [effectiveViewOnly])
+
   // ---- note inspector (dock 3rd column or modal) ------------------------
   const effectiveWindowMode: WindowMode =
     windowMode === 'dock' && wideForDock ? 'dock' : 'modal'
@@ -333,13 +399,13 @@ export default function App() {
     setSearch,
     isFiltered,
     visibleAnnotations,
-  } = useNotesView(current?.annotations ?? [], viewOnly)
+  } = useNotesView(current?.annotations ?? [], effectiveViewOnly)
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
-  const showDock = !viewOnly && effectiveWindowMode === 'dock'
+  const showDock = !effectiveViewOnly && effectiveWindowMode === 'dock'
   const showModal =
-    !viewOnly && !!selectedNote && effectiveWindowMode === 'modal'
+    !effectiveViewOnly && !!selectedNote && effectiveWindowMode === 'modal'
   const transportLocked = showModal
   const inspectorSubtitle = selectedNote
     ? noteLabel(selectedNote.start, selectedNote.end)
@@ -434,19 +500,28 @@ export default function App() {
         return [] as Folder[]
       }),
     ])
-      .then(([loaded, loadedFolders]) => {
+      .then(async ([loaded, loadedFolders]) => {
         if (cancelled) return
         setFolders(loadedFolders)
         // Land on the home page — unless the URL deep-links (`?track=`) to a
         // track we actually own; a dead link falls back home and is cleaned.
         const urlId = new URLSearchParams(window.location.search).get('track')
-        const deepLink =
-          urlId && loaded.some((p) => p.id === urlId) ? urlId : null
+        // A deep link to a track we don't own may be an editable share link
+        // ("Edit" from the viewer): fetch it and join it to the session list.
+        // It stays out of the home library and is gone on the next sign-in.
+        let all = loaded
+        if (urlId && !loaded.some((p) => p.id === urlId)) {
+          const foreign = await fetchSharedProject(urlId)
+          if (cancelled) return
+          if (foreign && foreign.editableByLink && foreign.ownerId !== user.uid)
+            all = [...loaded, foreign]
+        }
+        const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
         if (urlId && !deepLink) syncUrl(null, 'replace')
         // Baseline the history to the freshly loaded set (clears any prior
         // undo/redo stacks); nothing before sign-in should be undoable.
-        resetHistory(loaded, deepLink)
-        persistedRef.current = new Map(loaded.map((p) => [p.id, p]))
+        resetHistory(all, deepLink)
+        persistedRef.current = new Map(all.map((p) => [p.id, p]))
         hydratedRef.current = true
         setLoadingProjects(false)
       })
@@ -486,13 +561,31 @@ export default function App() {
     setSaveStatus('editing')
     const t = setTimeout(() => {
       setSaveStatus('saving')
+      // The open track is never flushed while another session holds its edit
+      // lock (the rules would refuse the write anyway): any local stragglers
+      // from just before the lock was lost are superseded by the remote
+      // snapshots that re-baseline persistedRef.
+      const flushable = dirty.filter(
+        (p) => !(lockBlockedRef.current && p.id === currentIdRef.current),
+      )
       Promise.all(
-        dirty.map((p) => {
+        flushable.map((p) => {
           persistedRef.current.set(p.id, p)
-          return saveProject(uid, p)
+          // Saves of the open track carry this session's edit-lock claim:
+          // it both proves we hold the lock (rules refuse content writes
+          // without it) and refreshes the lock's heartbeat.
+          return saveProject(
+            uid,
+            p,
+            p.id === currentIdRef.current
+              ? lockClaimRef.current ?? undefined
+              : undefined,
+          )
         }),
       )
-        .then(() => setSaveStatus('saved'))
+        .then(() =>
+          setSaveStatus(flushable.length < dirty.length ? 'idle' : 'saved'),
+        )
         .catch((err) => {
           console.error('Failed to save project:', err)
           setSaveStatus('error')
@@ -535,6 +628,9 @@ export default function App() {
   // the saved notes. Runs in the background; failures are non-fatal.
   useEffect(() => {
     if (!user || !current) return
+    // Never sweep a foreign (link-edited) track: its images live under the
+    // *owner's* Storage path, which we can't even list.
+    if (current.ownerId && current.ownerId !== user.uid) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -974,7 +1070,8 @@ export default function App() {
     if (showHelp) return // modal open — swallow the rest
     if (transportLocked) return // a modal plugin window owns the keyboard
     if (e.key === 'v' || e.key === 'V') {
-      toggleViewOnly()
+      // The View/Edit toggle is moot while the lock forces read-only.
+      if (!lockBlocked) toggleViewOnly()
       return
     }
 
@@ -1012,15 +1109,15 @@ export default function App() {
         break
       case 'n':
       case 'N':
-        if (!viewOnly) addAnnotationAtCurrent()
+        if (!effectiveViewOnly) addAnnotationAtCurrent()
         break
       case 'i':
       case 'I':
-        if (!viewOnly) markIn()
+        if (!effectiveViewOnly) markIn()
         break
       case 'o':
       case 'O':
-        if (!viewOnly) markOut()
+        if (!effectiveViewOnly) markOut()
         break
     }
   })
@@ -1033,7 +1130,7 @@ export default function App() {
   useEffect(() => {
     // Editor-only (belt and braces on home: nav re-baselines, so canUndo is
     // already false there — the gate just makes the intent explicit).
-    if (viewOnly || view === 'home') return
+    if (effectiveViewOnly || view === 'home') return
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       const k = e.key.toLowerCase()
@@ -1047,7 +1144,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [viewOnly, view, undo, redo])
+  }, [effectiveViewOnly, view, undo, redo])
 
   // ---- docked inspector (3rd column) resize -----------------------------
   // The player|notes split itself lives in `useNotesSplit` (shared with the
@@ -1161,10 +1258,36 @@ export default function App() {
             <Home size={16} />
           </button>
         )}
-        {view === 'track' && viewOnly && (
+        {view === 'track' && viewOnly && !lockBlocked && (
           <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
             <Eye size={11} /> View only
           </span>
+        )}
+        {/* Edit-lock banner: someone else (or another tab) holds this track's
+            edit lock, or the owner turned link editing off — read-only until
+            it frees up or is taken over. */}
+        {view === 'track' && lockBlocked && (
+          <span
+            role="status"
+            className="flex min-w-0 items-center gap-1.5 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink"
+          >
+            <Pencil size={11} className="shrink-0" />
+            <span className="truncate">
+              {editLock.state === 'other'
+                ? `${lockHolderLabel ?? 'Someone'} is editing`
+                : 'Editing turned off'}
+            </span>
+          </span>
+        )}
+        {view === 'track' && editLock.state === 'other' && (
+          <button
+            type="button"
+            onClick={editLock.takeOver}
+            title="Take over editing — the other session becomes read-only"
+            className="press shrink-0 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-accent hover:text-accentink"
+          >
+            Take over
+          </button>
         )}
         <div className="flex-1" />
         {/* Save indicator: editing… (dirty, debouncing) → saving… (write in
@@ -1200,7 +1323,7 @@ export default function App() {
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
             body keeps its own in-editor undo. ⌘Z / ⌘⇧Z (Ctrl on Win/Linux). */}
-        {view === 'track' && !viewOnly && (
+        {view === 'track' && !effectiveViewOnly && (
           <div
             role="group"
             aria-label="Undo and redo"
@@ -1231,7 +1354,7 @@ export default function App() {
         {/* Mode toggle: a squared segmented switch (Edit | View). Tonal active
             fill keeps amber pure; the active View segment carries amber text to
             echo the view-only state. The 'V' key still flips it. */}
-        {view === 'track' && (
+        {view === 'track' && !lockBlocked && (
           <div
             role="group"
             aria-label="Editing mode"
@@ -1319,7 +1442,11 @@ export default function App() {
       {/* ---- Body: the home page (library), or the editor for the open track */}
       {!current ? (
         <HomePage
-          projects={projects}
+          // Foreign tracks (opened via an editable share link) ride along in
+          // the session's project list but never join the home library.
+          projects={projects.filter(
+            (p) => !p.ownerId || p.ownerId === user?.uid,
+          )}
           folders={folders}
           openFolderId={openFolderId}
           onOpenFolder={setOpenFolderId}
@@ -1335,7 +1462,7 @@ export default function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Sub-bar: track title + source badge + per-track tools. */}
           <div className="flex h-11 items-center gap-2 border-b border-line bg-ink/60 px-3">
-            {viewOnly ? (
+            {effectiveViewOnly ? (
               <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold tracking-wide text-fg">
                 {current.title}
               </span>
@@ -1389,12 +1516,12 @@ export default function App() {
               </button>
             )}
             {current.source && <ExportPdfButton project={current} />}
-            {current.source && (
+            {/* Sharing is the owner's call alone — never shown on a foreign
+                (link-edited) track; the rules refuse the writes anyway. */}
+            {current.source && !isForeign && (
               <SharePanel
                 project={current}
-                onToggleShare={(shared) =>
-                  patchProject(current.id, { shared })
-                }
+                onChange={(patch) => patchProject(current.id, patch)}
               />
             )}
           </div>
@@ -1402,7 +1529,9 @@ export default function App() {
           {/* Body */}
           {!current.source ? (
             <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
-              {viewOnly ? (
+              {/* The source (and its Storage path) belongs to the owner — a
+                  link editor annotates, they don't re-source the track. */}
+              {effectiveViewOnly || isForeign ? (
                 <ReadOnlyNotice>This track has no source yet.</ReadOnlyNotice>
               ) : (
                 <SourcePicker
@@ -1413,7 +1542,7 @@ export default function App() {
             </div>
           ) : needsAudioFile ? (
             <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
-              {viewOnly ? (
+              {effectiveViewOnly || isForeign ? (
                 <ReadOnlyNotice>
                   The audio for this track isn’t available right now
                   {current.source.fileName
@@ -1458,7 +1587,7 @@ export default function App() {
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
                         volume={muted ? 0 : volume}
-                        readOnly={viewOnly}
+                        readOnly={effectiveViewOnly}
                         onTime={handleTime}
                         onDuration={handleDuration}
                         onPlayingChange={handlePlaying}
@@ -1489,7 +1618,7 @@ export default function App() {
                     volume={volume}
                     muted={muted}
                     hasNotes={(current.annotations.length ?? 0) > 0}
-                    readOnly={viewOnly}
+                    readOnly={effectiveViewOnly}
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSeek={seek}
                     onStep={step}
@@ -1557,7 +1686,7 @@ export default function App() {
                       searchOpen={searchOpen}
                       searchActive={search.trim() !== ''}
                       onToggleSearch={toggleSearch}
-                      viewOnly={viewOnly}
+                      viewOnly={effectiveViewOnly}
                     />
                   }
                 />
@@ -1570,7 +1699,7 @@ export default function App() {
                     onClose={toggleSearch}
                   />
                 )}
-                {!viewOnly && (
+                {!effectiveViewOnly && (
                   <NoteActions
                     pendingIn={pendingIn}
                     currentTime={currentTime}
@@ -1590,7 +1719,7 @@ export default function App() {
                     currentTime={currentTime}
                     isPlaying={isPlaying}
                     playbackRate={playbackRate}
-                    readOnly={viewOnly}
+                    readOnly={effectiveViewOnly}
                     filtered={isFiltered}
                     scrollRef={notesScrollRef}
                     noteOrder={noteOrder}
