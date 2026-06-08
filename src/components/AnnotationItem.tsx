@@ -41,6 +41,9 @@ interface Props {
   onPlayPassage?: () => void
   /** This note's passage is armed to stop at its end (lights the segment). */
   passageArmed?: boolean
+  /** "Play once" mode — the chip label swaps to "Play Once" and the passage
+   *  segment is hidden (the chip itself now does that behavior). */
+  playOnce?: boolean
   /** Scrub to an arbitrary time within the note (clicking the progress bar). */
   onSeek?: (t: number) => void
   onSeekNote: (id: string) => void
@@ -70,6 +73,7 @@ export default function AnnotationItem({
   onPlay,
   onPlayPassage,
   passageArmed = false,
+  playOnce = false,
   onSeek,
   onSeekNote,
   mentionItems,
@@ -77,6 +81,22 @@ export default function AnnotationItem({
   const theme = useResolvedTheme()
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const tags = tagsOf(annotation)
+  // Drop the body preview entirely on empty notes — TipTap serializes a blank
+  // editor as `<p></p>` which still rendered a 36px min-height block, leaving
+  // a tall hollow card under the chip row.
+  const hasBody = useMemo(
+    () =>
+      blocks.some((block) => {
+        if (block.type === TEXT_BLOCK) {
+          const html = asTextData(block)?.html ?? ''
+          if (!html) return false
+          const text = html.replace(/<[^>]*>/g, '').trim()
+          return text.length > 0 || /<img\b/i.test(html)
+        }
+        return !!getPlugin(block.type)
+      }),
+    [blocks],
+  )
 
   const isRange = annotation.end != null
   const label = noteLabel(annotation.start, annotation.end)
@@ -191,7 +211,7 @@ export default function AnnotationItem({
       />
 
       {/* header */}
-      <div className="flex items-center gap-1.5 pb-1 pl-3 pr-2 pt-3">
+      <div className={`flex items-center gap-1.5 pl-3 pr-2 pt-3 ${hasBody ? 'pb-1' : 'pb-3'}`}>
         {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
         <span className="inline-flex items-stretch">
           <button
@@ -204,8 +224,16 @@ export default function AnnotationItem({
               stop(e)
               onPlay()
             }}
-            title="Jump to this moment and pin it to the top"
-            aria-label={`Seek to ${label}`}
+            title={
+              playOnce && isRange
+                ? `Play ${label} once — pauses at the end`
+                : 'Jump to this moment and pin it to the top'
+            }
+            aria-label={
+              playOnce && isRange
+                ? `Play ${label} once and stop at the end`
+                : `Seek to ${label}`
+            }
             // Rounded as a unit with the fused passage segment (when present).
             className={`press inline-flex items-center gap-[5px] border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-2 py-[2.5px] font-mono text-[11.5px] font-medium tabular-nums tracking-[0.04em] hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)] ${
               isRange && onPlayPassage ? 'rounded-l-sm border-r-0' : 'rounded-sm'
@@ -226,7 +254,7 @@ export default function AnnotationItem({
             ) : (
               <Play size={9} className="fill-current" />
             )}
-            {label}
+            {playOnce && isRange ? 'Play Once' : label}
           </button>
           {isRange && onPlayPassage && (
             <button
@@ -344,7 +372,9 @@ export default function AnnotationItem({
         <div className="flex-1" />
       </div>
 
-      {/* body preview — text rendered read-only, then a summary line per block */}
+      {/* body preview — text rendered read-only, then a summary line per block.
+          Hidden entirely when nothing would render, so empty notes collapse. */}
+      {hasBody && (
       <div className="pb-2.5 pl-3 pr-2">
         {blocks.map((block) => {
           if (block.type === TEXT_BLOCK) {
@@ -379,6 +409,7 @@ export default function AnnotationItem({
           )
         })}
       </div>
+      )}
     </div>
   )
 }

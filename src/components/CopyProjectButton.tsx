@@ -34,11 +34,11 @@ export default function CopyProjectButton({ project }: { project: Project }) {
         u = (await signInWithPopup(auth, googleProvider)).user
       }
       setLabel('Copying…')
-      const newId = await copySharedProject(u.uid, project, setLabel)
+      const copy = await copySharedProject(u.uid, project, setLabel)
       // Swap `?view=` for a `?track=` deep link: the signed-in app loads and
       // opens the fresh copy directly in the editor.
       setLabel('Opening…')
-      window.location.href = `${window.location.pathname}?track=${newId}`
+      window.location.href = `${window.location.pathname}?track=${copy.id}`
     } catch (err) {
       const code = (err as { code?: string }).code
       // Closing the sign-in popup is a cancel, not a failure.

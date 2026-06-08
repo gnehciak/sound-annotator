@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, ExternalLink, Pencil } from 'lucide-react'
+import { Eye, ExternalLink, Pencil, Settings as SettingsIcon } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
@@ -9,6 +9,8 @@ import {
   DEFAULT_VOLUME,
   loadOverviewOpen,
   saveOverviewOpen,
+  loadPlayOnce,
+  savePlayOnce,
 } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { tagsOf } from '../lib/tags'
@@ -23,6 +25,7 @@ import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import CopyProjectButton from './CopyProjectButton'
+import SettingsModal from './SettingsModal'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
@@ -60,6 +63,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [searchOpen, setSearchOpen] = useState(false)
   // Overview strip open/closed — shares the editor's persisted preference.
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+  const [playOnce, setPlayOnceState] = useState(loadPlayOnce)
+  const setPlayOnce = useCallback((on: boolean) => {
+    setPlayOnceState(on)
+    savePlayOnce(on)
+  }, [])
   const [showHelp, setShowHelp] = useState(false)
   const help = usePresence(showHelp)
 
@@ -70,6 +78,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       return next
     })
   }
+  const setOverviewOpenPref = useCallback((on: boolean) => {
+    setOverviewOpen(on)
+    saveOverviewOpen(on)
+  }, [])
+  const [showSettings, setShowSettings] = useState(false)
 
   // Reveal/dismiss the notes search; closing clears the query (see App).
   function toggleSearch() {
@@ -223,6 +236,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     pause,
   })
 
+
   const seekToNote = useCallback(
     (id: string) => {
       const a = annotations.find((x) => x.id === id)
@@ -284,11 +298,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         break
       case 'ArrowUp':
         e.preventDefault()
-        step(1)
+        step(-1)
         break
       case 'ArrowDown':
         e.preventDefault()
-        step(-1)
+        step(1)
         break
       case '[':
         e.preventDefault()
@@ -409,6 +423,16 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
           </a>
         )}
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+          aria-label="Open settings"
+          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+        >
+          <SettingsIcon size={12} />
+          <span className="hidden sm:inline">Settings</span>
+        </button>
         <ExportPdfButton project={project} />
         <CopyProjectButton project={project} />
         <a
@@ -564,6 +588,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               onPlay={play}
               onPlayPassage={playPassage}
               passageId={passageId}
+              playOnce={playOnce}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
             />
@@ -579,6 +604,17 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           closing={help.closing}
           onClose={() => setShowHelp(false)}
           readOnly
+        />
+      )}
+      {showSettings && (
+        <SettingsModal
+          playOnce={playOnce}
+          onPlayOnce={setPlayOnce}
+          overviewOpen={overviewOpen}
+          onOverviewOpen={setOverviewOpenPref}
+          noteOrder={noteOrder}
+          onNoteOrder={changeNoteOrder}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

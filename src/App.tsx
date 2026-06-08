@@ -15,6 +15,8 @@ import {
   DEFAULT_VOLUME,
   loadViewOnly,
   saveViewOnly,
+  loadPlayOnce,
+  savePlayOnce,
   loadOverviewOpen,
   saveOverviewOpen,
   loadWindowMode,
@@ -36,6 +38,7 @@ import {
   reconcileProjectImages,
 } from './lib/imageCloud'
 import { fetchVideoTitle, parseVideoId } from './lib/youtube'
+import { copySharedProject } from './lib/copyProject'
 import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
@@ -49,6 +52,7 @@ import {
   Check,
   Play,
   Proportions,
+  Settings as SettingsIcon,
   Undo2,
   Redo2,
 } from 'lucide-react'
@@ -73,6 +77,7 @@ import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
 import HomePage from './components/HomePage'
 import ExportPdfButton from './components/ExportPdfButton'
+import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
@@ -184,6 +189,20 @@ export default function App() {
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
+  // "Play once" — when on, every Play action arms passage playback for the
+  // sounding range note (auto-pause at its end) instead of seek-and-continue.
+  const [playOnce, setPlayOnceState] = useState(loadPlayOnce)
+  const setPlayOnce = useCallback((on: boolean) => {
+    setPlayOnceState(on)
+    savePlayOnce(on)
+  }, [])
+  // Settings modal — central knob for cross-cutting prefs.
+  const [showSettings, setShowSettings] = useState(false)
+  // Direct-set wrapper for overview (the existing toggleOverview only flips).
+  const setOverviewOpenPref = useCallback((on: boolean) => {
+    setOverviewOpen(on)
+    saveOverviewOpen(on)
+  }, [])
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -816,6 +835,26 @@ export default function App() {
     [patchProject],
   )
 
+  // Make a copy of a track from the home library. Clones to Storage, then
+  // splices the saved copy into local state (no refetch needed). The home
+  // page sorts by updatedAt, so the fresh copy lands first.
+  const copyTrack = useCallback(
+    async (project: Project) => {
+      if (!user) return
+      const copy = await copySharedProject(user.uid, project)
+      persistedRef.current.set(copy.id, copy)
+      setProjects((ps) => [copy, ...ps])
+    },
+    [user, setProjects],
+  )
+
+  // Turn on view-only sharing for a track without opening the editor — the
+  // home-page "Share link" menu item flips the gate so the link works.
+  const enableTrackShare = useCallback(
+    (id: string) => patchProject(id, { shared: true }),
+    [patchProject],
+  )
+
   function setYoutubeSource(url: string) {
     if (!current) return
     const videoId = parseVideoId(url)
@@ -1141,11 +1180,11 @@ export default function App() {
         break
       case 'ArrowUp':
         e.preventDefault()
-        step(1)
+        step(-1)
         break
       case 'ArrowDown':
         e.preventDefault()
-        step(-1)
+        step(1)
         break
       case '[':
         e.preventDefault()
@@ -1483,6 +1522,8 @@ export default function App() {
           onCreateTrack={createProject}
           onDeleteTrack={removeProject}
           onMoveTrack={moveTrackToFolder}
+          onCopyTrack={copyTrack}
+          onShareTrack={enableTrackShare}
           onCreateFolder={createFolder}
           onRenameFolder={renameFolder}
           onDeleteFolder={deleteFolder}
@@ -1572,6 +1613,16 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0 flex-1" />
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              aria-label="Open settings"
+              className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            >
+              <SettingsIcon size={12} />
+              Settings
+            </button>
             {current.source && (
               <button
                 type="button"
@@ -1813,6 +1864,7 @@ export default function App() {
                     onPlay={play}
                     onPlayPassage={playPassage}
                     passageId={passageId}
+                    playOnce={playOnce}
                     onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
@@ -1935,6 +1987,17 @@ export default function App() {
         <ShortcutsOverlay
           closing={help.closing}
           onClose={() => setShowHelp(false)}
+        />
+      )}
+      {showSettings && (
+        <SettingsModal
+          playOnce={playOnce}
+          onPlayOnce={setPlayOnce}
+          overviewOpen={overviewOpen}
+          onOverviewOpen={setOverviewOpenPref}
+          noteOrder={noteOrder}
+          onNoteOrder={changeNoteOrder}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

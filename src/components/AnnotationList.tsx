@@ -38,6 +38,8 @@ interface Props {
   onPlayPassage?: (a: Annotation) => void
   /** Note whose passage is armed to stop — lights that chip's loop segment. */
   passageId?: string | null
+  /** When true, the chip's Play button arms passage playback on range notes. */
+  playOnce?: boolean
   /** Persist a new top-to-bottom order for a group of same-time notes. */
   onReorder?: (orderedIds: string[]) => void
   onSeekNote: (id: string) => void
@@ -62,6 +64,7 @@ export default function AnnotationList({
   onPlay,
   onPlayPassage,
   passageId,
+  playOnce = false,
   onReorder,
   onSeekNote,
   mentionItems,
@@ -372,8 +375,15 @@ export default function AnnotationList({
           canMoveDown={idx < sorted.length - 1 && sameSlot(a, sorted[idx + 1])}
           onMoveUp={() => moveNote(a.id, -1)}
           onMoveDown={() => moveNote(a.id, 1)}
-          onPlay={() => playNote(a.start)}
-          onPlayPassage={onPlayPassage ? () => playPassage(a) : undefined}
+          onPlay={() =>
+            playOnce && a.end != null && onPlayPassage
+              ? playPassage(a)
+              : playNote(a.start)
+          }
+          onPlayPassage={
+            onPlayPassage && !playOnce ? () => playPassage(a) : undefined
+          }
+          playOnce={playOnce}
           passageArmed={passageId === a.id}
           onSeek={onSeek}
           onSeekNote={onSeekNote}

@@ -161,6 +161,28 @@ export function saveViewOnly(on: boolean): void {
   }
 }
 
+// "Play once" mode — when on, clicking a range note's Play chip arms passage
+// playback (seeks to start, pauses at end) instead of just seeking and letting
+// playback continue past the note. Persists per-browser like the other view
+// prefs. Point notes (no end) are unaffected.
+const PLAY_ONCE_KEY = 'sound-annotator:play-once'
+
+export function loadPlayOnce(): boolean {
+  try {
+    return localStorage.getItem(PLAY_ONCE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function savePlayOnce(on: boolean): void {
+  try {
+    localStorage.setItem(PLAY_ONCE_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
 // How the notes list is ordered (see AnnotationList). One stability↔liveness
 // dial, three stops:
 //   'timeline' — always chronological by start time (the default; most stable)

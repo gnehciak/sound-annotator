@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
+  Copy,
+  ExternalLink,
   Eye,
   Folder as FolderIcon,
-  FolderInput,
   FolderPlus,
+  Link2,
+  Loader2,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
@@ -29,6 +33,10 @@ interface Props {
   onCreateTrack: () => void
   onDeleteTrack: (id: string) => void
   onMoveTrack: (id: string, folderId: string | null) => void
+  /** Clone a track into the user's library — resolves once the copy is saved. */
+  onCopyTrack: (project: Project) => Promise<void>
+  /** Turn on view-only sharing for a track (no-op if already shared). */
+  onShareTrack: (id: string) => void
   /** Optimistically creates "New folder" and returns its id. */
   onCreateFolder: () => string
   onRenameFolder: (id: string, name: string) => void
@@ -84,6 +92,8 @@ export default function HomePage({
   onCreateTrack,
   onDeleteTrack,
   onMoveTrack,
+  onCopyTrack,
+  onShareTrack,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -408,6 +418,8 @@ export default function HomePage({
                               onDeleteTrack(p.id)
                           }}
                           onMove={(folderId) => onMoveTrack(p.id, folderId)}
+                          onCopy={() => onCopyTrack(p)}
+                          onShare={() => onShareTrack(p.id)}
                         />
                       ))}
                     </div>
@@ -680,6 +692,8 @@ function TrackTile({
   onOpen,
   onDelete,
   onMove,
+  onCopy,
+  onShare,
 }: {
   project: Project
   theme: ResolvedTheme
@@ -690,6 +704,8 @@ function TrackTile({
   onOpen: () => void
   onDelete: () => void
   onMove: (folderId: string | null) => void
+  onCopy: () => Promise<void>
+  onShare: () => void
 }) {
   const n = p.annotations.length
   // YouTube tracks lead with the video's own thumbnail — derived straight from
@@ -750,20 +766,15 @@ function TrackTile({
         >
           {p.title}
         </button>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-          <MoveMenu project={p} folders={folders} onMove={onMove} />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            title="Delete track"
-            aria-label={`Delete track ${p.title}`}
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
-          >
-            <Trash2 size={13} />
-          </button>
+        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+          <TrackActionsMenu
+            project={p}
+            folders={folders}
+            onCopy={onCopy}
+            onShare={onShare}
+            onMove={onMove}
+            onDelete={onDelete}
+          />
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 pb-3.5 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
@@ -788,24 +799,97 @@ function TrackTile({
   )
 }
 
-/* ---- "move to folder" menu ------------------------------------------------ */
+/* ---- track tile "..." menu ------------------------------------------------ */
 
-function MoveMenu({
+/**
+ * The track tile's one and only action affordance — a kebab popover hosting
+ * everything you might do to a track without opening the editor:
+ *
+ *   • Open YouTube link (only for YouTube-sourced tracks)
+ *   • Make a copy            — clones into the library, in place
+ *   • Share link             — turns on view-only sharing and copies the URL
+ *   • Move to {folder}…      — inline section (only when folders exist)
+ *   • Delete
+ *
+ * Copy and Share show inline progress / confirmation in their own row; the
+ * menu then auto-closes so the next pass is a fresh click.
+ */
+function TrackActionsMenu({
   project: p,
   folders,
+  onCopy,
+  onShare,
   onMove,
+  onDelete,
 }: {
   project: Project
   folders: Folder[]
+  onCopy: () => Promise<void>
+  onShare: () => void
   onMove: (folderId: string | null) => void
+  onDelete: () => void
 }) {
   const [open, setOpen] = useState(false)
+  // Async-action lifecycle for the two rows that show inline feedback. `busy`
+  // is the action currently running; `done` is the one that just finished and
+  // is briefly displaying its check before the menu closes.
+  const [busy, setBusy] = useState<'copy' | 'share' | null>(null)
+  const [done, setDone] = useState<'copy' | 'share' | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+
   // Where the track lives now (dangling ids count as the root library).
   const here =
     p.folderId && folders.some((f) => f.id === p.folderId) ? p.folderId : null
+  const youtubeUrl =
+    p.source?.type === 'youtube' ? p.source.youtubeUrl ?? null : null
 
-  const row = (id: string | null, label: string) => {
+  async function handleCopy() {
+    if (busy) return
+    setBusy('copy')
+    try {
+      await onCopy()
+      setDone('copy')
+      setTimeout(() => {
+        setDone(null)
+        setOpen(false)
+      }, 900)
+    } catch (err) {
+      console.error('Copy failed:', err)
+      alert('Copy failed — check your connection and try again.')
+    } finally {
+      setBusy((b) => (b === 'copy' ? null : b))
+    }
+  }
+
+  async function handleShare() {
+    if (busy) return
+    setBusy('share')
+    try {
+      // Auto-enable view-only sharing the first time, so the copied link
+      // actually resolves. Already-shared tracks just get a clipboard copy.
+      if (!p.shared) onShare()
+      const url = `${window.location.origin}${window.location.pathname}?view=${p.id}`
+      await navigator.clipboard.writeText(url)
+      setDone('share')
+      setTimeout(() => {
+        setDone(null)
+        setOpen(false)
+      }, 900)
+    } catch (err) {
+      console.error('Share copy failed:', err)
+      alert('Couldn’t copy the share link — try the Share button inside the track.')
+    } finally {
+      setBusy((b) => (b === 'share' ? null : b))
+    }
+  }
+
+  function openYoutube() {
+    if (!youtubeUrl) return
+    window.open(youtubeUrl, '_blank', 'noopener,noreferrer')
+    setOpen(false)
+  }
+
+  const moveRow = (id: string | null, label: string) => {
     const isHere = id === here
     return (
       <button
@@ -816,7 +900,7 @@ function MoveMenu({
           setOpen(false)
           onMove(id)
         }}
-        className={`flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-xs transition-colors ${
+        className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-xs transition-colors ${
           isHere ? 'text-muted' : 'text-fg hover:bg-raised'
         }`}
       >
@@ -833,6 +917,11 @@ function MoveMenu({
     )
   }
 
+  // Shared row chrome for the top action group. Hover wash + disabled state
+  // for in-flight async actions.
+  const actionCls =
+    'flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-70'
+
   return (
     <>
       <button
@@ -843,29 +932,97 @@ function MoveMenu({
           setOpen((o) => !o)
         }}
         aria-expanded={open}
-        title="Move to folder"
-        aria-label={`Move track ${p.title} to a folder`}
+        title="More actions"
+        aria-label={`More actions for ${p.title}`}
         className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
       >
-        <FolderInput size={13} />
+        <MoreHorizontal size={15} />
       </button>
       <Popover
         open={open}
         anchorRef={btnRef}
         onClose={() => setOpen(false)}
-        width={200}
+        width={220}
       >
         {/* Portal events bubble through the React tree — stop them so a menu
             click can't also open the tile's track. */}
         <div
           onClick={(e) => e.stopPropagation()}
-          className="rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
+          className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
         >
-          <p className="px-2.5 pb-1 pt-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
-            Move to
-          </p>
-          {row(null, 'Library (no folder)')}
-          {folders.map((f) => row(f.id, f.name))}
+          {youtubeUrl && (
+            <button type="button" onClick={openYoutube} className={actionCls}>
+              <ExternalLink size={13} className="shrink-0 text-muted" />
+              <span>Open YouTube link</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleCopy}
+            disabled={busy === 'copy'}
+            className={actionCls}
+          >
+            {busy === 'copy' ? (
+              <Loader2
+                size={13}
+                className="shrink-0 animate-spin text-muted"
+              />
+            ) : done === 'copy' ? (
+              <Check size={13} className="shrink-0 text-accentink" />
+            ) : (
+              <Copy size={13} className="shrink-0 text-muted" />
+            )}
+            <span>
+              {busy === 'copy'
+                ? 'Copying…'
+                : done === 'copy'
+                  ? 'Copied to your library'
+                  : 'Make a copy'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={busy === 'share'}
+            className={actionCls}
+          >
+            {done === 'share' ? (
+              <Check size={13} className="shrink-0 text-accentink" />
+            ) : (
+              <Link2 size={13} className="shrink-0 text-muted" />
+            )}
+            <span>
+              {done === 'share'
+                ? p.shared
+                  ? 'Link copied'
+                  : 'Link copied · sharing on'
+                : p.shared
+                  ? 'Copy share link'
+                  : 'Share link'}
+            </span>
+          </button>
+          {folders.length > 0 && (
+            <>
+              <div className="my-1 border-t border-line" />
+              <p className="px-2.5 pb-1 pt-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                Move to
+              </p>
+              {moveRow(null, 'Library (no folder)')}
+              {folders.map((f) => moveRow(f.id, f.name))}
+            </>
+          )}
+          <div className="my-1 border-t border-line" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              onDelete()
+            }}
+            className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs text-fg transition-colors hover:bg-raised hover:text-danger"
+          >
+            <Trash2 size={13} className="shrink-0 text-muted" />
+            <span>Delete</span>
+          </button>
         </div>
       </Popover>
     </>

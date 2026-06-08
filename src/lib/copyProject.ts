@@ -83,16 +83,18 @@ async function fetchBlob(url: string): Promise<Blob> {
 }
 
 /**
- * Copy a (shared) project into `uid`'s account and resolve with the new
- * project id. `onStatus` receives short progress labels for the UI. Audio is
- * copied strictly (a copy with broken audio is worse than a failed copy);
- * images are best-effort — one that can't be fetched keeps its original URL.
+ * Copy a (shared) project into `uid`'s account and resolve with the saved
+ * copy (id, ownerId, etc. populated). `onStatus` receives short progress
+ * labels for the UI. Audio is copied strictly (a copy with broken audio is
+ * worse than a failed copy); images are best-effort — one that can't be
+ * fetched keeps its original URL. A same-owner copy stays in the source's
+ * folder; a cross-owner copy (from the share viewer) lands in the root.
  */
 export async function copySharedProject(
   uid: string,
   src: Project,
   onStatus?: (label: string) => void,
-): Promise<string> {
+): Promise<Project> {
   const newId = crypto.randomUUID()
 
   // De-dupe the title against the user's existing tracks: a name that's already
@@ -136,14 +138,20 @@ export async function copySharedProject(
   }
 
   onStatus?.('Saving…')
-  await saveProject(uid, {
+  const copy: Project = {
     id: newId,
+    ownerId: uid,
     title,
     source,
     annotations: src.annotations.map((a) => rewriteAnnotation(a, urlMap)),
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
-  })
-  return newId
+    // Same-account copies stay in the source's folder; cross-account copies
+    // (the share viewer) land in the root — the source's folder id is the
+    // original owner's and means nothing in the recipient's library.
+    folderId: src.ownerId === uid ? src.folderId ?? null : null,
+  }
+  await saveProject(uid, copy)
+  return copy
 }
