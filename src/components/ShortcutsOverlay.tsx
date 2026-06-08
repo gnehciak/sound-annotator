@@ -1,47 +1,68 @@
 import { X } from 'lucide-react'
 
-const GROUPS = [
-  {
-    title: 'Transport',
-    items: [
-      { keys: ['Space'], label: 'Play / pause' },
-      { keys: ['↑', '↓'], label: 'Nudge 1 second' },
-      { keys: ['←', '→'], label: 'Seek 5 seconds' },
-    ],
-  },
-  {
-    title: 'Notes',
-    items: [
-      { keys: ['N'], label: 'Add note at current time' },
-      { keys: ['I'], label: 'Mark section start' },
-      { keys: ['O'], label: 'Mark section end' },
-      { keys: ['[', ']'], label: 'Previous / next note' },
-    ],
-  },
-  {
-    title: 'Navigation',
-    items: [
-      { keys: ['Home', 'End'], label: 'Jump to start / end' },
-      { keys: ['V'], label: 'Toggle view-only mode' },
-      { keys: ['?'], label: 'Show this help' },
-    ],
-  },
-  {
-    title: 'Editing',
-    items: [
-      { keys: ['⌘', 'Z'], label: 'Undo' },
-      { keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
-    ],
-  },
-]
+type Group = { title: string; items: { keys: string[]; label: string }[] }
+
+const TRANSPORT: Group = {
+  title: 'Transport',
+  items: [
+    { keys: ['Space'], label: 'Play / pause' },
+    { keys: ['↑', '↓'], label: 'Nudge 1 second' },
+    { keys: ['←', '→'], label: 'Seek 5 seconds' },
+  ],
+}
+
+const NOTES_EDIT: Group = {
+  title: 'Notes',
+  items: [
+    { keys: ['N'], label: 'Add note at current time' },
+    { keys: ['I'], label: 'Mark section start' },
+    { keys: ['O'], label: 'Mark section end' },
+    { keys: ['[', ']'], label: 'Previous / next note' },
+  ],
+}
+
+const NOTES_VIEW: Group = {
+  title: 'Notes',
+  items: [{ keys: ['[', ']'], label: 'Previous / next note' }],
+}
+
+const NAV_EDIT: Group = {
+  title: 'Navigation',
+  items: [
+    { keys: ['Home', 'End'], label: 'Jump to start / end' },
+    { keys: ['V'], label: 'Toggle view-only mode' },
+    { keys: ['?'], label: 'Show this help' },
+  ],
+}
+
+const NAV_VIEW: Group = {
+  title: 'Navigation',
+  items: [
+    { keys: ['Home', 'End'], label: 'Jump to start / end' },
+    { keys: ['?'], label: 'Show this help' },
+  ],
+}
+
+const EDITING: Group = {
+  title: 'Editing',
+  items: [
+    { keys: ['⌘', 'Z'], label: 'Undo' },
+    { keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
+  ],
+}
 
 export default function ShortcutsOverlay({
   onClose,
   closing = false,
+  readOnly = false,
 }: {
   onClose: () => void
   closing?: boolean
+  readOnly?: boolean
 }) {
+  const groups: Group[] = readOnly
+    ? [TRANSPORT, NOTES_VIEW, NAV_VIEW]
+    : [TRANSPORT, NOTES_EDIT, NAV_EDIT, EDITING]
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 ${
@@ -72,7 +93,7 @@ export default function ShortcutsOverlay({
         </div>
 
         <div className="grid gap-x-8 gap-y-5 px-4 py-5 sm:grid-cols-2">
-          {GROUPS.map((g) => (
+          {groups.map((g) => (
             <div key={g.title}>
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-accentink">
                 {g.title}

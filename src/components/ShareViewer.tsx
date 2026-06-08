@@ -26,6 +26,9 @@ import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
+import { useHotkeys } from '../lib/useHotkeys'
+import { usePresence } from '../lib/usePresence'
+import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
 
 type Status = 'loading' | 'ready' | 'notfound'
@@ -57,6 +60,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [searchOpen, setSearchOpen] = useState(false)
   // Overview strip open/closed — shares the editor's persisted preference.
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+  const [showHelp, setShowHelp] = useState(false)
+  const help = usePresence(showHelp)
 
   function toggleOverview() {
     setOverviewOpen((on) => {
@@ -229,6 +234,80 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     },
     [annotations, seek],
   )
+
+  const jumpNote = useCallback(
+    (dir: 1 | -1) => {
+      if (annotations.length === 0) return
+      const sorted = [...annotations].sort((a, b) => a.start - b.start)
+      const eps = 0.3
+      const target =
+        dir === 1
+          ? sorted.find((a) => a.start > currentTime + eps)
+          : [...sorted].reverse().find((a) => a.start < currentTime - eps)
+      if (target) seekToNote(target.id)
+    },
+    [annotations, currentTime, seekToNote],
+  )
+
+  // Playback-only shortcuts — mirrors App's set, minus the edit actions
+  // (N/I/O) and the V/undo-redo bindings that only apply to the editor.
+  const src = project?.source
+  const playerActive =
+    status === 'ready' &&
+    ((src?.type === 'youtube' && !!src.videoId) ||
+      (src?.type === 'audio' && !!src.audioUrl))
+  useHotkeys((e) => {
+    if (e.key === 'Escape') {
+      if (showHelp) setShowHelp(false)
+      return
+    }
+    if (e.key === '?') {
+      e.preventDefault()
+      setShowHelp((s) => !s)
+      return
+    }
+    if (showHelp) return
+    if (!playerActive) return
+    switch (e.key) {
+      case ' ':
+        e.preventDefault()
+        if (isPlaying) pause()
+        else play()
+        break
+      case 'ArrowLeft':
+        e.preventDefault()
+        step(-5)
+        break
+      case 'ArrowRight':
+        e.preventDefault()
+        step(5)
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        step(1)
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        step(-1)
+        break
+      case '[':
+        e.preventDefault()
+        jumpNote(-1)
+        break
+      case ']':
+        e.preventDefault()
+        jumpNote(1)
+        break
+      case 'Home':
+        e.preventDefault()
+        seek(0)
+        break
+      case 'End':
+        e.preventDefault()
+        if (duration > 0) seek(duration)
+        break
+    }
+  })
 
   const regionSpecs = useMemo(
     () =>
@@ -494,6 +573,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </div>
         </div>
       </div>
+
+      {help.mounted && (
+        <ShortcutsOverlay
+          closing={help.closing}
+          onClose={() => setShowHelp(false)}
+          readOnly
+        />
+      )}
     </div>
   )
 }
