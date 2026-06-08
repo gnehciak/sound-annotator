@@ -9,7 +9,6 @@ import {
   DEFAULT_VOLUME,
   loadOverviewOpen,
   saveOverviewOpen,
-  loadPlayOnce,
   loadViewNoteOrder,
   saveViewNoteOrder,
   type NoteOrder,
@@ -66,7 +65,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // we sync from project.settings (once) so the viewer sees the owner's
   // choice. After that, the in-page toggles update state directly — viewer
   // overrides never write back to the project. playOnce has no UI here.
-  const [playOnce, setPlayOnce] = useState(loadPlayOnce)
+  // Play-once defaults off; the project's settings override it on sync.
+  const [playOnce, setPlayOnce] = useState(false)
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
   const [noteOrder, setNoteOrderState] = useState<NoteOrder>(loadViewNoteOrder)
   const settingsSyncedFor = useRef<string | null>(null)

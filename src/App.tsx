@@ -15,8 +15,6 @@ import {
   DEFAULT_VOLUME,
   loadViewOnly,
   saveViewOnly,
-  loadPlayOnce,
-  savePlayOnce,
   loadNoteOrder,
   saveNoteOrder,
   type NoteOrder,
@@ -196,7 +194,8 @@ export default function App() {
   // go to both: the project (so it travels with the share) and localStorage
   // (so a brand-new project inherits the user's last choice as default).
   const [showSettings, setShowSettings] = useState(false)
-  const [userPlayOnce, setUserPlayOnce] = useState(loadPlayOnce)
+  // Play-once defaults off; only a project's own settings can turn it on.
+  const [userPlayOnce, setUserPlayOnce] = useState(false)
   const [userOverviewOpen, setUserOverviewOpen] = useState(loadOverviewOpen)
   const [userNoteOrder, setUserNoteOrder] = useState<NoteOrder>(loadNoteOrder)
   // Which note block (if any) is open in the plugin editor window, and how it's
@@ -414,7 +413,6 @@ export default function App() {
   const setPlayOnce = useCallback(
     (on: boolean) => {
       setUserPlayOnce(on)
-      savePlayOnce(on)
       patchProjectSettings({ playOnce: on })
     },
     [patchProjectSettings],
