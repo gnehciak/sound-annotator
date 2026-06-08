@@ -18,11 +18,7 @@ import { type NoteOrder } from './storage'
  * live, default timeline) or the view-only one (timeline / live, default live).
  * They persist independently, so toggling view mode doesn't disturb the other.
  */
-export function useNotesView(
-  annotations: Annotation[],
-  noteOrder: NoteOrder,
-  changeNoteOrder: (mode: NoteOrder) => void,
-) {
+export function useNotesView(annotations: Annotation[], noteOrder: NoteOrder) {
   // Auto-pin (scrolling the playing note to the top) and auto-cue (clicking a
   // note moves the playhead to it) are both coupled to the order — on for Live
   // and Auto, off for Timeline. There's no separate toggle: the one order

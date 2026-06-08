@@ -198,7 +198,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     setSearch,
     isFiltered,
     visibleAnnotations,
-  } = useNotesView(annotations, noteOrder, changeNoteOrder)
+  } = useNotesView(annotations, noteOrder)
 
   const handleTime = useCallback((t: number) => setCurrentTime(t), [])
   const handleDuration = useCallback((d: number) => setDuration(d), [])

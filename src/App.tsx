@@ -487,7 +487,7 @@ export default function App() {
     setSearch,
     isFiltered,
     visibleAnnotations,
-  } = useNotesView(current?.annotations ?? [], noteOrder, changeNoteOrder)
+  } = useNotesView(current?.annotations ?? [], noteOrder)
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
