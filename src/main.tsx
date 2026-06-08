@@ -1,5 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// IBM Plex, self-hosted (@fontsource) — the type system's two voices. Sans
+// carries prose at 400–700 (+italic), Mono carries timecodes/labels at 400–700.
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/400-italic.css'
+import '@fontsource/ibm-plex-sans/500.css'
+import '@fontsource/ibm-plex-sans/600.css'
+import '@fontsource/ibm-plex-sans/700.css'
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource/ibm-plex-mono/600.css'
+import '@fontsource/ibm-plex-mono/700.css'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './lib/auth'

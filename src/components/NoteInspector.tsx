@@ -149,7 +149,7 @@ export default function NoteInspector({
     // different note is loaded into the inspector.
     <div className="flex animate-fade-in flex-col">
       {/* Metadata controls */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-line/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-[7px] border-b border-line/60 px-[13px] py-2.5">
         <ColorPicker color={color} onChange={(c) => onUpdate({ color: c })} />
         <TagPicker
           tags={tagsOf(annotation)}
@@ -162,7 +162,7 @@ export default function NoteInspector({
           onClick={onDelete}
           title="Delete note"
           aria-label="Delete note"
-          className="press rounded p-1 text-muted hover:bg-raised hover:text-danger"
+          className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
         >
           <Trash2 size={14} />
         </button>
@@ -170,7 +170,7 @@ export default function NoteInspector({
 
       {/* Structure section: a clear on/off switch on its own row, with a name
           field (when on) that shows beside the section's bracket in the overview. */}
-      <div className="flex flex-col gap-2 border-b border-line/60 px-3 py-2">
+      <div className="flex flex-col gap-2 border-b border-line/60 px-[13px] py-2.5">
         <button
           type="button"
           role="switch"
@@ -185,7 +185,7 @@ export default function NoteInspector({
               ? 'Give this note an end time first — a section brackets a span, not a single moment'
               : 'Section notes are bracketed along their span in the overview'
           }
-          className={`flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-left transition-colors ${
+          className={`flex w-full items-center justify-between gap-2.5 rounded border px-[11px] py-2 text-left transition-colors ${
             annotation.end == null
               ? 'cursor-not-allowed border-line/60 opacity-50'
               : annotation.structure
@@ -194,7 +194,7 @@ export default function NoteInspector({
           }`}
         >
           <span
-            className={`flex items-center gap-1.5 text-[12px] ${
+            className={`flex items-center gap-2 text-[12.5px] ${
               annotation.structure ? 'text-fg' : 'text-muted'
             }`}
           >
@@ -202,13 +202,13 @@ export default function NoteInspector({
             Mark as section note
           </span>
           <span
-            className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors ${
+            className={`relative inline-flex h-[17px] w-[30px] shrink-0 rounded-full border transition-colors ${
               annotation.structure ? 'border-accent bg-accent' : 'border-line bg-inset'
             }`}
           >
             <span
               className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
-                annotation.structure ? 'left-3 bg-onaccent' : 'left-0.5 bg-muted'
+                annotation.structure ? 'left-[14px] bg-onaccent' : 'left-[2px] bg-muted'
               }`}
             />
           </span>
@@ -219,7 +219,7 @@ export default function NoteInspector({
             onChange={(e) => onUpdate({ sectionName: e.target.value })}
             placeholder="Section name"
             aria-label="Section name"
-            className="w-full rounded-sm border border-line bg-inset px-2 py-1 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            className="bevel-inset w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
           />
         )}
       </div>
@@ -242,11 +242,11 @@ export default function NoteInspector({
       {/* Score position — pairs with the time row above: where the note's
           moment falls in the printed music. Free text: a bar number or a
           rehearsal mark. A typing run collapses into one undo step. */}
-      <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line/60 px-[13px] py-2.5">
         <label
           htmlFor={`note-bar-${annotation.id}`}
           title="Where this moment falls in the score"
-          className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-muted"
+          className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted"
         >
           Bar
         </label>
@@ -261,7 +261,7 @@ export default function NoteInspector({
             )
           }}
           placeholder="Bar number or rehearsal mark — e.g. 24, reh. B"
-          className="w-full rounded-sm border border-line bg-inset px-2 py-1 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          className="bevel-inset w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
         />
       </div>
 
@@ -289,9 +289,9 @@ export default function NoteInspector({
           const Icon = plugin.icon
           return (
             <div key={block.id} className="border-t border-line">
-              <div className="flex items-center gap-2 px-3 pb-1 pt-2">
+              <div className="flex items-center gap-2 px-[13px] pb-1 pt-2.5">
                 <Icon size={12} className="shrink-0 text-muted" />
-                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-fg">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-fg">
                   {plugin.label}
                 </span>
                 <div className="flex-1" />
@@ -300,7 +300,7 @@ export default function NoteInspector({
                   onClick={() => removeBlock(block.id)}
                   title={`Remove ${plugin.label}`}
                   aria-label={`Remove ${plugin.label}`}
-                  className="press rounded p-0.5 text-muted hover:text-danger"
+                  className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
                 >
                   <X size={13} />
                 </button>
@@ -315,7 +315,7 @@ export default function NoteInspector({
         })}
 
         {addablePlugins().length > 0 && (
-          <div className="border-t border-line px-3 py-2">
+          <div className="border-t border-line px-[13px] py-2.5">
             <AddPropertyMenu onAdd={addBlock} />
           </div>
         )}
@@ -362,7 +362,7 @@ function NoteTimeBar({
     rate: playbackRate,
   })
   return (
-    <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2">
+    <div className="flex items-center gap-2 border-b border-line/60 px-[13px] py-2.5">
       <TimeEndpoint
         label="Begin"
         time={start}
@@ -457,7 +457,7 @@ function TimeEndpoint({
         onClick={() => setOpen((o) => !o)}
         title={`${label} — click to edit`}
         aria-label={`${label} ${display}`}
-        className={`press rounded-sm border px-1.5 py-0.5 font-mono text-[12px] tabular-nums text-fg hover:border-accent ${
+        className={`press rounded-sm border px-2 py-[3px] font-mono text-[12px] tabular-nums text-fg transition-colors hover:border-accent ${
           open ? 'border-accent' : 'border-line'
         }`}
       >
@@ -470,9 +470,9 @@ function TimeEndpoint({
         width={184}
         className={`${
           align === 'right' ? 'origin-top-right' : 'origin-top-left'
-        } rounded border border-line bg-panel p-2 shadow-lg`}
+        } rounded border border-line bg-panel p-2.5 shadow-lg`}
       >
-        <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
           {label}
         </div>
         <input
@@ -489,7 +489,7 @@ function TimeEndpoint({
           placeholder="m:ss"
           inputMode="numeric"
           aria-label={`${label} time`}
-          className="mb-2 w-full rounded border border-line bg-inset px-2 py-1 text-center font-mono text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          className="bevel-inset mb-2 w-full rounded border border-line bg-inset px-[9px] py-[6px] text-center font-mono text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <div className="flex items-center gap-1">
           <button
@@ -505,7 +505,7 @@ function TimeEndpoint({
             type="button"
             onClick={() => onCommit(Math.floor(currentTime))}
             title="Set to the current time"
-            className="press flex h-7 flex-1 items-center justify-center gap-1 rounded border border-line font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accentink"
+            className="press flex h-7 flex-1 items-center justify-center gap-1 rounded border border-line font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-accent hover:text-accentink"
           >
             <Crosshair size={12} /> Now
           </button>
@@ -526,7 +526,7 @@ function TimeEndpoint({
               onClear()
               close()
             }}
-            className="press mt-2 flex w-full items-center justify-center gap-1 rounded border border-line/60 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-danger/60 hover:text-danger"
+            className="press mt-2 flex w-full items-center justify-center gap-1 rounded border border-line/60 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-danger/60 hover:text-danger"
           >
             <X size={11} /> Remove end
           </button>
@@ -547,7 +547,7 @@ function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accentink"
+        className="press inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-accent hover:text-accentink"
       >
         <Plus size={12} /> Property
       </button>
@@ -568,7 +568,7 @@ function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
                 onAdd(p.type)
                 setOpen(false)
               }}
-              className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
+              className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
             >
               <Icon size={13} className="shrink-0" /> {p.label}
             </button>

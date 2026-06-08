@@ -1296,7 +1296,7 @@ export default function App() {
           signal — `masthead-armed` washes it accent with an accent hairline,
           echoing the lit Edit key. View mode / the lock return it to panel. */}
       <header
-        className={`chrome-dark flex items-center gap-2 border-b px-3 py-2 transition-colors duration-150 sm:gap-3 sm:px-4 ${
+        className={`chrome-dark flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
             : 'border-line bg-panel'
@@ -1308,15 +1308,15 @@ export default function App() {
           type="button"
           onClick={goHome}
           title="Back to the library"
-          className="press flex items-center gap-2 sm:gap-3"
+          className="press flex items-center gap-[9px]"
         >
-          <span className="text-accentink">◉</span>
-          <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
+          <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+          <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
             Sound&nbsp;Annotator
           </span>
         </button>
         {view === 'track' && viewOnly && !lockBlocked && (
-          <span className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-1.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
+          <span className="flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
             <Eye size={11} /> View only
           </span>
         )}
@@ -1328,7 +1328,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Undo and redo"
-            className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+            className="flex items-center gap-px rounded-md border border-line bg-inset p-[2px]"
           >
             <button
               type="button"
@@ -1336,7 +1336,7 @@ export default function App() {
               disabled={!canUndo}
               title="Undo (⌘Z)"
               aria-label="Undo"
-              className="press flex h-6 items-center rounded-[1px] px-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
             >
               <Undo2 size={15} />
             </button>
@@ -1346,13 +1346,13 @@ export default function App() {
               disabled={!canRedo}
               title="Redo (⌘⇧Z)"
               aria-label="Redo"
-              className="press flex h-6 items-center rounded-[1px] px-1.5 text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
             >
               <Redo2 size={15} />
             </button>
           </div>
         )}
-        {/* Mode toggle: a squared segmented switch (pencil | eye), icon-only.
+        {/* Mode toggle: a segmented switch (pencil | eye), icon-only.
             The Edit key lights solid accent while armed — the header wash
             echoes it; the active View segment stays a tonal fill with accent
             text. The 'V' key still flips it. */}
@@ -1360,7 +1360,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Editing mode"
-            className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+            className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
           >
             <button
               type="button"
@@ -1368,7 +1368,7 @@ export default function App() {
               aria-pressed={!viewOnly}
               title="Edit mode (V)"
               aria-label="Edit mode"
-              className={`press flex h-6 w-8 items-center justify-center rounded-[1px] transition-colors duration-150 ${
+              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
                 viewOnly ? 'text-muted hover:text-fg' : 'bg-accent text-onaccent'
               }`}
             >
@@ -1380,7 +1380,7 @@ export default function App() {
               aria-pressed={viewOnly}
               title="View-only mode (V)"
               aria-label="View-only mode"
-              className={`press flex h-6 w-8 items-center justify-center rounded-[1px] transition-colors duration-150 ${
+              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
                 viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
               }`}
             >
@@ -1396,11 +1396,11 @@ export default function App() {
           <div
             role="group"
             aria-label="Edit lock"
-            className="flex min-w-0 items-center gap-px rounded-sm border border-line bg-inset p-px"
+            className="flex min-w-0 items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
           >
             <span
               role="status"
-              className="flex h-6 min-w-0 items-center gap-1.5 rounded-[1px] bg-accent/10 px-2 font-mono text-[10px] uppercase tracking-wider text-accentink"
+              className="flex h-[26px] min-w-0 items-center gap-1.5 rounded bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink"
             >
               <Pencil size={12} className="shrink-0" />
               <span className="truncate">
@@ -1414,7 +1414,7 @@ export default function App() {
                 type="button"
                 onClick={editLock.takeOver}
                 title="Take over editing — the other session becomes read-only"
-                className="press flex h-6 shrink-0 items-center whitespace-nowrap rounded-[1px] px-2 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:bg-raised hover:text-accentink"
+                className="press flex h-[26px] shrink-0 items-center whitespace-nowrap rounded px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:bg-raised hover:text-accentink"
               >
                 Take over
               </button>
@@ -1434,25 +1434,25 @@ export default function App() {
           </span>
         )}
         {view === 'track' && (
-          <div className="ml-1 hidden items-baseline gap-1 rounded border border-line bg-inset px-2.5 py-1 min-[720px]:flex">
-            <span className="led text-base leading-none">{formatTime(currentTime)}</span>
-            <span className="font-mono text-[10px] text-muted">
+          <div className="bevel-inset hidden items-baseline gap-1.5 rounded border border-line bg-inset px-[13px] py-[7px] min-[720px]:flex">
+            <span className="led text-[15px] font-medium leading-none">{formatTime(currentTime)}</span>
+            <span className="font-mono text-[10.5px] text-muted">
               / {formatTime(duration)}
             </span>
           </div>
         )}
 
         {user && (
-          <div className="ml-1 flex items-center gap-1.5 border-l border-line pl-3">
+          <div className="flex items-center gap-[7px] border-l border-line pl-3">
             {user.photoURL ? (
               <img
                 src={user.photoURL}
                 alt=""
                 referrerPolicy="no-referrer"
-                className="h-6 w-6 rounded-full border border-line"
+                className="h-7 w-7 rounded-full border border-line-strong"
               />
             ) : (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-line bg-raised text-[11px] font-semibold uppercase text-muted">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line-strong bg-raised text-xs font-semibold uppercase text-fg">
                 {(user.displayName ?? user.email ?? '?').slice(0, 1)}
               </span>
             )}
@@ -1460,7 +1460,7 @@ export default function App() {
               onClick={() => void signOut()}
               title={`Sign out${user.email ? ` (${user.email})` : ''}`}
               aria-label="Sign out"
-              className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+              className="press grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
             >
               <LogOut size={16} />
             </button>
@@ -1490,7 +1490,7 @@ export default function App() {
       ) : (
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Sub-bar: track title + per-track tools. */}
-          <div className="flex h-11 items-center gap-2 border-b border-line bg-ink/60 px-3">
+          <div className="flex h-[50px] items-center gap-2 border-b border-line bg-ink/60 px-3.5">
             {/* Back to where the track lives: its folder, or the root library. */}
             <button
               type="button"
@@ -1500,12 +1500,12 @@ export default function App() {
                 'the library'
               }`}
               aria-label="Back"
-              className="press -ml-1 shrink-0 rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+              className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
             >
               <ArrowLeft size={16} />
             </button>
             {effectiveViewOnly ? (
-              <span className="min-w-0 truncate px-1 text-sm font-semibold tracking-wide text-fg">
+              <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
                 {current.title}
               </span>
             ) : (
@@ -1516,7 +1516,7 @@ export default function App() {
                 <div className="inline-grid min-w-0">
                   <span
                     aria-hidden
-                    className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre px-1 text-sm font-semibold tracking-wide"
+                    className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em]"
                   >
                     {current.title || 'Untitled track'}
                   </span>
@@ -1531,7 +1531,7 @@ export default function App() {
                     }
                     placeholder="Untitled track"
                     aria-label="Track title"
-                    className="col-start-1 row-start-1 w-full min-w-0 rounded-sm bg-transparent px-1 text-sm font-semibold tracking-wide text-fg placeholder:text-muted"
+                    className="col-start-1 row-start-1 w-full min-w-0 rounded bg-transparent px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg transition-colors placeholder:text-muted hover:bg-fg/5"
                   />
                 </div>
                 <Pencil
@@ -1547,7 +1547,7 @@ export default function App() {
               <div
                 role="status"
                 aria-live="polite"
-                className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted"
+                className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted"
               >
                 {saveStatus === 'editing' && (
                   <>
@@ -1578,7 +1578,7 @@ export default function App() {
                 onClick={fitLayout}
                 title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
                 aria-label="Fit layout to screen"
-                className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
               >
                 <Proportions size={12} />
                 Fit
@@ -1654,7 +1654,7 @@ export default function App() {
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Open the original video on YouTube (new tab)"
-                        className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
                       >
                         <Play size={12} />
                         YouTube
@@ -1662,7 +1662,7 @@ export default function App() {
                     ) : undefined
                   }
                 />
-                <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
                   <div
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
@@ -1687,7 +1687,7 @@ export default function App() {
                   </div>
 
                   {uploadPct != null && (
-                    <div className="flex shrink-0 items-center gap-2 border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+                    <div className="flex shrink-0 items-center gap-2 rounded border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
                       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                         <span
                           className="block h-full bg-accent transition-[width]"
@@ -1849,7 +1849,7 @@ export default function App() {
                 >
                   <div className="h-full w-[var(--inspector-w)]">
                     <PluginWindow
-                      title="Note Properties"
+                      title="Note"
                       subtitle={inspectorSubtitle}
                       mode="dock"
                       onSetMode={changeWindowMode}
@@ -1903,7 +1903,7 @@ export default function App() {
       {/* Note inspector — modal overlay (narrow screens or chosen mode) */}
       {showModal && selectedNote && (
         <PluginWindow
-          title="Note Properties"
+          title="Note"
           subtitle={inspectorSubtitle}
           mode="modal"
           onSetMode={changeWindowMode}
@@ -1943,7 +1943,7 @@ function LevelMeter({ active }: { active: boolean }) {
   const SEGS = 16
   return (
     <div
-      className="bevel-inset flex h-4 items-stretch gap-[1.5px] border border-line bg-inset px-1 py-1"
+      className="flex h-[18px] items-end gap-[2.5px]"
       title="Output level"
       aria-hidden="true"
     >
@@ -1957,11 +1957,12 @@ function LevelMeter({ active }: { active: boolean }) {
         return (
           <span
             key={i}
-            className={active ? 'meter-seg' : ''}
+            className={`origin-bottom rounded-[2px] ${active ? 'meter-seg' : ''}`}
             style={{
-              width: '2px',
+              width: '3.5px',
+              height: `${30 + Math.sin((i / (SEGS - 1)) * Math.PI) * 60}%`,
               background: color,
-              opacity: active ? undefined : i < 5 ? 0.55 : 0.1,
+              opacity: active ? undefined : i < 5 ? 0.55 : 0.2,
               animationDelay: active ? `${i * 45}ms` : undefined,
               animationDuration: active ? `${700 + (i % 5) * 90}ms` : undefined,
             }}

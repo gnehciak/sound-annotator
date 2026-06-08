@@ -50,12 +50,12 @@ export default function PluginWindow({
   }, [onClose])
 
   const header = (
-    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-raised/60 px-3">
-      <span className="truncate font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
+    <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line bg-raised px-3.5">
+      <span className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {title}
       </span>
       {subtitle && (
-        <span className="shrink-0 font-mono text-[11px] tracking-wider text-accentink">
+        <span className="shrink-0 font-mono text-[11px] tabular-nums tracking-wider text-muted">
           {subtitle}
         </span>
       )}
@@ -80,7 +80,7 @@ export default function PluginWindow({
             onClick={onClose}
             title="Close (Esc)"
             aria-label="Close"
-            className="press rounded p-1 text-muted hover:text-fg"
+            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
           >
             <X size={15} />
           </button>
@@ -100,7 +100,7 @@ export default function PluginWindow({
         <div
           role="dialog"
           aria-label={title}
-          className="flex max-h-[80vh] w-full max-w-lg flex-col border border-line-strong bg-panel"
+          className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-line-strong bg-panel"
         >
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
@@ -139,8 +139,8 @@ function ModeButton({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`press rounded p-1 ${
-        active ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
+      className={`press grid h-[26px] w-[26px] place-items-center rounded transition-colors ${
+        active ? 'bg-raised text-fg' : 'text-muted hover:bg-raised hover:text-fg'
       }`}
     >
       {icon}

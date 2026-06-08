@@ -72,7 +72,7 @@ export default function ThemeToggle({
         aria-label={`Theme: ${label}, palette ${PALETTE_NAME[palette]}. Open theme menu.`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="press rounded p-1.5 text-muted hover:bg-raised hover:text-fg"
+        className="press grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <Icon size={16} />
       </button>
@@ -84,10 +84,10 @@ export default function ThemeToggle({
         width={184}
         className="rounded border border-line bg-panel py-1 shadow-lg"
       >
-        <div className="px-2.5 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="px-2.5 pb-1 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
           Mode
         </div>
-        <div role="radiogroup" aria-label="Theme mode" className="flex gap-1 px-2 pb-2">
+        <div role="radiogroup" aria-label="Theme mode" className="flex gap-1 px-2.5 pb-2">
           {MODES.map(({ value, name, Icon: MIcon }) => (
             <button
               key={value}
@@ -96,7 +96,7 @@ export default function ThemeToggle({
               aria-checked={pref === value}
               title={name}
               onClick={() => onChange(value)}
-              className={`flex flex-1 items-center justify-center rounded border py-1.5 ${
+              className={`flex flex-1 items-center justify-center rounded border py-2 ${
                 pref === value
                   ? 'border-line-strong bg-raised text-fg'
                   : 'border-line text-muted hover:bg-raised hover:text-fg'
@@ -107,7 +107,7 @@ export default function ThemeToggle({
           ))}
         </div>
 
-        <div className="border-t border-line px-2.5 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+        <div className="border-t border-line px-2.5 pb-1 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
           Palette
         </div>
         <div role="radiogroup" aria-label="Signal palette">
@@ -121,13 +121,15 @@ export default function ThemeToggle({
                 onPaletteChange(p)
                 setOpen(false)
               }}
-              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] hover:bg-raised ${
+              className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px] hover:bg-raised ${
                 palette === p ? 'text-fg' : 'text-muted'
               }`}
             >
               <span
                 aria-hidden
-                className="h-2.5 w-2.5 rounded-[2px] border border-line"
+                // Arbitrary micro radius: rounded-sm (5px) on a 10px box is a
+                // circle, not a softly-squared swatch (cf. the overview diamond).
+                className="h-2.5 w-2.5 rounded-[3px] border border-line"
                 style={{ background: SWATCH[p][resolved] }}
               />
               <span className="flex-1">{PALETTE_NAME[p]}</span>

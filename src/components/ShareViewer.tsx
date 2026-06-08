@@ -277,8 +277,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   if (status === 'notfound' || !project) {
     return (
       <div className="flex h-full items-center justify-center bg-ink p-6 text-fg">
-        <div className="w-full max-w-md border border-line bg-panel p-8 text-center">
-          <span className="text-accentink">◉</span>
+        <div className="w-full max-w-md rounded border border-line bg-panel p-8 text-center">
+          <span
+            aria-hidden
+            className="mx-auto block h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]"
+          />
           <h1 className="mt-3 text-lg font-semibold">Link unavailable</h1>
           <p className="mt-2 text-sm text-muted">
             This shared track doesn’t exist or sharing was turned off. Ask
@@ -286,7 +289,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </p>
           <a
             href={window.location.pathname}
-            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 bg-accent px-4 py-2 text-sm font-bold text-onaccent hover:brightness-110"
+            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 rounded bg-accent px-4 py-2 text-sm font-bold text-onaccent hover:brightness-110"
           >
             Open Sound Annotator
           </a>
@@ -304,12 +307,12 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* Header — `chrome-dark`: light mode's dark masthead (see index.css). */}
-      <header className="chrome-dark flex items-center gap-3 border-b border-line bg-panel px-4 py-2">
-        <span className="text-accentink">◉</span>
-        <span className="hidden text-xs font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
+      <header className="chrome-dark flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
+        <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+        <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator
         </span>
-        <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-accentink">
+        <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
           <Eye size={11} /> Read only
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
@@ -322,7 +325,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <a
             href={`${window.location.pathname}?track=${project.id}`}
             title="Edit this track's notes — you'll be asked to sign in with Google"
-            className="press inline-flex shrink-0 items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-accentink hover:border-accent"
+            className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
           >
             <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
           </a>
@@ -332,7 +335,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <a
           href={window.location.pathname}
           title="Open the full app"
-          className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-line-strong hover:text-fg"
+          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
         >
           <ExternalLink size={12} /> <span className="hidden sm:inline">Open app</span>
         </a>
@@ -354,7 +357,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             left="Player"
             right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
           />
-          <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
             {hasPlayer ? (
               <>
                 <div
@@ -399,7 +402,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 />
               </>
             ) : (
-              <div className="border border-dashed border-line p-6 text-center text-sm text-muted">
+              <div className="rounded border border-dashed border-line p-6 text-center text-sm text-muted">
                 The audio for this track isn’t available, but the notes below are
                 still here.
               </div>

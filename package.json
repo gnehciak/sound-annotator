@@ -11,6 +11,8 @@
     "test:rules": "firebase emulators:exec --only firestore \"node scripts/test-firestore-rules.mjs\""
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@tiptap/extension-image": "^3.24.0",
     "@tiptap/extension-mention": "^3.24.0",
     "@tiptap/pm": "^3.24.0",

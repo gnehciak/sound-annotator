@@ -23,19 +23,19 @@ export default function ColorPicker({ color, onChange }: Props) {
 
   return (
     // stop clicks from toggling the note's expand state
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+    <div ref={ref} className="relative inline-flex items-center" onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         title="Note colour"
         aria-label="Note colour"
-        className="press h-4 w-4 shrink-0 rounded-full border border-line hover:border-line-strong"
+        className="press mr-[3px] h-[22px] w-[22px] shrink-0 rounded-full shadow-[0_0_0_2px_rgb(var(--bg-panel)),0_0_0_3.5px_rgb(var(--border-strong))] transition-transform hover:scale-110"
         style={{ background: color }}
       />
 
       {pop.mounted && (
         <div
-          className={`absolute left-0 top-full z-20 mt-1 w-44 origin-top-left rounded border border-line bg-panel p-2 shadow-lg ${
+          className={`absolute left-0 top-full z-20 mt-1 w-44 origin-top-left rounded border border-line bg-panel p-2.5 shadow-lg ${
             pop.closing ? 'animate-pop-out' : 'animate-pop-in'
           }`}
         >
@@ -61,7 +61,7 @@ export default function ColorPicker({ color, onChange }: Props) {
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2">
-            <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+            <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
               <input
                 type="color"
                 value={normalizeHex(color)}
@@ -77,7 +77,7 @@ export default function ColorPicker({ color, onChange }: Props) {
                 onChange(undefined)
                 setOpen(false)
               }}
-              className="font-mono text-[10px] uppercase tracking-wider text-muted hover:text-fg"
+              className="font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted hover:text-fg"
             >
               Reset
             </button>

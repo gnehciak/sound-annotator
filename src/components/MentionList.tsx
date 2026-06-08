@@ -61,7 +61,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
   return (
     <div className="max-h-56 w-64 origin-top animate-pop-in overflow-y-auto rounded border border-line bg-panel py-1 shadow-lg">
       {items.length === 0 ? (
-        <div className="px-3 py-2 text-xs text-muted">No notes to mention</div>
+        <div className="px-3 py-2.5 text-xs text-muted">No notes to mention</div>
       ) : (
         items.map((item, i) => {
           return (
@@ -73,7 +73,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                 e.preventDefault()
                 choose(i)
               }}
-              className={`flex w-full flex-col gap-0.5 px-3 py-1.5 text-left text-xs ${
+              className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left text-xs ${
                 i === selected ? 'bg-raised text-fg' : 'text-muted'
               }`}
             >
@@ -90,7 +90,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                       return info ? (
                         <span
                           key={t}
-                          className="font-mono text-[10px] uppercase tracking-wider"
+                          className="font-mono text-[10px] font-medium uppercase tracking-[0.12em]"
                           style={{ color: hueText(info.color, theme) }}
                         >
                           {info.label}

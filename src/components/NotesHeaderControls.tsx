@@ -49,7 +49,7 @@ export default function NotesHeaderControls({
         aria-pressed={searchOpen}
         title={searchActive ? 'Search active — click to change' : 'Search notes'}
         aria-label="Search notes"
-        className={`press rounded-sm p-1 ${
+        className={`press grid h-[26px] w-[26px] place-items-center rounded transition-colors ${
           searchOpen || searchActive
             ? 'bg-raised text-accentink'
             : 'text-muted hover:bg-raised hover:text-fg'
@@ -72,7 +72,7 @@ export default function NotesHeaderControls({
   )
 }
 
-// The notes list ordering, as a squared segmented switch (Timeline · Auto ·
+// The notes list ordering, as a segmented switch (Timeline · Auto ·
 // Live) — one stability↔liveness dial, not a matrix of when/which permutations.
 // Mirrors the Edit | View switch; stays neutral (no amber) since none of the
 // modes mean "now". Lives in the Notes title bar.
@@ -114,7 +114,7 @@ function NoteOrderControl({
     <div
       role="group"
       aria-label="Note order"
-      className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+      className="flex items-center gap-[2px] rounded-[7px] border border-line bg-inset p-[2px]"
     >
       {options.map((opt) => {
         const active = value === opt.value
@@ -125,8 +125,8 @@ function NoteOrderControl({
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
             title={opt.title}
-            className={`press rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
-              active ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
+            className={`press flex h-[22px] items-center rounded-sm px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 ${
+              active ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
             }`}
           >
             {opt.label}

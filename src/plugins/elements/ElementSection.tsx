@@ -20,7 +20,7 @@ export default function ElementSection({
 }: Props) {
   return (
     <div className="border-t border-line/60">
-      <div className="flex items-center gap-2 px-3 pb-1 pt-2">
+      <div className="flex items-center gap-2 px-3.5 pb-1 pt-2.5">
         <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-fg">
           {category.label}
         </span>
@@ -37,7 +37,7 @@ export default function ElementSection({
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 pb-3">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3.5 pb-3.5">
         {category.fields.map((f) => (
           <FieldSelect
             key={f.id}

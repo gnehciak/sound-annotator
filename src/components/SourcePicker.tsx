@@ -35,7 +35,7 @@ export default function SourcePicker({ onYoutube, onAudioFile }: Props) {
           />
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
+            className="inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
           >
             <Play size={14} /> Load
           </button>

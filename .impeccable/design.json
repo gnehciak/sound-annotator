@@ -58,7 +58,7 @@
     },
     "typographyMeta": {
       "display": { "displayName": "Track Title", "purpose": "The editable track title; the largest prose on screen. A tool, so it never shouts (<=1.125rem)." },
-      "body": { "displayName": "Body", "purpose": "Note content and general UI copy; system humanist sans, ~65-75ch measure." },
+      "body": { "displayName": "Body", "purpose": "Note content and general UI copy; IBM Plex Sans (humanist-technical), ~65-75ch measure." },
       "label": { "displayName": "Mono Label", "purpose": "Panel title bars, badges, micro-controls. Monospace, uppercase, +0.2em." },
       "mono": { "displayName": "LED Readout", "purpose": "The transport/header clock and timecode tags. Amber, tabular, glowing." }
     },
@@ -83,7 +83,7 @@
       "refersTo": "button-play",
       "description": "The one filled control in the transport; toggles playback.",
       "html": "<button class=\"ds-btn-play\">▶ Play</button>",
-      "css": ".ds-btn-play{background:#f5a623;color:#1a1813;font:700 0.8125rem system-ui,sans-serif;padding:6px 12px;border:none;border-radius:2px;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -2px 3px rgb(0 0 0 / .32);cursor:pointer}.ds-btn-play:hover{filter:brightness(1.1)}.ds-btn-play:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
+      "css": ".ds-btn-play{background:#f5a623;color:#1a1813;font:700 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:6px 12px;border:none;border-radius:6px;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -2px 3px rgb(0 0 0 / .32);cursor:pointer}.ds-btn-play:hover{filter:brightness(1.1)}.ds-btn-play:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
     },
     {
       "name": "Transport Button",
@@ -91,7 +91,7 @@
       "refersTo": "button-transport",
       "description": "Ghost transport control (seek +/- 5s).",
       "html": "<button class=\"ds-btn-transport\">«5</button>",
-      "css": ".ds-btn-transport{background:transparent;color:#968d7c;font:500 0.75rem ui-monospace,Menlo,monospace;padding:6px 8px;border:1px solid #38342b;border-radius:2px;cursor:pointer}.ds-btn-transport:hover{color:#e9e4d8;border-color:#4d473a}.ds-btn-transport:focus-visible{outline:2px solid #f5a623;outline-offset:1px}"
+      "css": ".ds-btn-transport{background:transparent;color:#968d7c;font:500 0.75rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:6px 8px;border:1px solid #38342b;border-radius:6px;cursor:pointer}.ds-btn-transport:hover{color:#e9e4d8;border-color:#4d473a}.ds-btn-transport:focus-visible{outline:2px solid #f5a623;outline-offset:1px}"
     },
     {
       "name": "Capture Button",
@@ -99,7 +99,7 @@
       "refersTo": "button-capture",
       "description": "Primary creative action: add a note at the current playhead. Amber outline, not a second solid-amber control.",
       "html": "<button class=\"ds-btn-capture\">● Note @ 0:42</button>",
-      "css": ".ds-btn-capture{background:rgb(245 166 35 / .1);color:#f5a623;font:700 0.6875rem ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border:1px solid rgb(245 166 35 / .7);border-radius:2px;cursor:pointer}.ds-btn-capture:hover{background:rgb(245 166 35 / .2)}.ds-btn-capture:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
+      "css": ".ds-btn-capture{background:rgb(245 166 35 / .1);color:#f5a623;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border:1px solid rgb(245 166 35 / .7);border-radius:6px;cursor:pointer}.ds-btn-capture:hover{background:rgb(245 166 35 / .2)}.ds-btn-capture:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
     },
     {
       "name": "LED Readout",
@@ -107,7 +107,7 @@
       "refersTo": "readout-led",
       "description": "Recessed amber clock; the transport and header timecode.",
       "html": "<div class=\"ds-readout\">0:42</div>",
-      "css": ".ds-readout{display:inline-block;background:#131210;color:#f5a623;font:500 1rem ui-monospace,Menlo,monospace;letter-spacing:.08em;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgb(245 166 35 / .5);padding:4px 8px;border:1px solid #38342b;border-radius:2px;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}"
+      "css": ".ds-readout{display:inline-block;background:#131210;color:#f5a623;font:500 1rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.08em;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgb(245 166 35 / .5);padding:4px 8px;border:1px solid #38342b;border-radius:6px;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}"
     },
     {
       "name": "Panel Title Bar",
@@ -115,7 +115,7 @@
       "refersTo": "title-bar",
       "description": "The load-bearing instrument-panel header worn by every panel.",
       "html": "<div class=\"ds-titlebar\"><span>Notes</span><span class=\"ds-titlebar-stat\">3 notes</span></div>",
-      "css": ".ds-titlebar{display:flex;align-items:center;justify-content:space-between;background:#262219;border-bottom:1px solid #38342b;padding:6px 12px;font:600 0.625rem ui-monospace,Menlo,monospace;letter-spacing:.25em;text-transform:uppercase;color:#968d7c}.ds-titlebar-stat{letter-spacing:.1em}"
+      "css": ".ds-titlebar{display:flex;align-items:center;justify-content:space-between;background:#262219;border-bottom:1px solid #38342b;height:40px;padding:0 14px;font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.25em;text-transform:uppercase;color:#968d7c}.ds-titlebar-stat{letter-spacing:.1em}"
     },
     {
       "name": "Source Input",
@@ -123,7 +123,7 @@
       "refersTo": "input-field",
       "description": "Recessed text field (YouTube URL entry).",
       "html": "<input class=\"ds-input\" placeholder=\"https://youtube.com/watch?v=…\">",
-      "css": ".ds-input{background:#131210;color:#e9e4d8;font:400 0.8125rem system-ui,sans-serif;padding:8px 12px;border:1px solid #38342b;border-radius:2px;outline:none;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}.ds-input::placeholder{color:#968d7c}.ds-input:focus{border-color:#f5a623}"
+      "css": ".ds-input{background:#131210;color:#e9e4d8;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:8px 12px;border:1px solid #38342b;border-radius:6px;outline:none;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}.ds-input::placeholder{color:#968d7c}.ds-input:focus{border-color:#f5a623}"
     },
     {
       "name": "Note Row",
@@ -131,7 +131,7 @@
       "refersTo": "note-row",
       "description": "Signature component: a flush cue-list row with a colored identity spine and a mono timecode tag. Not a card.",
       "html": "<div class=\"ds-clip\"><span class=\"ds-clip-spine\"></span><div class=\"ds-clip-head\"><button class=\"ds-clip-tag\">0:42</button><span class=\"ds-clip-live\">● live</span></div><div class=\"ds-clip-body\">Famous opening motif: short-short-short-long.</div></div>",
-      "css": ".ds-clip{position:relative;background:rgb(42 39 31 / .4);border-bottom:1px solid #38342b;padding:6px 8px 8px 16px}.ds-clip-spine{position:absolute;left:0;top:0;bottom:0;width:3px;background:#3bb6a6}.ds-clip-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ds-clip-tag{background:#3bb6a6;color:#1a1813;font:700 0.6875rem ui-monospace,Menlo,monospace;padding:2px 6px;border:none;border-radius:2px;cursor:pointer}.ds-clip-live{font:600 0.625rem ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#f5a623}.ds-clip-body{color:#e9e4d8;font:400 0.8125rem system-ui,sans-serif;line-height:1.6}"
+      "css": ".ds-clip{position:relative;background:rgb(42 39 31 / .4);border-bottom:1px solid #38342b;padding:6px 8px 8px 16px}.ds-clip-spine{position:absolute;left:0;top:0;bottom:0;width:3px;background:#3bb6a6}.ds-clip-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ds-clip-tag{background:#3bb6a6;color:#1a1813;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:2px 6px;border:none;border-radius:5px;cursor:pointer}.ds-clip-live{font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#f5a623}.ds-clip-body{color:#e9e4d8;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;line-height:1.6}"
     },
     {
       "name": "Track Row",
@@ -139,17 +139,17 @@
       "refersTo": "track-row",
       "description": "Flush sidebar track entry; active state carries a 2px amber left-bar.",
       "html": "<div class=\"ds-track ds-track--active\"><span class=\"ds-track-glyph\">▶</span><span class=\"ds-track-name\">Beethoven – Symphony No. 5</span></div>",
-      "css": ".ds-track{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgb(56 52 43 / .4);border-left:2px solid transparent;padding:6px 8px 6px 10px;color:#968d7c;font:400 0.875rem system-ui,sans-serif;cursor:pointer}.ds-track:hover{color:#e9e4d8}.ds-track--active{border-left-color:#f5a623;background:#2a271f;color:#e9e4d8}.ds-track-glyph{color:rgb(245 166 35 / .7);font:0.75rem ui-monospace,monospace}.ds-track-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+      "css": ".ds-track{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgb(56 52 43 / .4);border-left:2px solid transparent;padding:6px 8px 6px 10px;color:#968d7c;font:400 0.875rem 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}.ds-track:hover{color:#e9e4d8}.ds-track--active{border-left-color:#f5a623;background:#2a271f;color:#e9e4d8}.ds-track-glyph{color:rgb(245 166 35 / .7);font:0.75rem 'IBM Plex Mono',ui-monospace,monospace}.ds-track-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
     }
   ],
   "narrative": {
     "northStar": "The Listening Station",
-    "overview": "Sound Annotator is built like an audio analysis bench, not a web app. The surface is warm-dark and quiet so the eye rests on the recording and the notes, not the chrome. Everything reads like instrument output: timecodes and counts are monospace, the transport carries an LED clock and a level meter, panels are flush metal with hard edges. It is dense by intent, optimized for a teacher who returns daily and knows it cold. Color is data, not decoration: one signal color, amber, means 'now', while the note palette encodes identity and is always paired with a timecode label so meaning survives a projector or a colorblind viewer.",
+    "overview": "Sound Annotator is built like an audio analysis bench, not a web app. The surface is warm-dark and quiet so the eye rests on the recording and the notes, not the chrome. Everything reads like instrument output: timecodes and counts are monospace, the transport carries an LED clock and a level meter, panels are flush metal with softly squared corners. It is dense by intent, optimized for a teacher who returns daily and knows it cold. Color is data, not decoration: one signal color, amber, means 'now', while the note palette encodes identity and is always paired with a timecode label so meaning survives a projector or a colorblind viewer.",
     "keyCharacteristics": [
       "Warm-dark, four-step tonal surface ramp; depth from tone, not shadow.",
       "One amber signal color meaning 'now'; everything else neutral or data-hue.",
       "Monospace tabular numerics for every timecode, count, and micro-label.",
-      "Squared corners (<=2px), flush panels, hairline dividers; zero card-gaps.",
+      "Softly squared corners (chips 5px / controls 6px / grouped containers 8px / panels 10px), flush panels, hairline dividers; zero card-gaps.",
       "Secondary controls hidden at rest, revealed on hover or focus."
     ],
     "rules": [
@@ -161,7 +161,7 @@
       { "name": "The Bevel-Restraint Rule", "body": "Bevels are 1px lighting hints on interactive controls only. Textures, surface gradients, gloss, and faux-material finishes are forbidden. If a bevel looks like brushed metal, it has failed.", "section": "elevation" }
     ],
     "dos": [
-      "Do build depth from the tonal ramp (ink -> panel -> raised -> inset) and hairline (#38342b) dividers. Flush panels, squared corners (<=2px).",
+      "Do build depth from the tonal ramp (ink -> panel -> raised -> inset) and hairline (#38342b) dividers. Flush panels, softly squared corners (5-10px).",
       "Do keep numerics monospace and tabular: timecodes, counts, durations.",
       "Do reserve Signal Amber (#f5a623) for 'now' and the primary action; keep it under ~10% of any screen.",
       "Do pair every color-coded note with its timecode label, so identity never depends on hue alone (projector + colorblind safe).",
@@ -172,7 +172,7 @@
       "Don't drift into heavy enterprise SaaS clutter: gray-on-gray toolbars, competing controls, data-grid busyness.",
       "Don't use retro skeuomorphism: fake wood or metal textures, glossy bevels, brushed-aluminum.",
       "Don't let color carry meaning alone, and don't add a second face to the type system. Two voices (sans + mono) only.",
-      "Don't introduce a second solid-amber control next to Play, or round a corner past 2px."
+      "Don't introduce a second solid-amber control next to Play, or round a corner past the lg=10px panel radius."
     ]
   }
 }

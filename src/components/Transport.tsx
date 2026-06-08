@@ -107,9 +107,9 @@ export default function Transport({
 
   return (
     <>
-    <div className="space-y-2 rounded border border-line bg-panel p-2">
+    <div className="space-y-[11px] rounded-lg border border-line bg-panel px-[13px] pb-[13px] pt-[11px]">
       {/* progress / seek bar, flanked by the (editable) current time and total */}
-      <div className="flex items-center gap-2 px-0.5">
+      <div className="flex items-center gap-2.5">
         <input
           value={editing ? draft : formatTime(currentTime)}
           onFocus={() => {
@@ -138,7 +138,7 @@ export default function Transport({
           }}
           title="Type a time (m:ss or seconds) and press Enter to jump"
           aria-label="Current time — type to jump"
-          className="led w-16 shrink-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-center text-sm leading-none outline-none focus:border-accent focus:bg-inset"
+          className="led w-[72px] shrink-0 rounded border border-transparent bg-transparent px-2 py-1 text-center text-[14px] font-medium leading-none outline-none transition-colors hover:border-line hover:bg-inset focus:border-accent focus:bg-inset"
         />
 
         <div
@@ -173,12 +173,12 @@ export default function Transport({
             />
           </div>
           <div
-            className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
+            className="absolute top-1/2 h-[13px] w-[13px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
             style={{ left: `${frac * 100}%` }}
           />
         </div>
 
-        <span className="shrink-0 font-mono text-sm text-muted">
+        <span className="shrink-0 font-mono text-xs text-muted">
           {formatTime(duration)}
         </span>
       </div>
@@ -195,10 +195,10 @@ export default function Transport({
             aria-expanded={speedOpen}
             aria-label={`Playback speed: ${playbackRate}×`}
             title="Playback speed"
-            className={`press inline-flex items-center gap-0.5 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${
+            className={`press inline-flex items-center gap-1 rounded-sm border px-[9px] py-[3px] font-mono text-[11px] tabular-nums ${
               playbackRate !== 1
                 ? 'border-accent/60 bg-accent/10 text-accentink'
-                : 'border-line bg-inset text-muted hover:text-fg'
+                : 'border-line bg-inset text-muted hover:border-line-strong hover:text-fg'
             }`}
           >
             {playbackRate}×
@@ -238,12 +238,12 @@ export default function Transport({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-[7px]">
           <button
             onClick={() => onStep(-5)}
             aria-label="Back 5 seconds"
             title="Jump back 5 seconds (Shift ←)"
-            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronsLeft size={13} />
           </button>
@@ -251,14 +251,14 @@ export default function Transport({
             onClick={() => onStep(-1)}
             aria-label="Back 1 second"
             title="Jump back 1 second (←)"
-            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronLeft size={13} />
           </button>
           <button
             onClick={onPlayPause}
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-            className="press inline-flex h-7 w-24 items-center justify-center gap-1.5 bg-accent text-sm font-bold text-onaccent hover:brightness-110"
+            className="press inline-flex w-[104px] items-center justify-center gap-[7px] rounded bg-accent py-[7px] text-[13.5px] font-bold text-onaccent hover:brightness-110"
           >
             {isPlaying ? <Pause size={15} /> : <Play size={15} />}
             {isPlaying ? 'Pause' : 'Play'}
@@ -267,7 +267,7 @@ export default function Transport({
             onClick={() => onStep(1)}
             aria-label="Forward 1 second"
             title="Jump forward 1 second (→)"
-            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronRight size={13} />
           </button>
@@ -275,7 +275,7 @@ export default function Transport({
             onClick={() => onStep(5)}
             aria-label="Forward 5 seconds"
             title="Jump forward 5 seconds (Shift →)"
-            className="press inline-flex h-7 items-center border border-line px-2 text-muted hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronsRight size={13} />
           </button>
@@ -293,9 +293,9 @@ export default function Transport({
     </div>
 
     {/* keyboard shortcuts — beneath the panel, on the bare app background */}
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 opacity-60">
+    <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 opacity-70">
       {hints.map((h) => (
-        <span key={h.label} className="flex items-center gap-1">
+        <span key={h.label} className="flex items-center gap-[5px]">
           <span className="flex items-center gap-0.5">
             {h.keys.map((k) => (
               <kbd key={k} className="kbd-cap">
@@ -303,7 +303,7 @@ export default function Transport({
               </kbd>
             ))}
           </span>
-          <span className="font-mono text-[10px] uppercase leading-none tracking-wider text-muted/70">
+          <span className="font-mono text-[9.5px] uppercase leading-none tracking-[0.14em] text-muted">
             {h.label}
           </span>
         </span>
@@ -371,7 +371,9 @@ function VolumeControl({
         aria-label={open ? (muted ? 'Unmute' : 'Mute') : 'Volume'}
         aria-expanded={open}
         title={open ? (muted ? 'Unmute' : 'Mute') : `Volume ${pct}%`}
-        className={`press ${muted ? 'text-accentink' : 'text-muted hover:text-fg'}`}
+        className={`press grid h-[30px] w-[30px] place-items-center rounded transition-colors ${
+          muted ? 'text-accentink' : 'text-muted hover:bg-raised hover:text-fg'
+        }`}
       >
         <Icon size={15} />
       </button>
@@ -379,7 +381,7 @@ function VolumeControl({
       // Static -translate-x-1/2 centering lives on this outer wrapper because
       // panel-in fills `transform: none` and would clobber it on the same node.
       <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
-      <div className="animate-panel-in rounded border border-line bg-panel py-2 shadow-lg shadow-black/40">
+      <div className="animate-panel-in rounded border border-line bg-panel px-[7px] py-2.5 shadow-lg shadow-black/40">
       <div
         ref={trackRef}
         role="slider"
@@ -421,7 +423,7 @@ function VolumeControl({
             onSetVolume(Math.max(0, level - 0.05))
           }
         }}
-        className="group relative h-20 cursor-pointer touch-none px-2.5 outline-none"
+        className="group relative h-[84px] cursor-pointer touch-none px-1.5 outline-none"
       >
         <div className="relative h-full w-1.5 overflow-hidden rounded-full border border-line bg-inset group-focus-visible:border-accent">
           <div
@@ -430,7 +432,7 @@ function VolumeControl({
           />
         </div>
         <div
-          className="absolute left-1/2 h-3 w-3 -translate-x-1/2 translate-y-1/2 rounded-full border border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
+          className="absolute left-1/2 h-3 w-3 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-ink bg-accent opacity-80 transition-[opacity,transform] duration-100 ease-instr group-hover:scale-125 group-hover:opacity-100"
           style={{ bottom: `${pct}%` }}
         />
       </div>

@@ -53,7 +53,7 @@ export default function TagFilter({ tags, counts, selected, onChange }: Props) {
             : 'Filter notes by tag'
         }
         aria-label="Filter notes by tag"
-        className={`press flex items-center gap-1 rounded-sm px-1.5 py-1 font-mono text-[10px] uppercase tracking-wider ${
+        className={`press flex h-[26px] min-w-[26px] items-center justify-center gap-1 rounded px-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors ${
           active
             ? 'bg-raised text-accentink'
             : 'text-muted hover:bg-raised hover:text-fg'
@@ -70,14 +70,14 @@ export default function TagFilter({ tags, counts, selected, onChange }: Props) {
           }`}
         >
           <div className="flex items-center justify-between gap-2 px-2.5 pb-1 pt-0.5">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-muted">
+            <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
               Filter by tag
             </span>
             {active && (
               <button
                 type="button"
                 onClick={() => onChange(new Set())}
-                className="font-mono text-[9px] uppercase tracking-wider text-muted hover:text-fg"
+                className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted hover:text-fg"
               >
                 Clear
               </button>
@@ -85,7 +85,7 @@ export default function TagFilter({ tags, counts, selected, onChange }: Props) {
           </div>
 
           {tags.length === 0 ? (
-            <div className="px-2.5 py-2 text-[11px] text-muted">
+            <div className="px-2.5 py-2.5 text-[11px] text-muted">
               No tagged notes yet.
             </div>
           ) : (
@@ -98,7 +98,7 @@ export default function TagFilter({ tags, counts, selected, onChange }: Props) {
                   type="button"
                   onClick={() => toggle(t)}
                   aria-pressed={on}
-                  className={`flex w-full items-center gap-2 px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider hover:bg-raised ${
+                  className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] hover:bg-raised ${
                     on ? 'text-fg' : 'text-muted'
                   }`}
                 >

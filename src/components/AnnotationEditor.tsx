@@ -105,7 +105,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: {
       attributes: {
-        class: 'text-[13px] leading-relaxed text-fg px-3 py-2',
+        class: 'text-[13px] leading-[1.65] text-fg px-3.5 pt-3 pb-4',
       },
       handlePaste: (_view, event) => {
         if (readOnly) return false
@@ -155,7 +155,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   return (
     <div>
       {editor && showToolbar && !readOnly && (
-        <div className="flex flex-wrap items-center gap-0.5 border-b border-line/60 px-2 py-1">
+        <div className="flex flex-wrap items-center gap-0.5 border-b border-line/60 px-[11px] py-[7px]">
           <ToolbarButton
             icon={<Bold size={14} />}
             title="Bold"
@@ -188,7 +188,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
             active={editor.isActive('blockquote')}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
           />
-          <span className="mx-1 h-3.5 w-px bg-line" />
+          <span className="mx-1.5 h-4 w-px bg-line" />
           <ToolbarButton
             icon={<ImagePlus size={14} />}
             title="Insert image"
@@ -241,7 +241,7 @@ function ToolbarButton({
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+      className={`flex h-[27px] min-w-[27px] items-center justify-center rounded-sm px-[5px] transition-colors ${
         active
           ? 'bg-accent/15 text-accentink'
           : 'text-muted hover:bg-raised hover:text-fg'

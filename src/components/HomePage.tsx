@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   Eye,
@@ -55,6 +55,13 @@ const salutation = () => {
 }
 
 /**
+ * Stagger helper for the dashboard cascade: base delay plus a per-index step,
+ * clamped so a long list doesn't make the last tile feel late. Returns a string
+ * suitable for `style={{ animationDelay }}`.
+ */
+const stagger = (base: number, i: number) => `${base + Math.min(i, 11) * 40}ms`
+
+/**
  * The home page: the signed-in landing view listing every track as a tile,
  * grouped into flat folders (Drive semantics — the root shows folder tiles
  * plus the tracks that live outside any folder; clicking a folder drills in).
@@ -88,6 +95,24 @@ export default function HomePage({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   // The Library crumb lights up while a dragged track may be dropped on it.
   const [crumbOver, setCrumbOver] = useState(false)
+  // Cascading window — true while the staggered welcome is playing, false once
+  // it's done. Resets whenever the user navigates between folders so the
+  // greeting replays on the new view. After it closes, freshly-mounted tiles
+  // (a new folder, search-clear restoring filtered tracks) rise on their own
+  // with no stagger — instant feedback for a deliberate click, instead of
+  // waiting for a phantom slot at the tail of the cascade.
+  const [cascading, setCascading] = useState(true)
+  const [lastFolderId, setLastFolderId] = useState(openFolderId)
+  if (lastFolderId !== openFolderId) {
+    setLastFolderId(openFolderId)
+    setCascading(true)
+  }
+  useEffect(() => {
+    // 1.2s covers header rise (~320ms) + tracks-heading delay (240ms) + 12-tile
+    // cap stagger (440ms) + animation duration (420ms) with a small margin.
+    const t = setTimeout(() => setCascading(false), 1200)
+    return () => clearTimeout(t)
+  }, [openFolderId])
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -142,15 +167,25 @@ export default function HomePage({
             <button
               type="button"
               onClick={onCreateTrack}
-              className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
+              className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
             >
               <Plus size={14} /> New track
             </button>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6">
+          /* The key replays the stagger cascade on every folder navigation —
+             root → folder → root all re-enter as a fresh listening station,
+             not a snap. Search refines in place (no remount) so typing stays
+             live. */
+          <div
+            key={openFolderId ?? 'root'}
+            className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6"
+          >
             {/* Top block: greeting at the root, breadcrumb inside a folder. */}
-            <div className="mb-6 flex items-start justify-between gap-4">
+            <div
+              className="mb-6 flex animate-rise-in items-start justify-between gap-4"
+              style={{ animationDelay: stagger(0, 0) }}
+            >
               {openFolder ? (
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -209,7 +244,7 @@ export default function HomePage({
               <button
                 type="button"
                 onClick={onCreateTrack}
-                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
+                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
               >
                 <Plus size={13} />
                 <span className="hidden sm:inline">New track</span>
@@ -217,7 +252,10 @@ export default function HomePage({
             </div>
 
             {/* Search well — spans every folder, like the old sub-bar's. */}
-            <div className="relative mb-8 max-w-[520px]">
+            <div
+              className="relative mb-8 max-w-[520px] animate-rise-in"
+              style={{ animationDelay: stagger(60, 0) }}
+            >
               <Search
                 size={14}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
@@ -246,11 +284,14 @@ export default function HomePage({
             {/* Folder cards — root only, and hidden while a search is on. */}
             {!searching && !openFolder && (
               <section className="mb-8">
-                <h2 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+                <h2
+                  className="mb-2.5 animate-rise-in font-mono text-[10px] uppercase tracking-[0.2em] text-muted"
+                  style={{ animationDelay: stagger(100, 0) }}
+                >
                   Folders
                 </h2>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-                  {folders.map((f) => (
+                  {folders.map((f, i) => (
                     <FolderTile
                       key={f.id}
                       folder={f}
@@ -258,6 +299,7 @@ export default function HomePage({
                       tracks={counts.get(f.id)?.tracks ?? 0}
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
+                      enterDelay={cascading ? stagger(140, i) : '0ms'}
                       onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
@@ -272,7 +314,12 @@ export default function HomePage({
                   <button
                     type="button"
                     onClick={() => setRenamingId(onCreateFolder())}
-                    className="press flex min-h-[58px] items-center justify-center gap-2 rounded border border-dashed border-line font-mono text-[11px] uppercase tracking-wider text-muted hover:border-line-strong hover:text-fg"
+                    style={{
+                      animationDelay: cascading
+                        ? stagger(140, folders.length)
+                        : '0ms',
+                    }}
+                    className="press flex min-h-[58px] animate-tile-in items-center justify-center gap-2 rounded border border-dashed border-line font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:border-line-strong hover:text-fg"
                   >
                     <FolderPlus size={13} /> New folder
                   </button>
@@ -280,68 +327,94 @@ export default function HomePage({
               </section>
             )}
 
-            <section>
-              <h2 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-                {searching
-                  ? `Results — ${visible.length}`
-                  : openFolder
-                    ? `Tracks — ${visible.length}`
-                    : 'Tracks'}
-              </h2>
-              {visible.length === 0 ? (
-                searching ? (
-                  <p className="py-6 text-sm text-muted">
-                    No tracks match “{query.trim()}”.
-                  </p>
-                ) : openFolder ? (
-                  <div className="flex flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center">
-                    <FolderIcon size={22} className="text-muted/50" />
-                    <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-                      Nothing in this folder yet
-                    </p>
-                    <p className="max-w-xs text-[12px] leading-relaxed text-muted/70">
-                      Create a track here, or go back to the library and drag
-                      tracks onto this folder.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={onCreateTrack}
-                      className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20"
-                    >
-                      <Plus size={13} /> New track
-                    </button>
-                  </div>
-                ) : (
-                  <p className="py-4 text-sm text-muted">
-                    No tracks outside folders.
-                  </p>
-                )
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
-                  {visible.map((p) => (
-                    <TrackTile
-                      key={p.id}
-                      project={p}
-                      theme={theme}
-                      folders={folders}
-                      // Search results span folders — label each with its home.
-                      folderName={
-                        searching
-                          ? folders.find((f) => f.id === folderOf(p))?.name ??
-                            null
-                          : null
-                      }
-                      onOpen={() => onOpenTrack(p.id)}
-                      onDelete={() => {
-                        if (confirm(`Delete “${p.title}” and its notes?`))
-                          onDeleteTrack(p.id)
-                      }}
-                      onMove={(folderId) => onMoveTrack(p.id, folderId)}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            {(() => {
+              /* Stack the tracks section onto the same cascade. When folder
+                 cards are above, the heading waits for the folders to finish;
+                 inside a folder (or while searching) it follows the search well
+                 directly. */
+              const tracksHeadDelay =
+                !searching && !openFolder ? 240 : 120
+              const tilesBaseDelay = tracksHeadDelay + 40
+              return (
+                <section>
+                  <h2
+                    className="mb-2.5 animate-rise-in font-mono text-[10px] uppercase tracking-[0.2em] text-muted"
+                    style={{ animationDelay: stagger(tracksHeadDelay, 0) }}
+                  >
+                    {searching
+                      ? `Results — ${visible.length}`
+                      : openFolder
+                        ? `Tracks — ${visible.length}`
+                        : 'Tracks'}
+                  </h2>
+                  {visible.length === 0 ? (
+                    searching ? (
+                      <p
+                        className="animate-rise-in py-6 text-sm text-muted"
+                        style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
+                      >
+                        No tracks match “{query.trim()}”.
+                      </p>
+                    ) : openFolder ? (
+                      <div
+                        className="flex animate-tile-in flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center"
+                        style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
+                      >
+                        <FolderIcon size={22} className="text-muted/50" />
+                        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+                          Nothing in this folder yet
+                        </p>
+                        <p className="max-w-xs text-[12px] leading-relaxed text-muted/70">
+                          Create a track here, or go back to the library and
+                          drag tracks onto this folder.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={onCreateTrack}
+                          className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+                        >
+                          <Plus size={13} /> New track
+                        </button>
+                      </div>
+                    ) : (
+                      <p
+                        className="animate-rise-in py-4 text-sm text-muted"
+                        style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
+                      >
+                        No tracks outside folders.
+                      </p>
+                    )
+                  ) : (
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+                      {visible.map((p, i) => (
+                        <TrackTile
+                          key={p.id}
+                          project={p}
+                          theme={theme}
+                          folders={folders}
+                          enterDelay={
+                            cascading ? stagger(tilesBaseDelay, i) : '0ms'
+                          }
+                          // Search results span folders — label each with its home.
+                          folderName={
+                            searching
+                              ? folders.find((f) => f.id === folderOf(p))
+                                  ?.name ?? null
+                              : null
+                          }
+                          onOpen={() => onOpenTrack(p.id)}
+                          onDelete={() => {
+                            if (confirm(`Delete “${p.title}” and its notes?`))
+                              onDeleteTrack(p.id)
+                          }}
+                          onMove={(folderId) => onMoveTrack(p.id, folderId)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -444,6 +517,7 @@ function FolderTile({
   tracks,
   notes,
   renaming,
+  enterDelay,
   onOpen,
   onStartRename,
   onRename,
@@ -456,6 +530,7 @@ function FolderTile({
   tracks: number
   notes: number
   renaming: boolean
+  enterDelay: string
   onOpen: () => void
   onStartRename: () => void
   onRename: (name: string) => void
@@ -492,10 +567,14 @@ function FolderTile({
         setOver(false)
         onDropTrack(e.dataTransfer.getData(TRACK_MIME))
       }}
-      className={`group flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
+      style={{ animationDelay: enterDelay }}
+      /* `transition` (not just transition-colors) so the rest-frame hover lift
+         eases instead of snapping. Lift suppressed while a track is dragging
+         over — the accent fill is the affordance there, no need to also float. */
+      className={`group flex animate-tile-in cursor-pointer items-center gap-3 rounded border p-3.5 transition duration-200 ease-instr ${
         over
           ? 'border-accent bg-accent/10'
-          : 'border-line bg-panel hover:border-line-strong'
+          : 'border-line bg-panel hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
       }`}
     >
       <div
@@ -544,7 +623,7 @@ function FolderTile({
             {folder.name}
           </button>
         )}
-        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+        <p className="mt-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
           {tracks} {tracks === 1 ? 'track' : 'tracks'}
           {notes > 0 && ` · ${notes} ${notes === 1 ? 'note' : 'notes'}`}
         </p>
@@ -559,7 +638,7 @@ function FolderTile({
             }}
             title="Rename folder"
             aria-label={`Rename folder ${folder.name}`}
-            className="press rounded p-1 text-muted hover:bg-raised hover:text-fg"
+            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
           >
             <Pencil size={13} />
           </button>
@@ -580,7 +659,7 @@ function FolderTile({
             }}
             title="Delete folder (its tracks move back to the library)"
             aria-label={`Delete folder ${folder.name}`}
-            className="press rounded p-1 text-muted hover:bg-raised hover:text-danger"
+            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
           >
             <Trash2 size={13} />
           </button>
@@ -597,6 +676,7 @@ function TrackTile({
   theme,
   folders,
   folderName,
+  enterDelay,
   onOpen,
   onDelete,
   onMove,
@@ -606,6 +686,7 @@ function TrackTile({
   folders: Folder[]
   /** Shown as a chip on cross-folder search results (null hides it). */
   folderName: string | null
+  enterDelay: string
   onOpen: () => void
   onDelete: () => void
   onMove: (folderId: string | null) => void
@@ -624,28 +705,37 @@ function TrackTile({
         e.dataTransfer.effectAllowed = 'move'
       }}
       onClick={onOpen}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded border border-line bg-panel transition-colors hover:border-line-strong"
+      style={{ animationDelay: enterDelay }}
+      /* Hover: subtle lift + soft drop shadow, eased on the house curve. The
+         duration here matches FolderTile's so a mixed row of cards floats
+         together. */
+      className="group flex animate-tile-in cursor-pointer flex-col overflow-hidden rounded border border-line bg-panel transition duration-200 ease-instr hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10"
     >
-      {/* Cover — the tile's "viewer screen": an inset well under a hairline. */}
-      <div className="relative aspect-video w-full border-b border-line bg-inset">
-        {videoId && !thumbBroken ? (
-          <img
-            src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
-            alt=""
-            loading="lazy"
-            draggable={false}
-            onError={() => setThumbBroken(true)}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <WaveArt id={p.id} theme={theme} />
-        )}
+      {/* Cover — the tile's "viewer screen": an inset well under a hairline.
+          overflow-hidden so the hover ken-burns stays within the well, and the
+          inner cover scales rather than the tile chrome — the screen comes
+          alive, the frame doesn't. */}
+      <div className="relative aspect-video w-full overflow-hidden border-b border-line bg-inset">
+        <div className="absolute inset-0 transition-transform duration-700 ease-instr group-hover:scale-[1.04]">
+          {videoId && !thumbBroken ? (
+            <img
+              src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+              alt=""
+              loading="lazy"
+              draggable={false}
+              onError={() => setThumbBroken(true)}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <WaveArt id={p.id} theme={theme} />
+          )}
+        </div>
       </div>
       {/* Cue line — the track's notes at their real positions. */}
-      <div className="mx-3 mt-2.5 h-3 shrink-0">
+      <div className="mx-3.5 mt-3 h-3 shrink-0">
         <CueLine notes={p.annotations} theme={theme} />
       </div>
-      <div className="flex items-start gap-2 px-3 pt-1.5">
+      <div className="flex items-start gap-2 px-3.5 pt-1.5">
         <span aria-hidden className="font-mono text-xs text-accentink/70">
           {sourceGlyph(p)}
         </span>
@@ -670,13 +760,13 @@ function TrackTile({
             }}
             title="Delete track"
             aria-label={`Delete track ${p.title}`}
-            className="press rounded p-1 text-muted hover:bg-raised hover:text-danger"
+            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
           >
             <Trash2 size={13} />
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-3 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 pb-3.5 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         <span>
           {n} {n === 1 ? 'note' : 'notes'}
         </span>
@@ -726,7 +816,7 @@ function MoveMenu({
           setOpen(false)
           onMove(id)
         }}
-        className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-xs transition-colors ${
+        className={`flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-xs transition-colors ${
           isHere ? 'text-muted' : 'text-fg hover:bg-raised'
         }`}
       >
@@ -755,7 +845,7 @@ function MoveMenu({
         aria-expanded={open}
         title="Move to folder"
         aria-label={`Move track ${p.title} to a folder`}
-        className="press rounded p-1 text-muted hover:bg-raised hover:text-fg"
+        className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <FolderInput size={13} />
       </button>
@@ -771,7 +861,7 @@ function MoveMenu({
           onClick={(e) => e.stopPropagation()}
           className="rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
         >
-          <p className="px-2.5 pb-1 pt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+          <p className="px-2.5 pb-1 pt-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
             Move to
           </p>
           {row(null, 'Library (no folder)')}

@@ -54,24 +54,24 @@ export default function ShortcutsOverlay({
         aria-modal="true"
         aria-label="Keyboard shortcuts"
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg rounded border border-line bg-panel shadow-2xl ${
+        className={`w-full max-w-lg overflow-hidden rounded-lg border border-line bg-panel shadow-2xl ${
           closing ? 'animate-panel-out' : 'animate-panel-in'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
+        <div className="flex h-10 items-center justify-between border-b border-line bg-raised px-3.5">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Keyboard Shortcuts
           </span>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-muted hover:bg-raised hover:text-fg"
+            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
           >
             <X size={15} />
           </button>
         </div>
 
-        <div className="grid gap-x-8 gap-y-5 p-4 sm:grid-cols-2">
+        <div className="grid gap-x-8 gap-y-5 px-4 py-5 sm:grid-cols-2">
           {GROUPS.map((g) => (
             <div key={g.title}>
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-accentink">
@@ -88,7 +88,7 @@ export default function ShortcutsOverlay({
                       {it.keys.map((k) => (
                         <kbd
                           key={k}
-                          className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted"
+                          className="kbd-cap text-[11px]"
                         >
                           {k}
                         </kbd>
@@ -101,7 +101,7 @@ export default function ShortcutsOverlay({
           ))}
         </div>
 
-        <div className="border-t border-line px-4 py-2 text-center font-mono text-[10px] text-muted">
+        <div className="border-t border-line px-4 py-2.5 text-center font-mono text-[10px] text-muted">
           Press{' '}
           <kbd className="rounded border border-line bg-inset px-1 leading-none">
             ?

@@ -13,7 +13,7 @@ export default function ExportPdfButton({ project }: { project: Project }) {
       type="button"
       onClick={() => exportProjectPdf(project)}
       title="Export this track's notes to a PDF (opens in a new tab)"
-      className="press inline-flex shrink-0 items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted transition-colors hover:border-line-strong hover:text-fg"
+      className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
     >
       <FileDown size={12} />
       <span className="hidden sm:inline">PDF</span>

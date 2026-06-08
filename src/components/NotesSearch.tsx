@@ -26,7 +26,7 @@ export default function NotesSearch({ value, onChange, count, total, onClose }: 
   }, [])
 
   return (
-    <div className="flex items-center gap-2 border-b border-line bg-panel px-2.5 py-1.5">
+    <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
       <Search size={14} className="shrink-0 text-muted" />
       <input
         ref={inputRef}
@@ -52,7 +52,7 @@ export default function NotesSearch({ value, onChange, count, total, onClose }: 
         onClick={onClose}
         aria-label="Close search"
         title="Close search (Esc)"
-        className="press shrink-0 rounded-sm p-0.5 text-muted hover:bg-raised hover:text-fg"
+        className="press grid h-[22px] w-[22px] shrink-0 place-items-center rounded-sm text-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <X size={14} />
       </button>

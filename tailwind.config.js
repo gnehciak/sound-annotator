@@ -33,7 +33,11 @@ export default {
         rowsel: 'rgb(var(--row-sel) / <alpha-value>)',
       },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        // IBM Plex carries both voices ("station, warmed"): a humanist-technical
+        // sans for prose, its matching mono for timecodes and silkscreen labels.
+        // System stacks remain as fallbacks while the webfont loads.
+        sans: ['IBM Plex Sans', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       // Motion system — "instrument motion": fast, decelerating, no bounce.
       // One expo-ish ease-out (matches the note-list FLIP) is the house curve.
@@ -66,6 +70,17 @@ export default {
           from: { opacity: '0', transform: 'translateY(-6px)' },
           to: { opacity: '1', transform: 'none' },
         },
+        // Home dashboard cascade: tiles drift up + settle. Slightly longer than
+        // note-in (notes feel snappy; the dashboard wants room to breathe).
+        'tile-in': {
+          from: { opacity: '0', transform: 'translateY(12px) scale(0.985)' },
+          to: { opacity: '1', transform: 'none' },
+        },
+        // Section labels / search well — same drift, no scale, shorter throw.
+        'rise-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'none' },
+        },
         // The amber "now" dot breathes like an LED. Ends at full so it rests
         // bright when reduced-motion clamps it to one frame.
         'now-pulse': {
@@ -86,19 +101,25 @@ export default {
         // `backwards` (not `both`): no forwards-fill, so it never pins the
         // note's opacity over the resting `opacity-50` dim state.
         'note-in': 'note-in 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
+        // Dashboard cascade — `backwards` holds the from-state through the
+        // per-tile delay so the stagger reads cleanly without forwards-pinning
+        // the resting hover transforms.
+        'tile-in': 'tile-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
+        'rise-in': 'rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
         'now-pulse': 'now-pulse 1.7s ease-in-out infinite',
         'dock-in': 'dock-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both',
       },
-      // Squared-off: pro tools don't use the soft shadcn radii. Even `rounded-lg`
-      // resolves to ~2px so nothing reads as a floating card.
+      // Softly squared ("station, warmed"): chips 5px, controls 6px, grouped
+      // containers 8px, panels 10px. Still far from pill/card territory — the
+      // instrument keeps its edges, they just stop being knife-sharp.
       borderRadius: {
         none: '0px',
-        sm: '1px',
-        DEFAULT: '2px',
-        md: '2px',
-        lg: '2px',
-        xl: '3px',
-        '2xl': '4px',
+        sm: '5px',
+        DEFAULT: '6px',
+        md: '8px',
+        lg: '10px',
+        xl: '12px',
+        '2xl': '14px',
         full: '9999px',
       },
     },

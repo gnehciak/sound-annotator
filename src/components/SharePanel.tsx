@@ -62,9 +62,9 @@ export default function SharePanel({ project, onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         title={shared ? 'Shared — manage link' : 'Share this track by link'}
-        className={`press inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+        className={`press inline-flex items-center gap-1.5 rounded border px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
           shared
-            ? 'border-accent/60 bg-accent/10 text-accentink'
+            ? 'border-accent/70 bg-accent/10 text-accentink hover:bg-accent/20'
             : 'border-line text-muted hover:border-line-strong hover:text-fg'
         }`}
       >
@@ -73,7 +73,7 @@ export default function SharePanel({ project, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in rounded border border-line bg-panel p-3 shadow-lg shadow-black/40">
+        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in rounded border border-line bg-panel p-3.5 shadow-lg shadow-black/40">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-fg">
@@ -116,13 +116,13 @@ export default function SharePanel({ project, onChange }: Props) {
             <>
               {/* Link role — view-only or link-editing (Docs-style). */}
               <div className="mt-3 flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   Link role
                 </span>
                 <div
                   role="group"
                   aria-label="Link permission"
-                  className="flex items-center gap-px rounded-sm border border-line bg-inset p-px"
+                  className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
                 >
                   <button
                     type="button"
@@ -131,7 +131,7 @@ export default function SharePanel({ project, onChange }: Props) {
                     }
                     aria-pressed={!canEdit}
                     title="Anyone with the link can view"
-                    className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                    className={`press flex h-[26px] items-center gap-1 rounded px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 ${
                       canEdit ? 'text-muted hover:text-fg' : 'bg-raised text-fg'
                     }`}
                   >
@@ -144,7 +144,7 @@ export default function SharePanel({ project, onChange }: Props) {
                     }
                     aria-pressed={canEdit}
                     title="Anyone with the link can edit (sign-in required)"
-                    className={`press flex items-center gap-1 rounded-[1px] px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                    className={`press flex h-[26px] items-center gap-1 rounded px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 ${
                       canEdit
                         ? 'bg-raised text-accentink'
                         : 'text-muted hover:text-fg'
@@ -161,12 +161,12 @@ export default function SharePanel({ project, onChange }: Props) {
                   value={url}
                   onFocus={(e) => e.currentTarget.select()}
                   aria-label="Share link"
-                  className="led min-w-0 flex-1 rounded border border-line bg-inset px-2 py-1 font-mono text-[11px] text-fg outline-none focus:border-accent"
+                  className="led bevel-inset min-w-0 flex-1 rounded border border-line bg-inset px-[9px] py-[6px] font-mono text-[11px] text-fg outline-none focus:border-accent"
                 />
                 <button
                   onClick={copy}
                   title="Copy link"
-                  className="press inline-flex shrink-0 items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-fg hover:border-accent hover:text-accentink"
+                  className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line bg-raised px-2 py-[6px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg transition-colors hover:border-accent hover:text-accentink"
                 >
                   {copied ? <Check size={12} /> : <Copy size={12} />}
                   {copied ? 'Copied' : 'Copy'}

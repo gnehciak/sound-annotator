@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react'
-import { Play, ArrowUp, ArrowDown, RotateCw } from 'lucide-react'
+import { Play, ArrowUp, ArrowDown, RotateCw, Brackets } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
@@ -124,57 +124,68 @@ export default function AnnotationItem({
       className={`group relative cursor-pointer transition ${
         enterAnim ? 'animate-note-in' : ''
       } ${
-        active ? 'z-20 bg-rowsel' : selected ? 'bg-rowsel' : 'hover:bg-rowsel/25'
-      } ${isPlaying && !focused ? 'opacity-50' : ''}`}
+        active
+          ? 'z-20 bg-rowsel'
+          : selected
+            ? 'bg-rowsel shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]'
+            : 'hover:bg-rowsel/25'
+      } ${isPlaying && !focused ? 'opacity-40 blur-[0.5px] saturate-[0.75] hover:opacity-95 hover:blur-0 hover:saturate-100' : ''}`}
     >
-      {/* progress bar along the top border. For ranges it's a scrubber: clicking
-          seeks to that fraction of the note's span. The button is a taller
-          transparent grab strip (over the header's top padding) so the thin bar
-          isn't a pixel-hunt; the visible bar thickens on hover. */}
-      {isRange && onSeek ? (
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={(e) => {
-            stop(e)
-            const r = e.currentTarget.getBoundingClientRect()
-            const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
-            onSeek(annotation.start + f * span)
-          }}
-          title="Click to scrub within this note"
-          aria-label="Scrub within this note"
-          className="group/bar absolute inset-x-0 top-0 z-10 flex h-2 cursor-pointer items-start"
-        >
-          <span
-            className="block h-[3px] w-full transition-[height] group-hover/bar:h-[5px]"
-            style={{ background: `${color}33` }}
+      {/* progress bar along the top border — only while this note is the one
+          sounding, so resting rows stay a flush hairline cue list (the spine
+          carries identity). For ranges it's a scrubber: clicking seeks to that
+          fraction of the note's span; the thin bar thickens on hover. */}
+      {active &&
+        (isRange && onSeek ? (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              stop(e)
+              const r = e.currentTarget.getBoundingClientRect()
+              const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+              onSeek(annotation.start + f * span)
+            }}
+            title="Click to scrub within this note"
+            aria-label="Scrub within this note"
+            className="group/bar absolute inset-x-0 -top-1 z-10 flex h-[11px] cursor-pointer items-center"
           >
             <span
-              className="block h-full"
+              className="block h-[3px] w-full transition-[height] group-hover/bar:h-[5px]"
+              style={{ background: `${color}33` }}
+            >
+              <span
+                className="block h-full"
+                style={{ width: `${progress * 100}%`, background: color }}
+              />
+            </span>
+          </button>
+        ) : (
+          <div
+            className="absolute inset-x-0 top-0 z-10 h-[3px]"
+            style={{ background: `${color}33` }}
+          >
+            <div
+              className="h-full"
               style={{ width: `${progress * 100}%`, background: color }}
             />
-          </span>
-        </button>
-      ) : (
-        <div
-          className="absolute inset-x-0 top-0 z-10 h-[3px]"
-          style={{ background: `${color}33` }}
-        >
-          <div
-            className="h-full"
-            style={{ width: `${progress * 100}%`, background: color }}
-          />
-        </div>
-      )}
+          </div>
+        ))}
 
-      {/* colored spine — shown while playing or selected */}
+      {/* colored spine — full-height identity flag, shown only when the player
+          is paused. As soon as playback starts every spine wipes off to the
+          left; the active note's top progress bar carries the color while the
+          tape is rolling, so a chorus of spines would just be noise. The
+          clip-path transition is in CSS (see .spine in index.css), not inline,
+          so the slide isn't reset every time currentTime ticks the parent. */}
       <div
-        className="absolute inset-y-0 left-0 w-[3px] transition-opacity duration-200 ease-instr"
-        style={{ background: color, opacity: focused ? 1 : 0 }}
+        className="spine absolute inset-y-0 left-0 w-[3.5px]"
+        data-hidden={isPlaying || undefined}
+        style={{ background: color }}
       />
 
       {/* header */}
-      <div className="flex items-center gap-2 pb-1 pl-2 pr-1 pt-2">
+      <div className="flex items-center gap-1.5 pb-1 pl-3 pr-2 pt-3">
         {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
         <span className="inline-flex items-stretch">
           <button
@@ -189,8 +200,15 @@ export default function AnnotationItem({
             }}
             title="Jump to this moment and pin it to the top"
             aria-label={`Seek to ${label}`}
-            className="press inline-flex items-center gap-1 px-1.5 py-0.5 font-mono text-[11px] font-bold text-onbright"
-            style={{ background: color }}
+            // Rounded as a unit with the fused passage segment (when present).
+            className={`press inline-flex items-center gap-[5px] border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-2 py-[2.5px] font-mono text-[11.5px] font-medium tabular-nums tracking-[0.04em] hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)] ${
+              isRange && onPlayPassage ? 'rounded-l-sm border-r-0' : 'rounded-sm'
+            }`}
+            style={{
+              ['--hue' as string]: color,
+              borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
+              color: hueText(color, theme),
+            }}
           >
             {active && isPlaying ? (
               <span className="eq" aria-hidden="true">
@@ -218,8 +236,13 @@ export default function AnnotationItem({
                   : 'Play just this passage — pauses at the end'
               }
               aria-label={`Play ${label} and stop at the end`}
-              className="press flex items-center border-l border-onbright/25 px-1.5 text-onbright"
-              style={{ background: color }}
+              className="press flex items-center rounded-r-sm border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-1.5 hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)]"
+              style={{
+                ['--hue' as string]: color,
+                borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
+                borderLeftColor: `color-mix(in srgb, ${color} 35%, transparent)`,
+                color: hueText(color, theme),
+              }}
             >
               <RotateCw
                 size={11}
@@ -234,11 +257,28 @@ export default function AnnotationItem({
           )}
         </span>
 
+        {/* Section chip — names a structure note's span (display-only). */}
+        {annotation.structure && annotation.sectionName && (
+          <span
+            title="Section note"
+            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
+            style={{
+              borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
+              color: hueText(color, theme),
+            }}
+          >
+            <Brackets size={9} strokeWidth={2.4} className="shrink-0" />
+            <span className="max-w-[16ch] truncate">
+              {annotation.sectionName}
+            </span>
+          </span>
+        )}
+
         {/* Score position — the bar number / rehearsal mark, shown as typed. */}
         {annotation.bar?.trim() && (
           <span
             title="Bar / rehearsal mark"
-            className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted"
+            className="rounded-sm border border-line px-[7px] py-[2.5px] font-mono text-[10px] font-medium tracking-[0.1em] text-muted"
           >
             {annotation.bar.trim()}
           </span>
@@ -246,7 +286,7 @@ export default function AnnotationItem({
 
         {/* Reorder arrows — only when another note shares this time. */}
         {!readOnly && (canMoveUp || canMoveDown) && (
-          <span className="flex items-center" onClick={stop}>
+          <span className="flex items-center gap-1" onClick={stop}>
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
@@ -257,7 +297,7 @@ export default function AnnotationItem({
               }}
               title="Move above the note at the same time"
               aria-label="Move note up"
-              className="press px-0.5 text-muted hover:text-fg disabled:opacity-25 disabled:hover:text-muted"
+              className="press grid h-[27px] w-[27px] place-items-center rounded border border-line bg-panel text-muted hover:border-line-strong hover:bg-raised hover:text-fg disabled:opacity-25 disabled:hover:border-line disabled:hover:bg-panel disabled:hover:text-muted"
             >
               <ArrowUp size={13} />
             </button>
@@ -271,7 +311,7 @@ export default function AnnotationItem({
               }}
               title="Move below the note at the same time"
               aria-label="Move note down"
-              className="press px-0.5 text-muted hover:text-fg disabled:opacity-25 disabled:hover:text-muted"
+              className="press grid h-[27px] w-[27px] place-items-center rounded border border-line bg-panel text-muted hover:border-line-strong hover:bg-raised hover:text-fg disabled:opacity-25 disabled:hover:border-line disabled:hover:bg-panel disabled:hover:text-muted"
             >
               <ArrowDown size={13} />
             </button>
@@ -283,7 +323,7 @@ export default function AnnotationItem({
           return (
             <span
               key={t}
-              className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+              className="flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
               style={{ borderColor: hueText(info.color, theme), color: hueText(info.color, theme) }}
             >
               <span
@@ -299,7 +339,7 @@ export default function AnnotationItem({
       </div>
 
       {/* body preview — text rendered read-only, then a summary line per block */}
-      <div className="pb-1.5 pl-2 pr-1">
+      <div className="pb-2.5 pl-3 pr-2">
         {blocks.map((block) => {
           if (block.type === TEXT_BLOCK) {
             const html = asTextData(block)?.html ?? ''
@@ -336,3 +376,4 @@ export default function AnnotationItem({
     </div>
   )
 }
+

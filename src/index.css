@@ -65,42 +65,44 @@
 }
 
 /* ============================================================
-   LIGHT — "Daylit Station": a literal-white page/canvas framed by
-   faintly warm chrome. The tonal ramp INVERTS in this theme: the
-   page (ink/note) is the lightest surface and depth goes DOWN from
-   it (ink > panel > raised > inset) — on paper, controls and wells
-   shade rather than lift, which keeps raised states visible against
-   white. Structure is carried by the darker hairlines plus the warm
-   chrome zoning. Warmth lives in the chrome, wells, borders, and
-   amber — not the page. Body, muted, placeholder, and amber-ink are
+   LIGHT — "Daylit Station": soft warm-paper page with bright chrome
+   lifting above it and a deep stone well below. Ramp tiers like
+   dark: inset (deepest well/screen) < ink (page) < panel (chrome) <
+   raised (controls/title bars/selection — the brightest pop). The
+   note paper stays pure white as the focal writing surface; the
+   page underneath is barely warm so white buttons + raised states
+   visibly lift instead of disappearing. Selected rows = raised so
+   they brighten neutrally — note hues stay on the chip + spine,
+   never wash the row. Body, muted, placeholder, and amber-ink are
    AA-verified on every surface.
    ============================================================ */
 [data-theme='light'] {
-  --bg-ink: 255 255 255; /* #ffffff literal-white canvas + body */
-  --bg-panel: 245 245 242; /* #f5f5f2 stone chrome (sidebar/header/transport) — de-yellowed */
-  --bg-raised: 240 239 235; /* #f0efeb controls / title bars — a shade BELOW panel: on paper, controls shade rather than lift, so raised states stay visible on the white page */
-  --bg-inset: 229 227 220; /* #e5e3dc recessed wells / inputs — the deepest step */
-  --surface-note: 255 255 255; /* #ffffff white note page (= ink) */
-  --border: 184 180 166; /* #b8b4a6 hairlines — ~2:1 on white so edges draw */
-  --border-strong: 132 128 111; /* #84806f hover/active edges — ≥3:1 on ink + panel */
+  --bg-ink: 233 227 213; /* #e9e3d5 deeper warm paper page — gives chrome real lift above it */
+  --bg-panel: 246 242 232; /* #f6f2e8 lifted chrome (sidebar/right dock/transport) */
+  --bg-raised: 254 252 246; /* #fefcf6 brightest tone — controls / title bars / selected rows pop above panel */
+  --bg-inset: 215 205 184; /* #d7cdb8 deepest warm stone — wells, inputs, the player screen — reads as a recessed well */
+  --surface-note: 255 255 255; /* #ffffff pure-white note paper — the focal writing surface, the brightest plane */
+  --border: 150 142 124; /* #968e7c confident hairlines — ~3:1 on page, carries structure on every tier */
+  --border-strong: 108 101 86; /* #6c6556 hover/active edges — ≥3:1 on every surface */
   --text: 42 38 32; /* #2a2620 warm near-black */
   --text-strong: 28 26 22; /* #1c1a16 h1 / emphasis */
   --text-muted: 95 86 70; /* #5f5646 labels/placeholder — AA on every surface incl. inset */
-  --accent: 204 122 10; /* #cc7a0a deep signal amber — fills/graphics, ≥3:1 on white */
+  --accent: 217 119 6; /* #d97706 signal amber — fills/graphics, ≥3:1 on white + raised */
   --accent-ink: 135 78 5; /* #874e05 AA amber — text/LED/focus, ≥4.5:1 incl. on inset */
-  --meter: 79 125 38; /* #4f7d26 light-safe meter green */
-  --peak: 194 67 59; /* #c2433b meter peak */
-  --danger: 190 18 60; /* #be123c rose-700 — delete affordances, AA on chrome */
+  --meter: 92 142 41; /* #5c8e29 light-safe meter green */
+  --peak: 213 54 47; /* #d5362f meter peak — saturated lamp red */
+  --danger: 190 18 60; /* #be123c rose-700 — delete affordances */
   --on-bright: 26 24 19; /* text on data-hue fills stays dark on light too */
   --on-accent: var(--on-bright); /* see dark block — diverges only in mono */
-  --row-sel: 240 239 235; /* #f0efeb neutral stone highlight (= raised) — the playing dot + amber chip carry the signal, not a cream field */
+  --row-sel: 254 252 246; /* #fefcf6 = raised — selected rows lift neutrally; hue belongs to chip + spine */
 
-  --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.12);
-  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.7),
-    inset 0 -2px 3px rgb(0 0 0 / 0.16);
+  --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.14);
+  --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.8),
+    inset 0 -2px 3px rgb(0 0 0 / 0.10), 0 1px 2px rgb(0 0 0 / 0.08),
+    0 1px 0 rgb(0 0 0 / 0.04);
   --led-glow: none;
-  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7),
-    0 1px 0 rgb(0 0 0 / 0.16);
+  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 1px 0 rgb(0 0 0 / 0.18);
 
   color-scheme: light;
 }
@@ -136,18 +138,19 @@
   --row-sel: 32 38 43;
 }
 [data-theme='light'][data-palette='cyan'] {
-  --bg-panel: 241 244 244; /* #f1f4f4 cool chrome */
-  --bg-raised: 235 239 238; /* #ebefee */
-  --bg-inset: 221 228 227; /* #dde4e3 */
-  --border: 169 184 181; /* #a9b8b5 */
-  --border-strong: 116 130 127; /* #74827f */
+  --bg-ink: 232 237 237; /* #e8eded cool paper page */
+  --bg-panel: 240 245 244; /* #f0f5f4 lifted cool chrome */
+  --bg-raised: 251 253 253; /* #fbfdfd brightest cool — controls/selection */
+  --bg-inset: 209 222 220; /* #d1dedc deepest cool stone — wells/screens */
+  --border: 142 159 156; /* #8e9f9c confident cool hairline */
+  --border-strong: 103 117 114; /* #677572 */
   --text: 32 38 42; /* #20262a */
   --text-strong: 20 24 27; /* #14181b */
   --text-muted: 77 89 97; /* #4d5961 */
-  --accent: 19 144 135; /* #139087 */
+  --accent: 26 161 149; /* #1aa195 */
   --accent-ink: 17 94 89; /* #115e59 */
   --on-bright: 16 19 20;
-  --row-sel: 223 243 240; /* #dff3f0 */
+  --row-sel: 251 253 253; /* = raised — neutral cool lift */
 }
 
 /* VERMILION — "Tally": broadcast REC light on neutral studio gray.
@@ -171,11 +174,12 @@
   --row-sel: 38 34 32;
 }
 [data-theme='light'][data-palette='vermilion'] {
-  --bg-panel: 245 242 240; /* #f5f2f0 */
-  --bg-raised: 240 235 232; /* #f0ebe8 */
-  --bg-inset: 231 224 220; /* #e7e0dc */
-  --border: 192 177 169; /* #c0b1a9 */
-  --border-strong: 141 125 116; /* #8d7d74 */
+  --bg-ink: 241 234 229; /* #f1eae5 warm paper page (slightly redder) */
+  --bg-panel: 247 242 238; /* #f7f2ee lifted warm chrome */
+  --bg-raised: 254 250 247; /* #fefaf7 brightest — controls/selection */
+  --bg-inset: 226 213 205; /* #e2d5cd deepest warm stone */
+  --border: 161 142 132; /* #a18e84 confident warm hairline */
+  --border-strong: 113 99 91; /* #71635b */
   --text: 38 33 31; /* #26211f */
   --text-strong: 26 21 18; /* #1a1512 */
   --text-muted: 93 83 78; /* #5d534e */
@@ -183,7 +187,7 @@
   --accent-ink: 163 42 18; /* #a32a12 */
   --danger: 190 24 93; /* #be185d pink-700 */
   --on-bright: 23 17 16;
-  --row-sel: 253 233 227; /* #fde9e3 */
+  --row-sel: 254 250 247; /* = raised — neutral warm lift */
 }
 
 /* MONO — "Print": pure-grayscale chrome and an achromatic signal
@@ -211,11 +215,12 @@
   --row-sel: 38 38 38;
 }
 [data-theme='light'][data-palette='mono'] {
-  --bg-panel: 242 242 242; /* #f2f2f2 */
-  --bg-raised: 236 236 236; /* #ececec */
-  --bg-inset: 224 224 224; /* #e0e0e0 */
-  --border: 178 178 178; /* #b2b2b2 */
-  --border-strong: 122 122 122; /* #7a7a7a */
+  --bg-ink: 234 234 234; /* #eaeaea neutral paper page */
+  --bg-panel: 243 243 243; /* #f3f3f3 lifted chrome */
+  --bg-raised: 252 252 252; /* #fcfcfc brightest — controls/selection */
+  --bg-inset: 215 215 215; /* #d7d7d7 deepest gray well */
+  --border: 145 145 145; /* #919191 confident hairline */
+  --border-strong: 100 100 100; /* #646464 */
   --text: 34 34 34; /* #222222 */
   --text-strong: 17 17 17; /* #111111 */
   --text-muted: 85 85 85; /* #555555 */
@@ -224,7 +229,7 @@
   --meter: 107 107 107; /* #6b6b6b */
   --on-bright: 22 22 22;
   --on-accent: 255 255 255; /* white text on the near-black signal fill */
-  --row-sel: 236 236 236; /* = raised */
+  --row-sel: 252 252 252; /* = raised — neutral gray lift */
 }
 
 /* VIOLET — "Lab": synth-hardware violet on neutral-cool gray. */
@@ -245,18 +250,19 @@
   --row-sel: 36 34 40;
 }
 [data-theme='light'][data-palette='violet'] {
-  --bg-panel: 243 242 246; /* #f3f2f6 */
-  --bg-raised: 237 236 242; /* #edecf2 */
-  --bg-inset: 227 224 234; /* #e3e0ea */
-  --border: 179 173 196; /* #b3adc4 */
-  --border-strong: 126 119 144; /* #7e7790 */
+  --bg-ink: 235 233 240; /* #ebe9f0 cool paper page */
+  --bg-panel: 243 241 247; /* #f3f1f7 lifted cool chrome */
+  --bg-raised: 252 251 255; /* #fcfbff brightest — controls/selection */
+  --bg-inset: 218 213 230; /* #dad5e6 deepest cool-violet stone */
+  --border: 155 146 178; /* #9b92b2 confident cool hairline */
+  --border-strong: 110 102 128; /* #6e6680 */
   --text: 33 30 38; /* #211e26 */
   --text-strong: 23 20 27; /* #17141b */
   --text-muted: 86 79 99; /* #564f63 */
   --accent: 147 102 237; /* #9366ed */
   --accent-ink: 91 33 182; /* #5b21b6 */
   --on-bright: 21 18 26;
-  --row-sel: 236 231 250; /* #ece7fa */
+  --row-sel: 252 251 255; /* = raised — neutral cool lift */
 }
 
 html,
@@ -268,7 +274,7 @@ body {
   margin: 0;
   background: rgb(var(--bg-ink));
   color: rgb(var(--text));
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -288,7 +294,7 @@ body {
 
 /* LED-style readout (the transport/header clock) */
 .led {
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   letter-spacing: 0.08em;
   color: rgb(var(--accent-ink));
   text-shadow: var(--led-glow);
@@ -309,16 +315,20 @@ body {
   animation: meterPulse 0.45s ease-in-out infinite alternate;
 }
 
-/* Segmented LED level meter (header) */
+/* Segmented LED level meter (header) — bars bounce from their base (the
+   segments carry origin-bottom) while flickering, like the prototype's. */
 @keyframes segFlicker {
   0% {
     opacity: 0.18;
+    transform: scaleY(0.45);
   }
   45% {
     opacity: 1;
+    transform: scaleY(1);
   }
   100% {
     opacity: 0.28;
+    transform: scaleY(0.5);
   }
 }
 .meter-seg {
@@ -433,6 +443,17 @@ body {
   .press:active {
     transform: scale(0.97);
   }
+
+  /* Note row spine — slides in from the left when the player is paused, wipes
+     off to the left when playing. clip-path is in CSS (not inline) so the
+     transition state survives React's re-render churn while currentTime ticks. */
+  .spine {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 220ms var(--ease-out);
+  }
+  .spine[data-hidden] {
+    clip-path: inset(0 100% 0 0);
+  }
 }
 
 /* ============================================================
@@ -461,22 +482,22 @@ body {
   }
 }
 
-/* Tiny keycap for inline shortcut hints. Squared (2px) with a 1px lip — a
-   darker bottom edge so it reads as a physical key, no gloss (DESIGN.md §4). */
+/* Tiny keycap for inline shortcut hints — a 2px bottom edge reads as the
+   key's lip (the prototype's kbd treatment), no gloss (DESIGN.md §4). */
 .kbd-cap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.1rem;
-  padding: 2px 4px;
-  border: 1px solid rgb(var(--border-strong));
-  border-radius: 2px;
-  background: rgb(var(--bg-raised));
-  box-shadow: var(--kbd-shadow);
+  padding: 1px 6px;
+  border: 1px solid rgb(var(--border));
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgb(var(--bg-panel));
   color: rgb(var(--text-muted));
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 10px;
-  line-height: 1;
+  line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
 
@@ -488,6 +509,33 @@ body {
 }
 .bevel-raised {
   box-shadow: var(--bevel-raised);
+}
+
+/* Light mode: hairline-bordered buttons get a whisper-soft outer lift + an
+   inset top highlight, so they read as physical tokens on the bright chrome
+   instead of dissolving into it. Scoped to .press (interactive elements) with
+   visible hairlines (border-style:solid). Dark mode keeps the flat tactile
+   look it already has. Filled accent buttons (which carry their own pop via
+   the amber fill) opt out via `.press[data-no-lift]`. */
+[data-theme='light'] .press[class*='border-line']:not([data-no-lift]),
+[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]) {
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 0.04),
+    0 1px 2px rgb(0 0 0 / 0.05),
+    inset 0 1px 0 rgb(255 255 255 / 0.55);
+}
+[data-theme='light'] .press[class*='border-line']:not([data-no-lift]):hover,
+[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]):hover {
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 0.05),
+    0 2px 4px rgb(0 0 0 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+[data-theme='light'] .press[class*='border-line']:not([data-no-lift]):active,
+[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]):active {
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 0.10),
+    0 0 0 rgb(0 0 0 / 0);
 }
 
 /* Dark scrollbars */
@@ -520,7 +568,7 @@ body {
   ):focus-visible {
   outline: 2px solid rgb(var(--accent-ink));
   outline-offset: 1px;
-  border-radius: 2px;
+  border-radius: 5px;
 }
 
 /* Reduced motion is not optional: still the level meter and any transitions. */
@@ -536,6 +584,7 @@ body {
   .meter-seg {
     animation: none !important;
     opacity: 0.5;
+    transform: none;
   }
   /* Rest the eq bars at a readable mid-height so they read as a static waveform
      glyph rather than collapsing to the animation's trough frame. */
@@ -587,7 +636,7 @@ body {
 }
 .ProseMirror img {
   max-width: 100%;
-  border-radius: 4px;
+  border-radius: 6px;
   margin: 0.5rem 0;
   display: block;
   border: 1px solid rgb(var(--border));
@@ -612,7 +661,7 @@ body {
 .ProseMirror .resizable-image__skeleton {
   position: absolute;
   inset: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid rgb(var(--border));
   background: linear-gradient(
     100deg,
@@ -639,7 +688,7 @@ body {
   display: flex;
   gap: 1px;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid rgb(var(--border));
   background: rgb(var(--bg-ink) / 0.85);
   backdrop-filter: blur(2px);
@@ -658,7 +707,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 3px;
-  border-radius: 2px;
+  border-radius: 5px;
   color: rgb(var(--text-muted));
   cursor: pointer;
 }
@@ -724,7 +773,7 @@ body {
   bottom: -6px;
   width: 13px;
   height: 13px;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1.5px solid rgb(var(--bg-ink));
   background: rgb(var(--accent));
   cursor: nwse-resize;
@@ -743,10 +792,10 @@ body {
   top: 6px;
   left: 6px;
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: 4px;
   background: rgb(var(--bg-ink) / 0.85);
   color: rgb(var(--text));
-  font: 600 10px/1.5 ui-monospace, SFMono-Regular, monospace;
+  font: 600 10px/1.5 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   pointer-events: none;
 }
 
@@ -758,7 +807,7 @@ body {
   margin: 0.5rem 0;
   max-width: 100%;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid rgb(var(--border));
   line-height: 0;
   user-select: none;
@@ -776,7 +825,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font: 600 11px/1 ui-monospace, SFMono-Regular, monospace;
+  font: 600 11px/1 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgb(var(--accent));
@@ -814,7 +863,7 @@ body {
 }
 .ProseMirror code {
   background: rgb(var(--bg-raised));
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 0.1rem 0.3rem;
   font-size: 0.85em;
   color: rgb(var(--accent-ink));
@@ -829,9 +878,9 @@ body {
   color: rgb(var(--accent-ink));
   background: rgb(var(--accent-ink) / 0.12);
   border: 1px solid rgb(var(--accent-ink) / 0.35);
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 0 0.25rem;
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.85em;
   white-space: nowrap;
   cursor: pointer;

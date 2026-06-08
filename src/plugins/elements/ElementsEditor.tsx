@@ -49,10 +49,10 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
   const addable = ELEMENTS.filter((c) => !openIds.includes(c.id))
 
   return (
-    <div className="pb-3">
+    <div className="pb-3.5">
       {/* Layer — the note's identity */}
-      <div className="px-3 pb-2 pt-3">
-        <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted">
+      <div className="px-3.5 pb-2.5 pt-3.5">
+        <div className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
           Layer
         </div>
         <div className="flex flex-wrap gap-1">
@@ -64,7 +64,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
                 type="button"
                 disabled={readOnly}
                 onClick={() => setLayer(active ? undefined : l.id)}
-                className={`press flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[11px] uppercase tracking-wider ${
+                className={`press flex items-center gap-1.5 rounded border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] ${
                   active ? '' : 'border-line text-muted hover:text-fg'
                 }`}
                 style={active ? { borderColor: l.color, color: l.color } : undefined}
@@ -90,18 +90,18 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
       ))}
 
       {sections.length === 0 && readOnly && (
-        <div className="px-3 py-2 text-[12px] text-muted">No elements recorded.</div>
+        <div className="px-3.5 py-2.5 text-[12px] text-muted">No elements recorded.</div>
       )}
 
       {/* Add element — reveals a category section on demand. The menu is
           portalled (Popover) so it isn't clipped by the window's scroll area. */}
       {!readOnly && addable.length > 0 && (
-        <div className="border-t border-line/60 px-3 pt-2">
+        <div className="border-t border-line/60 px-3.5 pt-2.5">
           <button
             ref={addBtnRef}
             type="button"
             onClick={() => setAddOpen((o) => !o)}
-            className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted hover:border-accent hover:text-accentink"
+            className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted hover:border-accent hover:text-accentink"
           >
             <Plus size={12} /> Add element
           </button>
@@ -117,7 +117,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
                 key={c.id}
                 type="button"
                 onClick={() => addCategory(c.id)}
-                className="flex w-full items-center px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider text-muted hover:bg-raised hover:text-fg"
+                className="flex w-full items-center px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-muted hover:bg-raised hover:text-fg"
               >
                 {c.label}
               </button>

@@ -72,8 +72,14 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
         return (
           <span
             key={t}
-            className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-            style={{ borderColor: hueText(c.color, theme), color: hueText(c.color, theme) }}
+            className="flex items-center gap-1.5 rounded-sm border px-2 py-[3px] font-mono text-[10px] font-semibold uppercase tracking-[0.12em]"
+            style={{
+              // 45%-mix ring (the prototype's .tagchip): softer than full-strength
+              // hueText while keeping the AA-adjusted base for theme safety.
+              borderColor: `color-mix(in srgb, ${hueText(c.color, theme)} 45%, transparent)`,
+              color: hueText(c.color, theme),
+              background: `color-mix(in srgb, ${c.color} 10%, transparent)`,
+            }}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
@@ -85,7 +91,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
               onClick={() => remove(t)}
               title={`Remove ${c.label}`}
               aria-label={`Remove ${c.label}`}
-              className="press -mr-0.5 ml-0.5 rounded hover:text-fg"
+              className="press -mr-0.5 rounded opacity-60 hover:opacity-100"
             >
               <X size={11} />
             </button>
@@ -98,7 +104,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
         title="Add a tag"
         aria-label="Add a tag"
-        className="flex items-center gap-1 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted hover:text-fg"
+        className="press flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
       >
         {tags.length === 0 ? (
           <>
@@ -130,13 +136,13 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
               onChange={(e) => setText(e.target.value)}
               placeholder="Custom tag…"
               aria-label="Custom tag"
-              className="w-full rounded border border-line bg-inset px-2 py-1 text-[11px] text-fg placeholder:text-muted focus:border-accent"
+              className="bevel-inset w-full rounded border border-line bg-inset px-2 py-1.5 text-[11px] text-fg placeholder:text-muted focus:border-accent"
             />
           </form>
 
           {suggestions.length > 0 && (
             <>
-              <div className="px-2.5 pb-1 font-mono text-[9px] uppercase tracking-wider text-muted">
+              <div className="px-2.5 pb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
                 This project
               </div>
               {suggestions.map((t) => {
@@ -146,7 +152,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
                     key={t}
                     type="button"
                     onClick={() => toggle(t)}
-                    className="flex w-full items-center gap-2 px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider text-muted hover:bg-raised"
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] text-muted hover:bg-raised"
                   >
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
@@ -159,7 +165,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
             </>
           )}
 
-          <div className="px-2.5 pb-1 pt-1 font-mono text-[9px] uppercase tracking-wider text-muted">
+          <div className="px-2.5 pb-1 pt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
             Presets
           </div>
           {TAGS.map((t) => {
@@ -170,7 +176,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
                 type="button"
                 onClick={() => toggle(t.id)}
                 aria-pressed={on}
-                className={`flex w-full items-center gap-2 px-2.5 py-1 text-left font-mono text-[11px] uppercase tracking-wider hover:bg-raised ${
+                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-[0.1em] hover:bg-raised ${
                   on ? 'text-fg' : 'text-muted'
                 }`}
               >

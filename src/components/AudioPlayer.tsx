@@ -219,9 +219,11 @@ const AudioPlayer = forwardRef<PlayerHandle, Props>(function AudioPlayer(
   )
 
   return (
-    <div className="rounded border border-line bg-inset p-3">
+    // rounded-lg: the media frame matches YouTubePlayer's 10px video frame —
+    // same slot, same radius, whichever source the track has.
+    <div className="rounded-lg border border-line bg-inset p-3.5">
       <div ref={containerRef} className="w-full cursor-pointer" />
-      <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted">
+      <p className="mt-2 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         Click the waveform to jump
         {!readOnly && ' · drag across it to note a section'}
       </p>

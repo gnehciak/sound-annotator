@@ -45,10 +45,10 @@ function SignIn() {
 
   return (
     <div className="flex h-full animate-fade-in items-center justify-center bg-ink text-fg">
-      <div className="w-full max-w-sm animate-panel-in border border-line bg-panel p-8">
+      <div className="w-full max-w-sm animate-panel-in rounded border border-line bg-panel p-8">
         <div className="mb-6 flex items-center gap-2">
-          <span className="text-accentink">◉</span>
-          <span className="text-xs font-semibold uppercase tracking-[0.22em]">
+          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
             Sound&nbsp;Annotator
           </span>
         </div>
@@ -60,7 +60,7 @@ function SignIn() {
         <button
           onClick={go}
           disabled={busy}
-          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 bg-accent py-2.5 text-sm font-bold text-onaccent hover:brightness-110 disabled:opacity-60"
+          className="press bevel-raised mt-6 inline-flex w-full items-center justify-center gap-2 rounded bg-accent py-2.5 text-sm font-bold text-onaccent hover:brightness-110 disabled:opacity-60"
         >
           <LogIn size={16} />
           {busy ? 'Opening…' : 'Continue with Google'}
@@ -77,10 +77,10 @@ function SignIn() {
 function SetupNotice() {
   return (
     <div className="flex h-full items-center justify-center bg-ink text-fg">
-      <div className="w-full max-w-md border border-line bg-panel p-8">
+      <div className="w-full max-w-md rounded border border-line bg-panel p-8">
         <div className="mb-4 flex items-center gap-2">
-          <span className="text-accentink">◉</span>
-          <span className="text-xs font-semibold uppercase tracking-[0.22em]">
+          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
             Sound&nbsp;Annotator
           </span>
         </div>

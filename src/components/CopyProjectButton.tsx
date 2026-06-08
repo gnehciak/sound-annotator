@@ -66,7 +66,7 @@ export default function CopyProjectButton({ project }: { project: Project }) {
             ? 'Copy this track and its notes into your account'
             : 'Copy this track into your own account (you’ll be asked to sign in with Google)'
       }
-      className={`press inline-flex shrink-0 items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors disabled:cursor-wait ${
+      className={`press inline-flex shrink-0 items-center gap-1.5 rounded border px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:cursor-wait ${
         failed
           ? 'border-danger/60 text-danger hover:border-danger'
           : 'border-accent/60 bg-accent/10 text-accentink hover:border-accent'

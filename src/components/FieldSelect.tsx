@@ -48,7 +48,7 @@ export default function FieldSelect({
     return (
       <div className="min-w-0">
         <FieldLabel>{label}</FieldLabel>
-        <div className="truncate px-1 py-1 text-[12px] text-fg">
+        <div className="truncate px-1 py-1.5 text-[12px] text-fg">
           {value || <span className="text-muted">—</span>}
         </div>
       </div>
@@ -62,7 +62,7 @@ export default function FieldSelect({
         ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={`flex w-full items-center gap-1 rounded border border-line bg-inset px-2 py-1 text-left text-[12px] focus:border-accent focus:outline-none ${
+        className={`bevel-inset flex w-full items-center gap-1 rounded border border-line bg-inset px-[9px] py-[6px] text-left text-[12.5px] transition-colors focus:border-accent focus:outline-none ${
           value ? 'text-fg' : 'text-muted'
         }`}
       >
@@ -82,7 +82,7 @@ export default function FieldSelect({
             key={opt}
             type="button"
             onClick={() => pick(opt)}
-            className={`flex w-full items-center gap-2 px-2.5 py-1 text-left text-[12px] hover:bg-raised ${
+            className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] hover:bg-raised ${
               value === opt ? 'text-fg' : 'text-muted'
             }`}
           >
@@ -107,7 +107,7 @@ export default function FieldSelect({
               onChange={(e) => setCustom(e.target.value)}
               placeholder="Other…"
               aria-label={`Custom ${label}`}
-              className="w-full rounded border border-line bg-inset px-2 py-1 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+              className="w-full rounded border border-line bg-inset px-2 py-1.5 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
             />
           </form>
         )}
@@ -116,7 +116,7 @@ export default function FieldSelect({
           <button
             type="button"
             onClick={() => pick(undefined)}
-            className="mt-1 flex w-full items-center border-t border-line px-2.5 py-1 text-left font-mono text-[10px] uppercase tracking-wider text-muted hover:bg-raised"
+            className="mt-1 flex w-full items-center border-t border-line px-2.5 py-1.5 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted hover:bg-raised"
           >
             Clear
           </button>
@@ -128,7 +128,7 @@ export default function FieldSelect({
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">
+    <div className="mb-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
       {children}
     </div>
   )

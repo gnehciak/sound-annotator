@@ -18,7 +18,7 @@ export default function ElementsSummary({ data }: PluginSummaryProps) {
     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       {layer && (
         <span
-          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider"
+          className="inline-flex items-center gap-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em]"
           style={{ color: hueText(layer.color, theme) }}
         >
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: layer.color }} />

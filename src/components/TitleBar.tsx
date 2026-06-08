@@ -17,14 +17,14 @@ export default function TitleBar({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line bg-raised/60 px-3">
-      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.25em] text-muted">
+    <div className="flex h-10 shrink-0 items-center justify-between gap-2.5 border-b border-line bg-raised px-3.5">
+      <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {left}
       </span>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-1.5">
         {actions}
         {right && (
-          <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-muted">
+          <span className="shrink-0 font-mono text-[11px] uppercase tabular-nums tracking-wider text-muted">
             {right}
           </span>
         )}

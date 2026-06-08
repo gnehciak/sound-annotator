@@ -19,34 +19,35 @@ colors:
   note-orange: "#ef8b4b"
 typography:
   display:
-    fontFamily: "system-ui, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'IBM Plex Sans', system-ui, 'Segoe UI', Roboto, sans-serif"
     fontSize: "1.125rem"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "normal"
   body:
-    fontFamily: "system-ui, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "'IBM Plex Sans', system-ui, 'Segoe UI', Roboto, sans-serif"
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.6
     letterSpacing: "normal"
   label:
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontFamily: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
     fontSize: "0.625rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "0.2em"
   mono:
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontFamily: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
     fontSize: "1rem"
     fontWeight: 500
     lineHeight: 1
     letterSpacing: "0.08em"
 rounded:
   none: "0px"
-  sm: "1px"
-  DEFAULT: "2px"
-  lg: "2px"
+  sm: "5px"
+  DEFAULT: "6px"
+  md: "8px"
+  lg: "10px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -74,7 +75,8 @@ components:
     backgroundColor: "{colors.raised}"
     textColor: "{colors.muted}"
     rounded: "{rounded.none}"
-    padding: "6px 12px"
+    padding: "0 14px"
+    height: "40px"
     typography: "{typography.label}"
   input-field:
     backgroundColor: "{colors.inset}"
@@ -100,8 +102,8 @@ Sound Annotator is built like an audio analysis bench, not a web app. The
 surface is warm-dark and quiet so the eye rests on the recording and the notes,
 not the chrome. Everything reads like instrument output: timecodes and counts
 are monospace, the transport carries an LED clock and a level meter, panels are
-flush metal with hard edges. It is dense by intent, optimized for a teacher who
-returns to it daily and knows it cold.
+flush metal with softly squared corners. It is dense by intent, optimized for a
+teacher who returns to it daily and knows it cold.
 
 Color is treated as data, not decoration. There is exactly one signal color,
 amber, and it means *now*: the playhead, the active note, the primary action.
@@ -119,7 +121,8 @@ from fake metal or glossy bevels.
 - Warm-dark, four-step tonal surface ramp; depth from tone, not shadow.
 - One amber signal color meaning "now"; everything else is neutral or data-hue.
 - Monospace tabular numerics for every timecode, count, and micro-label.
-- Squared corners (≤2px), flush panels, hairline dividers; zero card-gaps.
+- Softly squared corners (chips 5px · controls 6px · grouped containers 8px ·
+  panels 10px), flush panels, hairline dividers; zero card-gaps.
 - Secondary controls hidden at rest, revealed on hover or focus.
 
 ## 2. Colors
@@ -259,13 +262,14 @@ Four light-specific rules, all WCAG-AA verified:
 
 ## 3. Typography
 
-**Display / Body Font:** system-ui (with 'Segoe UI', Roboto, sans-serif)
-**Label / Mono Font:** ui-monospace (with SFMono-Regular, Menlo, Consolas)
+**Display / Body Font:** IBM Plex Sans (with system-ui, 'Segoe UI', Roboto fallbacks)
+**Label / Mono Font:** IBM Plex Mono (with ui-monospace, SFMono-Regular, Menlo, Consolas fallbacks)
 
-**Character:** The interface speaks in two voices. A quiet system humanist sans
-carries all prose (notes, titles, helper text); a monospace carries every number
-and every micro-label, the way a piece of gear silkscreens its panel. The
-contrast between the two is the type system; there is no third face.
+**Character:** The interface speaks in two voices. A quiet humanist-technical
+sans (IBM Plex Sans) carries all prose (notes, titles, helper text); its
+matching mono (IBM Plex Mono) carries every number and every micro-label, the
+way a piece of gear silkscreens its panel. The contrast between the two is the
+type system; there is no third face.
 
 ### Hierarchy
 - **Display** (700, 1.125rem, 1.2): The editable track title in the sub-bar. The
@@ -316,7 +320,9 @@ are forbidden. The moment a bevel looks like brushed metal, it has failed.
 ## 5. Components
 
 ### Buttons
-- **Shape:** Squared (2px radius). No pills, no fully-rounded buttons.
+- **Shape:** Softly squared (6px radius; tiny chips 5px, segmented/grouped
+  containers 8px). No pills beyond dots, toggle knobs, and scrubber handles;
+  no fully-rounded buttons.
 - **Primary (Play):** Solid Signal Amber (#f5a623) fill, Ink (#1a1813) text, the
   raised bevel, padding 6px 12px. Brightens slightly on hover. The one filled
   button in the transport.
@@ -328,12 +334,12 @@ are forbidden. The moment a bevel looks like brushed metal, it has failed.
   second solid-amber element competing with Play.
 
 ### Inputs / Fields
-- **Style:** Inset. Inset (#131210) fill, 1px Border, Text color, 2px radius.
+- **Style:** Inset. Inset (#131210) fill, 1px Border, Text color, 6px radius.
 - **Focus:** Border shifts to Signal Amber. No glow ring, no box-shadow halo.
 - **Placeholder:** Muted (#968d7c); never lighter (keep ≥4.5:1).
 
 ### Title Bars
-- Filled panel headers: Raised (#2a271f) fill, 1px bottom Border, Muted
+- Filled panel headers (40px tall): Raised (#2a271f) fill, 1px bottom Border, Muted
   uppercase mono label (+0.25em), optional right-aligned mono stat. Every panel
   (Tracks, Viewer, Annotations) wears one. This is the load-bearing "instrument
   panel" device of the whole UI.
@@ -356,8 +362,8 @@ are hidden at rest and revealed on hover or focus, keeping the resting state
 quiet.
 
 ### Navigation (Library) — "Station Cards"
-The signed-in landing view. Still flat Panel tiles (hairline border, squared
-corners — no soft cards), grouped into folders with Drive semantics (folder
+The signed-in landing view. Still flat Panel tiles (hairline border, softly
+squared corners — no soft cards), grouped into folders with Drive semantics (folder
 cards at the root, drill in to see a folder's tracks), but the surface warmed
 for a wider audience (2026-06-08) without leaving the system:
 
@@ -383,7 +389,7 @@ for a wider audience (2026-06-08) without leaving the system:
 
 ### Do:
 - **Do** build depth from the tonal ramp (ink → panel → raised → inset) and
-  hairline (#38342b) dividers. Flush panels, squared corners (≤2px).
+  hairline (#38342b) dividers. Flush panels, softly squared corners (5–10px).
 - **Do** keep numerics monospace and tabular: timecodes, counts, durations.
 - **Do** reserve Signal Amber (#f5a623) for "now" and the primary action; keep it
   under ~10% of any screen.
@@ -402,4 +408,5 @@ for a wider audience (2026-06-08) without leaving the system:
 - **Don't** let color carry meaning alone, and **don't** add a second face to the
   type system. Two voices (sans + mono) only.
 - **Don't** introduce a second solid-amber control next to Play, or round a
-  corner past 2px. If it looks like a card with a shadow, it's wrong.
+  corner past the lg=10px panel radius. If it looks like a card with a shadow,
+  it's wrong.

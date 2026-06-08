@@ -336,7 +336,7 @@ export default function AnnotationList({
 
   if (sorted.length === 0) {
     return (
-      <div className="m-3 border border-dashed border-line p-8 text-center text-sm text-muted">
+      <div className="m-3.5 rounded border border-dashed border-line p-8 text-center text-sm text-muted">
         {filtered ? (
           'No notes match your search or filters.'
         ) : readOnly ? (

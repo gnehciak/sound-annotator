@@ -31,9 +31,10 @@ Precise, technical, pro-tool. The interface should feel like a piece of studio
 gear or an editing application (DAW / NLE), not a web dashboard: confident,
 dense, instrument-like. Quiet tonal surfaces (a dark default and a light theme
 that frames a literal-white page in tinted chrome — "a white score on the
-bench"), monospace timecodes, LED-style readouts, and one committed signal
-accent (amber by default; the user can choose cyan, vermilion, violet, or an
-achromatic mono palette — always a single signal). UI copy is terse and functional (verb plus
+bench"), IBM Plex type in two voices (a humanist-technical sans, its matching
+mono for timecodes), softly squared corners, LED-style readouts, and one
+committed signal accent (amber by default; the user can choose cyan, vermilion,
+violet, or an achromatic mono palette — always a single signal). UI copy is terse and functional (verb plus
 object on buttons, no marketing tone).
 
 ## Anti-references
@@ -41,7 +42,7 @@ object on buttons, no marketing tone).
 - **Generic AI / shadcn dashboards**: rounded cards, soft drop shadows, indigo
   accent, evenly padded "friendly SaaS" whitespace. This is the primary thing to
   avoid; the design has deliberately moved to flush panels, hard dividers, and
-  squared corners.
+  softly squared corners.
 - **Heavy enterprise SaaS clutter**: gray-on-gray toolbars, competing controls,
   data-grid busyness. Density is welcome, clutter is not; every control must earn
   its place.
@@ -61,8 +62,8 @@ object on buttons, no marketing tone).
    what is useful at rest; reveal secondary controls on hover or focus rather
    than crowding them on screen or burying them in menus.
 4. **Committed, not tasteful-by-default.** One warm-dark palette, one amber
-   accent, squared corners, monospace numerics. No hedging back toward the
-   generic.
+   accent, softly squared corners (5–10px), monospace numerics. No hedging back
+   toward the generic.
 5. **Legible under classroom conditions.** It gets projected and read at a
    distance, so contrast and sizing must hold up on a dim display, and meaning
    must never depend on color alone.

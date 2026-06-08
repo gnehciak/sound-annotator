@@ -369,11 +369,11 @@ export default function TrackOverview({
         }}
         aria-expanded={open}
         title={open ? 'Hide overview' : 'Show overview'}
-        className="flex h-9 shrink-0 cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="flex h-[38px] shrink-0 cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 text-muted transition-colors hover:bg-raised hover:text-fg"
       >
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-[7px]">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          <span className="font-mono text-[11px] uppercase tracking-[0.25em]">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.25em]">
             Overview
           </span>
         </span>
@@ -385,18 +385,18 @@ export default function TrackOverview({
               disabled={!scrollable}
               title="Scroll to the playhead"
               aria-label="Scroll to the playhead"
-              className={`${btn} rounded-sm p-1 hover:text-accentink`}
+              className={`${btn} grid h-6 w-[26px] place-items-center rounded-sm hover:text-accentink`}
             >
               <Crosshair size={12} />
             </button>
-            <div className="flex items-center gap-px" role="group" aria-label="Timeline zoom">
+            <div className="flex items-center" role="group" aria-label="Timeline zoom">
               <button
                 type="button"
                 onClick={() => stepZoom(-1, null)}
                 disabled={!canZoomOut}
                 title="Zoom out (longer time unit)"
                 aria-label="Zoom out"
-                className={`${btn} rounded-l-sm p-1`}
+                className={`${btn} grid h-6 w-[26px] place-items-center rounded-l-sm`}
               >
                 <ZoomOut size={12} />
               </button>
@@ -406,7 +406,7 @@ export default function TrackOverview({
                 disabled={!canZoomOut}
                 title="Fit the whole track"
                 aria-label="Reset zoom to fit"
-                className={`${btn} w-9 border-x-0 py-1 text-center font-mono text-[10px] tabular-nums`}
+                className={`${btn} h-6 w-[38px] border-x-0 text-center font-mono text-[9.5px] font-semibold tabular-nums tracking-[0.1em]`}
               >
                 {zoomLabel(effZoom)}
               </button>
@@ -416,7 +416,7 @@ export default function TrackOverview({
                 disabled={!canZoomIn}
                 title="Zoom in (shorter time unit)"
                 aria-label="Zoom in"
-                className={`${btn} rounded-r-sm p-1`}
+                className={`${btn} grid h-6 w-[26px] place-items-center rounded-r-sm`}
               >
                 <ZoomIn size={12} />
               </button>
@@ -526,7 +526,7 @@ export default function TrackOverview({
                       style={{ left: secLeft, top: SECTION_NAME_Y, width: secW }}
                     >
                       <span
-                        className="sticky inline-block align-top font-mono text-[10px] font-semibold uppercase leading-none tracking-wider"
+                        className="sticky inline-block align-top font-mono text-[10px] font-semibold uppercase leading-none tracking-[0.1em]"
                         style={{
                           left: PAD,
                           right: PAD,
@@ -584,7 +584,7 @@ export default function TrackOverview({
                     }}
                   >
                     <span
-                      className={`block rotate-45 rounded-[1px] ring-1 ring-ink transition-transform ${
+                      className={`block rotate-45 rounded-[1.5px] ring-1 ring-ink transition-transform ${
                         lift ? 'scale-125' : ''
                       }`}
                       style={{ width: DIAMOND, height: DIAMOND, background: p.color }}
@@ -625,7 +625,7 @@ export default function TrackOverview({
             maxWidth: 248,
           }}
         >
-          <div className="rounded-md border border-line bg-raised px-2.5 py-1.5 shadow-lg">
+          <div className="rounded border border-line bg-raised px-2.5 py-2 shadow-lg">
             <span
               className="font-mono text-[11px] font-semibold tabular-nums"
               style={{ color: hueText(hoverNote.color, theme) }}
