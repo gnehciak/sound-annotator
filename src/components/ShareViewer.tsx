@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, ExternalLink, Pencil, Settings as SettingsIcon } from 'lucide-react'
+import { Eye, ExternalLink, Pencil } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { firebaseReady } from '../lib/firebase'
 import { fetchSharedProject } from '../lib/projectStore'
@@ -10,7 +10,9 @@ import {
   loadOverviewOpen,
   saveOverviewOpen,
   loadPlayOnce,
-  savePlayOnce,
+  loadViewNoteOrder,
+  saveViewNoteOrder,
+  type NoteOrder,
 } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { tagsOf } from '../lib/tags'
@@ -25,7 +27,6 @@ import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import CopyProjectButton from './CopyProjectButton'
-import SettingsModal from './SettingsModal'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
@@ -61,28 +62,36 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [muted, setMuted] = useState(false)
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
-  // Overview strip open/closed — shares the editor's persisted preference.
+  // Resolved view prefs. State initializes from localStorage; on project load
+  // we sync from project.settings (once) so the viewer sees the owner's
+  // choice. After that, the in-page toggles update state directly — viewer
+  // overrides never write back to the project. playOnce has no UI here.
+  const [playOnce, setPlayOnce] = useState(loadPlayOnce)
   const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
-  const [playOnce, setPlayOnceState] = useState(loadPlayOnce)
-  const setPlayOnce = useCallback((on: boolean) => {
-    setPlayOnceState(on)
-    savePlayOnce(on)
-  }, [])
-  const [showHelp, setShowHelp] = useState(false)
-  const help = usePresence(showHelp)
-
-  function toggleOverview() {
+  const [noteOrder, setNoteOrderState] = useState<NoteOrder>(loadViewNoteOrder)
+  const settingsSyncedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!project) return
+    if (settingsSyncedFor.current === project.id) return
+    settingsSyncedFor.current = project.id
+    const s = project.settings
+    if (s?.playOnce !== undefined) setPlayOnce(s.playOnce)
+    if (s?.overviewOpen !== undefined) setOverviewOpen(s.overviewOpen)
+    if (s?.noteOrder !== undefined) setNoteOrderState(s.noteOrder)
+  }, [project])
+  const toggleOverview = useCallback(() => {
     setOverviewOpen((on) => {
       const next = !on
       saveOverviewOpen(next)
       return next
     })
-  }
-  const setOverviewOpenPref = useCallback((on: boolean) => {
-    setOverviewOpen(on)
-    saveOverviewOpen(on)
   }, [])
-  const [showSettings, setShowSettings] = useState(false)
+  const changeNoteOrder = useCallback((mode: NoteOrder) => {
+    setNoteOrderState(mode)
+    saveViewNoteOrder(mode)
+  }, [])
+  const [showHelp, setShowHelp] = useState(false)
+  const help = usePresence(showHelp)
 
   // Reveal/dismiss the notes search; closing clears the query (see App).
   function toggleSearch() {
@@ -180,8 +189,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     style: splitStyle,
   } = useNotesSplit()
   const {
-    noteOrder,
-    changeNoteOrder,
     autoPin,
     setTagFilter,
     filterTags,
@@ -191,7 +198,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     setSearch,
     isFiltered,
     visibleAnnotations,
-  } = useNotesView(annotations, true)
+  } = useNotesView(annotations, noteOrder, changeNoteOrder)
 
   const handleTime = useCallback((t: number) => setCurrentTime(t), [])
   const handleDuration = useCallback((d: number) => setDuration(d), [])
@@ -423,16 +430,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
           </a>
         )}
-        <button
-          type="button"
-          onClick={() => setShowSettings(true)}
-          title="Settings"
-          aria-label="Open settings"
-          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-        >
-          <SettingsIcon size={12} />
-          <span className="hidden sm:inline">Settings</span>
-        </button>
         <ExportPdfButton project={project} />
         <CopyProjectButton project={project} />
         <a
@@ -604,17 +601,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           closing={help.closing}
           onClose={() => setShowHelp(false)}
           readOnly
-        />
-      )}
-      {showSettings && (
-        <SettingsModal
-          playOnce={playOnce}
-          onPlayOnce={setPlayOnce}
-          overviewOpen={overviewOpen}
-          onOverviewOpen={setOverviewOpenPref}
-          noteOrder={noteOrder}
-          onNoteOrder={changeNoteOrder}
-          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

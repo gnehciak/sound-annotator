@@ -2,13 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Annotation } from '../types'
 import { tagsUsedIn, tagsOf, resolveTag, tagCountsIn } from './tags'
 import { noteLabel, notePlainText } from './format'
-import {
-  loadNoteOrder,
-  saveNoteOrder,
-  loadViewNoteOrder,
-  saveViewNoteOrder,
-  type NoteOrder,
-} from './storage'
+import { type NoteOrder } from './storage'
 
 /**
  * The notes-list view state shared by the editor (App) and the read-only
@@ -24,12 +18,11 @@ import {
  * live, default timeline) or the view-only one (timeline / live, default live).
  * They persist independently, so toggling view mode doesn't disturb the other.
  */
-export function useNotesView(annotations: Annotation[], viewOnly = false) {
-  // Two independent ordering prefs (edit vs. view-only); the active one is
-  // chosen by `viewOnly`. See AnnotationList for what each value means.
-  const [editOrder, setEditOrder] = useState<NoteOrder>(loadNoteOrder)
-  const [viewOrder, setViewOrder] = useState<NoteOrder>(loadViewNoteOrder)
-  const noteOrder = viewOnly ? viewOrder : editOrder
+export function useNotesView(
+  annotations: Annotation[],
+  noteOrder: NoteOrder,
+  changeNoteOrder: (mode: NoteOrder) => void,
+) {
   // Auto-pin (scrolling the playing note to the top) and auto-cue (clicking a
   // note moves the playhead to it) are both coupled to the order — on for Live
   // and Auto, off for Timeline. There's no separate toggle: the one order
@@ -40,16 +33,6 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
   const [tagFilter, setTagFilter] = useState<Set<string>>(() => new Set())
   // Free-text search query (empty = show all). Composes with the tag filter.
   const [search, setSearch] = useState('')
-
-  function changeNoteOrder(mode: NoteOrder) {
-    if (viewOnly) {
-      saveViewNoteOrder(mode)
-      setViewOrder(mode)
-    } else {
-      saveNoteOrder(mode)
-      setEditOrder(mode)
-    }
-  }
   // Every tag in use across these notes — the filter's menu.
   const filterTags = useMemo(() => tagsUsedIn(annotations), [annotations])
   // How many notes carry each tag — the tally beside each filter entry.
@@ -111,8 +94,6 @@ export function useNotesView(annotations: Annotation[], viewOnly = false) {
   }, [annotations, activeFilter, searchTerms, searchIndex, isFiltered])
 
   return {
-    noteOrder,
-    changeNoteOrder,
     autoPin,
     autoSeek,
     setTagFilter,

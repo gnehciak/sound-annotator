@@ -39,6 +39,10 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     shared: data.shared === true,
     editableByLink: data.editableByLink === true,
     folderId: typeof data.folderId === 'string' ? data.folderId : null,
+    settings:
+      data.settings && typeof data.settings === 'object'
+        ? (data.settings as Project['settings'])
+        : undefined,
   }
 }
 
@@ -95,6 +99,7 @@ export async function saveProject(
     shared: p.shared === true,
     editableByLink: p.editableByLink === true,
     folderId: p.folderId ?? null,
+    settings: p.settings,
   }
   if (lock) payload.lock = { ...lock, at: serverTimestamp() }
   // An undefined source must drop out of mergeFields too (Firestore is set to

@@ -17,6 +17,9 @@ import {
   saveViewOnly,
   loadPlayOnce,
   savePlayOnce,
+  loadNoteOrder,
+  saveNoteOrder,
+  type NoteOrder,
   loadOverviewOpen,
   saveOverviewOpen,
   loadWindowMode,
@@ -160,9 +163,8 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
-  // Overview rail open/collapsed. Collapsing leaves only its header strip so the
-  // player gets the vertical room.
-  const [overviewOpen, setOverviewOpen] = useState(loadOverviewOpen)
+  // overviewOpen, playOnce, noteOrder are now derived below from project
+  // settings (with the user-fallback states above as defaults).
   // Whether the notes search row is revealed (the query itself lives in
   // useNotesView). Resets when the track changes.
   const [searchOpen, setSearchOpen] = useState(false)
@@ -189,20 +191,14 @@ export default function App() {
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
-  // "Play once" — when on, every Play action arms passage playback for the
-  // sounding range note (auto-pause at its end) instead of seek-and-continue.
-  const [playOnce, setPlayOnceState] = useState(loadPlayOnce)
-  const setPlayOnce = useCallback((on: boolean) => {
-    setPlayOnceState(on)
-    savePlayOnce(on)
-  }, [])
-  // Settings modal — central knob for cross-cutting prefs.
+  // Settings modal — central knob for cross-cutting prefs. Each pref's effective
+  // value is project.settings.X ?? user-local fallback (localStorage). Writes
+  // go to both: the project (so it travels with the share) and localStorage
+  // (so a brand-new project inherits the user's last choice as default).
   const [showSettings, setShowSettings] = useState(false)
-  // Direct-set wrapper for overview (the existing toggleOverview only flips).
-  const setOverviewOpenPref = useCallback((on: boolean) => {
-    setOverviewOpen(on)
-    saveOverviewOpen(on)
-  }, [])
+  const [userPlayOnce, setUserPlayOnce] = useState(loadPlayOnce)
+  const [userOverviewOpen, setUserOverviewOpen] = useState(loadOverviewOpen)
+  const [userNoteOrder, setUserNoteOrder] = useState<NoteOrder>(loadNoteOrder)
   // Which note block (if any) is open in the plugin editor window, and how it's
   // presented. Below ~1100px the dock 3rd column won't fit → fall back to modal.
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
@@ -220,13 +216,8 @@ export default function App() {
       return next
     })
   }
-  function toggleOverview() {
-    setOverviewOpen((on) => {
-      const next = !on
-      saveOverviewOpen(next)
-      return next
-    })
-  }
+  // toggleOverview is defined below, after `current` is in scope (so the
+  // toggle can also persist to project settings — see canEditSettings).
   // Reveal/dismiss the notes search row; closing always clears the query so the
   // list isn't left silently filtered with no visible field.
   function toggleSearch() {
@@ -378,6 +369,75 @@ export default function App() {
     editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
   // Read-only for any reason: the user's own View toggle, or the lock.
   const effectiveViewOnly = viewOnly || lockBlocked
+
+  // Settings live on the project; user-local values are the fallback when a
+  // project has none. On opening a project that *has* settings, we sync the
+  // user state from it (once per project id) so the UI reads from one source.
+  // After that the user state is the live value: toggles update it directly,
+  // and — when the user can save settings (owner, not locked) — also patch the
+  // project doc so the choice travels with the share.
+  const canEditSettings = !effectiveViewOnly && !isForeign && !!current
+  const settingsSyncedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!current) {
+      settingsSyncedFor.current = null
+      return
+    }
+    if (settingsSyncedFor.current === current.id) return
+    settingsSyncedFor.current = current.id
+    const s = current.settings
+    if (s?.playOnce !== undefined) setUserPlayOnce(s.playOnce)
+    if (s?.overviewOpen !== undefined) setUserOverviewOpen(s.overviewOpen)
+    if (s?.noteOrder !== undefined) setUserNoteOrder(s.noteOrder)
+  }, [current])
+  const playOnce = userPlayOnce
+  const overviewOpen = userOverviewOpen
+  const noteOrder = userNoteOrder
+  const patchProjectSettings = useCallback(
+    (patch: Partial<NonNullable<Project['settings']>>) => {
+      if (!canEditSettings || !current) return
+      const id = current.id
+      setProjects((ps) =>
+        ps.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                settings: { ...p.settings, ...patch },
+                updatedAt: now(),
+              }
+            : p,
+        ),
+      )
+    },
+    [canEditSettings, current, setProjects],
+  )
+  const setPlayOnce = useCallback(
+    (on: boolean) => {
+      setUserPlayOnce(on)
+      savePlayOnce(on)
+      patchProjectSettings({ playOnce: on })
+    },
+    [patchProjectSettings],
+  )
+  const setOverviewOpenPref = useCallback(
+    (on: boolean) => {
+      setUserOverviewOpen(on)
+      saveOverviewOpen(on)
+      patchProjectSettings({ overviewOpen: on })
+    },
+    [patchProjectSettings],
+  )
+  const toggleOverview = useCallback(() => {
+    setOverviewOpenPref(!overviewOpen)
+  }, [overviewOpen, setOverviewOpenPref])
+  const changeNoteOrder = useCallback(
+    (mode: NoteOrder) => {
+      setUserNoteOrder(mode)
+      saveNoteOrder(mode)
+      patchProjectSettings({ noteOrder: mode })
+    },
+    [patchProjectSettings],
+  )
   // Mirrors for the debounced save (fires outside React's data flow, well
   // after the commit these effects ride on).
   const lockBlockedRef = useRef(false)
@@ -417,8 +477,6 @@ export default function App() {
   // Notes-list view state (tag filter, order, auto-pin, auto-cue) — shared with
   // the read-only ShareViewer; none of it mutates notes.
   const {
-    noteOrder,
-    changeNoteOrder,
     autoPin,
     autoSeek,
     setTagFilter,
@@ -429,7 +487,7 @@ export default function App() {
     setSearch,
     isFiltered,
     visibleAnnotations,
-  } = useNotesView(current?.annotations ?? [], effectiveViewOnly)
+  } = useNotesView(current?.annotations ?? [], noteOrder, changeNoteOrder)
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
@@ -1613,16 +1671,18 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0 flex-1" />
-            <button
-              type="button"
-              onClick={() => setShowSettings(true)}
-              title="Settings"
-              aria-label="Open settings"
-              className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-            >
-              <SettingsIcon size={12} />
-              Settings
-            </button>
+            {canEditSettings && (
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                title="Settings"
+                aria-label="Open settings"
+                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+              >
+                <SettingsIcon size={12} />
+                Settings
+              </button>
+            )}
             {current.source && (
               <button
                 type="button"

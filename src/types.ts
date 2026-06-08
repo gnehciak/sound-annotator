@@ -110,6 +110,22 @@ export interface Project {
    * as unfiled.
    */
   folderId?: string | null
+  /**
+   * Per-project presentation preferences set by the project owner — the
+   * Settings modal's knobs. Travels with the project so a shared track
+   * opens the same way for everyone. Absent on legacy projects; readers
+   * substitute the user's local pref or a hard default.
+   */
+  settings?: ProjectSettings
+}
+
+export interface ProjectSettings {
+  /** When on, the per-note Play chip arms passage playback (pause at end). */
+  playOnce?: boolean
+  /** Whether the overview timeline strip opens by default. */
+  overviewOpen?: boolean
+  /** Default ordering for the notes list. See AnnotationList for the modes. */
+  noteOrder?: 'timeline' | 'auto' | 'live'
 }
 
 /** A home-page folder grouping tracks. Flat (no nesting), never shared. */
