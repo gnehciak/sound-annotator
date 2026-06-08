@@ -121,15 +121,21 @@ export default function AnnotationItem({
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       aria-selected={selected || undefined}
-      className={`group relative cursor-pointer transition ${
+      className={`group relative cursor-pointer transition duration-200 ${
         enterAnim ? 'animate-note-in' : ''
       } ${
+        // Light theme: active = pure-white pop, resting = warm-white tile, hover =
+        // a 35% mix toward pure white (clearly lifted above the tile but short of
+        // active). Dark theme: keep the single-step lift where active = row-sel
+        // and resting = page.
         active
-          ? 'z-20 bg-rowsel'
+          ? `z-20 ${theme === 'light' ? 'bg-note' : 'bg-rowsel'}`
           : selected
-            ? 'bg-rowsel shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]'
-            : 'hover:bg-rowsel/25'
-      } ${isPlaying && !focused ? 'opacity-40 blur-[0.5px] saturate-[0.75] hover:opacity-95 hover:blur-0 hover:saturate-100' : ''}`}
+            ? `${theme === 'light' ? 'bg-note' : 'bg-rowsel'} shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]`
+            : theme === 'light'
+              ? 'bg-rowsel hover:bg-[color-mix(in_srgb,rgb(var(--row-sel)),rgb(var(--surface-note))_35%)]'
+              : 'hover:bg-rowsel/25'
+      } ${isPlaying && !focused ? 'opacity-50' : ''}`}
     >
       {/* progress bar along the top border — only while this note is the one
           sounding, so resting rows stay a flush hairline cue list (the spine

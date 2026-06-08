@@ -94,7 +94,7 @@
   --danger: 190 18 60; /* #be123c rose-700 — delete affordances */
   --on-bright: 26 24 19; /* text on data-hue fills stays dark on light too */
   --on-accent: var(--on-bright); /* see dark block — diverges only in mono */
-  --row-sel: 254 252 246; /* #fefcf6 = raised — selected rows lift neutrally; hue belongs to chip + spine */
+  --row-sel: 250 245 232; /* #faf5e8 warm-white "tile" — every note row sits on this; the playing/selected one swaps to pure-white surface-note. Tinted enough to read clearly distinct from pure white */
 
   --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.14);
   --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.8),
@@ -150,7 +150,7 @@
   --accent: 26 161 149; /* #1aa195 */
   --accent-ink: 17 94 89; /* #115e59 */
   --on-bright: 16 19 20;
-  --row-sel: 251 253 253; /* = raised — neutral cool lift */
+  --row-sel: 237 246 245; /* #edf6f5 cool-tinted white note tile */
 }
 
 /* VERMILION — "Tally": broadcast REC light on neutral studio gray.
@@ -187,7 +187,7 @@
   --accent-ink: 163 42 18; /* #a32a12 */
   --danger: 190 24 93; /* #be185d pink-700 */
   --on-bright: 23 17 16;
-  --row-sel: 254 250 247; /* = raised — neutral warm lift */
+  --row-sel: 250 240 232; /* #faf0e8 warm-tinted white note tile */
 }
 
 /* MONO — "Print": pure-grayscale chrome and an achromatic signal
@@ -229,7 +229,7 @@
   --meter: 107 107 107; /* #6b6b6b */
   --on-bright: 22 22 22;
   --on-accent: 255 255 255; /* white text on the near-black signal fill */
-  --row-sel: 252 252 252; /* = raised — neutral gray lift */
+  --row-sel: 242 242 242; /* #f2f2f2 off-white gray note tile */
 }
 
 /* VIOLET — "Lab": synth-hardware violet on neutral-cool gray. */
@@ -262,7 +262,7 @@
   --accent: 147 102 237; /* #9366ed */
   --accent-ink: 91 33 182; /* #5b21b6 */
   --on-bright: 21 18 26;
-  --row-sel: 252 251 255; /* = raised — neutral cool lift */
+  --row-sel: 240 237 250; /* #f0edfa cool-violet tinted white note tile */
 }
 
 html,

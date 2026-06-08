@@ -1793,7 +1793,9 @@ export default function App() {
                 )}
                 <div
                   ref={setNotesScroll}
-                  className="relative flex-1 overflow-y-auto bg-note"
+                  className={`relative flex-1 overflow-y-auto ${
+                    resolvedTheme === 'light' ? 'bg-rowsel' : 'bg-note'
+                  }`}
                 >
                   <AnnotationList
                     annotations={visibleAnnotations}
