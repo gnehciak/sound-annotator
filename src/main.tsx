@@ -21,6 +21,7 @@ import { AuthProvider, ApiTokenBridge } from './lib/auth'
 import { backendReady } from './lib/api'
 import Gate, { SetupNotice } from './components/Gate'
 import ShareViewer from './components/ShareViewer'
+import { PublicBrowsePage } from './components/BrowseGallery'
 import './plugins/register' // registers note plugins (side effect)
 
 const params = new URLSearchParams(window.location.search)
@@ -28,6 +29,8 @@ const params = new URLSearchParams(window.location.search)
 // sign-in — but it still mounts under ClerkProvider so "Make a copy" can
 // authenticate.
 const viewId = params.get('view')
+// `?browse=1` opens the public gallery of published tracks — no sign-in.
+const browse = params.get('browse') === '1'
 // Clerk's OAuth redirect lands here mid-sign-in (see lib/auth.tsx).
 const ssoCallback = window.location.pathname === '/sso-callback'
 
@@ -45,6 +48,8 @@ createRoot(document.getElementById('root')!).render(
           <AuthenticateWithRedirectCallback />
         ) : viewId ? (
           <ShareViewer projectId={viewId} />
+        ) : browse ? (
+          <PublicBrowsePage />
         ) : (
           <AuthProvider>
             <Gate>

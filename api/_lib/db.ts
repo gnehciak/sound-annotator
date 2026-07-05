@@ -25,6 +25,9 @@ export interface ProjectRow {
   folder_id: string | null
   settings: unknown
   lock: LockValue | null
+  published: boolean
+  published_at: string | number | null
+  published_by_name: string | null
 }
 
 export interface FolderRow {
@@ -62,6 +65,8 @@ export function rowToProject(
     editableByLink: r.editable_by_link === true,
     folderId: r.folder_id,
     settings: r.settings ?? undefined,
+    published: r.published === true,
+    publishedByName: r.published_by_name ?? undefined,
   }
   if (opts?.withLock) p.lock = r.lock ?? null
   return p

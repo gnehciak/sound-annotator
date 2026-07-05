@@ -104,6 +104,15 @@ export interface Project {
    */
   editableByLink?: boolean
   /**
+   * When true, the project is listed on the public Browse gallery — anyone
+   * can find it there and open it read-only (publishing implies viewability,
+   * independent of `shared`). Off by default; toggled from the Share panel.
+   * Only the owner can flip it; the server stamps the byline on publish.
+   */
+  published?: boolean
+  /** Display name stamped by the server when the project was published. */
+  publishedByName?: string
+  /**
    * Id of the home-page folder this track lives in, or null/absent for the
    * root library ("unfiled"). Folders live in their own `folders` collection
    * (see lib/folderStore.ts); an id pointing at a deleted folder is treated
@@ -126,6 +135,25 @@ export interface ProjectSettings {
   overviewOpen?: boolean
   /** Default ordering for the notes list. See AnnotationList for the modes. */
   noteOrder?: 'timeline' | 'auto' | 'live'
+}
+
+/**
+ * One published project as listed by GET /api/browse — a deliberately light
+ * card payload: cover + cue-line ticks + byline, never the note HTML.
+ */
+export interface BrowseItem {
+  id: string
+  ownerId: string
+  title: string
+  sourceType: SourceType | null
+  /** YouTube video id when the source is a video — drives the card cover. */
+  videoId: string | null
+  noteCount: number
+  /** Note positions/colours for the cue line (capped server-side). */
+  ticks: { id: string; start: number; end?: number; color?: string }[]
+  publishedByName: string
+  publishedAt: number
+  updatedAt: number
 }
 
 /** A home-page folder grouping tracks. Flat (no nesting), never shared. */

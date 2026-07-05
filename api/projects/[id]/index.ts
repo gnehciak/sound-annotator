@@ -9,7 +9,7 @@
 //   link editors (editableByLink) may write content fields only. Content
 //   writes must hold the edit lock while someone else's claim is live.
 // - DELETE: owner only.
-import { getUid } from '../../_lib/auth.js'
+import { getUid, getUserName } from '../../_lib/auth.js'
 import {
   sql,
   getProjectRow,
@@ -33,7 +33,8 @@ export async function GET(request: Request): Promise<Response> {
   // brand-new project has no row until its first save. Ids are unguessable,
   // so existence probing gains nothing.
   if (!row) return err(404, 'Not found')
-  if (row.shared || row.editable_by_link) return json(rowToProject(row, { withLock: true }))
+  if (row.shared || row.editable_by_link || row.published)
+    return json(rowToProject(row, { withLock: true }))
   const uid = await getUid(request)
   if (uid && row.owner_id === uid) return json(rowToProject(row, { withLock: true }))
   return err(403, 'Not shared')
@@ -128,6 +129,17 @@ export async function PUT(request: Request): Promise<Response> {
   // heartbeat warm on every save); one without a claim leaves it untouched.
   const lock = stamped ?? existing.lock
 
+  // Publishing (owner only). Flipping on stamps the byline + timestamp — the
+  // Clerk lookup runs only on that transition, not on every save. Flipping
+  // off delists immediately; the stale byline is harmless and invisible.
+  const published =
+    'published' in body && isOwner ? body.published === true : existing.published
+  const nowPublishing = published && existing.published !== true
+  const publishedAt = nowPublishing ? Date.now() : existing.published_at
+  const publishedByName = nowPublishing
+    ? await getUserName(uid)
+    : existing.published_by_name
+
   await sql`
     UPDATE projects SET
       title = ${title},
@@ -138,7 +150,10 @@ export async function PUT(request: Request): Promise<Response> {
       editable_by_link = ${editableByLink},
       folder_id = ${folderId},
       settings = ${jsonb(settings)}::jsonb,
-      lock = ${jsonb(lock)}::jsonb
+      lock = ${jsonb(lock)}::jsonb,
+      published = ${published},
+      published_at = ${publishedAt},
+      published_by_name = ${publishedByName}
     WHERE id = ${id}
   `
   return json({ ok: true })

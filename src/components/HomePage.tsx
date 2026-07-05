@@ -6,6 +6,7 @@ import {
   Eye,
   Folder as FolderIcon,
   FolderPlus,
+  Globe,
   Link2,
   Loader2,
   MoreHorizontal,
@@ -15,12 +16,14 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { Annotation, Folder, Project } from '../types'
+import type { Folder, Project } from '../types'
 import { formatRelativeTime } from '../lib/format'
 import { colorForId, hueText } from '../lib/noteColors'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import Popover from './Popover'
+import BrowseGallery from './BrowseGallery'
+import { WaveArt, CueLine } from './trackArt'
 
 interface Props {
   projects: Project[]
@@ -62,6 +65,19 @@ const salutation = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
+/** Which home view is on: your library, or the public Browse gallery. */
+type HomeView = 'library' | 'browse'
+
+const VIEW_KEY = 'sound-annotator:home-view'
+
+const loadView = (): HomeView => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'browse' ? 'browse' : 'library'
+  } catch {
+    return 'library'
+  }
+}
+
 /**
  * Stagger helper for the dashboard cascade: base delay plus a per-index step,
  * clamped so a long list doesn't make the last tile feel late. Returns a string
@@ -100,6 +116,17 @@ export default function HomePage({
 }: Props) {
   const theme = useResolvedTheme()
   const { user } = useAuth()
+  // Library vs the public Browse gallery. Sticky across visits — a teacher
+  // mid-lesson reopening the app lands back on whichever bench they left.
+  const [view, setView] = useState<HomeView>(loadView)
+  const switchView = (v: HomeView) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      /* private mode — the view just won't stick */
+    }
+  }
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -160,12 +187,61 @@ export default function HomePage({
   const empty = projects.length === 0 && folders.length === 0
   const firstName = user?.displayName?.trim().split(/\s+/)[0]
 
+  // One view-selector tab. The active one sits raised in the inset well —
+  // the same hardware "input switch" language as the Share panel's link-role
+  // group.
+  const viewTab = (v: HomeView, label: string, icon: React.ReactNode) => (
+    <button
+      key={v}
+      role="tab"
+      aria-selected={view === v}
+      onClick={() => switchView(v)}
+      className={`press flex h-[26px] items-center gap-1.5 rounded px-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 ${
+        view === v ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+
   return (
     <main className="flex min-h-0 min-w-0 flex-1 animate-fade-in flex-col">
-      <div className="flex-1 overflow-y-auto">
-        {empty ? (
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        {/* Station view selector — your library, or the public gallery. */}
+        <div className="mx-auto w-full max-w-[1180px] shrink-0 px-4 pt-5 sm:px-6">
+          <div
+            role="tablist"
+            aria-label="Home view"
+            className="inline-flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+          >
+            {viewTab('library', 'Library', <FolderIcon size={11} />)}
+            {viewTab('browse', 'Browse', <Globe size={11} />)}
+          </div>
+        </div>
+
+        {view === 'browse' ? (
+          <div
+            key="browse"
+            className="mx-auto w-full max-w-[1180px] flex-1 px-4 py-6 sm:px-6"
+          >
+            <div
+              className="mb-6 animate-rise-in"
+              style={{ animationDelay: stagger(0, 0) }}
+            >
+              <h1 className="text-xl font-semibold tracking-tight text-fg-strong">
+                Browse
+              </h1>
+              <p className="mt-1 text-[13px] text-muted">
+                Published tracks from every station — open one to listen
+                through its notes, or copy it into your library.
+              </p>
+            </div>
+            <BrowseGallery />
+          </div>
+        ) : empty ? (
           /* First run: nothing at all yet — the old editor empty state's hero. */
-          <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="text-5xl">🎛️</div>
             <h2 className="text-lg font-semibold text-fg">
               Annotate a piece of music
@@ -189,7 +265,7 @@ export default function HomePage({
              live. */
           <div
             key={openFolderId ?? 'root'}
-            className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6"
+            className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6"
           >
             {/* Top block: greeting at the root, breadcrumb inside a folder. */}
             <div
@@ -431,93 +507,6 @@ export default function HomePage({
         )}
       </div>
     </main>
-  )
-}
-
-/* ---- cover art + cue line ------------------------------------------------- */
-
-/**
- * Waveform mark for tracks without a thumbnail (audio files, no source yet,
- * or a dead YouTube thumb). Deterministic from the track id — the same hue
- * rotation the notes use, bars from a seeded LCG — so a track keeps its cover.
- */
-function WaveArt({ id, theme }: { id: string; theme: ResolvedTheme }) {
-  const bars = useMemo(() => {
-    let h = 0
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-    const n = 26
-    const W = 320
-    const H = 180
-    const bw = 4
-    const gap = (W - 60 - n * bw) / (n - 1)
-    const out: { x: number; y: number; w: number; h: number }[] = []
-    // Seeded LCG, advanced inline per bar (no closure — keeps the memo pure).
-    let s = (h || 1) >>> 0
-    for (let i = 0; i < n; i++) {
-      s = (s * 1103515245 + 12345) % 2147483648
-      const t = i / (n - 1)
-      const env = Math.sin(t * Math.PI) ** 0.6
-      const bh = 8 + (s / 2147483648) * 80 * (0.3 + 0.7 * env)
-      out.push({ x: 30 + i * (bw + gap), y: H / 2 - bh / 2, w: bw, h: bh })
-    }
-    return out
-  }, [id])
-  // hueText keeps the bars crisp on the pale inset well in light mode.
-  const hue = hueText(colorForId(id), theme)
-  return (
-    <svg
-      viewBox="0 0 320 180"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden
-      className="absolute inset-0 h-full w-full"
-    >
-      {bars.map((b, i) => (
-        <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} fill={hue} />
-      ))}
-    </svg>
-  )
-}
-
-/**
- * The cue line: every note drawn as a tick at its position in the track, in
- * its own colour — the simplified annotation fingerprint. Positions normalise
- * against the last note (track duration isn't stored), which keeps relative
- * spacing honest. Notes with no siblings still read as "annotated".
- */
-function CueLine({
-  notes,
-  theme,
-}: {
-  notes: Annotation[]
-  theme: ResolvedTheme
-}) {
-  const ticks = useMemo(() => {
-    if (notes.length === 0) return []
-    const last = Math.max(...notes.map((n) => n.end ?? n.start), 1)
-    const scale = last * 1.04 // small right pad so the last tick isn't flush
-    return notes.map((n) => ({
-      x: 4 + (n.start / scale) * 989,
-      color: hueText(n.color ?? colorForId(n.id), theme),
-    }))
-  }, [notes, theme])
-  return (
-    <svg
-      viewBox="0 0 1000 100"
-      preserveAspectRatio="none"
-      aria-hidden
-      className="h-full w-full"
-    >
-      <rect
-        x={0}
-        y={46}
-        width={1000}
-        height={8}
-        style={{ fill: 'rgb(var(--text) / 0.1)' }}
-      />
-      {ticks.map((t, i) => (
-        <rect key={i} x={t.x} y={16} width={7} height={68} fill={t.color} />
-      ))}
-    </svg>
   )
 }
 
@@ -783,6 +772,11 @@ function TrackTile({
         </span>
         <span aria-hidden>·</span>
         <span>{formatRelativeTime(p.updatedAt)}</span>
+        {p.published && (
+          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
+            <Globe size={10} /> Published
+          </span>
+        )}
         {p.shared && (
           <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
             <Eye size={10} /> Shared

@@ -21,6 +21,14 @@ CREATE TABLE IF NOT EXISTS projects (
 
 CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects (owner_id);
 
+-- Publishing (the public Browse gallery). Kept as ALTERs so re-running this
+-- file upgrades an existing database in place.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS published boolean NOT NULL DEFAULT false;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS published_at bigint;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS published_by_name text;
+
+CREATE INDEX IF NOT EXISTS projects_published_idx ON projects (published_at DESC) WHERE published;
+
 CREATE TABLE IF NOT EXISTS folders (
   id         text PRIMARY KEY,
   owner_id   text NOT NULL,

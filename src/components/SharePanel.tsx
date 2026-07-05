@@ -4,9 +4,14 @@ import type { Project } from '../types'
 
 interface Props {
   project: Project
-  /** Persist a sharing change; both flags travel together so a role flip and
-   *  the switch are each one write. */
-  onChange: (patch: { shared: boolean; editableByLink: boolean }) => void
+  /** Persist a sharing change; flags travel together so a role flip and
+   *  the switch are each one write. `published` rides the same patch when
+   *  the Publish switch flips. */
+  onChange: (patch: {
+    shared?: boolean
+    editableByLink?: boolean
+    published?: boolean
+  }) => void
 }
 
 /** Link to this project's share viewer (same app, `?view=` route). */
@@ -29,6 +34,7 @@ export default function SharePanel({ project, onChange }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const shared = project.shared === true
   const canEdit = shared && project.editableByLink === true
+  const published = project.published === true
   const url = shareUrl(project.id)
 
   // Close on outside-click or Escape.
@@ -61,15 +67,19 @@ export default function SharePanel({ project, onChange }: Props) {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title={shared ? 'Shared — manage link' : 'Share this track by link'}
+        title={
+          shared || published
+            ? 'Sharing is on — manage link & publishing'
+            : 'Share this track by link, or publish it'
+        }
         className={`press inline-flex items-center gap-1.5 rounded border px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-          shared
+          shared || published
             ? 'border-accent/70 bg-accent/10 text-accentink hover:bg-accent/20'
             : 'border-line text-muted hover:border-line-strong hover:text-fg'
         }`}
       >
         <Share2 size={12} />
-        {shared ? 'Shared' : 'Share'}
+        {shared ? 'Shared' : published ? 'Published' : 'Share'}
       </button>
 
       {open && (
@@ -174,6 +184,53 @@ export default function SharePanel({ project, onChange }: Props) {
               </div>
             </>
           )}
+
+          {/* Publish — the public Browse gallery. Independent of the link
+              switch above: an unlisted link and a public listing are
+              different promises, so each gets its own gate. */}
+          <div className="mt-3.5 border-t border-line pt-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-fg">
+                  <Globe
+                    size={13}
+                    className={published ? 'text-accentink' : 'text-muted'}
+                  />
+                  Publish to Browse
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted">
+                  {published
+                    ? 'Listed on the public Browse page — anyone can open it read-only or copy it.'
+                    : 'List this track on the public Browse page for anyone to find.'}
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={published}
+                onClick={() => onChange({ published: !published })}
+                title={published ? 'Unpublish' : 'Publish'}
+                className={`press relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors ${
+                  published
+                    ? 'border-accent bg-accent/30'
+                    : 'border-line bg-inset'
+                }`}
+              >
+                <span
+                  className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left] ${
+                    published ? 'left-[18px] bg-accent' : 'left-0.5 bg-muted'
+                  }`}
+                />
+              </button>
+            </div>
+            {published && (
+              <a
+                href={`${window.location.pathname}?browse=1`}
+                className="mt-2 inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:underline"
+              >
+                View it on Browse →
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@
 import { api, ApiError } from './api'
 import { withBlocks } from './noteBlocks'
 import type { EditLockClaim } from './editLock'
-import type { Annotation, Project } from '../types'
+import type { Annotation, BrowseItem, Project } from '../types'
 
 /**
  * Shape a raw API payload into a Project (shared by both fetchers and the
@@ -25,6 +25,9 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,
     editableByLink: data.editableByLink === true,
+    published: data.published === true,
+    publishedByName:
+      typeof data.publishedByName === 'string' ? data.publishedByName : undefined,
     folderId: typeof data.folderId === 'string' ? data.folderId : null,
     settings:
       data.settings && typeof data.settings === 'object'
@@ -85,6 +88,7 @@ export async function saveProject(
     updatedAt: p.updatedAt,
     shared: p.shared === true,
     editableByLink: p.editableByLink === true,
+    published: p.published === true,
     folderId: p.folderId ?? null,
     settings: p.settings,
   }
@@ -97,6 +101,12 @@ export async function saveProject(
 
 export async function deleteProjectDoc(id: string): Promise<void> {
   await api(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** The public Browse gallery: every published project, newest first. No auth
+ *  required — publishing is an explicit opt-in to public listing. */
+export async function fetchBrowse(): Promise<BrowseItem[]> {
+  return api<BrowseItem[]>('/api/browse')
 }
 
 export { ApiError }
