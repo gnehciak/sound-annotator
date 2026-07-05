@@ -5,9 +5,9 @@
 // the loser's next poll flips its UI to read-only. Only the lock column is
 // touched, so a claim can never clobber content. `at` is stamped here,
 // server-side — the client's clock is never trusted.
-import { getUid } from '../../_lib/auth'
-import { sql, getProjectRow, jsonb, type LockValue } from '../../_lib/db'
-import { json, err } from '../../_lib/respond'
+import { getUid } from '../../_lib/auth.js'
+import { sql, getProjectRow, jsonb, type LockValue } from '../../_lib/db.js'
+import { json, err } from '../../_lib/respond.js'
 
 function idFrom(request: Request): string {
   const parts = new URL(request.url).pathname.split('/').filter(Boolean)

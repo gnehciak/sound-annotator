@@ -4,8 +4,8 @@
 // on load (not mid-edit) with the *saved* HTML — an image is only collected
 // once it's truly gone from the notes.
 import { del, list } from '@vercel/blob'
-import { getUid } from '../_lib/auth'
-import { json, err } from '../_lib/respond'
+import { getUid } from '../_lib/auth.js'
+import { json, err } from '../_lib/respond.js'
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)

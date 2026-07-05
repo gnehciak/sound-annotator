@@ -4,8 +4,8 @@
 // users/{uid}/ prefix (the port of the old storage.rules) and capping size
 // at the same 60 MB.
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
-import { getUid } from '../_lib/auth'
-import { json, err } from '../_lib/respond'
+import { getUid } from '../_lib/auth.js'
+import { json, err } from '../_lib/respond.js'
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)

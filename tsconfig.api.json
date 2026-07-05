@@ -4,12 +4,13 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.api.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023"],
-    "module": "esnext",
+    "module": "nodenext",
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode (Vercel compiles functions with esbuild) */
-    "moduleResolution": "bundler",
+    /* Real Node ESM — the deployed runtime resolves these imports itself, so
+       relative imports carry .js extensions (ERR_MODULE_NOT_FOUND otherwise). */
+    "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,

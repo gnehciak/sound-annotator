@@ -1,7 +1,7 @@
 // PUT / DELETE /api/folders/:id — create-or-rename and delete, owner only.
-import { getUid } from '../_lib/auth'
-import { sql, type FolderRow } from '../_lib/db'
-import { json, err } from '../_lib/respond'
+import { getUid } from '../_lib/auth.js'
+import { sql, type FolderRow } from '../_lib/db.js'
+import { json, err } from '../_lib/respond.js'
 
 function idFrom(request: Request): string {
   const parts = new URL(request.url).pathname.split('/').filter(Boolean)

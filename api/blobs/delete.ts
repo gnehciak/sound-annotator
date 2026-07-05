@@ -2,8 +2,8 @@
 // caller's own users/{uid}/ space. Used when audio is removed and when a
 // project (and its images) is deleted.
 import { del, list } from '@vercel/blob'
-import { getUid } from '../_lib/auth'
-import { json, err } from '../_lib/respond'
+import { getUid } from '../_lib/auth.js'
+import { json, err } from '../_lib/respond.js'
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)

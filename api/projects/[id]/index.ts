@@ -9,7 +9,7 @@
 //   link editors (editableByLink) may write content fields only. Content
 //   writes must hold the edit lock while someone else's claim is live.
 // - DELETE: owner only.
-import { getUid } from '../../_lib/auth'
+import { getUid } from '../../_lib/auth.js'
 import {
   sql,
   getProjectRow,
@@ -17,8 +17,8 @@ import {
   lockLive,
   jsonb,
   type LockValue,
-} from '../../_lib/db'
-import { json, err } from '../../_lib/respond'
+} from '../../_lib/db.js'
+import { json, err } from '../../_lib/respond.js'
 
 function idFrom(request: Request): string {
   const parts = new URL(request.url).pathname.split('/').filter(Boolean)
