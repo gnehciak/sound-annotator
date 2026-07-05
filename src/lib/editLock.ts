@@ -1,38 +1,32 @@
 // The edit lock: one session edits a project at a time, Google-Docs-adjacent.
 //
-// The lock is a `lock` map on the project doc — { sessionId, uid, name, at } —
-// where `at` is a server-timestamp heartbeat. A session holds the lock by
-// refreshing `at` (heartbeats + every save); a lock whose heartbeat is older
-// than LOCK_TTL_MS is stale and free to claim. firestore.rules enforces the
-// hard half (content writes must carry the holder's claim — see holdsLock());
-// this hook does the soft half: claim, heartbeat, release, and telling the UI
-// to go read-only when somebody else is editing.
+// The lock is a `lock` value on the project row — { sessionId, uid, name, at }
+// — where `at` is a server-stamped heartbeat (epoch ms). A session holds the
+// lock by refreshing `at` (heartbeats + every save); a lock whose heartbeat is
+// older than LOCK_TTL_MS is stale and free to claim. The API enforces the
+// hard half (content writes must carry the holder's claim — see
+// api/projects/[id]/index.ts); this hook does the soft half: claim,
+// heartbeat, release, and telling the UI to go read-only when somebody else
+// is editing.
 //
-// Deliberately Firestore-only (no Realtime Database presence): a closed tab
-// holds its lock until the TTL lapses (~45s of "ghost lock"), which the
-// "Take over" button papers over. Lock-only writes are last-write-wins by
-// design — a take-over simply claims, and the loser's live snapshot flips its
-// UI to read-only.
+// Postgres has no push channel to the browser, so the old Firestore
+// `onSnapshot` became a poll (POLL_MS): each tick fetches the project with
+// its lock and re-runs the same state machine. A closed tab holds its lock
+// until the TTL lapses (~45s of "ghost lock"), which the "Take over" button
+// papers over. Lock-only writes are last-write-wins by design — a take-over
+// simply claims, and the loser's next poll flips its UI to read-only.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  updateDoc,
-  type DocumentSnapshot,
-  type Timestamp,
-} from 'firebase/firestore'
-import type { User } from 'firebase/auth'
-import { db } from './firebase'
+import { api, ApiError, lastToken } from './api'
 import { toProject } from './projectStore'
+import type { AppUser } from './auth'
 import type { Project } from '../types'
 
 /** This tab's identity. Per-tab (not per-user) on purpose: the same account in
  *  two tabs is exactly the clobbering scenario the lock exists to prevent. */
 export const SESSION_ID: string = crypto.randomUUID()
 
-/** The claim a save carries to prove it holds the lock (projectStore stamps
- *  the `at` heartbeat). */
+/** The claim a save carries to prove it holds the lock (the API stamps the
+ *  `at` heartbeat server-side). */
 export interface EditLockClaim {
   sessionId: string
   uid: string
@@ -40,7 +34,7 @@ export interface EditLockClaim {
 }
 
 /**
- * - `off`     — no lock in play (not enabled, or the doc doesn't exist yet);
+ * - `off`     — no lock in play (not enabled, or the row doesn't exist yet);
  *               editing is allowed.
  * - `mine`    — this session holds the lock.
  * - `other`   — another live session holds it: go read-only.
@@ -62,25 +56,29 @@ interface LockData {
   sessionId?: string
   uid?: string
   name?: string
-  at?: Timestamp
+  /** epoch ms, stamped by the server */
+  at?: number
 }
 
-// Client-side staleness; firestore.rules treats a lock as live for 40s, so a
-// stale claim here is never one the rules still defend.
+// Client-side staleness; the API treats a lock as live for 40s, so a stale
+// claim here is never one the server still defends.
 export const LOCK_TTL_MS = 45_000
 const HEARTBEAT_MS = 15_000
+// Poll cadence. Locked-out sessions see the editor's saves at this latency;
+// a freed lock is claimed within one tick.
+const POLL_MS = 5_000
 
 /**
- * Subscribe to a project's edit lock and keep this session's claim alive.
+ * Poll a project's edit lock and keep this session's claim alive.
  *
  * While another session holds the lock (or before our claim lands),
- * `onRemoteData` receives each server-confirmed copy of the project, so the
- * locked-out UI tracks the editor live and a take-over starts from the latest
- * content rather than clobbering it.
+ * `onRemoteData` receives each polled copy of the project, so the locked-out
+ * UI tracks the editor and a take-over starts from the latest content rather
+ * than clobbering it.
  */
 export function useEditLock(opts: {
   projectId: string | null
-  user: User | null
+  user: AppUser | null
   enabled: boolean
   onRemoteData?: (p: Project) => void
 }): EditLock {
@@ -119,21 +117,31 @@ export function useEditLock(opts: {
     // run's cleanup resets it when the lock disengages (track closed, etc.).
     if (!enabled || !projectId || !user || !claim) return
 
-    const ref = doc(db, 'projects', projectId)
     const me = claim
+    const lockUrl = `/api/projects/${encodeURIComponent(projectId)}/lock`
+    let disposed = false
     let claiming = false
-    let staleTimer: number | undefined
-    let lastSnap: DocumentSnapshot | null = null
 
-    // Claim/refresh/take over are all the same write; rules allow lock-only
-    // writes unconditionally (last write wins, the loser's UI flips via its
-    // snapshot). Failures are expected noise — a brand-new project's doc
-    // doesn't exist until its first save (which carries the claim itself),
-    // and a lost race just means the next snapshot says 'other'.
+    // Claim/refresh/take over are all the same write; the API allows
+    // lock-only writes unconditionally (last write wins, the loser's UI
+    // flips via its next poll). Failures are expected noise — a brand-new
+    // project's row doesn't exist until its first save (which carries the
+    // claim itself), and a lost race just means the next poll says 'other'.
     const writeLock = () => {
-      if (claiming) return
+      if (claiming || disposed) return
       claiming = true
-      updateDoc(ref, { lock: { ...me, at: serverTimestamp() } })
+      api<{ lock: LockData }>(lockUrl, {
+        method: 'POST',
+        json: { action: 'claim', sessionId: me.sessionId, name: me.name },
+      })
+        .then(() => {
+          // Claim landed — flip to 'mine' immediately rather than waiting a
+          // poll tick (the old latency-compensated snapshot's job).
+          if (!disposed) {
+            setBoth('mine')
+            setHolder(null)
+          }
+        })
         .catch(() => {})
         .finally(() => {
           claiming = false
@@ -141,21 +149,11 @@ export function useEditLock(opts: {
     }
     takeOverRef.current = writeLock
 
-    const handle = (snap: DocumentSnapshot) => {
-      lastSnap = snap
-      window.clearTimeout(staleTimer)
-      // serverTimestamps:'estimate' keeps our own pending claim "fresh" so the
-      // latency-compensated snapshot flips us to 'mine' immediately.
-      const data = snap.data({ serverTimestamps: 'estimate' })
-      if (!data) return // doc not created yet — the first save claims it
+    const handle = (data: Record<string, unknown>) => {
+      const remote = () => onRemoteDataRef.current?.(toProject(projectId, data))
 
-      // Only server-confirmed data may refresh the UI: the persistent cache
-      // replays stale snapshots on subscribe, and our own pending writes echo.
-      const confirmed = !snap.metadata.fromCache && !snap.metadata.hasPendingWrites
-      const remote = () =>
-        confirmed && onRemoteDataRef.current?.(toProject(snap.id, data))
-
-      // The owner switched link editing off under us — read-only, stop claiming.
+      // The owner switched link editing off under us — read-only, stop
+      // claiming.
       if (data.ownerId !== user.uid && data.editableByLink !== true) {
         remote()
         setBoth('revoked')
@@ -164,7 +162,7 @@ export function useEditLock(opts: {
       }
 
       const lock = (data.lock ?? null) as LockData | null
-      const at = lock?.at?.toMillis() ?? 0
+      const at = typeof lock?.at === 'number' ? lock.at : 0
       const live = lock != null && Date.now() - at < LOCK_TTL_MS
 
       if (live && lock.sessionId === SESSION_ID) {
@@ -174,25 +172,37 @@ export function useEditLock(opts: {
         remote()
         setBoth('other')
         setHolder({ uid: lock.uid ?? '', name: lock.name ?? 'Someone' })
-        // No snapshot fires when a lock merely expires — re-check at its TTL.
-        staleTimer = window.setTimeout(
-          () => lastSnap && handle(lastSnap),
-          at + LOCK_TTL_MS - Date.now() + 250,
-        )
+        // A merely-expired lock is caught by the next poll tick (POLL_MS
+        // < the TTL margin), so no dedicated stale timer is needed.
       } else {
         // Free or stale. Take the final remote copy (the previous holder's
-        // last save rides in this snapshot), then claim for this session.
+        // last save rides in this response), then claim for this session.
         remote()
         writeLock()
       }
     }
 
-    const unsub = onSnapshot(ref, handle, (err) => {
-      // Read permission lost (sharing turned off entirely) → read-only.
-      console.error('Edit lock subscription failed:', err)
-      setBoth('revoked')
-      setHolder(null)
-    })
+    const poll = async () => {
+      try {
+        const data = await api<Record<string, unknown>>(
+          `/api/projects/${encodeURIComponent(projectId)}`,
+        )
+        if (!disposed) handle(data)
+      } catch (err) {
+        if (disposed) return
+        if (err instanceof ApiError && err.status === 404) return // no row yet — the first save creates it
+        if (err instanceof ApiError && err.status === 403) {
+          // Read permission lost (sharing turned off entirely) → read-only.
+          setBoth('revoked')
+          setHolder(null)
+          return
+        }
+        // Network blips: keep the current state; the next tick retries.
+      }
+    }
+
+    void poll()
+    const pollTimer = window.setInterval(() => void poll(), POLL_MS)
 
     // Keep the claim warm. Saves also refresh it; this covers idle listening.
     // (Hidden tabs get throttled, so a backgrounded session naturally cedes
@@ -202,16 +212,26 @@ export function useEditLock(opts: {
     }, HEARTBEAT_MS)
 
     // Best-effort release when the tab goes away; the TTL covers crashes.
+    // Fired from pagehide, so it can't await a token — it rides the last one
+    // lib/api.ts saw (keepalive lets the request outlive the page).
     const release = () => {
-      if (stateRef.current === 'mine')
-        updateDoc(ref, { lock: null }).catch(() => {})
+      if (stateRef.current !== 'mine') return
+      void fetch(lockUrl, {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(lastToken ? { Authorization: `Bearer ${lastToken}` } : {}),
+        },
+        body: JSON.stringify({ action: 'release', sessionId: me.sessionId }),
+      }).catch(() => {})
     }
     window.addEventListener('pagehide', release)
 
     return () => {
-      unsub()
+      disposed = true
+      window.clearInterval(pollTimer)
       window.clearInterval(hb)
-      window.clearTimeout(staleTimer)
       window.removeEventListener('pagehide', release)
       release()
       takeOverRef.current = () => {}

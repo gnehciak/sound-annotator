@@ -30,3 +30,5 @@ dist-ssr
 # Claude Code local tooling (installed skills, session state) — not app source
 .claude/
 .vercel
+.env*
+!.env.example

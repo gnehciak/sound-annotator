@@ -1,0 +1,31 @@
+-- Neon schema for Sound Annotator. Applied via scripts/apply-schema.mjs.
+-- Mirrors the old Firestore shape: one row per project, notes inline in the
+-- `annotations` jsonb; folders are just named rows (membership lives on each
+-- project's folder_id).
+
+CREATE TABLE IF NOT EXISTS projects (
+  id               text PRIMARY KEY,
+  owner_id         text NOT NULL,
+  title            text NOT NULL DEFAULT 'Untitled track',
+  source           jsonb,
+  annotations      jsonb NOT NULL DEFAULT '[]',
+  updated_at       bigint NOT NULL DEFAULT 0,
+  shared           boolean NOT NULL DEFAULT false,
+  editable_by_link boolean NOT NULL DEFAULT false,
+  folder_id        text,
+  settings         jsonb,
+  -- Edit lock: { sessionId, uid, name, at } where `at` is epoch ms stamped by
+  -- the API server (never trusted from the client) — see api/_lib/lock.ts.
+  lock             jsonb
+);
+
+CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects (owner_id);
+
+CREATE TABLE IF NOT EXISTS folders (
+  id         text PRIMARY KEY,
+  owner_id   text NOT NULL,
+  name       text NOT NULL DEFAULT 'Untitled folder',
+  created_at bigint NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS folders_owner_idx ON folders (owner_id);

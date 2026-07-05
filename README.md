@@ -5,37 +5,36 @@ A web app for annotating music in the classroom. Load a **YouTube video** or an
 plus pasted or uploaded screenshots — that jump the player to the right moment
 when you click them.
 
-This is the **local-only MVP**: no accounts, no server. Everything is saved in
-your browser, so you can open it and start annotating immediately.
+Accounts and sync run on **Vercel**: Google sign-in via Clerk, projects in
+Neon Postgres, audio and note images in Vercel Blob. The browser talks to
+Vercel Functions in `/api`, which enforce all access control (owner-only
+data, unguessable-id share links, the one-editor-at-a-time lock).
 
 ## Run it
 
 ```bash
-npm install      # first time only
-npm run dev      # http://localhost:5173
+npm install          # first time only
+vercel env pull      # first time only — syncs .env.local from the linked project
+npm run dev:full     # app + /api functions (vercel dev) — http://localhost:3000
 ```
 
-Build for production: `npm run build` then `npm run preview`.
+`npm run dev` (plain Vite) still works for UI-only tinkering, but every data
+call needs the functions, so `dev:full` is the one you want day-to-day.
 
-## Deploying security rules
+Build for production: `npm run build`. Deploy with `vercel deploy` (preview)
+or `vercel deploy --prod`.
 
-`firestore.rules` and `storage.rules` are checked into the repo but only take
-effect once published to Firebase — editing the files (or merging a PR) does
-**not** change the live project. `firebase.json` / `.firebaserc` wire them up so
-a one-liner publishes both straight from the checked-in files:
+## Backend
 
-```bash
-npm i -g firebase-tools   # first time only
-firebase login            # first time only — interactive
-firebase deploy --only firestore:rules,storage
-```
-
-The project is pinned to `sound-annotator` in `.firebaserc`. No composite
-indexes are needed (`fetchProjects` filters by a single field and sorts
-client-side), so `firestore.indexes.json` is intentionally empty.
-
-> If you change `firestore.rules` (e.g. the read-only share gate), the change is
-> live for users only after this deploy runs.
+- **Schema** — `scripts/schema.sql`; apply with
+  `node --env-file=.env.local scripts/apply-schema.mjs` (idempotent).
+- **Authorization** — lives entirely in the `/api` functions:
+  `api/projects/[id]/index.ts` (owner/link-editor rules + the edit lock),
+  `api/projects/[id]/lock.ts` (claim/heartbeat/release),
+  `api/blobs/*.ts` (uploads pinned to `users/{uid}/…`, 60 MB cap).
+- **Env vars** — provisioned by the Vercel integrations (Neon, Clerk, Blob);
+  `vercel env pull` refreshes `.env.local`. The client only ever sees
+  `VITE_CLERK_PUBLISHABLE_KEY`.
 
 ## How to use
 
@@ -58,14 +57,15 @@ src/
   types.ts                 Project / Annotation / PlayerHandle types
   App.tsx                  State + persistence orchestrator, sidebar, transport
   lib/
-    firebase.ts            Firebase app + Auth / Firestore / Storage singletons
-    auth.tsx               Google sign-in context (useAuth)
+    api.ts                 Fetch helper for /api (attaches the Clerk session token)
+    auth.tsx               Google sign-in via Clerk behind the app's useAuth()
     youtube.ts             Parse video id from any YT URL + load the IFrame API
     format.ts              seconds -> "m:ss"
     image.ts               Downscale a pasted image to a small JPEG blob
-    projectStore.ts        Projects + notes  <-> Firestore (incl. shared-link read)
-    audioCloud.ts          Audio file blobs  <-> Cloud Storage (download URLs)
-    imageCloud.ts          Note image blobs  <-> Cloud Storage (download URLs)
+    projectStore.ts        Projects + notes  <-> /api/projects (incl. shared-link read)
+    audioCloud.ts          Audio file blobs  <-> Vercel Blob (client uploads)
+    imageCloud.ts          Note image blobs  <-> Vercel Blob (client uploads + GC)
+    editLock.ts            One-editor-at-a-time lock (poll + heartbeat)
     storage.ts             Local UI prefs (panel width, view mode) -> localStorage
   components/
     PlayerPane.tsx         Chooses the right player, forwards the imperative ref
@@ -82,24 +82,24 @@ src/
 
 **Persistence model**
 
-- **Firebase** backend, per user (Google sign-in via Auth). The browser talks
-  straight to Firebase — no server of our own.
-- Project metadata + note HTML → **Firestore**, one document per project (notes
-  inline), saved debounced on change. An offline cache keeps it working without
-  a connection.
-- Audio files → **Cloud Storage** at `users/{uid}/audio/{projectId}`, streamed
-  back via their download URL. If the file is missing, the notes are kept and
-  the app asks you to re-open the file.
-- Pasted/inserted note images are downscaled, uploaded to **Cloud Storage**
-  (`users/{uid}/images/{projectId}/…`), and referenced by download URL in the
-  note HTML — keeping the base64 bytes out of the Firestore doc. (If an upload
-  fails it falls back to an inline data URL so the image isn't lost.) Images are
-  **resizable** by dragging a corner handle; the width persists in the note HTML.
+- **Vercel** backend, per user (Google sign-in via Clerk). The browser calls
+  the `/api` Vercel Functions; they hold the only credentials to Neon/Blob.
+- Project metadata + note HTML → **Neon Postgres**, one row per project (notes
+  inline in the `annotations` jsonb), saved debounced on change.
+- Audio files → **Vercel Blob** at `users/{uid}/audio/{projectId}`, uploaded
+  straight from the browser with a server-minted token and streamed back via
+  their public-but-unguessable URL. If the file is missing, the notes are kept
+  and the app asks you to re-open the file.
+- Pasted/inserted note images are downscaled, uploaded to **Vercel Blob**
+  (`users/{uid}/images/{projectId}/…`), and referenced by URL in the note HTML —
+  keeping the base64 bytes out of the project row. (If an upload fails it falls
+  back to an inline data URL so the image isn't lost.) Images are **resizable**
+  by dragging a corner handle; the width persists in the note HTML.
 - **Read-only sharing.** A project can be flagged shared, which mints a
-  `?view={id}` link anyone can open read-only with no sign-in (the random doc id
-  is the share token). `firestore.rules` only serves a doc to a stranger when
-  it's flagged shared; only the owner can flip that flag. Audio rides along on
-  its tokenized Storage download URL, so shared audio tracks play too.
+  `?view={id}` link anyone can open read-only with no sign-in (the random row id
+  is the share token). The API only serves a project to a stranger when it's
+  flagged shared; only the owner can flip that flag. Audio rides along on its
+  unguessable Blob URL, so shared audio tracks play too.
 
 ## Known limitations (by design)
 
@@ -114,7 +114,7 @@ src/
 - **Time-range notes** ("1:10–1:35") with draggable **wavesurfer regions**.
 - **Export to PDF** (timestamps + notes + screenshots) for handouts.
 - **Note templates** (form analysis, instrumentation, dynamics map).
-- **Teacher/student roles** on top of the existing Firebase backend (named
+- **Teacher/student roles** on top of the existing backend (named
   collaborators, not just an unlisted read-only link).
 - Optional migration to **Next.js** for server-rendered share pages.
 

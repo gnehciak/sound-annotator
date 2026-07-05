@@ -3,11 +3,19 @@
 A web app for time-anchored music annotation in the classroom: load a YouTube
 video or an audio file, then attach timestamped rich-text notes that seek the
 player when clicked. Vite + React 19 + TypeScript + Tailwind + TipTap +
-wavesurfer.js. Backed by Firebase: Google sign-in (Auth), projects/notes in
-Firestore (one doc per project, notes inline), audio blobs in Cloud Storage
-(`users/{uid}/audio/{projectId}`). Config is in `.env.local` (`VITE_FIREBASE_*`);
-security rules live in `firestore.rules` / `storage.rules`, bucket CORS in
-`cors.json`. Per-user data; the browser talks straight to Firebase (no server).
+wavesurfer.js. Backed by Vercel: Google sign-in via Clerk, projects/notes in
+Neon Postgres (one row per project, notes inline in `annotations` jsonb),
+audio/images in Vercel Blob (`users/{uid}/audio/{projectId}`,
+`users/{uid}/images/{projectId}/…`). The SPA calls Vercel Functions in `/api`
+(Web signature), which enforce all authorization — owner-only access,
+share-by-unguessable-id for `?view=` links, link-editor field clipping, and
+the server-stamped edit lock (see `api/projects/[id]/index.ts`). Schema lives
+in `scripts/schema.sql` (apply with `node --env-file=.env.local
+scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
+`vercel env pull` writes `.env.local` (client reads only
+`VITE_CLERK_PUBLISHABLE_KEY`; functions read `DATABASE_URL`,
+`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`). Local dev with API:
+`npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
 ## Design Context
 

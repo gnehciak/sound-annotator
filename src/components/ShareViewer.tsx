@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Eye, ExternalLink, Pencil } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
-import { firebaseReady } from '../lib/firebase'
+import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
   loadVolume,
@@ -47,9 +47,9 @@ const STEP_WINDOW = 1200
  * in `readOnly` mode, so clicking a note seeks the track but nothing is editable.
  */
 export default function ShareViewer({ projectId }: { projectId: string }) {
-  // Without Firebase configured there's nothing to fetch — start at 'notfound'.
+  // Without the backend configured there's nothing to fetch — start at 'notfound'.
   const [status, setStatus] = useState<Status>(() =>
-    firebaseReady ? 'loading' : 'notfound',
+    backendReady ? 'loading' : 'notfound',
   )
   const [project, setProject] = useState<Project | null>(null)
 
@@ -161,10 +161,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const seekTargetRef = useRef<number | null>(null)
   const lastStepRef = useRef(0)
 
-  // Fetch once. firestore.rules only returns the doc when it's `shared`, so a
+  // Fetch once. The API only returns the doc when it's `shared`, so a
   // private or missing id resolves to null → "not available".
   useEffect(() => {
-    if (!firebaseReady) return
+    if (!backendReady) return
     let cancelled = false
     fetchSharedProject(projectId).then((p) => {
       if (cancelled) return

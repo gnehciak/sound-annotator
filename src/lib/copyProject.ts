@@ -11,12 +11,13 @@ import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
 import type { Annotation, Project } from '../types'
 
 /**
- * Firebase Storage download URLs for note images embedded in note HTML
- * (`users%2F{uid}%2Fimages%2F{projectId}%2F{imageId}.{ext}?alt=media&token=…`).
- * Matched against the raw HTML, where `&` appears entity-escaped as `&amp;`.
+ * Vercel Blob URLs for note images embedded in note HTML
+ * (`https://{store}.public.blob.vercel-storage.com/users/{uid}/images/…`).
+ * Matched against the raw HTML; blob URLs carry no query string, but escAmp
+ * handling below is kept for safety with any legacy URLs still embedded.
  */
 const IMAGE_URL_RE =
-  /https:\/\/firebasestorage\.googleapis\.com\/[^\s"'<>]*%2Fimages%2F[^\s"'<>]+/g
+  /https:\/\/[^\s"'<>]*\.public\.blob\.vercel-storage\.com\/users\/[^\s"'<>]*\/images\/[^\s"'<>]+/g
 
 /** TipTap escapes `&` in attribute values — the form a URL takes inside HTML. */
 const escAmp = (url: string) => url.replaceAll('&', '&amp;')
@@ -75,7 +76,7 @@ function untakenTitle(title: string, taken: Set<string>): string {
   }
 }
 
-/** Download a Storage object via its tokened download URL (CORS allows GET). */
+/** Download a blob via its public URL (Blob storage allows cross-origin GET). */
 async function fetchBlob(url: string): Promise<Blob> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Download failed (${res.status})`)

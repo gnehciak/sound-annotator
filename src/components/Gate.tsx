@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { LogIn } from 'lucide-react'
-import { firebaseReady } from '../lib/firebase'
 import { useAuth } from '../lib/auth'
 
 /**
- * Decides what to render based on auth state: a setup notice when Firebase
- * isn't configured, a spinner while auth resolves, the sign-in screen when
- * signed out, and the app itself once signed in.
+ * Decides what to render based on auth state: a spinner while auth resolves,
+ * the sign-in screen when signed out, and the app itself once signed in.
+ * (When the backend isn't configured at all, main.tsx renders <SetupNotice>
+ * instead of mounting Clerk — so this component can assume a live provider.)
  */
 export default function Gate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
 
-  if (!firebaseReady) return <SetupNotice />
   if (loading) return <Splash label="Connecting…" />
   if (!user) return <SignIn />
   return <>{children}</>
@@ -36,8 +35,8 @@ function SignIn() {
     setError(null)
     try {
       await signInWithGoogle()
+      // Full-page redirect follows — the busy state simply holds until then.
     } catch (e) {
-      // Popup closed/blocked, etc. — show a quiet hint rather than a crash.
       setError(e instanceof Error ? e.message : 'Sign-in failed.')
       setBusy(false)
     }
@@ -74,7 +73,8 @@ function SignIn() {
   )
 }
 
-function SetupNotice() {
+/** Rendered by main.tsx when the Clerk publishable key isn't configured. */
+export function SetupNotice() {
   return (
     <div className="flex h-full items-center justify-center bg-ink text-fg">
       <div className="w-full max-w-md rounded border border-line bg-panel p-8">
@@ -84,11 +84,12 @@ function SetupNotice() {
             Sound&nbsp;Annotator
           </span>
         </div>
-        <h1 className="text-lg font-semibold">Firebase not configured</h1>
+        <h1 className="text-lg font-semibold">Auth not configured</h1>
         <p className="mt-2 text-sm text-muted">
-          Create a <code className="text-accentink">.env.local</code> from{' '}
-          <code className="text-accentink">.env.example</code> and paste your
-          Firebase web-app config values, then restart the dev server.
+          Set <code className="text-accentink">VITE_CLERK_PUBLISHABLE_KEY</code>{' '}
+          in <code className="text-accentink">.env.local</code> (run{' '}
+          <code className="text-accentink">vercel env pull</code> after
+          installing the Clerk integration), then restart the dev server.
         </p>
       </div>
     </div>
