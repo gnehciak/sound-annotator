@@ -1,7 +1,6 @@
 -- Neon schema for Sound Annotator. Applied via scripts/apply-schema.mjs.
--- Mirrors the old Firestore shape: one row per project, notes inline in the
--- `annotations` jsonb; folders are just named rows (membership lives on each
--- project's folder_id).
+-- One row per project, notes inline in the `annotations` jsonb; folders are
+-- just named rows (membership lives on each project's folder_id).
 
 CREATE TABLE IF NOT EXISTS projects (
   id               text PRIMARY KEY,

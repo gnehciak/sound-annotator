@@ -93,13 +93,14 @@ export interface Project {
   /**
    * When true, anyone holding the project's `?view={id}` link can open it
    * read-only (no sign-in required). Off by default; toggled from the Share
-   * panel. See firestore.rules — shared docs are world-readable by id.
+   * panel. The API serves shared projects to anyone by id (see
+   * api/projects/[id]/index.ts).
    */
   shared?: boolean
   /**
    * When true, anyone holding the link can also *edit* the project's notes and
    * title after signing in — one session at a time, serialized by the edit
-   * lock (see lib/editLock.ts and firestore.rules). The Share panel's
+   * lock (see lib/editLock.ts and api/projects/[id]/index.ts). The Share panel's
    * "Can edit" role. Only the owner can flip this.
    */
   editableByLink?: boolean

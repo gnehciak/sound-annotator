@@ -9,9 +9,9 @@
 // heartbeat, release, and telling the UI to go read-only when somebody else
 // is editing.
 //
-// Postgres has no push channel to the browser, so the old Firestore
-// `onSnapshot` became a poll (POLL_MS): each tick fetches the project with
-// its lock and re-runs the same state machine. A closed tab holds its lock
+// Postgres has no push channel to the browser, so live lock state is a poll
+// (POLL_MS): each tick fetches the project with its lock and re-runs the same
+// state machine. A closed tab holds its lock
 // until the TTL lapses (~45s of "ghost lock"), which the "Take over" button
 // papers over. Lock-only writes are last-write-wins by design — a take-over
 // simply claims, and the loser's next poll flips its UI to read-only.

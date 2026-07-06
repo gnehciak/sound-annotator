@@ -1,5 +1,5 @@
-// GET / PUT / DELETE /api/projects/:id — the server-side port of what
-// firestore.rules used to enforce declaratively:
+// GET / PUT / DELETE /api/projects/:id — the server-side authorization for a
+// project, enforced here in code:
 //
 // - GET: shared docs (view or edit links) are fetchable by id by anyone
 //   holding the link (the unguessable id is the share token); owners can

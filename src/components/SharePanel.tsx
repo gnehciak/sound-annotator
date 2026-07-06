@@ -25,8 +25,8 @@ function shareUrl(id: string): string {
  * the panel reveals the "Anyone with the link" switch and, once on, a role —
  * **Can view** (read-only viewer, no sign-in) or **Can edit** (signed-in
  * visitors may edit notes/title, one session at a time via the edit lock) —
- * plus the copyable link. The parent persists the flags, which flip the
- * firestore.rules gates.
+ * plus the copyable link. The parent persists the flags, which gate share
+ * access server-side (see api/projects/[id]/index.ts).
  */
 export default function SharePanel({ project, onChange }: Props) {
   const [open, setOpen] = useState(false)

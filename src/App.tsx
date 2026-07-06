@@ -144,7 +144,7 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [openFolderId, setOpenFolderId] = useState<string | null>(null)
 
-  // Last version of each project written to Firestore, keyed by id. Used to
+  // Last version of each project persisted to the backend, keyed by id. Used to
   // write only the projects that actually changed (mutations replace the
   // changed project's object, so reference inequality means "dirty").
   const persistedRef = useRef<Map<string, Project>>(new Map())
@@ -571,7 +571,7 @@ export default function App() {
     [user, currentId],
   )
 
-  // Load this user's projects and folders from Firestore once on sign-in.
+  // Load this user's projects and folders from the backend once on sign-in.
   useEffect(() => {
     if (!user) return
     let cancelled = false
