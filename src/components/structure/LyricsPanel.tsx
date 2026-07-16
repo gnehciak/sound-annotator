@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Annotation } from '../../types'
 import { formatTime } from '../../lib/format'
 import { colorForId, hueText } from '../../lib/noteColors'
@@ -11,8 +11,14 @@ import TitleBar from '../TitleBar'
  * (deliberately not line-synced) set like a score page — generous spacing
  * instead of dividers, one thin hue rail per section as its identity mark,
  * the section name in its own hue. While the song plays, the sounding
- * section stays lit and the others fall back, karaoke-sheet style, and the
- * sheet follows the playhead by itself. Click any heading to play from there.
+ * section stays lit and the others fall back, karaoke-sheet style.
+ *
+ * Auto-pin: whenever the sounding section changes — playback rolling into
+ * the next section, or any seek (ruler, chips, a lyric heading) — and again
+ * when Play is pressed, the sheet scrolls that section to its top, like the
+ * notes list pinning the playing note. A measured bottom spacer lets even
+ * the last section pin, and the pin stands down while the caret is in the
+ * sheet so it never yanks the page out from under someone typing.
  */
 
 interface Props {
@@ -36,23 +42,61 @@ export default function LyricsPanel({
   const theme = useResolvedTheme()
   const ordered = sortedSections(sections)
   const activeId = sectionAt(ordered, currentTime)?.id ?? null
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const roRef = useRef<ResizeObserver | null>(null)
+  // Bottom spacer so the last sections can still pin to the panel top.
+  const [pad, setPad] = useState(0)
 
-  // Follow the song: bring the sounding section into view while playing —
-  // but never yank the sheet out from under someone typing or selecting in it.
+  const setScrollEl = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el
+    roRef.current?.disconnect()
+    if (!el) return
+    const update = () => setPad(Math.max(0, el.clientHeight - 96))
+    update()
+    roRef.current = new ResizeObserver(update)
+    roRef.current.observe(el)
+  }, [])
+
+  /** Scroll the sounding section to the top of the sheet. */
+  const activeIdRef = useRef(activeId)
   useEffect(() => {
-    if (!isPlaying || !activeId) return
+    activeIdRef.current = activeId
+  })
+  const pinActive = useCallback(() => {
     const panel = scrollRef.current
-    if (!panel || panel.contains(document.activeElement)) return
-    document
-      .getElementById(`lyrics-${activeId}`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [activeId, isPlaying])
+    const id = activeIdRef.current
+    if (!panel || !id) return
+    // Never yank the sheet out from under someone typing in it.
+    if (panel.contains(document.activeElement)) return
+    const el = document.getElementById(`lyrics-${id}`)
+    if (!el) return
+    const top =
+      el.getBoundingClientRect().top -
+      panel.getBoundingClientRect().top +
+      panel.scrollTop -
+      6
+    panel.scrollTo({
+      top: Math.max(0, top),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    })
+  }, [])
+
+  // Pin whenever the sounding section changes — that covers playback rolling
+  // across a boundary AND any seek, playing or paused…
+  useEffect(() => {
+    if (activeId) pinActive()
+  }, [activeId, pinActive])
+  // …and when Play is pressed, re-pin the section already sounding.
+  useEffect(() => {
+    if (isPlaying) pinActive()
+  }, [isPlaying, pinActive])
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <TitleBar left="Lyrics" />
-      <div ref={scrollRef} className="flex-1 overflow-y-auto bg-note">
+      <div ref={setScrollEl} className="flex-1 overflow-y-auto bg-note">
         {ordered.length === 0 ? (
           <p className="px-5 py-10 text-center text-[12.5px] leading-relaxed text-muted">
             Draw sections on the timeline first — their lyrics go here.
@@ -121,6 +165,8 @@ export default function LyricsPanel({
                 </section>
               )
             })}
+            {/* Lets the last section scroll all the way to the panel top. */}
+            <div aria-hidden style={{ height: pad }} />
           </div>
         )}
       </div>
