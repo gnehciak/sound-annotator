@@ -130,6 +130,15 @@ export interface Project {
 }
 
 export interface ProjectSettings {
+  /**
+   * What kind of editor this project opens in. Absent (the default) is a
+   * classic annotation track; 'structure' opens the song-structure board — a
+   * visual section timeline whose annotations are the sections (see
+   * lib/sections.ts). Set once at creation. It lives here (not at the Project
+   * top level) so it rides the existing `settings` jsonb through the client
+   * and API field whitelists with no schema or API change.
+   */
+  kind?: 'structure'
   /** When on, the per-note Play chip arms passage playback (pause at end). */
   playOnce?: boolean
   /** Whether the overview timeline strip opens by default. */
