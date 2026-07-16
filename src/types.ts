@@ -1,3 +1,12 @@
+// NOTE — JSON import/export contract: a track's persisted *content* (title,
+// source, annotations, settings) round-trips through the portable JSON file in
+// lib/projectJson.ts. When you add or change a persisted field on Project,
+// ProjectSource, Annotation, or ProjectSettings, update projectJson.ts too:
+// the export envelope carries content fields only (never account/sharing
+// state), and the import sanitizer must explicitly accept the new field or an
+// imported file silently loses it. Primitive-valued ProjectSettings keys pass
+// through automatically; everything else needs a line in the sanitizer.
+
 export type SourceType = 'youtube' | 'audio'
 
 export interface ProjectSource {
@@ -74,6 +83,12 @@ export interface Annotation {
    * in the overview. Only meaningful when `structure` is set.
    */
   sectionName?: string
+  /**
+   * Plain-text lyrics for a song-structure section (whole-section granularity,
+   * not line-synced), shown in the structure board's Lyrics panel. Only
+   * meaningful on structure projects' sections.
+   */
+  lyrics?: string
   createdAt: number
 }
 
@@ -130,6 +145,15 @@ export interface Project {
 }
 
 export interface ProjectSettings {
+  /**
+   * What kind of editor this project opens in. Absent (the default) is a
+   * classic annotation track; 'structure' opens the song-structure board — a
+   * visual section timeline whose annotations are the sections (see
+   * lib/sections.ts). Set once at creation. It lives here (not at the Project
+   * top level) so it rides the existing `settings` jsonb through the client
+   * and API field whitelists with no schema or API change.
+   */
+  kind?: 'structure'
   /** When on, the per-note Play chip arms passage playback (pause at end). */
   playOnce?: boolean
   /** Whether the overview timeline strip opens by default. */

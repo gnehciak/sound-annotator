@@ -40,6 +40,7 @@ import {
 } from './lib/imageCloud'
 import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { copySharedProject } from './lib/copyProject'
+import { parseProjectJson } from './lib/projectJson'
 import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
@@ -80,10 +81,15 @@ import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
 import HomePage from './components/HomePage'
 import ExportPdfButton from './components/ExportPdfButton'
+import ExportJsonButton from './components/ExportJsonButton'
 import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
+import StructureEditor from './components/structure/StructureEditor'
+import LyricsPanel from './components/structure/LyricsPanel'
+import MiniTransport from './components/structure/MiniTransport'
+import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
 
@@ -293,6 +299,10 @@ export default function App() {
 
   const current = projects.find((p) => p.id === currentId) ?? null
 
+  // Song-structure projects open the visual section board instead of the
+  // notes workspace; their annotations are the sections (lib/sections.ts).
+  const isStructure = isStructureProject(current)
+
   // Home vs editor: no router — the home page is simply "no open track".
   // Deriving from `current` (not just currentId) self-heals a dangling id.
   const view: 'home' | 'track' = current ? 'track' : 'home'
@@ -490,7 +500,9 @@ export default function App() {
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
-  const showDock = !effectiveViewOnly && effectiveWindowMode === 'dock'
+  // Structure projects have no note inspector at all.
+  const showDock =
+    !effectiveViewOnly && effectiveWindowMode === 'dock' && !isStructure
   const showModal =
     !effectiveViewOnly && !!selectedNote && effectiveWindowMode === 'modal'
   const transportLocked = showModal
@@ -847,7 +859,7 @@ export default function App() {
     goHome()
   }
 
-  function createProject() {
+  function createProject(kind?: 'structure') {
     const p: Project = {
       id: uid(),
       title: 'Untitled track',
@@ -855,6 +867,9 @@ export default function App() {
       updatedAt: now(),
       // Born into the folder that's open on the home page (null = root).
       folderId: openFolderId,
+      // A song-structure project marks its kind in settings (types.ts) so it
+      // opens as the section board; classic tracks carry no settings yet.
+      ...(kind === 'structure' ? { settings: { kind } } : {}),
     }
     // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
     // so undo can't later cross it and silently drop the new track.
@@ -939,6 +954,27 @@ export default function App() {
       setProjects((ps) => [copy, ...ps])
     },
     [user, setProjects],
+  )
+
+  // Import a track from an exported JSON file (see lib/projectJson.ts): parse
+  // and sanitise the document, then run it through the copy machinery so the
+  // import gets a fresh id and re-hosts its audio/images under this account.
+  // Lands in the folder that's open on the home page. Errors (bad file, dead
+  // audio the strict path would trip on) surface in the Import button's alert.
+  const importTrack = useCallback(
+    async (file: File) => {
+      if (!user) return
+      const parsed = parseProjectJson(await file.text())
+      const imported = await copySharedProject(
+        user.uid,
+        { ...parsed, ownerId: user.uid },
+        undefined,
+        { folderId: openFolderId },
+      )
+      persistedRef.current.set(imported.id, imported)
+      setProjects((ps) => [imported, ...ps])
+    },
+    [user, openFolderId, setProjects],
   )
 
   // Turn on view-only sharing for a track without opening the editor — the
@@ -1209,6 +1245,48 @@ export default function App() {
     updateAnnotation(id, patch, { coalesceKey: `region:${id}` })
   }
 
+  // ---- song-structure sections (structure projects only) -----------------
+  // A section is an annotation with `structure: true` + a name; both live in
+  // the same undoable history as note edits, so ⌘Z spans every gesture.
+  function createSection(id: string, start: number, end: number) {
+    if (!current) return
+    const s = Math.max(0, Math.round(start * 10) / 10)
+    const e = Math.max(Math.round(end * 10) / 10, s + 0.5)
+    commitAnnotations(current.id, (anns) => [
+      ...anns,
+      {
+        id,
+        start: s,
+        end: e,
+        structure: true,
+        contentHtml: '',
+        blocks: [makeTextBlock('')],
+        createdAt: now(),
+      },
+    ])
+  }
+
+  // Cut a section in two: the original keeps [start, t), the new one takes
+  // [t, end) and inherits the name + colour (renamed in one click via presets).
+  function splitSection(id: string, t: number) {
+    if (!current) return
+    const cut = Math.round(t * 10) / 10
+    commitAnnotations(current.id, (anns) => {
+      const a = anns.find((x) => x.id === id)
+      if (!a || a.end == null) return anns
+      if (cut < a.start + 0.5 || cut > a.end - 0.5) return anns
+      const right: Annotation = {
+        ...a,
+        id: uid(),
+        start: cut,
+        contentHtml: '',
+        blocks: [makeTextBlock('')],
+        createdAt: now(),
+      }
+      return [...anns.map((x) => (x.id === id ? { ...x, end: cut } : x)), right]
+    })
+  }
+
   function markIn() {
     const t = playerRef.current?.getCurrentTime?.() ?? currentTime
     setPendingIn((prev) =>
@@ -1296,17 +1374,19 @@ export default function App() {
         e.preventDefault()
         if (duration > 0) seek(duration)
         break
+      // Note-taking keys are the notes workspace's; the structure board has
+      // its own tool keys (S/C/⌫, handled inside StructureEditor).
       case 'n':
       case 'N':
-        if (!effectiveViewOnly) addAnnotationAtCurrent()
+        if (!effectiveViewOnly && !isStructure) addAnnotationAtCurrent()
         break
       case 'i':
       case 'I':
-        if (!effectiveViewOnly) markIn()
+        if (!effectiveViewOnly && !isStructure) markIn()
         break
       case 'o':
       case 'O':
-        if (!effectiveViewOnly) markOut()
+        if (!effectiveViewOnly && !isStructure) markOut()
         break
     }
   })
@@ -1404,7 +1484,9 @@ export default function App() {
         id: a.id,
         start: a.start,
         end: a.end,
-        color: colorForId(a.id),
+        // Custom colours (structure sections, recoloured notes) carry into the
+        // waveform regions; the id-derived hue stays the fallback.
+        color: a.color ?? colorForId(a.id),
       }))
     : []
 
@@ -1425,14 +1507,11 @@ export default function App() {
           way back to it, so the bar sits above everything, not in a menu. */}
       {isGuest && <GuestLinkBar />}
       {/* ---- Global header ---- */}
-      {/* `chrome-dark`: in light mode the masthead keeps the active palette's
-          dark-theme chrome (see index.css) — a dark bar anchoring the white
-          page; the LED clock gets its glow back. No-op in dark mode.
-          While the open track is editable ("armed"), the chrome takes the
+      {/* While the open track is editable ("armed"), the chrome takes the
           signal — `masthead-armed` washes it accent with an accent hairline,
           echoing the lit Edit key. View mode / the lock return it to panel. */}
       <header
-        className={`chrome-dark flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
+        className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
             : 'border-line bg-panel'
@@ -1623,6 +1702,7 @@ export default function App() {
           onDeleteTrack={removeProject}
           onMoveTrack={moveTrackToFolder}
           onCopyTrack={copyTrack}
+          onImportTrack={importTrack}
           onShareTrack={enableTrackShare}
           onCreateFolder={createFolder}
           onRenameFolder={renameFolder}
@@ -1716,7 +1796,7 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0 flex-1" />
-            {canEditSettings && (
+            {canEditSettings && !isStructure && (
               <button
                 type="button"
                 onClick={() => setShowSettings(true)}
@@ -1728,7 +1808,7 @@ export default function App() {
                 Settings
               </button>
             )}
-            {current.source && (
+            {current.source && !isStructure && (
               <button
                 type="button"
                 onClick={fitLayout}
@@ -1740,7 +1820,13 @@ export default function App() {
                 Fit
               </button>
             )}
-            {current.source && <ExportPdfButton project={current} />}
+            {/* PDF export renders the notes list — nothing to print on a
+                structure board (its sections have no note bodies). JSON
+                export carries any project kind, structure boards included. */}
+            {current.source && !isStructure && (
+              <ExportPdfButton project={current} />
+            )}
+            {current.source && <ExportJsonButton project={current} />}
             {/* Sharing is the owner's call alone — never shown on a foreign
                 (link-edited) track; the rules refuse the writes anyway.
                 A guest is nominally their project's owner, so `isForeign` is
@@ -1785,6 +1871,108 @@ export default function App() {
                   onAudioUrl={attachAudioUrl}
                 />
               )}
+            </div>
+          ) : isStructure ? (
+            /* Song-structure board: player over the section timeline, with
+               the per-section Lyrics column on the right. No notes column,
+               overview strip, or inspector — the timeline IS the workspace. */
+            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <TitleBar
+                  left="Player"
+                  right={
+                    current.source.type === 'youtube' ? undefined : 'Audio'
+                  }
+                  actions={
+                    current.source.type === 'youtube' ? (
+                      <a
+                        href={
+                          current.source.youtubeUrl ??
+                          (current.source.videoId
+                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                            : undefined)
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open the original video on YouTube (new tab)"
+                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                      >
+                        <Play size={12} />
+                        YouTube
+                      </a>
+                    ) : undefined
+                  }
+                />
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+                  <div
+                    ref={setPlayerArea}
+                    className="flex min-h-0 flex-1 flex-col justify-center"
+                  >
+                    <div ref={playerBoxRef}>
+                      <PlayerPane
+                        ref={playerRef}
+                        source={current.source}
+                        audioUrl={audioUrl}
+                        regionSpecs={regionSpecs}
+                        playbackRate={playbackRate}
+                        volume={muted ? 0 : volume}
+                        readOnly={effectiveViewOnly}
+                        onTime={handleTime}
+                        onDuration={handleDuration}
+                        onPlayingChange={handlePlaying}
+                        onSeek={seek}
+                        onCreateRange={createRange}
+                        onUpdateRegion={updateRegionGeom}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Folded transport: Play + clock + volume. Seeking lives in
+                      the board (ruler / minimap / chips / lyric headings). */}
+                  <MiniTransport
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    volume={volume}
+                    muted={muted}
+                    onPlayPause={() => (isPlaying ? pause() : play())}
+                    onSetVolume={changeVolume}
+                    onToggleMute={toggleMute}
+                  />
+                </div>
+              </div>
+
+              {/* keyed per track so tool/zoom/selection state resets on switch */}
+              <StructureEditor
+                key={current.id}
+                sections={current.annotations}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                readOnly={effectiveViewOnly}
+                onSeek={seek}
+                onCreate={createSection}
+                onSplit={splitSection}
+                onUpdate={updateAnnotation}
+                onDelete={deleteAnnotation}
+              />
+            </div>
+
+            {/* Lyrics — whole-section lyrics beside the board (wide screens).
+                Typing coalesces into one undo step per section. */}
+            <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+              <LyricsPanel
+                sections={current.annotations}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                readOnly={effectiveViewOnly}
+                onSeek={seek}
+                onUpdateLyrics={(id, lyrics) =>
+                  updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
+                }
+              />
+            </div>
             </div>
           ) : (
             /* Two columns: resizable player on the left, notes scroll on the right */

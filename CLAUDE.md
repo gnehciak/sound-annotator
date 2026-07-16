@@ -37,6 +37,16 @@ scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
+**JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
+versioned portable JSON envelope (export buttons in the editor sub-bar, share
+viewer, and track-tile menu; Import on the home page). When adding or changing
+any persisted field on `Project` / `Annotation` / `ProjectSource` /
+`ProjectSettings` (in `src/types.ts`), update `projectJson.ts` in the same
+change: add the field to the export envelope and the import sanitizer, or
+imported files silently lose it. Primitive-valued `settings` keys (including
+the project `kind`, e.g. song-structure boards) pass through automatically.
+Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
+
 ## Design Context
 
 This project uses **impeccable** for design work. Two root docs hold the
@@ -56,18 +66,19 @@ peak / danger / onbright / rowsel`). Per-note colors live in
 `src/lib/noteColors.ts`. Retune the whole theme from those files.
 
 **Themes** flow off that one token set, on two axes: `data-theme` (mode:
-dark, the default, or light — white-page: literal-white page/canvas framed by
-tinted chrome; the light ramp inverts so raised shades below panel; the global
-header keeps dark chrome via the `.chrome-dark` zone class — the "dark
-masthead") and
-`data-palette` (signal hue: amber default / cyan / vermilion / violet / mono),
-both on `<html>`. A boot script in `index.html` paints both flash-free before render;
+dark, the default — untinted graphite; or light — pure white end to end,
+hairlines carry structure, no dark masthead) and `data-palette` (signal hue:
+tangerine default / bubblegum / limeade / crayon), both on `<html>`.
+**Color-as-accent doctrine (2026-07-17):** the neutral canvas is shared by
+every palette and never tinted; color appears only as the signal, the meter,
+the note data, and the faint `--row-sel` signal wash on the selected row. A
+boot script in `index.html` paints both axes flash-free before render;
 `src/lib/theme.ts` is the runtime (`useTheme` controller, `useResolvedTheme`
 mode subscriber, `useThemeKey` mode+palette key for canvas painters, `cssRgb`
 reader). The signal splits into `--accent` (fills) and `--accent-ink` (AA text)
 — identical in dark, divergent in light. See DESIGN.md §2 "Themes & Palettes".
-When adding a token, set it in the two mode blocks and audit the six palette
-blocks (they inherit anything not redefined); AA-verify any new light pair.
+When adding a token, set it in the two mode blocks; palette blocks redefine
+only the accent family. AA-verify any new light pair.
 
 For design tasks, invoke the impeccable skill (e.g. `/impeccable critique`,
 `/impeccable audit`, `/impeccable polish`, `/impeccable live`). It reads

@@ -90,5 +90,5 @@ export default function ColorPicker({ color, onChange }: Props) {
 
 /** <input type="color"> only accepts #rrggbb. */
 function normalizeHex(c: string): string {
-  return /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#f5a623'
+  return /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#ff9f2e'
 }

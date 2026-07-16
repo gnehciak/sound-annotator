@@ -25,14 +25,14 @@
           document.documentElement.style.colorScheme = theme
           var palette = localStorage.getItem('sound-annotator:palette')
           if (
-            ['amber', 'cyan', 'vermilion', 'violet', 'mono'].indexOf(palette) <
+            ['tangerine', 'bubblegum', 'limeade', 'crayon'].indexOf(palette) <
             0
           )
-            palette = 'amber'
+            palette = 'tangerine'
           document.documentElement.dataset.palette = palette
         } catch (e) {
           document.documentElement.dataset.theme = 'dark'
-          document.documentElement.dataset.palette = 'amber'
+          document.documentElement.dataset.palette = 'tangerine'
         }
       })()
     </script>

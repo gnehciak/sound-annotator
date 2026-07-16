@@ -25,11 +25,16 @@ import NotesHeaderControls from './NotesHeaderControls'
 import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
+import ExportJsonButton from './ExportJsonButton'
 import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { useHotkeys } from '../lib/useHotkeys'
+import StructureEditor from './structure/StructureEditor'
+import LyricsPanel from './structure/LyricsPanel'
+import MiniTransport from './structure/MiniTransport'
+import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
@@ -336,7 +341,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         id: a.id,
         start: a.start,
         end: a.end,
-        color: colorForId(a.id),
+        // Custom colours (structure sections, recoloured notes) carry into
+        // the waveform regions, matching the editor.
+        color: a.color ?? colorForId(a.id),
       })),
     [annotations],
   )
@@ -403,11 +410,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const hasPlayer =
     (source?.type === 'youtube' && !!source.videoId) ||
     (source?.type === 'audio' && !!audioUrl)
+  // Song-structure projects share as the section board, not the notes list —
+  // the same StructureEditor the owner uses, in read-only mode.
+  const isStructure = isStructureProject(project)
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
-      {/* Header — `chrome-dark`: light mode's dark masthead (see index.css). */}
-      <header className="chrome-dark flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
         <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
         <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator
@@ -430,7 +439,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
           </a>
         )}
-        <ExportPdfButton project={project} />
+        {/* PDF export renders the notes list — nothing to print on a
+            structure board (its sections have no note bodies). JSON export
+            carries any project kind, structure boards included. */}
+        {!isStructure && <ExportPdfButton project={project} />}
+        <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
           href={window.location.pathname}
@@ -441,8 +454,96 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         </a>
       </header>
 
-      {/* Body: the same resizable player|notes split the editor uses — notes is
-          the fixed column, the player flexes (and stacks above on narrow). */}
+      {isStructure ? (
+        /* Structure board: player over the read-only section timeline, with
+           the Lyrics column beside it when the owner wrote any — the same
+           layout the editor uses, minus editing. */
+        <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <TitleBar
+              left="Player"
+              right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
+            />
+            <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+              {hasPlayer ? (
+                <>
+                  <div
+                    ref={setPlayerArea}
+                    className={
+                      source?.type === 'youtube'
+                        ? 'flex min-h-0 flex-1 flex-col justify-center'
+                        : 'shrink-0'
+                    }
+                  >
+                    <PlayerPane
+                      ref={playerRef}
+                      source={source}
+                      audioUrl={audioUrl}
+                      regionSpecs={regionSpecs}
+                      playbackRate={playbackRate}
+                      volume={muted ? 0 : volume}
+                      readOnly
+                      onTime={handleTime}
+                      onDuration={handleDuration}
+                      onPlayingChange={handlePlaying}
+                      onSeek={seek}
+                      onCreateRange={() => {}}
+                      onUpdateRegion={() => {}}
+                    />
+                  </div>
+                  {/* Folded transport: Play + clock + volume. Seeking lives in
+                      the board (ruler / minimap / chips / lyric headings). */}
+                  <MiniTransport
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    volume={volume}
+                    muted={muted}
+                    onPlayPause={() => (isPlaying ? pause() : play())}
+                    onSetVolume={changeVolume}
+                    onToggleMute={toggleMute}
+                  />
+                </>
+              ) : (
+                <div className="rounded border border-dashed border-line p-6 text-center text-sm text-muted">
+                  The audio for this track isn’t available, but its structure
+                  is still mapped below.
+                </div>
+              )}
+            </div>
+          </div>
+          {/* readOnly: the board never calls the mutation props. */}
+          <StructureEditor
+            key={project.id}
+            sections={annotations}
+            duration={duration}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            readOnly
+            onSeek={seek}
+            onCreate={() => {}}
+            onSplit={() => {}}
+            onUpdate={() => {}}
+            onDelete={() => {}}
+          />
+        </div>
+        {annotations.some((a) => a.lyrics?.trim()) && (
+          <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+            <LyricsPanel
+              sections={annotations}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              readOnly
+              onSeek={seek}
+              onUpdateLyrics={() => {}}
+            />
+          </div>
+        )}
+        </div>
+      ) : (
+      /* Body: the same resizable player|notes split the editor uses — notes is
+          the fixed column, the player flexes (and stacks above on narrow). */
       <div
         ref={splitRef}
         className={`flex min-h-0 flex-1 flex-col ${NOTES_SPLIT_660.row}`}
@@ -595,6 +696,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </div>
         </div>
       </div>
+      )}
 
       {help.mounted && (
         <ShortcutsOverlay

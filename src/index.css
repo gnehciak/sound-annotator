@@ -10,45 +10,42 @@
    these in JS; see lib/theme.ts). Shadows/glows are full
    box-shadow strings so each theme can tune its own bevels.
 
-   Two-amber rule: `--accent` is the bright signal for FILLS and
+   COLOR-AS-ACCENT doctrine (2026-07-17 reskin): the canvas is one
+   untinted neutral stage — graphite in dark, pure white end to end
+   in light — shared by EVERY palette. Color only ever arrives as
+   accent: the signal hue, the meter, the note-data hues, and a
+   faint signal wash on the selected row (--row-sel). Palette
+   blocks therefore redefine only the accent family; the neutrals
+   never move.
+
+   Two-signal rule: `--accent` is the bright signal for FILLS and
    graphics (Play, spines, dots, progress); `--accent-ink` is the
-   contrast-safe amber for TEXT, the LED readout, links, and the
-   focus ring. They are IDENTICAL in dark (so dark is unchanged and
-   text/fill share one amber); they diverge only in light, where
-   bright amber on a pale surface fails AA as text.
+   contrast-safe variant for TEXT, the LED readout, links, and the
+   focus ring. They are IDENTICAL in dark; they diverge only in
+   light, where a fill-strength signal fails AA as text on white.
 
-   Zone class: `.chrome-dark` re-applies the dark blocks to ONE
-   element inside the light theme — the element (and its subtree)
-   keeps full dark-theme tokens for the active palette while the
-   rest of the page stays light. Used by the global header: light
-   mode's "dark masthead". Children restyle through the same vars
-   (LED clock + glow, meter, toggles) with no component changes;
-   portalled popovers escape the zone and stay light, which is
-   right — they float over light content.
-
-   DARK — "The Listening Station" (warm-dark studio gear). Default.
+   DARK — untinted graphite. Default palette: Tangerine.
    ============================================================ */
 :root,
-[data-theme='dark'],
-[data-theme='light'] .chrome-dark {
-  --bg-ink: 26 24 19; /* #1a1813 base */
-  --bg-panel: 33 31 24; /* #211f18 panel */
-  --bg-raised: 42 39 31; /* #2a271f raised control */
-  --bg-inset: 19 18 16; /* #131210 inset readouts/editor */
-  --surface-note: 26 24 19; /* notes page — = ink in dark */
-  --border: 56 52 43; /* #38342b hairlines */
-  --border-strong: 77 71 58; /* #4d473a */
-  --text: 233 228 216; /* #e9e4d8 */
+[data-theme='dark'] {
+  --bg-ink: 22 22 24; /* #161618 base */
+  --bg-panel: 30 30 34; /* #1e1e22 panel */
+  --bg-raised: 40 40 45; /* #28282d raised control */
+  --bg-inset: 15 15 18; /* #0f0f12 inset readouts/editor */
+  --surface-note: 22 22 24; /* notes page — = ink in dark */
+  --border: 54 54 61; /* #36363d hairlines */
+  --border-strong: 78 78 87; /* #4e4e57 */
+  --text: 236 236 240; /* #ececf0 */
   --text-strong: 255 255 255; /* #fff — h1 / emphasis */
-  --text-muted: 168 158 138; /* #a89e8a — lifted for AA contrast on raised + projector legibility */
-  --accent: 245 166 35; /* #f5a623 amber — fills/graphics */
-  --accent-ink: 245 166 35; /* = accent in dark; text/LED/focus amber */
-  --meter: 156 203 99; /* #9ccb63 level-meter green */
-  --peak: 239 111 111; /* #ef6f6f meter peak (was hardcoded) */
+  --text-muted: 164 164 174; /* #a4a4ae — AA on raised + projector legibility */
+  --accent: 255 106 61; /* #ff6a3d tangerine — fills/graphics */
+  --accent-ink: 255 106 61; /* = accent in dark; text/LED/focus */
+  --meter: 255 206 51; /* #ffce33 sunshine level meter */
+  --peak: 255 82 82; /* #ff5252 meter peak */
   --danger: 251 113 133; /* #fb7185 rose-400 — delete affordances */
-  --on-bright: 26 24 19; /* text that sits ON a data-hue fill (timecode chips) — dark in both themes */
-  --on-accent: var(--on-bright); /* text ON the signal fill (Play, sign-in, copy). Same as on-bright except in mono, where the light accent is near-black and needs white text */
-  --row-sel: 42 39 31; /* selected/active note row — = raised in dark */
+  --on-bright: 22 22 24; /* text that sits ON a data-hue fill (timecode chips) — dark in both themes */
+  --on-accent: var(--on-bright); /* text ON the signal fill (Play, sign-in, copy). Diverges only where a palette's light accent is too dark for dark text (Crayon light) */
+  --row-sel: 61 41 38; /* selected/active note row — 14% signal wash over panel */
 
   /* Theme-tuned bevels/glows (see DESIGN.md §4). */
   --bevel-inset: inset 0 1px 3px rgb(0 0 0 / 0.6);
@@ -65,36 +62,33 @@
 }
 
 /* ============================================================
-   LIGHT — "Daylit Station": soft warm-paper page with bright chrome
-   lifting above it and a deep stone well below. Ramp tiers like
-   dark: inset (deepest well/screen) < ink (page) < panel (chrome) <
-   raised (controls/title bars/selection — the brightest pop). The
-   note paper stays pure white as the focal writing surface; the
-   page underneath is barely warm so white buttons + raised states
-   visibly lift instead of disappearing. Selected rows = raised so
-   they brighten neutrally — note hues stay on the chip + spine,
-   never wash the row. Body, muted, placeholder, and amber-ink are
-   AA-verified on every surface.
+   LIGHT — pure white end to end. The page, panels, chrome, and the
+   masthead are all literal white; structure comes from hairlines
+   and two shallow neutral wells (raised for title bars / hover,
+   inset for readouts / inputs / the player screen). No tinted
+   surfaces anywhere — color is carried by the signal, the meter,
+   the note data, and the faint signal wash on the selected row.
+   Body, muted, placeholder, and accent-ink are AA on every surface.
    ============================================================ */
 [data-theme='light'] {
-  --bg-ink: 233 227 213; /* #e9e3d5 deeper warm paper page — gives chrome real lift above it */
-  --bg-panel: 246 242 232; /* #f6f2e8 lifted chrome (sidebar/right dock/transport) */
-  --bg-raised: 254 252 246; /* #fefcf6 brightest tone — controls / title bars / selected rows pop above panel */
-  --bg-inset: 215 205 184; /* #d7cdb8 deepest warm stone — wells, inputs, the player screen — reads as a recessed well */
-  --surface-note: 255 255 255; /* #ffffff pure-white note paper — the focal writing surface, the brightest plane */
-  --border: 150 142 124; /* #968e7c confident hairlines — ~3:1 on page, carries structure on every tier */
-  --border-strong: 108 101 86; /* #6c6556 hover/active edges — ≥3:1 on every surface */
-  --text: 42 38 32; /* #2a2620 warm near-black */
-  --text-strong: 28 26 22; /* #1c1a16 h1 / emphasis */
-  --text-muted: 95 86 70; /* #5f5646 labels/placeholder — AA on every surface incl. inset */
-  --accent: 217 119 6; /* #d97706 signal amber — fills/graphics, ≥3:1 on white + raised */
-  --accent-ink: 135 78 5; /* #874e05 AA amber — text/LED/focus, ≥4.5:1 incl. on inset */
-  --meter: 92 142 41; /* #5c8e29 light-safe meter green */
+  --bg-ink: 255 255 255; /* #ffffff the page — pure white */
+  --bg-panel: 255 255 255; /* #ffffff chrome (sidebar/right dock/transport) — white too; hairlines carry the structure */
+  --bg-raised: 242 242 245; /* #f2f2f5 title bars / hover states / lifted controls — the one visible step below white */
+  --bg-inset: 232 232 236; /* #e8e8ec recessed screens — wells, inputs, LED readouts, the player screen */
+  --surface-note: 255 255 255; /* #ffffff note paper = the page; one clean sheet */
+  --border: 212 212 217; /* #d4d4d9 hairlines — quiet but present on white */
+  --border-strong: 160 160 168; /* #a0a0a8 hover/active edges */
+  --text: 29 29 33; /* #1d1d21 near-black */
+  --text-strong: 14 14 17; /* #0e0e11 h1 / emphasis */
+  --text-muted: 98 98 107; /* #62626b labels/placeholder — AA on white, raised, and inset */
+  --accent: 224 78 26; /* #e04e1a tangerine — fills/graphics, ≥3:1 on white */
+  --accent-ink: 166 58 16; /* #a63a10 AA tangerine — text/LED/focus, ≥4.5:1 incl. on inset */
+  --meter: 185 134 0; /* #b98600 light-safe sunshine meter */
   --peak: 213 54 47; /* #d5362f meter peak — saturated lamp red */
   --danger: 190 18 60; /* #be123c rose-700 — delete affordances */
-  --on-bright: 26 24 19; /* text on data-hue fills stays dark on light too */
-  --on-accent: var(--on-bright); /* see dark block — diverges only in mono */
-  --row-sel: 250 245 232; /* #faf5e8 warm-white "tile" — every note row sits on this; the playing/selected one swaps to pure-white surface-note. Tinted enough to read clearly distinct from pure white */
+  --on-bright: 22 22 24; /* text on data-hue fills stays dark on light too */
+  --on-accent: var(--on-bright); /* see dark block — diverges only in Crayon light */
+  --row-sel: 252 241 237; /* #fcf1ed selected/active note row — 8% signal wash over white */
 
   --bevel-inset: inset 0 1px 2px rgb(0 0 0 / 0.14);
   --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.8),
@@ -109,160 +103,66 @@
 
 /* ============================================================
    PALETTES — the signal hue is selectable via `data-palette` on
-   <html> (boot script + lib/theme.ts), default 'amber' = the two
-   blocks above. Each palette retunes the signal color and the
-   neutral tint for both modes; anything not redefined (bevels,
-   LED glow, meter, motion) inherits from the mode blocks above —
-   the glow auto-follows because it reads var(--accent-ink).
-   Every palette satisfies the same AA contract as amber: light
-   accent fills carry dark on-bright text ≥4.5 and sit ≥3:1 on
-   white + panel; accent-ink ≥4.5 as text everywhere incl. inset;
-   muted ≥4.5 on every surface in both modes.
+   <html> (boot script + lib/theme.ts), default 'tangerine' = the
+   two blocks above. The neutral canvas is SHARED: palette blocks
+   redefine only the accent family (accent / accent-ink /
+   on-accent), the meter, the row-sel signal wash, and — where the
+   signal hue would collide with delete affordances — danger.
+   Everything else (neutrals, bevels, LED glow, motion) inherits
+   from the mode blocks above; the glow auto-follows because it
+   reads var(--accent-ink). Every palette satisfies the same AA
+   contract: light accent fills carry ≥4.5 on-accent text and sit
+   ≥3:1 on white; accent-ink ≥4.5 as text everywhere incl. inset.
    ============================================================ */
 
-/* CYAN — "Scope": phosphor trace on cool graphite. */
-[data-theme='dark'][data-palette='cyan'],
-[data-theme='light'][data-palette='cyan'] .chrome-dark {
-  --bg-ink: 19 22 25; /* #131619 */
-  --bg-panel: 25 29 33; /* #191d21 */
-  --bg-raised: 32 38 43; /* #20262b */
-  --bg-inset: 14 17 19; /* #0e1113 */
-  --surface-note: 19 22 25;
-  --border: 45 53 59; /* #2d353b */
-  --border-strong: 69 82 92; /* #45525c */
-  --text: 221 228 233; /* #dde4e9 */
-  --text-muted: 147 161 172; /* #93a1ac */
-  --accent: 53 224 216; /* #35e0d8 phosphor cyan */
-  --accent-ink: 53 224 216;
-  --on-bright: 16 19 20; /* #101314 */
-  --row-sel: 32 38 43;
+/* BUBBLEGUM — hot magenta signal, aqua meter. Danger shifts to
+   plain red so delete affordances never read as the pink signal. */
+[data-theme='dark'][data-palette='bubblegum'] {
+  --accent: 255 79 209; /* #ff4fd1 */
+  --accent-ink: 255 79 209;
+  --meter: 46 230 200; /* #2ee6c8 aqua */
+  --danger: 255 92 92; /* #ff5c5c red */
+  --row-sel: 59 36 57; /* 13% signal wash over panel */
 }
-[data-theme='light'][data-palette='cyan'] {
-  --bg-ink: 232 237 237; /* #e8eded cool paper page */
-  --bg-panel: 240 245 244; /* #f0f5f4 lifted cool chrome */
-  --bg-raised: 251 253 253; /* #fbfdfd brightest cool — controls/selection */
-  --bg-inset: 209 222 220; /* #d1dedc deepest cool stone — wells/screens */
-  --border: 142 159 156; /* #8e9f9c confident cool hairline */
-  --border-strong: 103 117 114; /* #677572 */
-  --text: 32 38 42; /* #20262a */
-  --text-strong: 20 24 27; /* #14181b */
-  --text-muted: 77 89 97; /* #4d5961 */
-  --accent: 26 161 149; /* #1aa195 */
-  --accent-ink: 17 94 89; /* #115e59 */
-  --on-bright: 16 19 20;
-  --row-sel: 237 246 245; /* #edf6f5 cool-tinted white note tile */
+[data-theme='light'][data-palette='bubblegum'] {
+  --accent: 214 31 174; /* #d61fae */
+  --accent-ink: 154 16 124; /* #9a107c */
+  --meter: 13 148 136; /* #0d9488 */
+  --danger: 185 28 28; /* #b91c1c red-700 */
+  --row-sel: 252 239 249; /* 7% signal wash over white */
 }
 
-/* VERMILION — "Tally": broadcast REC light on neutral studio gray.
-   Danger shifts to pink here so delete affordances never read as
-   the signal red. */
-[data-theme='dark'][data-palette='vermilion'],
-[data-theme='light'][data-palette='vermilion'] .chrome-dark {
-  --bg-ink: 23 21 20; /* #171514 */
-  --bg-panel: 30 27 26; /* #1e1b1a */
-  --bg-raised: 38 34 32; /* #262220 */
-  --bg-inset: 16 15 14; /* #100f0e */
-  --surface-note: 23 21 20;
-  --border: 55 50 47; /* #37322f */
-  --border-strong: 79 72 67; /* #4f4843 */
-  --text: 232 227 224; /* #e8e3e0 */
-  --text-muted: 163 154 148; /* #a39a94 */
-  --accent: 255 86 64; /* #ff5640 tally red */
-  --accent-ink: 255 86 64;
-  --danger: 244 114 182; /* #f472b6 pink-400 */
-  --on-bright: 23 17 16; /* #171110 */
-  --row-sel: 38 34 32;
+/* LIMEADE — lime signal on dark, deepened to emerald in light so
+   text and fills stay AA on white; violet meter as the wink. */
+[data-theme='dark'][data-palette='limeade'] {
+  --accent: 192 240 60; /* #c0f03c */
+  --accent-ink: 192 240 60;
+  --meter: 180 151 255; /* #b497ff violet */
+  --row-sel: 49 55 37; /* 12% signal wash over panel */
 }
-[data-theme='light'][data-palette='vermilion'] {
-  --bg-ink: 241 234 229; /* #f1eae5 warm paper page (slightly redder) */
-  --bg-panel: 247 242 238; /* #f7f2ee lifted warm chrome */
-  --bg-raised: 254 250 247; /* #fefaf7 brightest — controls/selection */
-  --bg-inset: 226 213 205; /* #e2d5cd deepest warm stone */
-  --border: 161 142 132; /* #a18e84 confident warm hairline */
-  --border-strong: 113 99 91; /* #71635b */
-  --text: 38 33 31; /* #26211f */
-  --text-strong: 26 21 18; /* #1a1512 */
-  --text-muted: 93 83 78; /* #5d534e */
-  --accent: 223 81 39; /* #df5127 */
-  --accent-ink: 163 42 18; /* #a32a12 */
-  --danger: 190 24 93; /* #be185d pink-700 */
-  --on-bright: 23 17 16;
-  --row-sel: 250 240 232; /* #faf0e8 warm-tinted white note tile */
+[data-theme='light'][data-palette='limeade'] {
+  --accent: 22 163 74; /* #16a34a emerald */
+  --accent-ink: 22 101 52; /* #166534 */
+  --meter: 124 88 232; /* #7c58e8 */
+  --row-sel: 236 248 241; /* 8% signal wash over white */
 }
 
-/* MONO — "Print": pure-grayscale chrome and an achromatic signal
-   (bright white on dark, near-black on light). Color survives only
-   as data (note hues) and alarms (danger, the meter's red peak);
-   the meter bars themselves go gray. The light accent is the one
-   place --on-accent diverges from --on-bright: a near-black fill
-   needs white text, while data-hue chips keep dark text. */
-[data-theme='dark'][data-palette='mono'],
-[data-theme='light'][data-palette='mono'] .chrome-dark {
-  --bg-ink: 22 22 22; /* #161616 */
-  --bg-panel: 29 29 29; /* #1d1d1d */
-  --bg-raised: 38 38 38; /* #262626 */
-  --bg-inset: 16 16 16; /* #101010 */
-  --surface-note: 22 22 22;
-  --border: 51 51 51; /* #333333 */
-  --border-strong: 79 79 79; /* #4f4f4f */
-  --text: 230 230 230; /* #e6e6e6 */
-  --text-muted: 160 160 160; /* #a0a0a0 */
-  --accent: 240 240 240; /* #f0f0f0 white signal */
-  --accent-ink: 240 240 240;
-  --meter: 184 184 184; /* #b8b8b8 gray bars; the red peak lamp stays */
-  --on-bright: 22 22 22; /* #161616 */
-  --on-accent: 22 22 22;
-  --row-sel: 38 38 38;
+/* CRAYON — cobalt signal, green meter; the playfulness lives in
+   the full-saturation note data. The light accent is the one place
+   --on-accent diverges from --on-bright: dark text fails AA on the
+   cobalt fill, so it carries white text (data-hue chips keep dark). */
+[data-theme='dark'][data-palette='crayon'] {
+  --accent: 79 139 255; /* #4f8bff */
+  --accent-ink: 79 139 255;
+  --meter: 61 220 116; /* #3ddc74 */
+  --row-sel: 37 45 65; /* 14% signal wash over panel */
 }
-[data-theme='light'][data-palette='mono'] {
-  --bg-ink: 234 234 234; /* #eaeaea neutral paper page */
-  --bg-panel: 243 243 243; /* #f3f3f3 lifted chrome */
-  --bg-raised: 252 252 252; /* #fcfcfc brightest — controls/selection */
-  --bg-inset: 215 215 215; /* #d7d7d7 deepest gray well */
-  --border: 145 145 145; /* #919191 confident hairline */
-  --border-strong: 100 100 100; /* #646464 */
-  --text: 34 34 34; /* #222222 */
-  --text-strong: 17 17 17; /* #111111 */
-  --text-muted: 85 85 85; /* #555555 */
-  --accent: 43 43 43; /* #2b2b2b near-black signal */
-  --accent-ink: 17 17 17; /* #111111 — links keep their underline */
-  --meter: 107 107 107; /* #6b6b6b */
-  --on-bright: 22 22 22;
-  --on-accent: 255 255 255; /* white text on the near-black signal fill */
-  --row-sel: 242 242 242; /* #f2f2f2 off-white gray note tile */
-}
-
-/* VIOLET — "Lab": synth-hardware violet on neutral-cool gray. */
-[data-theme='dark'][data-palette='violet'],
-[data-theme='light'][data-palette='violet'] .chrome-dark {
-  --bg-ink: 22 21 24; /* #161518 */
-  --bg-panel: 28 27 31; /* #1c1b1f */
-  --bg-raised: 36 34 40; /* #242228 */
-  --bg-inset: 15 14 17; /* #0f0e11 */
-  --surface-note: 22 21 24;
-  --border: 50 47 56; /* #322f38 */
-  --border-strong: 73 66 89; /* #494259 */
-  --text: 229 226 234; /* #e5e2ea */
-  --text-muted: 155 148 168; /* #9b94a8 */
-  --accent: 180 151 255; /* #b497ff */
-  --accent-ink: 180 151 255;
-  --on-bright: 21 18 26; /* #15121a */
-  --row-sel: 36 34 40;
-}
-[data-theme='light'][data-palette='violet'] {
-  --bg-ink: 235 233 240; /* #ebe9f0 cool paper page */
-  --bg-panel: 243 241 247; /* #f3f1f7 lifted cool chrome */
-  --bg-raised: 252 251 255; /* #fcfbff brightest — controls/selection */
-  --bg-inset: 218 213 230; /* #dad5e6 deepest cool-violet stone */
-  --border: 155 146 178; /* #9b92b2 confident cool hairline */
-  --border-strong: 110 102 128; /* #6e6680 */
-  --text: 33 30 38; /* #211e26 */
-  --text-strong: 23 20 27; /* #17141b */
-  --text-muted: 86 79 99; /* #564f63 */
-  --accent: 147 102 237; /* #9366ed */
-  --accent-ink: 91 33 182; /* #5b21b6 */
-  --on-bright: 21 18 26;
-  --row-sel: 240 237 250; /* #f0edfa cool-violet tinted white note tile */
+[data-theme='light'][data-palette='crayon'] {
+  --accent: 51 93 240; /* #335df0 */
+  --accent-ink: 36 68 204; /* #2444cc */
+  --meter: 30 158 78; /* #1e9e4e */
+  --on-accent: 255 255 255; /* white text on the cobalt signal fill */
+  --row-sel: 241 244 254; /* 7% signal wash over white */
 }
 
 html,
@@ -280,9 +180,8 @@ body {
 }
 
 /* Armed masthead: while the open track is editable, the header chrome
-   takes the signal — an opaque accent-over-panel mix (opaque so the
-   light theme's dark masthead stays a dark bar; see .chrome-dark) with
-   an accent hairline. Follows the active palette via the tokens. */
+   takes the signal — an opaque accent-over-panel mix with an accent
+   hairline. Follows the active palette via the tokens. */
 .masthead-armed {
   background-color: color-mix(
     in srgb,

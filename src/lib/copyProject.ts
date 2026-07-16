@@ -84,17 +84,27 @@ async function fetchBlob(url: string): Promise<Blob> {
   return res.blob()
 }
 
+export interface CopyProjectOptions {
+  /**
+   * Folder the copy lands in. Defaults to the source's folder for a
+   * same-owner copy, the root otherwise (a foreign folder id means nothing
+   * in the recipient's library).
+   */
+  folderId?: string | null
+}
+
 /**
  * Copy a (shared) project into `uid`'s account and resolve with the saved
  * copy (id, ownerId, etc. populated). `onStatus` receives short progress
- * labels for the UI. Images are best-effort — one that can't be fetched keeps
- * its original URL. A same-owner copy stays in the source's folder; a
- * cross-owner copy (from the share viewer) lands in the root.
+ * labels for the UI. The source is only a link now, so it copies verbatim and
+ * costs nothing; images are best-effort — one that can't be fetched keeps its
+ * original URL.
  */
 export async function copySharedProject(
   uid: string,
   src: Project,
   onStatus?: (label: string) => void,
+  opts?: CopyProjectOptions,
 ): Promise<Project> {
   const newId = crypto.randomUUID()
 
@@ -111,8 +121,9 @@ export async function copySharedProject(
 
   // Both source kinds are now just a link (YouTube or a direct audio URL), so
   // the source copies as-is — a copy points at the same audio the original
-  // does. Note images still get duplicated below: those we host, and they'd
-  // die with the original owner's project.
+  // does. Nothing is fetched here, so a copy can no longer fail on dead audio:
+  // a link that has rotted simply lands the copy on the re-attach prompt, which
+  // is what the old `onMissingAudio: 'detach'` existed to arrange.
   const source = src.source
 
   // Note images: re-upload each referenced image and map old URL → new.
@@ -139,13 +150,22 @@ export async function copySharedProject(
     title,
     source,
     annotations: src.annotations.map((a) => rewriteAnnotation(a, urlMap)),
+    // Settings travel with the copy — they carry presentation prefs and the
+    // project kind (a song-structure copy must open as a structure board).
+    settings: src.settings,
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
-    // Same-account copies stay in the source's folder; cross-account copies
-    // (the share viewer) land in the root — the source's folder id is the
-    // original owner's and means nothing in the recipient's library.
-    folderId: src.ownerId === uid ? src.folderId ?? null : null,
+    // An explicit destination (import) wins; otherwise same-account copies
+    // stay in the source's folder and cross-account copies (the share viewer)
+    // land in the root — the source's folder id is the original owner's and
+    // means nothing in the recipient's library.
+    folderId:
+      opts?.folderId !== undefined
+        ? opts.folderId
+        : src.ownerId === uid
+          ? src.folderId ?? null
+          : null,
   }
   await saveProject(uid, copy)
   return copy
