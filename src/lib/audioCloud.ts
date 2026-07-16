@@ -39,3 +39,44 @@ export async function deleteAudioCloud(
     json: { prefix: audioPath(uid, projectId) },
   })
 }
+
+// The temporary audio a YouTube project's section detection runs against —
+// one object, deleted server-side once the analysis finalizes.
+const analysisPath = (uid: string, projectId: string) =>
+  `users/${uid}/analysis/${projectId}`
+
+/** Upload the analysis audio for a YouTube project (same client-streamed
+ *  path as uploadAudio, different prefix) and resolve with its URL. */
+export async function uploadAnalysisAudio(
+  uid: string,
+  projectId: string,
+  file: File | Blob,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const blob = await upload(analysisPath(uid, projectId), file, {
+    access: 'public',
+    handleUploadUrl: '/api/blobs/upload',
+    contentType: (file as File).type || 'audio/mpeg',
+    multipart: true,
+    onUploadProgress: ({ percentage }) => onProgress?.(percentage / 100),
+  })
+  return blob.url
+}
+
+/** Sweep a deleted project's analysis artifacts: the saved stems, and any
+ *  temporary analysis upload a crashed run left behind. */
+export async function deleteAnalysisArtifacts(
+  uid: string,
+  projectId: string,
+): Promise<void> {
+  await Promise.all([
+    api('/api/blobs/delete', {
+      method: 'POST',
+      json: { prefix: `users/${uid}/stems/${projectId}/` },
+    }),
+    api('/api/blobs/delete', {
+      method: 'POST',
+      json: { prefix: analysisPath(uid, projectId) },
+    }),
+  ])
+}

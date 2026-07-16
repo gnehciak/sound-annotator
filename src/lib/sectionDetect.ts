@@ -14,17 +14,27 @@ export interface DetectedSection {
 }
 
 export interface AnalysisState {
-  status: 'none' | 'running' | 'done' | 'error'
+  /** 'audio-required': a YouTube project needs an analysis audio upload first. */
+  status: 'none' | 'audio-required' | 'running' | 'done' | 'error'
   sections?: DetectedSection[]
   bpm?: number
+  /** Blob URLs of the saved stems (vocals/drums/bass/guitar/piano/other). */
+  stems?: Record<string, string>
   error?: string
 }
 
-/** Kick off (or join / return the cached result of) the project's analysis. */
-export function startSectionDetection(projectId: string): Promise<AnalysisState> {
+/**
+ * Kick off (or join / return the cached result of) the project's analysis.
+ * YouTube projects pass the just-uploaded analysis audio's URL; without one
+ * the server answers 'audio-required'.
+ */
+export function startSectionDetection(
+  projectId: string,
+  audioUrl?: string,
+): Promise<AnalysisState> {
   return api<AnalysisState>(
     `/api/projects/${encodeURIComponent(projectId)}/analyze`,
-    { method: 'POST' },
+    { method: 'POST', json: audioUrl ? { audioUrl } : {} },
   )
 }
 

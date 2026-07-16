@@ -32,7 +32,12 @@ import {
 import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
-import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
+import {
+  uploadAudio,
+  deleteAudioCloud,
+  uploadAnalysisAudio,
+  deleteAnalysisArtifacts,
+} from './lib/audioCloud'
 import {
   uploadNoteImage,
   deleteProjectImages,
@@ -839,6 +844,9 @@ export default function App() {
       )
       void deleteProjectImages(user.uid, id).catch((err) =>
         console.error('Failed to delete cloud images:', err),
+      )
+      void deleteAnalysisArtifacts(user.uid, id).catch((err) =>
+        console.error('Failed to delete analysis artifacts:', err),
       )
     }
     void deleteProjectDoc(id).catch((err) =>
@@ -1772,32 +1780,48 @@ export default function App() {
                   left="Player"
                   right={current.source.type === 'youtube' ? undefined : 'Audio'}
                   actions={
-                    current.source.type === 'youtube' ? (
-                      <a
-                        href={
-                          current.source.youtubeUrl ??
-                          (current.source.videoId
-                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                            : undefined)
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open the original video on YouTube (new tab)"
-                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-                      >
-                        <Play size={12} />
-                        YouTube
-                      </a>
-                    ) : /* Detection reads the uploaded audio from Blob and is
-                         the owner's call (it spends their Replicate credit),
-                         so it needs the cloud URL, edit mode, and ownership. */
-                    current.source.audioUrl && !effectiveViewOnly && !isForeign ? (
-                      <DetectSectionsButton
-                        key={current.id}
-                        projectId={current.id}
-                        onSections={applyDetectedSections}
-                      />
-                    ) : undefined
+                    <>
+                      {current.source.type === 'youtube' && (
+                        <a
+                          href={
+                            current.source.youtubeUrl ??
+                            (current.source.videoId
+                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                              : undefined)
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open the original video on YouTube (new tab)"
+                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                          <Play size={12} />
+                          YouTube
+                        </a>
+                      )}
+                      {/* Detection is the owner's call (it spends their
+                          Replicate credit): audio tracks need their cloud
+                          URL; YouTube tracks prompt for a one-shot analysis
+                          upload inside the button. */}
+                      {user &&
+                        !effectiveViewOnly &&
+                        !isForeign &&
+                        (current.source.type === 'youtube' ||
+                          current.source.audioUrl) && (
+                          <DetectSectionsButton
+                            key={current.id}
+                            projectId={current.id}
+                            uploadAnalysisAudio={(file, onProgress) =>
+                              uploadAnalysisAudio(
+                                user.uid,
+                                current.id,
+                                file,
+                                onProgress,
+                              )
+                            }
+                            onSections={applyDetectedSections}
+                          />
+                        )}
+                    </>
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
