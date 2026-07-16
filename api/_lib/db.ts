@@ -30,6 +30,9 @@ export interface ProjectRow {
   published_by_name: string | null
   /** AI section-detection job state + cached result (api/projects/[id]/analyze.ts). */
   analysis: unknown
+  // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
+  // it is a credential, not project data.
+  guest_token_hash: string | null
 }
 
 export interface FolderRow {

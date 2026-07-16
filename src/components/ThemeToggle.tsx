@@ -21,18 +21,16 @@ const MODE_NAME = { system: 'System', light: 'Light', dark: 'Dark' } as const
 // only the ACTIVE palette's tokens exist on :root (the others can't be
 // previewed through CSS variables). Keep in sync with src/index.css.
 const SWATCH: Record<Palette, Record<ResolvedTheme, string>> = {
-  amber: { dark: '#f5a623', light: '#cc7a0a' },
-  cyan: { dark: '#35e0d8', light: '#139087' },
-  vermilion: { dark: '#ff5640', light: '#df5127' },
-  violet: { dark: '#b497ff', light: '#9366ed' },
-  mono: { dark: '#f0f0f0', light: '#2b2b2b' },
+  tangerine: { dark: '#ff6a3d', light: '#e04e1a' },
+  bubblegum: { dark: '#ff4fd1', light: '#d61fae' },
+  limeade: { dark: '#c0f03c', light: '#16a34a' },
+  crayon: { dark: '#4f8bff', light: '#335df0' },
 }
 const PALETTE_NAME: Record<Palette, string> = {
-  amber: 'Amber',
-  cyan: 'Cyan',
-  vermilion: 'Vermilion',
-  violet: 'Violet',
-  mono: 'Mono',
+  tangerine: 'Tangerine',
+  bubblegum: 'Bubblegum',
+  limeade: 'Limeade',
+  crayon: 'Crayon',
 }
 
 /**

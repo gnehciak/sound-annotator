@@ -33,7 +33,6 @@ import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
 import {
-  uploadAudio,
   deleteAudioCloud,
   uploadAnalysisAudio,
   deleteAnalysisArtifacts,
@@ -45,6 +44,7 @@ import {
 } from './lib/imageCloud'
 import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { copySharedProject } from './lib/copyProject'
+import { parseProjectJson } from './lib/projectJson'
 import { makeTextBlock } from './lib/noteBlocks'
 import {
   sectionsToAnnotations,
@@ -70,6 +70,7 @@ import {
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
+import GuestLinkBar from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
@@ -78,6 +79,7 @@ import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import DetectSectionsButton from './components/DetectSectionsButton'
 import StemMixer from './components/StemMixer'
+import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
@@ -90,10 +92,15 @@ import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
 import HomePage from './components/HomePage'
 import ExportPdfButton from './components/ExportPdfButton'
+import ExportJsonButton from './components/ExportJsonButton'
 import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
+import StructureEditor from './components/structure/StructureEditor'
+import LyricsPanel from './components/structure/LyricsPanel'
+import MiniTransport from './components/structure/MiniTransport'
+import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
 
@@ -122,7 +129,7 @@ function syncUrl(id: string | null, mode: 'push' | 'replace' = 'push') {
 const STEP_WINDOW = 1200
 
 export default function App() {
-  const { user, signOut } = useAuth()
+  const { user, isGuest, signOut } = useAuth()
   // Color theme controller (System / Light / Dark mode + signal palette).
   // Owns <html data-theme> and <html data-palette>.
   const {
@@ -172,7 +179,6 @@ export default function App() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
-  const [uploadPct, setUploadPct] = useState<number | null>(null)
   // overviewOpen, playOnce, noteOrder are now derived below from project
   // settings (with the user-fallback states above as defaults).
   // Whether the notes search row is revealed (the query itself lives in
@@ -306,6 +312,10 @@ export default function App() {
   }, [])
 
   const current = projects.find((p) => p.id === currentId) ?? null
+
+  // Song-structure projects open the visual section board instead of the
+  // notes workspace; their annotations are the sections (lib/sections.ts).
+  const isStructure = isStructureProject(current)
 
   // Home vs editor: no router — the home page is simply "no open track".
   // Deriving from `current` (not just currentId) self-heals a dangling id.
@@ -504,7 +514,9 @@ export default function App() {
   // The inspector is editing-only (never in view-only mode). In dock mode it's a
   // persistent 3rd column — open even with nothing selected (it shows an empty
   // state); the modal only appears on demand, when a note is actually selected.
-  const showDock = !effectiveViewOnly && effectiveWindowMode === 'dock'
+  // Structure projects have no note inspector at all.
+  const showDock =
+    !effectiveViewOnly && effectiveWindowMode === 'dock' && !isStructure
   const showModal =
     !effectiveViewOnly && !!selectedNote && effectiveWindowMode === 'modal'
   const transportLocked = showModal
@@ -592,6 +604,29 @@ export default function App() {
     let cancelled = false
     setLoadingProjects(true)
     hydratedRef.current = false
+
+    // A guest owns exactly one project and has no library to list (GET
+    // /api/projects is Clerk-only by design — a guest owner id is not a
+    // secret, so it must never be a key to anything). Their project comes
+    // straight off the URL, and they land in it rather than on a home screen
+    // that would be empty by construction.
+    if (isGuest) {
+      const id = new URLSearchParams(window.location.search).get('track')
+      void (async () => {
+        const p = id ? await fetchSharedProject(id) : null
+        if (cancelled) return
+        const all = p ? [p] : []
+        setFolders([])
+        resetHistory(all, p ? p.id : null)
+        persistedRef.current = new Map(all.map((x) => [x.id, x]))
+        hydratedRef.current = true
+        setLoadingProjects(false)
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
+
     Promise.all([
       fetchProjects(user.uid),
       // Folders are non-critical chrome: a failed read (offline blip, rules
@@ -614,8 +649,17 @@ export default function App() {
         if (urlId && !loaded.some((p) => p.id === urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
-          if (foreign && foreign.editableByLink && foreign.ownerId !== user.uid)
-            all = [...loaded, foreign]
+          // Guest projects join the session too — that's the admin page's Edit
+          // button (components/AdminGuests). Admin-ness isn't decided here: the
+          // API grants owner rights over guest rows only to an ADMIN_EMAILS
+          // address, so a non-admin who opened this URL would just watch their
+          // saves fail. Keeping the check server-side is the point.
+          const joinable =
+            foreign != null &&
+            foreign.ownerId !== user.uid &&
+            (foreign.editableByLink === true ||
+              foreign.ownerId?.startsWith('guest:') === true)
+          if (joinable) all = [...loaded, foreign]
         }
         const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
         if (urlId && !deepLink) syncUrl(null, 'replace')
@@ -634,7 +678,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [user, resetHistory])
+  }, [user, isGuest, resetHistory])
 
   // Back/forward: re-derive the open track from the URL. An id that no longer
   // exists (deleted track, stale entry) falls back to home and cleans the URL.
@@ -733,6 +777,10 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
+    // Guests have no images to sweep and no credentials to sweep with — the
+    // endpoint is Clerk-only, so this would just 401 into the console on every
+    // project they open.
+    if (isGuest) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -826,7 +874,7 @@ export default function App() {
     goHome()
   }
 
-  function createProject() {
+  function createProject(kind?: 'structure') {
     const p: Project = {
       id: uid(),
       title: 'Untitled track',
@@ -834,6 +882,9 @@ export default function App() {
       updatedAt: now(),
       // Born into the folder that's open on the home page (null = root).
       folderId: openFolderId,
+      // A song-structure project marks its kind in settings (types.ts) so it
+      // opens as the section board; classic tracks carry no settings yet.
+      ...(kind === 'structure' ? { settings: { kind } } : {}),
     }
     // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
     // so undo can't later cross it and silently drop the new track.
@@ -923,6 +974,27 @@ export default function App() {
     [user, setProjects],
   )
 
+  // Import a track from an exported JSON file (see lib/projectJson.ts): parse
+  // and sanitise the document, then run it through the copy machinery so the
+  // import gets a fresh id and re-hosts its audio/images under this account.
+  // Lands in the folder that's open on the home page. Errors (bad file, dead
+  // audio the strict path would trip on) surface in the Import button's alert.
+  const importTrack = useCallback(
+    async (file: File) => {
+      if (!user) return
+      const parsed = parseProjectJson(await file.text())
+      const imported = await copySharedProject(
+        user.uid,
+        { ...parsed, ownerId: user.uid },
+        undefined,
+        { folderId: openFolderId },
+      )
+      persistedRef.current.set(imported.id, imported)
+      setProjects((ps) => [imported, ...ps])
+    },
+    [user, openFolderId, setProjects],
+  )
+
   // Turn on view-only sharing for a track without opening the editor — the
   // home-page "Share link" menu item flips the gate so the link works.
   const enableTrackShare = useCallback(
@@ -958,40 +1030,41 @@ export default function App() {
     }
   }
 
-  async function attachAudioFile(file: File) {
+  /**
+   * Point the track at an audio file already on the web. Nothing is uploaded —
+   * the URL is stored as-is and wavesurfer streams from it, so the file stays
+   * the host's problem (and their bandwidth). Whether it actually loads is up
+   * to that host's CORS policy; see components/AudioUrlForm.
+   */
+  function attachAudioUrl(rawUrl: string) {
     if (!current || !user) return
     const projectId = current.id
     const startTitle = current.title
+    // A name for the UI only — the last path segment, minus any query string.
+    let fileName = 'Linked audio'
+    try {
+      const parsed = new URL(rawUrl)
+      fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '') || fileName
+    } catch {
+      alert("That doesn't look like a link. Paste a full URL starting with https://")
+      return
+    }
 
-    // Play the local file immediately while the upload runs in the background.
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
-    const localUrl = URL.createObjectURL(file)
-    audioUrlRef.current = localUrl
-    setAudioUrl(localUrl)
     setNeedsAudioFile(false)
-    setUploadPct(0)
-
-    // Switch to the player view right away (with local playback) so the upload
-    // progress bar is visible. The audioUrl gets filled in once the upload ends.
+    // Point the player at it now: the load effect keys on `currentId`, and this
+    // is the project already open, so it won't re-run and won't do it for us.
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+    setAudioUrl(rawUrl)
     patchProject(projectId, {
-      source: { type: 'audio', fileName: file.name },
+      source: { type: 'audio', fileName, audioUrl: rawUrl },
       title:
         startTitle === 'Untitled track'
-          ? file.name.replace(/\.[^.]+$/, '')
+          ? fileName.replace(/\.[^.]+$/, '')
           : startTitle,
     })
-
-    try {
-      const url = await uploadAudio(user.uid, projectId, file, setUploadPct)
-      patchProject(projectId, {
-        source: { type: 'audio', fileName: file.name, audioUrl: url },
-      })
-    } catch (err) {
-      console.error('Audio upload failed:', err)
-      alert('Audio upload failed — check your connection and try again.')
-    } finally {
-      setUploadPct(null)
-    }
   }
 
   // ---- annotation mutations ---------------------------------------------
@@ -1212,6 +1285,48 @@ export default function App() {
     [commitAnnotations, patchProject],
   )
 
+  // ---- song-structure sections (structure projects only) -----------------
+  // A section is an annotation with `structure: true` + a name; both live in
+  // the same undoable history as note edits, so ⌘Z spans every gesture.
+  function createSection(id: string, start: number, end: number) {
+    if (!current) return
+    const s = Math.max(0, Math.round(start * 10) / 10)
+    const e = Math.max(Math.round(end * 10) / 10, s + 0.5)
+    commitAnnotations(current.id, (anns) => [
+      ...anns,
+      {
+        id,
+        start: s,
+        end: e,
+        structure: true,
+        contentHtml: '',
+        blocks: [makeTextBlock('')],
+        createdAt: now(),
+      },
+    ])
+  }
+
+  // Cut a section in two: the original keeps [start, t), the new one takes
+  // [t, end) and inherits the name + colour (renamed in one click via presets).
+  function splitSection(id: string, t: number) {
+    if (!current) return
+    const cut = Math.round(t * 10) / 10
+    commitAnnotations(current.id, (anns) => {
+      const a = anns.find((x) => x.id === id)
+      if (!a || a.end == null) return anns
+      if (cut < a.start + 0.5 || cut > a.end - 0.5) return anns
+      const right: Annotation = {
+        ...a,
+        id: uid(),
+        start: cut,
+        contentHtml: '',
+        blocks: [makeTextBlock('')],
+        createdAt: now(),
+      }
+      return [...anns.map((x) => (x.id === id ? { ...x, end: cut } : x)), right]
+    })
+  }
+
   function markIn() {
     const t = playerRef.current?.getCurrentTime?.() ?? currentTime
     setPendingIn((prev) =>
@@ -1299,17 +1414,19 @@ export default function App() {
         e.preventDefault()
         if (duration > 0) seek(duration)
         break
+      // Note-taking keys are the notes workspace's; the structure board has
+      // its own tool keys (S/C/⌫, handled inside StructureEditor).
       case 'n':
       case 'N':
-        if (!effectiveViewOnly) addAnnotationAtCurrent()
+        if (!effectiveViewOnly && !isStructure) addAnnotationAtCurrent()
         break
       case 'i':
       case 'I':
-        if (!effectiveViewOnly) markIn()
+        if (!effectiveViewOnly && !isStructure) markIn()
         break
       case 'o':
       case 'O':
-        if (!effectiveViewOnly) markOut()
+        if (!effectiveViewOnly && !isStructure) markOut()
         break
     }
   })
@@ -1407,7 +1524,9 @@ export default function App() {
         id: a.id,
         start: a.start,
         end: a.end,
-        color: colorForId(a.id),
+        // Custom colours (structure sections, recoloured notes) carry into the
+        // waveform regions; the id-derived hue stays the fallback.
+        color: a.color ?? colorForId(a.id),
       }))
     : []
 
@@ -1424,27 +1543,30 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
+      {/* Guests have no account to hold their work — their links are the only
+          way back to it, so the bar sits above everything, not in a menu. */}
+      {isGuest && <GuestLinkBar />}
       {/* ---- Global header ---- */}
-      {/* `chrome-dark`: in light mode the masthead keeps the active palette's
-          dark-theme chrome (see index.css) — a dark bar anchoring the white
-          page; the LED clock gets its glow back. No-op in dark mode.
-          While the open track is editable ("armed"), the chrome takes the
+      {/* While the open track is editable ("armed"), the chrome takes the
           signal — `masthead-armed` washes it accent with an accent hairline,
           echoing the lit Edit key. View mode / the lock return it to panel. */}
       <header
-        className={`chrome-dark flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
+        className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
             : 'border-line bg-panel'
         }`}
       >
         {/* The wordmark doubles as the way home (the title sub-bar's back
-            arrow is the explicit route while a track is open). */}
+            arrow is the explicit route while a track is open) — except for a
+            guest, who has no library: one project is all they can have, and
+            "home" would offer them a New track the API refuses to create. */}
         <button
           type="button"
-          onClick={goHome}
-          title="Back to the library"
-          className="press flex items-center gap-[9px]"
+          onClick={isGuest ? undefined : goHome}
+          disabled={isGuest}
+          title={isGuest ? 'Sound Annotator' : 'Back to the library'}
+          className="press flex items-center gap-[9px] disabled:cursor-default"
         >
           <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
           <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
@@ -1620,6 +1742,7 @@ export default function App() {
           onDeleteTrack={removeProject}
           onMoveTrack={moveTrackToFolder}
           onCopyTrack={copyTrack}
+          onImportTrack={importTrack}
           onShareTrack={enableTrackShare}
           onCreateFolder={createFolder}
           onRenameFolder={renameFolder}
@@ -1629,19 +1752,22 @@ export default function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Sub-bar: track title + per-track tools. */}
           <div className="flex h-[50px] items-center gap-2 border-b border-line bg-ink/60 px-3.5">
-            {/* Back to where the track lives: its folder, or the root library. */}
-            <button
-              type="button"
-              onClick={goBack}
-              title={`Back to ${
-                folders.find((f) => f.id === current.folderId)?.name ??
-                'the library'
-              }`}
-              aria-label="Back"
-              className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
-            >
-              <ArrowLeft size={16} />
-            </button>
+            {/* Back to where the track lives: its folder, or the root library.
+                A guest has neither — this project is the whole session. */}
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={goBack}
+                title={`Back to ${
+                  folders.find((f) => f.id === current.folderId)?.name ??
+                  'the library'
+                }`}
+                aria-label="Back"
+                className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
             {effectiveViewOnly ? (
               <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
                 {current.title}
@@ -1710,7 +1836,7 @@ export default function App() {
               </div>
             )}
             <div className="min-w-0 flex-1" />
-            {canEditSettings && (
+            {canEditSettings && !isStructure && (
               <button
                 type="button"
                 onClick={() => setShowSettings(true)}
@@ -1722,7 +1848,7 @@ export default function App() {
                 Settings
               </button>
             )}
-            {current.source && (
+            {current.source && !isStructure && (
               <button
                 type="button"
                 onClick={fitLayout}
@@ -1734,10 +1860,20 @@ export default function App() {
                 Fit
               </button>
             )}
-            {current.source && <ExportPdfButton project={current} />}
+            {/* PDF export renders the notes list — nothing to print on a
+                structure board (its sections have no note bodies). JSON
+                export carries any project kind, structure boards included. */}
+            {current.source && !isStructure && (
+              <ExportPdfButton project={current} />
+            )}
+            {current.source && <ExportJsonButton project={current} />}
             {/* Sharing is the owner's call alone — never shown on a foreign
-                (link-edited) track; the rules refuse the writes anyway. */}
-            {current.source && !isForeign && (
+                (link-edited) track; the rules refuse the writes anyway.
+                A guest is nominally their project's owner, so `isForeign` is
+                false for them — but sharing and publishing are account-holder
+                powers (the API clips both off a guest's writes), and their
+                links live in GuestLinkBar instead. */}
+            {current.source && !isForeign && !isGuest && (
               <SharePanel
                 project={current}
                 onChange={(patch) => patchProject(current.id, patch)}
@@ -1755,7 +1891,7 @@ export default function App() {
               ) : (
                 <SourcePicker
                   onYoutube={setYoutubeSource}
-                  onAudioFile={attachAudioFile}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
             </div>
@@ -1772,9 +1908,146 @@ export default function App() {
               ) : (
                 <ReattachAudio
                   fileName={current.source.fileName}
-                  onAudioFile={attachAudioFile}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
+            </div>
+          ) : isStructure ? (
+            /* Song-structure board: player over the section timeline, with
+               the per-section Lyrics column on the right. No notes column,
+               overview strip, or inspector — the timeline IS the workspace. */
+            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <TitleBar
+                  left="Player"
+                  right={
+                    current.source.type === 'youtube' ? undefined : 'Audio'
+                  }
+                  actions={
+                    <>
+                      {current.source.type === 'youtube' && (
+                        <a
+                          href={
+                            current.source.youtubeUrl ??
+                            (current.source.videoId
+                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                              : undefined)
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open the original video on YouTube (new tab)"
+                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                          <Play size={12} />
+                          YouTube
+                        </a>
+                      )}
+                      {/* AI section detection — it fills this very board. */}
+                      {user &&
+                        !effectiveViewOnly &&
+                        !isForeign &&
+                        (current.source.type === 'youtube' ||
+                          current.source.audioUrl) && (
+                          <DetectSectionsButton
+                            key={current.id}
+                            projectId={current.id}
+                            uploadAnalysisAudio={(file, onProgress) =>
+                              uploadAnalysisAudio(
+                                user.uid,
+                                current.id,
+                                file,
+                                onProgress,
+                              )
+                            }
+                            onSections={applyDetectedSections}
+                          />
+                        )}
+                    </>
+                  }
+                />
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+                  <div
+                    ref={setPlayerArea}
+                    className="flex min-h-0 flex-1 flex-col justify-center"
+                  >
+                    <div ref={playerBoxRef}>
+                      <PlayerPane
+                        ref={playerRef}
+                        source={current.source}
+                        audioUrl={audioUrl}
+                        regionSpecs={regionSpecs}
+                        playbackRate={playbackRate}
+                        volume={stemActive || muted ? 0 : volume}
+                        readOnly={effectiveViewOnly}
+                        onTime={handleTime}
+                        onDuration={handleDuration}
+                        onPlayingChange={handlePlaying}
+                        onSeek={seek}
+                        onCreateRange={createRange}
+                        onUpdateRegion={updateRegionGeom}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Folded transport: Play + clock + volume. Seeking lives in
+                      the board (ruler / minimap / chips / lyric headings). */}
+                  <MiniTransport
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration}
+                    volume={volume}
+                    muted={muted}
+                    onPlayPause={() => (isPlaying ? pause() : play())}
+                    onSetVolume={changeVolume}
+                    onToggleMute={toggleMute}
+                  />
+
+                  {/* Stem mixer — hear one part while studying the form. */}
+                  {current.stems && (
+                    <StemMixer
+                      key={current.id}
+                      stems={current.stems}
+                      playerRef={playerRef}
+                      isPlaying={isPlaying}
+                      volume={muted ? 0 : volume}
+                      playbackRate={playbackRate}
+                      onActiveChange={setStemActive}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* keyed per track so tool/zoom/selection state resets on switch */}
+              <StructureEditor
+                key={current.id}
+                sections={current.annotations}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                readOnly={effectiveViewOnly}
+                onSeek={seek}
+                onCreate={createSection}
+                onSplit={splitSection}
+                onUpdate={updateAnnotation}
+                onDelete={deleteAnnotation}
+              />
+            </div>
+
+            {/* Lyrics — whole-section lyrics beside the board (wide screens).
+                Typing coalesces into one undo step per section. */}
+            <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+              <LyricsPanel
+                sections={current.annotations}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                readOnly={effectiveViewOnly}
+                onSeek={seek}
+                onUpdateLyrics={(id, lyrics) =>
+                  updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
+                }
+              />
+            </div>
             </div>
           ) : (
             /* Two columns: resizable player on the left, notes scroll on the right */
@@ -1860,18 +2133,6 @@ export default function App() {
                       />
                     </div>
                   </div>
-
-                  {uploadPct != null && (
-                    <div className="flex shrink-0 items-center gap-2 rounded border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                        <span
-                          className="block h-full bg-accent transition-[width]"
-                          style={{ width: `${Math.round(uploadPct * 100)}%` }}
-                        />
-                      </span>
-                      Uploading {Math.round(uploadPct * 100)}%
-                    </div>
-                  )}
 
                   <Transport
                     isPlaying={isPlaying}
@@ -2071,6 +2332,7 @@ export default function App() {
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
+                          allowImages={!isGuest}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2118,6 +2380,7 @@ export default function App() {
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
+            allowImages={!isGuest}
           />
         </PluginWindow>
       )}
@@ -2185,49 +2448,27 @@ function ReadOnlyNotice({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * A track whose `audioUrl` is missing or has gone dead (a link that rotted, or
+ * a project from before links replaced uploads). The notes are untouched — only
+ * the sound is gone — so this offers a new link rather than losing the work.
+ */
 function ReattachAudio({
   fileName,
-  onAudioFile,
+  onAudioUrl,
 }: {
   fileName?: string
-  onAudioFile: (file: File) => void
+  onAudioUrl: (url: string) => void
 }) {
-  const [over, setOver] = useState(false)
-  const take = (file?: File | null) => {
-    if (file && file.type.startsWith('audio/')) onAudioFile(file)
-  }
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault()
-        setOver(true)
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setOver(false)
-        take(e.dataTransfer.files?.[0])
-      }}
-      className={`rounded border p-6 text-center ${
-        over ? 'border-accent bg-accent/10' : 'border-accent/40 bg-accent/5'
-      }`}
-    >
+    <div className="rounded border border-accent/40 bg-accent/5 p-6">
       <p className="text-sm text-fg">
-        The audio file{fileName ? ` (${fileName})` : ''} for this track isn't
-        loaded. Re-open or drag it in to keep annotating. Your notes are safe.
+        The audio{fileName ? ` (${fileName})` : ''} for this track isn't
+        loading. Paste a link to it to keep annotating — your notes are safe.
       </p>
-      <label className="mt-3 inline-flex cursor-pointer rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20">
-        <input
-          type="file"
-          accept="audio/*"
-          className="hidden"
-          onChange={(e) => {
-            take(e.target.files?.[0])
-            e.target.value = ''
-          }}
-        />
-        Re-open audio file
-      </label>
+      <div className="mt-3">
+        <AudioUrlForm onAudioUrl={onAudioUrl} compact />
+      </div>
     </div>
   )
 }

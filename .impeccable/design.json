@@ -1,66 +1,67 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-06-03T12:00:00Z",
+  "generatedAt": "2026-07-17T12:00:00Z",
   "title": "Design System: Sound Annotator",
   "extensions": {
     "colorMeta": {
       "accent": {
         "role": "primary",
-        "displayName": "Signal Amber",
-        "canonical": "#f5a623",
-        "tonalRamp": ["#2a1c05", "#4d3408", "#7a520b", "#a8710f", "#d18f15", "#f5a623", "#f9c061", "#fde3b0"]
+        "displayName": "Signal Tangerine",
+        "canonical": "#ff6a3d",
+        "tonalRamp": ["#2b1006", "#54200c", "#803013", "#ab421c", "#d65628", "#ff6a3d", "#ff9a76", "#ffc9b3"]
       },
       "ink": {
         "role": "neutral",
-        "displayName": "Warm Ink",
-        "canonical": "#1a1813",
-        "tonalRamp": ["#131210", "#1a1813", "#211f18", "#2a271f", "#4d473a", "#968d7c", "#c3bbab", "#e9e4d8"]
+        "displayName": "Graphite Ink",
+        "canonical": "#161618",
+        "tonalRamp": ["#0f0f12", "#161618", "#1e1e22", "#28282d", "#4e4e57", "#a4a4ae", "#cfcfd6", "#ececf0"]
       },
       "meter": {
         "role": "secondary",
-        "displayName": "Meter Green",
-        "canonical": "#9ccb63",
-        "tonalRamp": ["#1c2710", "#2f4119", "#466226", "#5d8233", "#7aa845", "#9ccb63", "#bbdd92", "#dceec6"]
+        "displayName": "Sunshine Meter",
+        "canonical": "#ffce33",
+        "tonalRamp": ["#2b2205", "#544309", "#80660e", "#ab8913", "#d5ab1c", "#ffce33", "#ffdd70", "#ffeeb3"]
       },
-      "note-teal": { "role": "tertiary", "displayName": "Note Teal", "canonical": "#3bb6a6" },
-      "note-violet": { "role": "tertiary", "displayName": "Note Violet", "canonical": "#a07bf0" },
-      "note-rose": { "role": "tertiary", "displayName": "Note Rose", "canonical": "#ef6f8b" },
-      "note-sky": { "role": "tertiary", "displayName": "Note Sky", "canonical": "#5aa8e6" },
-      "note-orange": { "role": "tertiary", "displayName": "Note Orange", "canonical": "#ef8b4b" }
+      "note-red": { "role": "tertiary", "displayName": "Note Red", "canonical": "#ff5252" },
+      "note-orange": { "role": "tertiary", "displayName": "Note Orange", "canonical": "#ff9f2e" },
+      "note-yellow": { "role": "tertiary", "displayName": "Note Yellow", "canonical": "#ffd633" },
+      "note-green": { "role": "tertiary", "displayName": "Note Green", "canonical": "#3ddc74" },
+      "note-teal": { "role": "tertiary", "displayName": "Note Teal", "canonical": "#2dd4bf" },
+      "note-sky": { "role": "tertiary", "displayName": "Note Sky", "canonical": "#5aa8ff" },
+      "note-pink": { "role": "tertiary", "displayName": "Note Pink", "canonical": "#f472b6" },
+      "note-violet": { "role": "tertiary", "displayName": "Note Violet", "canonical": "#a06bff" }
     },
     "themes": {
       "default": "dark",
-      "mechanism": "Two axes: `data-theme` (mode: dark/light, 'system' follows the OS) and `data-palette` (signal hue: amber/cyan/vermilion/violet, default amber) on <html>, both resolved in JS (src/lib/theme.ts) and painted flash-free by a boot script in index.html. The Tailwind semantic colors read CSS variables, so every mode x palette combo flows from one token vocabulary; palette blocks in src/index.css only redefine what differs (bevels/glow/meter/motion inherit, the LED glow auto-follows via var(--accent-ink)).",
+      "mechanism": "Two axes: `data-theme` (mode: dark/light, 'system' follows the OS) and `data-palette` (signal hue: tangerine/bubblegum/limeade/crayon, default tangerine) on <html>, both resolved in JS (src/lib/theme.ts) and painted flash-free by a boot script in index.html. The Tailwind semantic colors read CSS variables, so every mode x palette combo flows from one token vocabulary. COLOR-AS-ACCENT doctrine (2026-07-17): the neutral canvas is SHARED by every palette — palette blocks in src/index.css redefine only the accent family (--accent/--accent-ink/--on-accent), the meter, the --row-sel signal wash, and (where the signal collides with deletes) danger. Bevels/glow/motion inherit; the LED glow auto-follows via var(--accent-ink).",
       "palettes": {
-        "amber": { "accent": { "dark": "#f5a623", "light": "#cc7a0a" }, "feel": "warm studio gear (default); light chrome is de-yellowed stone" },
-        "cyan": { "accent": { "dark": "#35e0d8", "light": "#139087" }, "feel": "Scope: phosphor trace on cool graphite" },
-        "vermilion": { "accent": { "dark": "#ff5640", "light": "#df5127" }, "feel": "Tally: broadcast REC light on neutral gray; danger shifts to pink (#f472b6 dark / #be185d light) so deletes never read as the signal red" },
-        "violet": { "accent": { "dark": "#b497ff", "light": "#9366ed" }, "feel": "Lab: synth-hardware violet on neutral-cool gray" },
-        "mono": { "accent": { "dark": "#f0f0f0", "light": "#2b2b2b" }, "feel": "Print: achromatic signal on pure grayscale; color survives only as data (note hues) and alarms (danger, red meter peak; meter bars go gray). The one palette where --on-accent (text on the signal fill) diverges from --on-bright (text on data-hue chips): the near-black light accent carries white text" }
+        "tangerine": { "accent": { "dark": "#ff6a3d", "light": "#e04e1a" }, "feel": "default; one juicy orange does all the talking, sunshine meter (#ffce33 / #b98600)" },
+        "bubblegum": { "accent": { "dark": "#ff4fd1", "light": "#d61fae" }, "feel": "hot magenta record-light, aqua meter (#2ee6c8 / #0d9488); danger shifts to plain red (#ff5c5c dark / #b91c1c light) so deletes never read as the pink signal" },
+        "limeade": { "accent": { "dark": "#c0f03c", "light": "#16a34a" }, "feel": "lime on dark deepened to emerald in light for AA on white; violet meter (#b497ff / #7c58e8) as the wink" },
+        "crayon": { "accent": { "dark": "#4f8bff", "light": "#335df0" }, "feel": "cobalt signal, green meter (#3ddc74 / #1e9e4e); quietest chrome, the crayon-box note data carries the playfulness. The one palette where --on-accent diverges from --on-bright: the light cobalt fill carries white text" }
       },
       "dark": {
-        "displayName": "The Listening Station (warm-dark studio gear)",
-        "tokens": { "ink": "#1a1813", "panel": "#211f18", "raised": "#2a271f", "inset": "#131210", "note": "#1a1813", "border": "#38342b", "border-strong": "#4d473a", "text": "#e9e4d8", "text-strong": "#ffffff", "muted": "#a89e8a", "accent": "#f5a623", "accent-ink": "#f5a623", "meter": "#9ccb63", "peak": "#ef6f6f", "danger": "#fb7185", "on-bright": "#1a1813", "row-sel": "#2a271f" }
+        "displayName": "The Listening Station (untinted graphite; color as accent)",
+        "tokens": { "ink": "#161618", "panel": "#1e1e22", "raised": "#28282d", "inset": "#0f0f12", "note": "#161618", "border": "#36363d", "border-strong": "#4e4e57", "text": "#ececf0", "text-strong": "#ffffff", "muted": "#a4a4ae", "accent": "#ff6a3d", "accent-ink": "#ff6a3d", "meter": "#ffce33", "peak": "#ff5252", "danger": "#fb7185", "on-bright": "#161618", "row-sel": "#3d2926" }
       },
       "light": {
-        "displayName": "The Daylit Station (a white score on a warm bench: literal-white page/canvas framed by faintly warm chrome, anchored by a dark masthead)",
-        "tokens": { "ink": "#ffffff", "panel": "#f5f5f2", "raised": "#f0efeb", "inset": "#e5e3dc", "note": "#ffffff", "border": "#b8b4a6", "border-strong": "#84806f", "text": "#2a2620", "text-strong": "#1c1a16", "muted": "#5f5646", "accent": "#cc7a0a", "accent-ink": "#874e05", "meter": "#4f7d26", "peak": "#c2433b", "danger": "#be123c", "on-bright": "#1a1813", "row-sel": "#f0efeb" }
+        "displayName": "The White Sheet (pure white end to end — page, panels, and masthead; hairlines carry structure; color only as accent)",
+        "tokens": { "ink": "#ffffff", "panel": "#ffffff", "raised": "#f2f2f5", "inset": "#e8e8ec", "note": "#ffffff", "border": "#d4d4d9", "border-strong": "#a0a0a8", "text": "#1d1d21", "text-strong": "#0e0e11", "muted": "#62626b", "accent": "#e04e1a", "accent-ink": "#a63a10", "meter": "#b98600", "peak": "#d5362f", "danger": "#be123c", "on-bright": "#161618", "row-sel": "#fcf1ed" }
       },
       "rules": [
-        "Two ambers: `--accent` is the bright signal for FILLS/graphics (Play, spines, dots, progress); `--accent-ink` is the AA-safe amber for TEXT/LED/links/focus. Identical in dark, divergent in light (bright amber fails AA as text on a pale surface).",
-        "The note page and canvas (`--note` / `bg-note` = ink) are LITERAL WHITE in light; warmth lives in the chrome, wells, borders, and amber, never the page. The light ramp INVERTS: raised sits a shade BELOW panel (on paper, controls shade rather than lift), so raised states stay visible against white. (History: white read clinical against the original all-warm flat ramp; once hairlines were darkened to carry structure, the user chose white — 2026-06-07.)",
-        "`--on-bright` is the text that sits ON an amber/hue fill (timecode labels, the Play button): dark in both themes.",
-        "`--row-sel` is the selected/active note row: = raised in dark; on light it is neutral stone in Amber (the user rejected the cream/yellow field — the playing dot + chip carry the signal) and a pale signal-tinted wash in the other palettes.",
+        "Accent-not-canvas: surfaces are neutral in both modes (untinted graphite dark, pure white light). Color arrives only as the signal, the meter, the note data, and the faint --row-sel signal wash on the selected row (12-14% over panel in dark, 7-8% over white in light). No other background may carry a hue.",
+        "Two signals: `--accent` is the bright signal for FILLS/graphics (Play, spines, dots, progress); `--accent-ink` is the AA-safe variant for TEXT/LED/links/focus. Identical in dark, divergent in light (a fill-strength signal fails AA as text on white).",
+        "`--on-bright` is the text that sits ON a data-hue fill (timecode labels): dark in both themes. `--on-accent` is the text on the SIGNAL fill (Play, sign-in, copy): = on-bright everywhere except Crayon light, where the cobalt fill carries white text.",
         "Note/tag/element hues stay raw as FILLS; used as TEXT or a 1px border on the white page they are mixed toward ink for AA (src/lib/noteColors.ts `hueText`).",
-        "Every light pair is WCAG AA verified: body/muted/placeholder/amber-text >= 4.5:1, non-text graphics >= 3:1.",
-        "Dark masthead: the global header is the ONE zone that keeps the active palette's dark-theme chrome in light mode — the `.chrome-dark` zone class in src/index.css re-applies the dark token blocks to that element, so its subtree (LED clock + glow, meter, toggles) restyles through the same variables. Masthead only: the track sub-bar, panel title bars, and transport stay light. Portalled popovers (theme menu) escape the zone and stay light. (Chosen 2026-06-08 from five mocked contrast variants.)"
+        "Every light pair is WCAG AA verified: body/muted/placeholder/accent-ink >= 4.5:1, non-text graphics >= 3:1.",
+        "The White-Sheet Rule (2026-07-17, supersedes White-Page + Dark-Masthead): light is one clean white sheet INCLUDING the global header — the `.chrome-dark` dark-masthead zone was retired with the tinted chrome when the user chose color-as-accent-only. The LED glow is dropped in light (a glow is a dark-screen affordance)."
       ]
     },
     "typographyMeta": {
       "display": { "displayName": "Track Title", "purpose": "The editable track title; the largest prose on screen. A tool, so it never shouts (<=1.125rem)." },
       "body": { "displayName": "Body", "purpose": "Note content and general UI copy; IBM Plex Sans (humanist-technical), ~65-75ch measure." },
       "label": { "displayName": "Mono Label", "purpose": "Panel title bars, badges, micro-controls. Monospace, uppercase, +0.2em." },
-      "mono": { "displayName": "LED Readout", "purpose": "The transport/header clock and timecode tags. Amber, tabular, glowing." }
+      "mono": { "displayName": "LED Readout", "purpose": "The transport/header clock and timecode tags. Signal-colored, tabular, glowing in dark." }
     },
     "shadows": [
       { "name": "inset-bevel", "value": "inset 0 1px 3px rgb(0 0 0 / 0.6)", "purpose": "Recessed screens only: LED readouts, the meter well, inputs, the editor canvas." },
@@ -83,7 +84,7 @@
       "refersTo": "button-play",
       "description": "The one filled control in the transport; toggles playback.",
       "html": "<button class=\"ds-btn-play\">▶ Play</button>",
-      "css": ".ds-btn-play{background:#f5a623;color:#1a1813;font:700 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:6px 12px;border:none;border-radius:6px;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -2px 3px rgb(0 0 0 / .32);cursor:pointer}.ds-btn-play:hover{filter:brightness(1.1)}.ds-btn-play:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
+      "css": ".ds-btn-play{background:#ff6a3d;color:#161618;font:700 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:6px 12px;border:none;border-radius:6px;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -2px 3px rgb(0 0 0 / .32);cursor:pointer}.ds-btn-play:hover{filter:brightness(1.1)}.ds-btn-play:focus-visible{outline:2px solid #ff6a3d;outline-offset:2px}"
     },
     {
       "name": "Transport Button",
@@ -91,23 +92,23 @@
       "refersTo": "button-transport",
       "description": "Ghost transport control (seek +/- 5s).",
       "html": "<button class=\"ds-btn-transport\">«5</button>",
-      "css": ".ds-btn-transport{background:transparent;color:#968d7c;font:500 0.75rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:6px 8px;border:1px solid #38342b;border-radius:6px;cursor:pointer}.ds-btn-transport:hover{color:#e9e4d8;border-color:#4d473a}.ds-btn-transport:focus-visible{outline:2px solid #f5a623;outline-offset:1px}"
+      "css": ".ds-btn-transport{background:transparent;color:#a4a4ae;font:500 0.75rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:6px 8px;border:1px solid #36363d;border-radius:6px;cursor:pointer}.ds-btn-transport:hover{color:#ececf0;border-color:#4e4e57}.ds-btn-transport:focus-visible{outline:2px solid #ff6a3d;outline-offset:1px}"
     },
     {
       "name": "Capture Button",
       "kind": "button",
       "refersTo": "button-capture",
-      "description": "Primary creative action: add a note at the current playhead. Amber outline, not a second solid-amber control.",
+      "description": "Primary creative action: add a note at the current playhead. Signal outline, not a second solid-signal control.",
       "html": "<button class=\"ds-btn-capture\">● Note @ 0:42</button>",
-      "css": ".ds-btn-capture{background:rgb(245 166 35 / .1);color:#f5a623;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border:1px solid rgb(245 166 35 / .7);border-radius:6px;cursor:pointer}.ds-btn-capture:hover{background:rgb(245 166 35 / .2)}.ds-btn-capture:focus-visible{outline:2px solid #f5a623;outline-offset:2px}"
+      "css": ".ds-btn-capture{background:rgb(255 106 61 / .1);color:#ff6a3d;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;border:1px solid rgb(255 106 61 / .7);border-radius:6px;cursor:pointer}.ds-btn-capture:hover{background:rgb(255 106 61 / .2)}.ds-btn-capture:focus-visible{outline:2px solid #ff6a3d;outline-offset:2px}"
     },
     {
       "name": "LED Readout",
       "kind": "custom",
       "refersTo": "readout-led",
-      "description": "Recessed amber clock; the transport and header timecode.",
+      "description": "Recessed signal-colored clock; the transport and header timecode.",
       "html": "<div class=\"ds-readout\">0:42</div>",
-      "css": ".ds-readout{display:inline-block;background:#131210;color:#f5a623;font:500 1rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.08em;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgb(245 166 35 / .5);padding:4px 8px;border:1px solid #38342b;border-radius:6px;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}"
+      "css": ".ds-readout{display:inline-block;background:#0f0f12;color:#ff6a3d;font:500 1rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.08em;font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgb(255 106 61 / .5);padding:4px 8px;border:1px solid #36363d;border-radius:6px;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}"
     },
     {
       "name": "Panel Title Bar",
@@ -115,7 +116,7 @@
       "refersTo": "title-bar",
       "description": "The load-bearing instrument-panel header worn by every panel.",
       "html": "<div class=\"ds-titlebar\"><span>Notes</span><span class=\"ds-titlebar-stat\">3 notes</span></div>",
-      "css": ".ds-titlebar{display:flex;align-items:center;justify-content:space-between;background:#262219;border-bottom:1px solid #38342b;height:40px;padding:0 14px;font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.25em;text-transform:uppercase;color:#968d7c}.ds-titlebar-stat{letter-spacing:.1em}"
+      "css": ".ds-titlebar{display:flex;align-items:center;justify-content:space-between;background:#28282d;border-bottom:1px solid #36363d;height:40px;padding:0 14px;font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.25em;text-transform:uppercase;color:#a4a4ae}.ds-titlebar-stat{letter-spacing:.1em}"
     },
     {
       "name": "Source Input",
@@ -123,7 +124,7 @@
       "refersTo": "input-field",
       "description": "Recessed text field (YouTube URL entry).",
       "html": "<input class=\"ds-input\" placeholder=\"https://youtube.com/watch?v=…\">",
-      "css": ".ds-input{background:#131210;color:#e9e4d8;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:8px 12px;border:1px solid #38342b;border-radius:6px;outline:none;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}.ds-input::placeholder{color:#968d7c}.ds-input:focus{border-color:#f5a623}"
+      "css": ".ds-input{background:#0f0f12;color:#ececf0;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;padding:8px 12px;border:1px solid #36363d;border-radius:6px;outline:none;box-shadow:inset 0 1px 3px rgb(0 0 0 / .6)}.ds-input::placeholder{color:#a4a4ae}.ds-input:focus{border-color:#ff6a3d}"
     },
     {
       "name": "Note Row",
@@ -131,29 +132,30 @@
       "refersTo": "note-row",
       "description": "Signature component: a flush cue-list row with a colored identity spine and a mono timecode tag. Not a card.",
       "html": "<div class=\"ds-clip\"><span class=\"ds-clip-spine\"></span><div class=\"ds-clip-head\"><button class=\"ds-clip-tag\">0:42</button><span class=\"ds-clip-live\">● live</span></div><div class=\"ds-clip-body\">Famous opening motif: short-short-short-long.</div></div>",
-      "css": ".ds-clip{position:relative;background:rgb(42 39 31 / .4);border-bottom:1px solid #38342b;padding:6px 8px 8px 16px}.ds-clip-spine{position:absolute;left:0;top:0;bottom:0;width:3px;background:#3bb6a6}.ds-clip-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ds-clip-tag{background:#3bb6a6;color:#1a1813;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:2px 6px;border:none;border-radius:5px;cursor:pointer}.ds-clip-live{font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#f5a623}.ds-clip-body{color:#e9e4d8;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;line-height:1.6}"
+      "css": ".ds-clip{position:relative;background:rgb(40 40 45 / .4);border-bottom:1px solid #36363d;padding:6px 8px 8px 16px}.ds-clip-spine{position:absolute;left:0;top:0;bottom:0;width:3px;background:#2dd4bf}.ds-clip-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ds-clip-tag{background:#2dd4bf;color:#161618;font:700 0.6875rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:2px 6px;border:none;border-radius:5px;cursor:pointer}.ds-clip-live{font:600 0.625rem 'IBM Plex Mono',ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#ff6a3d}.ds-clip-body{color:#ececf0;font:400 0.8125rem 'IBM Plex Sans',system-ui,sans-serif;line-height:1.6}"
     },
     {
       "name": "Track Row",
       "kind": "nav",
       "refersTo": "track-row",
-      "description": "Flush sidebar track entry; active state carries a 2px amber left-bar.",
+      "description": "Flush sidebar track entry; active state carries a 2px signal left-bar.",
       "html": "<div class=\"ds-track ds-track--active\"><span class=\"ds-track-glyph\">▶</span><span class=\"ds-track-name\">Beethoven – Symphony No. 5</span></div>",
-      "css": ".ds-track{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgb(56 52 43 / .4);border-left:2px solid transparent;padding:6px 8px 6px 10px;color:#968d7c;font:400 0.875rem 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}.ds-track:hover{color:#e9e4d8}.ds-track--active{border-left-color:#f5a623;background:#2a271f;color:#e9e4d8}.ds-track-glyph{color:rgb(245 166 35 / .7);font:0.75rem 'IBM Plex Mono',ui-monospace,monospace}.ds-track-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+      "css": ".ds-track{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgb(54 54 61 / .4);border-left:2px solid transparent;padding:6px 8px 6px 10px;color:#a4a4ae;font:400 0.875rem 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer}.ds-track:hover{color:#ececf0}.ds-track--active{border-left-color:#ff6a3d;background:#28282d;color:#ececf0}.ds-track-glyph{color:rgb(255 106 61 / .7);font:0.75rem 'IBM Plex Mono',ui-monospace,monospace}.ds-track-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
     }
   ],
   "narrative": {
     "northStar": "The Listening Station",
-    "overview": "Sound Annotator is built like an audio analysis bench, not a web app. The surface is warm-dark and quiet so the eye rests on the recording and the notes, not the chrome. Everything reads like instrument output: timecodes and counts are monospace, the transport carries an LED clock and a level meter, panels are flush metal with softly squared corners. It is dense by intent, optimized for a teacher who returns daily and knows it cold. Color is data, not decoration: one signal color, amber, means 'now', while the note palette encodes identity and is always paired with a timecode label so meaning survives a projector or a colorblind viewer.",
+    "overview": "Sound Annotator is built like an audio analysis bench, not a web app. The stage is one untinted neutral — quiet graphite in dark, pure white end to end in light — so the eye rests on the recording and the notes, not the chrome. Everything reads like instrument output: timecodes and counts are monospace, the transport carries an LED clock and a level meter, panels are flush with softly squared corners. It is dense by intent, optimized for a teacher who returns daily and knows it cold. Color is accent, never canvas: one playful selectable signal hue (Tangerine default) means 'now', a meter hue supports it, and the crayon-box note palette encodes identity — always paired with a timecode label so meaning survives a projector or a colorblind viewer.",
     "keyCharacteristics": [
-      "Warm-dark, four-step tonal surface ramp; depth from tone, not shadow.",
-      "One amber signal color meaning 'now'; everything else neutral or data-hue.",
+      "One untinted neutral stage (graphite dark / pure-white light), four-step tonal ramp; depth from tone and hairlines, not shadow.",
+      "Color only as accent: one signal hue meaning 'now', a meter hue, and the crayon-box note data. Surfaces never take a tint.",
       "Monospace tabular numerics for every timecode, count, and micro-label.",
       "Softly squared corners (chips 5px / controls 6px / grouped containers 8px / panels 10px), flush panels, hairline dividers; zero card-gaps.",
       "Secondary controls hidden at rest, revealed on hover or focus."
     ],
     "rules": [
-      { "name": "The Amber-Is-Now Rule", "body": "Amber means the present moment or the primary action, nothing else. Forbidden as a decorative fill. If more than ~10% of a screen is amber, something non-temporal has stolen the signal color.", "section": "colors" },
+      { "name": "The Accent-Not-Canvas Rule", "body": "Surfaces are neutral in both modes — untinted graphite dark, pure white light. Color arrives only as the signal, the meter, the note data, and the faint --row-sel wash on the selected row. If a background carries a hue anywhere else, it's wrong.", "section": "colors" },
+      { "name": "The Signal-Is-Now Rule", "body": "The active palette's signal means the present moment or the primary action, nothing else. Forbidden as a decorative fill. If more than ~10% of a screen is the signal, something non-temporal has stolen it.", "section": "colors" },
       { "name": "The Color-Is-Data Rule", "body": "Hue only encodes identity (which note), never emotion or hierarchy. Any color-coded element must also carry a text label (timecode), so it reads on a dim projector and for colorblind users.", "section": "colors" },
       { "name": "The Monospace-Numerics Rule", "body": "Every timecode, duration, and count is monospace and tabular-figure; numbers never reflow. Prose is never monospace; numerics are never proportional.", "section": "typography" },
       { "name": "The No-Shouting Rule", "body": "Product UI: display type stays <=1.25rem. No hero type. Hierarchy comes from weight, case, and the mono/sans split, not size.", "section": "typography" },
@@ -161,9 +163,9 @@
       { "name": "The Bevel-Restraint Rule", "body": "Bevels are 1px lighting hints on interactive controls only. Textures, surface gradients, gloss, and faux-material finishes are forbidden. If a bevel looks like brushed metal, it has failed.", "section": "elevation" }
     ],
     "dos": [
-      "Do build depth from the tonal ramp (ink -> panel -> raised -> inset) and hairline (#38342b) dividers. Flush panels, softly squared corners (5-10px).",
+      "Do build depth from the tonal ramp (ink -> panel -> raised -> inset) and hairline dividers. Flush panels, softly squared corners (5-10px).",
       "Do keep numerics monospace and tabular: timecodes, counts, durations.",
-      "Do reserve Signal Amber (#f5a623) for 'now' and the primary action; keep it under ~10% of any screen.",
+      "Do keep the canvas neutral and reserve the signal for 'now' and the primary action; keep it under ~10% of any screen.",
       "Do pair every color-coded note with its timecode label, so identity never depends on hue alone (projector + colorblind safe).",
       "Do hide secondary controls until hover/focus; let the resting UI stay calm."
     ],
@@ -172,7 +174,7 @@
       "Don't drift into heavy enterprise SaaS clutter: gray-on-gray toolbars, competing controls, data-grid busyness.",
       "Don't use retro skeuomorphism: fake wood or metal textures, glossy bevels, brushed-aluminum.",
       "Don't let color carry meaning alone, and don't add a second face to the type system. Two voices (sans + mono) only.",
-      "Don't introduce a second solid-amber control next to Play, or round a corner past the lg=10px panel radius."
+      "Don't introduce a second solid-signal control next to Play, tint a surface with the signal (beyond --row-sel), or round a corner past the lg=10px panel radius."
     ]
   }
 }

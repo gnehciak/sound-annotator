@@ -1,39 +1,23 @@
-// Audio blobs in Vercel Blob, one object per project under the owner's path:
-//   users/{uid}/audio/{projectId}
-// The browser streams bytes straight to Blob storage; /api/blobs/upload only
-// mints the token (and pins the path to the caller's own prefix).
+// Legacy audio blobs in Vercel Blob, one object per project under the owner's
+// path: users/{uid}/audio/{projectId}
+//
+// A track's *listening* audio is never uploaded any more — it's a link the
+// user pastes (see components/AudioUrlForm); deleteAudioCloud remains so that
+// deleting a project still cleans up blobs uploaded back when it did. The one
+// upload left is the ephemeral users/{uid}/analysis/{projectId} object AI
+// section detection runs against (deleted server-side at finalize).
 import { upload } from '@vercel/blob/client'
 import { api } from './api'
 
 const audioPath = (uid: string, projectId: string) =>
   `users/${uid}/audio/${projectId}`
 
-/**
- * Upload an audio file and resolve with its public URL. `onProgress` receives
- * a 0–1 fraction as the upload streams.
- */
-export async function uploadAudio(
-  uid: string,
-  projectId: string,
-  file: File | Blob,
-  onProgress?: (fraction: number) => void,
-): Promise<string> {
-  const blob = await upload(audioPath(uid, projectId), file, {
-    access: 'public',
-    handleUploadUrl: '/api/blobs/upload',
-    contentType: (file as File).type || 'audio/mpeg',
-    // Large files upload in parts — smoother progress and resilient retries.
-    multipart: true,
-    onUploadProgress: ({ percentage }) => onProgress?.(percentage / 100),
-  })
-  return blob.url
-}
-
 export async function deleteAudioCloud(
   uid: string,
   projectId: string,
 ): Promise<void> {
-  // Prefix delete; nothing under it (project never had audio) is not an error.
+  // Prefix delete; nothing under it (a project that never had an upload) is
+  // not an error.
   await api('/api/blobs/delete', {
     method: 'POST',
     json: { prefix: audioPath(uid, projectId) },
@@ -45,8 +29,8 @@ export async function deleteAudioCloud(
 const analysisPath = (uid: string, projectId: string) =>
   `users/${uid}/analysis/${projectId}`
 
-/** Upload the analysis audio for a YouTube project (same client-streamed
- *  path as uploadAudio, different prefix) and resolve with its URL. */
+/** Upload the analysis audio for a YouTube project (client-streamed via the
+ *  /api/blobs/upload token handler) and resolve with its URL. */
 export async function uploadAnalysisAudio(
   uid: string,
   projectId: string,

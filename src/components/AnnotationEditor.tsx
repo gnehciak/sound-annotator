@@ -9,7 +9,16 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { Bold, Italic, Heading2, List, Quote, ImagePlus, Loader2 } from 'lucide-react'
+import {
+  Bold,
+  Italic,
+  Heading2,
+  List,
+  Quote,
+  ImagePlus,
+  Loader2,
+  TriangleAlert,
+} from 'lucide-react'
 import { fileToScaledBlob, blobToDataUrl } from '../lib/image'
 import { ResizableImage } from './resizableImage'
 import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
@@ -34,6 +43,14 @@ interface Props {
     blob: Blob,
     onProgress?: (fraction: number) => void,
   ) => Promise<string>
+  /**
+   * When false, images are refused outright rather than falling back to a data
+   * URL. Guests have no Blob storage (uploads are signed-in only), and the
+   * fallback would base64 a screenshot straight into the project's
+   * `annotations` jsonb — so for them "no uploader" must mean "no image", not
+   * "inline it".
+   */
+  allowImages?: boolean
 }
 
 /** Imperative handle: drop the caret into the editor (used to focus new notes). */
@@ -51,16 +68,27 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     noteId,
     mentionItems,
     uploadImage,
+    allowImages = true,
   },
   ref,
 ) {
   const editorRef = useRef<Editor | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(0)
+  /** Transient: a guest tried to add an image (see insertImageFile). */
+  const [imagesRefused, setImagesRefused] = useState(false)
 
   const insertImageFile = async (file: File) => {
     const ed = editorRef.current
     if (!ed) return
+    // Refused (guest): say so. The image button is already hidden, but paste
+    // and drag-drop have no button to hide — without this the image would just
+    // vanish and the student would assume the app was broken.
+    if (!allowImages) {
+      setImagesRefused(true)
+      window.setTimeout(() => setImagesRefused(false), 4000)
+      return
+    }
     // No uploader available → keep the old inline-data-URL behaviour.
     if (!uploadImage) {
       try {
@@ -188,13 +216,22 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
             active={editor.isActive('blockquote')}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
           />
-          <span className="mx-1.5 h-4 w-px bg-line" />
-          <ToolbarButton
-            icon={<ImagePlus size={14} />}
-            title="Insert image"
-            onClick={() => fileInputRef.current?.click()}
-          />
-          {uploading > 0 ? (
+          {allowImages && (
+            <>
+              <span className="mx-1.5 h-4 w-px bg-line" />
+              <ToolbarButton
+                icon={<ImagePlus size={14} />}
+                title="Insert image"
+                onClick={() => fileInputRef.current?.click()}
+              />
+            </>
+          )}
+          {imagesRefused ? (
+            <span className="ml-1 flex animate-fade-in items-center gap-1 font-mono text-[10px] text-peak">
+              <TriangleAlert size={11} />
+              Images need an account — sign in to add them
+            </span>
+          ) : uploading > 0 ? (
             <span className="ml-1 flex items-center gap-1 font-mono text-[10px] text-accentink">
               <Loader2 size={11} className="animate-spin" />
               Uploading image…

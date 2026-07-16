@@ -2,6 +2,7 @@
 // poll the analysis, and turn its raw sections into structure annotations.
 import { api } from './api'
 import { makeTextBlock } from './noteBlocks'
+import { presetFor } from './sections'
 import type { Annotation } from '../types'
 
 export interface DetectedSection {
@@ -62,9 +63,11 @@ const LABEL_NAMES: Record<string, string> = {
 
 /**
  * Detected sections as structure annotations: ranged notes with the structure
- * bracket + section name, so they land in the overview rail, the waveform and
- * the notes list like hand-made ones. Repeated labels are numbered (Verse 1,
- * Verse 2) — a label that occurs once keeps its bare name.
+ * bracket + section name, so they land in the overview rail, the waveform,
+ * the notes list AND the song-structure board (whose sections are exactly
+ * this shape) like hand-made ones. Repeated labels are numbered (Verse 1,
+ * Verse 2) — a label that occurs once keeps its bare name. Names that match
+ * a section preset take its identity hue (colour-is-data, per the board).
  */
 export function sectionsToAnnotations(sections: DetectedSection[]): Annotation[] {
   const total = new Map<string, number>()
@@ -76,7 +79,7 @@ export function sectionsToAnnotations(sections: DetectedSection[]): Annotation[]
     seen.set(s.label, nth)
     const base = LABEL_NAMES[s.label] ?? s.label.charAt(0).toUpperCase() + s.label.slice(1)
     const name = (total.get(s.label) ?? 1) > 1 ? `${base} ${nth}` : base
-    return {
+    const ann: Annotation = {
       id: `${AI_SECTION_PREFIX}${crypto.randomUUID()}`,
       start: s.start,
       end: Math.max(s.end, s.start + 1),
@@ -86,5 +89,8 @@ export function sectionsToAnnotations(sections: DetectedSection[]): Annotation[]
       blocks: [makeTextBlock('')],
       createdAt: at,
     }
+    const preset = presetFor(name)
+    if (preset) ann.color = preset.color
+    return ann
   })
 }

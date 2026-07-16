@@ -7,6 +7,7 @@
 // server-side — the client's clock is never trusted.
 import { getUid } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type LockValue } from '../../_lib/db.js'
+import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
 import { json, err } from '../../_lib/respond.js'
 
 function idFrom(request: Request): string {
@@ -22,7 +23,6 @@ interface LockBody {
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)
-  if (!uid) return err(401, 'Sign in required')
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
 
@@ -33,7 +33,15 @@ export async function POST(request: Request): Promise<Response> {
   // A brand-new project's lock subscription starts before the first save
   // creates the row — 404 is expected noise the client swallows.
   if (!row) return err(404, 'Not found')
-  if (row.owner_id !== uid && row.editable_by_link !== true)
+
+  // Guests hold the lock too: a student with two tabs open deserves the same
+  // protection from clobbering themselves as anyone else. Their principal is
+  // the row's own synthetic owner (see _lib/guest.ts).
+  const guestKey = uid ? null : guestKeyFrom(request)
+  const isGuest = guestKey != null && (await guestKeyOpens(guestKey, row.guest_token_hash))
+  if (!uid && !isGuest) return err(401, 'Sign in required')
+  const principal = uid ?? row.owner_id
+  if (!isGuest && row.owner_id !== uid && row.editable_by_link !== true)
     return err(403, 'Not editable')
 
   if (body.action === 'release') {
@@ -48,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const lock: LockValue = {
     sessionId: body.sessionId,
-    uid,
+    uid: principal,
     name: typeof body.name === 'string' ? body.name : 'Someone',
     at: Date.now(),
   }
