@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Share2, Check, Copy, Globe, Lock, Eye, Pencil } from 'lucide-react'
+import {
+  Share2,
+  Check,
+  Copy,
+  Globe,
+  Lock,
+  Eye,
+  Pencil,
+  ClipboardList,
+} from 'lucide-react'
 import type { Project } from '../types'
+import { isListeningTask, questionsOf } from '../lib/questions'
 
 interface Props {
   project: Project
@@ -36,6 +46,10 @@ export default function SharePanel({ project, onChange }: Props) {
   const canEdit = shared && project.editableByLink === true
   const published = project.published === true
   const url = shareUrl(project.id)
+  // Question notes make the view link a listening task (see lib/questions.ts).
+  const questionCount = isListeningTask(project)
+    ? questionsOf(project.annotations).length
+    : 0
 
   // Close on outside-click or Escape.
   useEffect(() => {
@@ -182,6 +196,23 @@ export default function SharePanel({ project, onChange }: Props) {
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
+
+              {/* The question notes turn this link into a worksheet — tell
+                  the teacher what students will actually get. */}
+              {questionCount > 0 && (
+                <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-muted">
+                  <ClipboardList
+                    size={12}
+                    className="mt-[1px] shrink-0 text-accentink"
+                  />
+                  <span>
+                    This track asks {questionCount}{' '}
+                    {questionCount === 1 ? 'question' : 'questions'} — the link
+                    opens as a listening task: students type answers under each
+                    question and hand back a PDF answer sheet.
+                  </span>
+                </p>
+              )}
             </>
           )}
 
