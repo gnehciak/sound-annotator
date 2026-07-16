@@ -10,9 +10,11 @@
 //   Content writes must hold the edit lock while someone else's claim is live.
 // - DELETE: owner only.
 //
-// Three kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
-// and a signed-out guest holding their project's key (see _lib/guest.ts). The
-// last two have identical rights — content only — so they share one code path.
+// Four kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
+// a signed-out guest holding their project's key (see _lib/guest.ts), and a
+// teacher-admin (ADMIN_EMAILS, see _lib/auth.ts), who stands in as the owner of
+// ANY project. Link editors and guests have identical rights — content only —
+// so they share one code path.
 import { getUid, getUserName, isAdmin } from '../../_lib/auth.js'
 import {
   sql,
@@ -26,7 +28,6 @@ import {
   guestKeyFrom,
   guestKeyOpens,
   hashGuestKey,
-  isGuestOwner,
   mintGuestKey,
   newGuestOwnerId,
   takeGuestCreateSlot,
@@ -50,6 +51,9 @@ export async function GET(request: Request): Promise<Response> {
     return json(rowToProject(row, { withLock: true }))
   const uid = await getUid(request)
   if (uid && row.owner_id === uid) return json(rowToProject(row, { withLock: true }))
+  // The admin console lists every project, so an admin must be able to open one
+  // that was never shared.
+  if (uid && (await isAdmin(uid))) return json(rowToProject(row, { withLock: true }))
   return err(403, 'Not shared')
 }
 
@@ -145,10 +149,9 @@ export async function PUT(request: Request): Promise<Response> {
     !lockLive(existing.lock) ||
     (stamped != null && existing.lock!.sessionId === stamped.sessionId)
 
-  // A teacher-admin gets owner rights over GUEST projects only (never over
-  // another teacher's library) — that's the whole scope of the admin page.
-  const admin =
-    uid != null && isGuestOwner(existing.owner_id) && (await isAdmin(uid))
+  // A teacher-admin stands in as the owner of any project — the console
+  // manages the whole database, not just guest submissions.
+  const admin = uid != null && (await isAdmin(uid))
   const isOwner = uid != null && (existing.owner_id === uid || admin)
   // A guest with the right key stands in for the link editor: same content-only
   // rights, so the clipping below covers both without a second branch.
@@ -233,11 +236,9 @@ export async function DELETE(request: Request): Promise<Response> {
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
 
-  // A teacher-admin may delete a guest project (the admin page's whole point);
-  // the owner_id guard still stands for everything else, so no admin can reach
-  // another teacher's library through here.
-  const row = await getProjectRow(id)
-  if (row && isGuestOwner(row.owner_id) && (await isAdmin(uid))) {
+  // A teacher-admin may delete any project (the console's whole point). The
+  // owner_id guard below still stands for everyone else.
+  if (await isAdmin(uid)) {
     await sql`DELETE FROM projects WHERE id = ${id}`
     return json({ ok: true })
   }

@@ -635,16 +635,20 @@ export default function App() {
         if (urlId && !loaded.some((p) => p.id === urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
-          // Guest projects join the session too — that's the admin page's Edit
-          // button (components/AdminGuests). Admin-ness isn't decided here: the
-          // API grants owner rights over guest rows only to an ADMIN_EMAILS
-          // address, so a non-admin who opened this URL would just watch their
-          // saves fail. Keeping the check server-side is the point.
+          // A foreign project joins the session when its link says it may
+          // (editableByLink), when it's a guest's, or when the admin console
+          // sent us here with `&admin=1`. Admin-ness isn't decided here: the
+          // API grants owner rights only to an ADMIN_EMAILS address, so anyone
+          // else arriving with that flag would simply watch their saves fail.
+          // Keeping the real check server-side is the point.
+          const sentByConsole =
+            new URLSearchParams(window.location.search).get('admin') === '1'
           const joinable =
             foreign != null &&
             foreign.ownerId !== user.uid &&
             (foreign.editableByLink === true ||
-              foreign.ownerId?.startsWith('guest:') === true)
+              foreign.ownerId?.startsWith('guest:') === true ||
+              sentByConsole)
           if (joinable) all = [...loaded, foreign]
         }
         const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
