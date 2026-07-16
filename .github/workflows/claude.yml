@@ -1,0 +1,36 @@
+name: Claude Code
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'claude-fix')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          label_trigger: "claude-fix"
+          claude_args: |
+            --model ${{ (contains(github.event.comment.body, '[fable]') && 'claude-fable-5') || (contains(github.event.comment.body, '[sonnet]') && 'claude-sonnet-5') || (contains(github.event.comment.body, '[haiku]') && 'claude-haiku-4-5-20251001') || 'claude-opus-4-8' }}
+            ${{ (contains(github.event.comment.body, '[low]') && '--effort low') || (contains(github.event.comment.body, '[medium]') && '--effort medium') || (contains(github.event.comment.body, '[xhigh]') && '--effort xhigh') || (contains(github.event.comment.body, '[max]') && '--effort max') || (contains(github.event.comment.body, '[high]') && '--effort high') || '' }}
+            --allowedTools "Bash(npm install),Bash(npm run lint),Bash(npm run build)"
