@@ -347,6 +347,10 @@ export default function App() {
     !!user && !!current?.ownerId && current.ownerId !== user.uid
   // The owner switched the link back to view-only while we were in it.
   const foreignRevoked = isForeign && current?.editableByLink !== true
+  // A track of yours with no source: the only thing to do here is load one,
+  // which is an edit. Stated without reference to the lock, so it can decide
+  // whether the lock is even claimed (below) without a cycle.
+  const sourceless = !!current && !current.source && !isForeign
 
   // While locked out, each server snapshot replaces our copy of the project,
   // so the read-only view tracks the live editor and a take-over starts from
@@ -367,17 +371,23 @@ export default function App() {
   // View mode doesn't claim the lock: someone passively watching a track
   // (a projector, a quick look) must never block whoever wants to edit.
   // Flipping back to Edit re-engages — and only then surfaces the banner if
-  // someone else holds it.
+  // someone else holds it. A sourceless track is the exception: it's editable
+  // regardless of the toggle (see below), so it claims the lock to match.
   const editLock = useEditLock({
     projectId: current?.id ?? null,
     user,
-    enabled: !!current && !!user && !foreignRevoked && !viewOnly,
+    enabled: !!current && !!user && !foreignRevoked && (!viewOnly || sourceless),
     onRemoteData: handleRemoteData,
   })
   const lockBlocked =
     editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
+  // View mode on a sourceless track would strand you on a read-only "no source"
+  // notice with no way to load one — so loading wins until a source lands, and
+  // the mode toggle stays out of the header (see below). Someone else holding
+  // the lock still outranks it: then there really is nothing to do here.
+  const awaitingSource = sourceless && !lockBlocked
   // Read-only for any reason: the user's own View toggle, or the lock.
-  const effectiveViewOnly = viewOnly || lockBlocked
+  const effectiveViewOnly = (viewOnly || lockBlocked) && !awaitingSource
 
   // Settings live on the project; user-local values are the fallback when a
   // project has none. On opening a project that *has* settings, we sync the
@@ -834,6 +844,9 @@ export default function App() {
       // opens as the section board; classic tracks carry no settings yet.
       ...(kind === 'structure' ? { settings: { kind } } : {}),
     }
+    // Creating a track is an act of editing: never drop into the new one in
+    // view mode, which the sticky View toggle would otherwise do.
+    setViewMode(false)
     // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
     // so undo can't later cross it and silently drop the new track.
     resetHistory([p, ...projects], p.id)
@@ -947,13 +960,12 @@ export default function App() {
     [patchProject],
   )
 
-  function setYoutubeSource(url: string) {
-    if (!current) return
+  /** Attach a YouTube source. Returns false when the link carries no video id
+      — the picker reports that inline, next to the field that caused it. */
+  function setYoutubeSource(url: string): boolean {
+    if (!current) return false
     const videoId = parseVideoId(url)
-    if (!videoId) {
-      alert("Couldn't find a YouTube video id in that link.")
-      return
-    }
+    if (!videoId) return false
     commitProject(current.id, {
       source: { type: 'youtube', youtubeUrl: url, videoId },
     })
@@ -973,6 +985,7 @@ export default function App() {
         )
       })
     }
+    return true
   }
 
   async function attachAudioFile(file: File) {
@@ -1291,8 +1304,9 @@ export default function App() {
     if (showHelp) return // modal open — swallow the rest
     if (transportLocked) return // a modal plugin window owns the keyboard
     if (e.key === 'v' || e.key === 'V') {
-      // The View/Edit toggle is moot while the lock forces read-only.
-      if (!lockBlocked) toggleViewOnly()
+      // The View/Edit toggle is moot while the lock forces read-only, and
+      // while the track is still waiting for a source there's nothing to view.
+      if (!lockBlocked && !awaitingSource) toggleViewOnly()
       return
     }
 
@@ -1489,7 +1503,7 @@ export default function App() {
             Sound&nbsp;Annotator
           </span>
         </button>
-        {view === 'track' && viewOnly && !lockBlocked && (
+        {view === 'track' && effectiveViewOnly && !lockBlocked && (
           <span className="flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
             <Eye size={11} /> View only
           </span>
@@ -1529,8 +1543,9 @@ export default function App() {
         {/* Mode toggle: a segmented switch (pencil | eye), icon-only.
             The Edit key lights solid accent while armed — the header wash
             echoes it; the active View segment stays a tonal fill with accent
-            text. The 'V' key still flips it. */}
-        {view === 'track' && !lockBlocked && (
+            text. The 'V' key still flips it. A track still waiting for its
+            source has nothing to view, so the toggle sits this one out. */}
+        {view === 'track' && !lockBlocked && !awaitingSource && (
           <div
             role="group"
             aria-label="Editing mode"
@@ -1792,18 +1807,23 @@ export default function App() {
 
           {/* Body */}
           {!current.source ? (
-            <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
-              {/* The source (and its Storage path) belongs to the owner — a
-                  link editor annotates, they don't re-source the track. */}
-              {effectiveViewOnly || isForeign ? (
+            /* The source (and its Storage path) belongs to the owner — a link
+               editor annotates, they don't re-source the track. The picker
+               stands in the player's own frame, so loading a source swaps the
+               controls for the player without the layout shifting. */
+            effectiveViewOnly || isForeign ? (
+              <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
                 <ReadOnlyNotice>This track has no source yet.</ReadOnlyNotice>
-              ) : (
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 animate-fade-in flex-col">
                 <SourcePicker
+                  isStructure={isStructure}
                   onYoutube={setYoutubeSource}
                   onAudioFile={attachAudioFile}
                 />
-              )}
-            </div>
+              </div>
+            )
           ) : needsAudioFile ? (
             <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
               {effectiveViewOnly || isForeign ? (
