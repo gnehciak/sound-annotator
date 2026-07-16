@@ -320,8 +320,9 @@ export default function Transport({
  * dismisses it. Drives the loaded player's volume (YouTube via the
  * IFrame API, audio via wavesurfer). The slider also takes arrow keys when
  * focused — stopPropagation keeps those off the global ←/→ seek shortcuts.
+ * Exported for the structure board's folded transport (MiniTransport).
  */
-function VolumeControl({
+export function VolumeControl({
   volume,
   muted,
   onSetVolume,

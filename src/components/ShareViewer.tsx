@@ -32,6 +32,7 @@ import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
+import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
@@ -489,18 +490,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       onUpdateRegion={() => {}}
                     />
                   </div>
-                  <Transport
+                  {/* Folded transport: Play + clock + volume. Seeking lives in
+                      the board (ruler / minimap / chips / lyric headings). */}
+                  <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
                     duration={duration}
-                    playbackRate={playbackRate}
                     volume={volume}
                     muted={muted}
-                    readOnly
                     onPlayPause={() => (isPlaying ? pause() : play())}
-                    onSeek={seek}
-                    onStep={step}
-                    onSetRate={setPlaybackRate}
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
                   />
