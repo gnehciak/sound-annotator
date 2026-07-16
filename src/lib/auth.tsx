@@ -7,7 +7,12 @@
 // directly, so it works anywhere under <ClerkProvider> (including the share
 // viewer, which renders outside <AuthProvider>). AuthProvider survives as a
 // pass-through so main.tsx keeps its familiar shape.
-import { useEffect, useMemo, type ReactNode } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import {
   useAuth as useClerkAuth,
   useUser,
@@ -15,6 +20,7 @@ import {
   useSignIn,
 } from '@clerk/clerk-react'
 import { registerTokenGetter } from './api'
+import { guestSnapshot, leaveGuest, subscribeGuest } from './guest'
 
 export interface AppUser {
   uid: string
@@ -25,6 +31,9 @@ export interface AppUser {
 
 interface AuthState {
   user: AppUser | null
+  /** true when `user` is a signed-out guest, not a Clerk account. The app
+   *  hides everything an account owns — uploads, folders, publishing. */
+  isGuest: boolean
   /** true until the first auth state resolves */
   loading: boolean
   signInWithGoogle: () => Promise<void>
@@ -54,6 +63,7 @@ export function useAuth(): AuthState {
   const { user: clerkUser, isLoaded } = useUser()
   const clerk = useClerk()
   const { signIn } = useSignIn()
+  const guest = useSyncExternalStore(subscribeGuest, guestSnapshot, guestSnapshot)
 
   // Stable identity per signed-in user: effects across the app (the edit
   // lock especially) depend on `user`, and a fresh object every render would
@@ -62,13 +72,20 @@ export function useAuth(): AuthState {
   const displayName = clerkUser?.fullName ?? clerkUser?.username ?? null
   const email = clerkUser?.primaryEmailAddress?.emailAddress ?? null
   const photoURL = clerkUser?.imageUrl ?? null
-  const user = useMemo<AppUser | null>(
-    () => (uid ? { uid, displayName, email, photoURL } : null),
-    [uid, displayName, email, photoURL],
-  )
+  // A guest stands in as a user whose uid is the project's synthetic owner, so
+  // every `ownerId === user.uid` check downstream keeps working untouched. A
+  // real Clerk session always wins: signing in mid-session must not leave the
+  // app acting as the guest.
+  const user = useMemo<AppUser | null>(() => {
+    if (uid) return { uid, displayName, email, photoURL }
+    if (guest)
+      return { uid: guest.ownerId, displayName: 'Guest', email: null, photoURL: null }
+    return null
+  }, [uid, displayName, email, photoURL, guest])
 
   return {
     user,
+    isGuest: !uid && guest != null,
     loading: !isLoaded,
     signInWithGoogle: async () => {
       if (!signIn) throw new Error('Auth is still loading — try again.')
@@ -82,6 +99,14 @@ export function useAuth(): AuthState {
       })
     },
     signOut: async () => {
+      // A guest has no Clerk session to end — dropping the key is the whole
+      // sign-out. The work survives; only this browser's shortcut back to it
+      // is gone, which is why the UI warns before doing it.
+      if (!uid && guest) {
+        leaveGuest()
+        window.location.assign('/')
+        return
+      }
       await clerk.signOut()
     },
   }

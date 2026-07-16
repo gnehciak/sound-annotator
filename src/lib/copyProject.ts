@@ -1,10 +1,11 @@
 // Clone a shared project into the signed-in user's own account ("make a copy"
-// from the read-only viewer). The copy gets a fresh doc id and *owns its
-// bytes*: the audio blob and every note image are re-uploaded under the new
-// owner's Storage path, so the copy keeps working even if the original is
-// unshared or deleted. Note ids are kept as-is — @mentions in note HTML link
-// notes by id, and the id also seeds each note's fallback colour.
-import { uploadAudio } from './audioCloud'
+// from the read-only viewer). The copy gets a fresh doc id and owns the bytes
+// we host: every note image is re-uploaded under the new owner's Storage path,
+// so it survives the original being unshared or deleted. The *source* is only
+// a link now (YouTube, or a direct audio URL), so it's copied verbatim and
+// both projects point at the same audio — if that link dies, both lose it.
+// Note ids are kept as-is — @mentions in note HTML link notes by id, and the
+// id also seeds each note's fallback colour.
 import { uploadNoteImage } from './imageCloud'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
@@ -90,22 +91,14 @@ export interface CopyProjectOptions {
    * in the recipient's library).
    */
   folderId?: string | null
-  /**
-   * What to do when the source audio can't be downloaded. `'fail'` (default)
-   * aborts the whole copy — right for live shares, where a copy with broken
-   * audio is worse than no copy. `'detach'` keeps the copy but drops the dead
-   * audioUrl, so the editor offers its re-attach flow — right for imports of
-   * older exports whose original bytes may be long gone.
-   */
-  onMissingAudio?: 'fail' | 'detach'
 }
 
 /**
  * Copy a (shared) project into `uid`'s account and resolve with the saved
  * copy (id, ownerId, etc. populated). `onStatus` receives short progress
- * labels for the UI. Audio is copied strictly by default (see
- * {@link CopyProjectOptions.onMissingAudio}); images are best-effort — one
- * that can't be fetched keeps its original URL.
+ * labels for the UI. The source is only a link now, so it copies verbatim and
+ * costs nothing; images are best-effort — one that can't be fetched keeps its
+ * original URL.
  */
 export async function copySharedProject(
   uid: string,
@@ -126,25 +119,12 @@ export async function copySharedProject(
   )
   const title = untakenTitle(src.title, taken)
 
-  // Audio: re-upload the blob under the new owner's path. YouTube sources are
-  // just metadata and copy as-is.
-  let source = src.source
-  if (source?.type === 'audio' && source.audioUrl) {
-    onStatus?.('Copying audio…')
-    try {
-      const blob = await fetchBlob(source.audioUrl)
-      const audioUrl = await uploadAudio(uid, newId, blob, (f) =>
-        onStatus?.(`Copying audio… ${Math.round(f * 100)}%`),
-      )
-      source = { ...source, audioUrl }
-    } catch (err) {
-      if (opts?.onMissingAudio !== 'detach') throw err
-      // The referenced audio is gone (source project deleted, etc.) — keep the
-      // copy but drop the URL, so opening it lands on the re-attach prompt.
-      console.error('Source audio unavailable — copying without it:', err)
-      source = { type: source.type, fileName: source.fileName }
-    }
-  }
+  // Both source kinds are now just a link (YouTube or a direct audio URL), so
+  // the source copies as-is — a copy points at the same audio the original
+  // does. Nothing is fetched here, so a copy can no longer fail on dead audio:
+  // a link that has rotted simply lands the copy on the re-attach prompt, which
+  // is what the old `onMissingAudio: 'detach'` existed to arrange.
+  const source = src.source
 
   // Note images: re-upload each referenced image and map old URL → new.
   const urls = [...new Set(src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)))]

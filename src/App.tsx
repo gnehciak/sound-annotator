@@ -32,7 +32,7 @@ import {
 import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
-import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
+import { deleteAudioCloud } from './lib/audioCloud'
 import {
   uploadNoteImage,
   deleteProjectImages,
@@ -61,12 +61,14 @@ import {
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
+import GuestLinkBar from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
+import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
@@ -116,7 +118,7 @@ function syncUrl(id: string | null, mode: 'push' | 'replace' = 'push') {
 const STEP_WINDOW = 1200
 
 export default function App() {
-  const { user, signOut } = useAuth()
+  const { user, isGuest, signOut } = useAuth()
   // Color theme controller (System / Light / Dark mode + signal palette).
   // Owns <html data-theme> and <html data-palette>.
   const {
@@ -166,7 +168,6 @@ export default function App() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
-  const [uploadPct, setUploadPct] = useState<number | null>(null)
   // overviewOpen, playOnce, noteOrder are now derived below from project
   // settings (with the user-fallback states above as defaults).
   // Whether the notes search row is revealed (the query itself lives in
@@ -589,6 +590,29 @@ export default function App() {
     let cancelled = false
     setLoadingProjects(true)
     hydratedRef.current = false
+
+    // A guest owns exactly one project and has no library to list (GET
+    // /api/projects is Clerk-only by design — a guest owner id is not a
+    // secret, so it must never be a key to anything). Their project comes
+    // straight off the URL, and they land in it rather than on a home screen
+    // that would be empty by construction.
+    if (isGuest) {
+      const id = new URLSearchParams(window.location.search).get('track')
+      void (async () => {
+        const p = id ? await fetchSharedProject(id) : null
+        if (cancelled) return
+        const all = p ? [p] : []
+        setFolders([])
+        resetHistory(all, p ? p.id : null)
+        persistedRef.current = new Map(all.map((x) => [x.id, x]))
+        hydratedRef.current = true
+        setLoadingProjects(false)
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
+
     Promise.all([
       fetchProjects(user.uid),
       // Folders are non-critical chrome: a failed read (offline blip, rules
@@ -611,8 +635,17 @@ export default function App() {
         if (urlId && !loaded.some((p) => p.id === urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
-          if (foreign && foreign.editableByLink && foreign.ownerId !== user.uid)
-            all = [...loaded, foreign]
+          // Guest projects join the session too — that's the admin page's Edit
+          // button (components/AdminGuests). Admin-ness isn't decided here: the
+          // API grants owner rights over guest rows only to an ADMIN_EMAILS
+          // address, so a non-admin who opened this URL would just watch their
+          // saves fail. Keeping the check server-side is the point.
+          const joinable =
+            foreign != null &&
+            foreign.ownerId !== user.uid &&
+            (foreign.editableByLink === true ||
+              foreign.ownerId?.startsWith('guest:') === true)
+          if (joinable) all = [...loaded, foreign]
         }
         const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
         if (urlId && !deepLink) syncUrl(null, 'replace')
@@ -631,7 +664,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [user, resetHistory])
+  }, [user, isGuest, resetHistory])
 
   // Back/forward: re-derive the open track from the URL. An id that no longer
   // exists (deleted track, stale entry) falls back to home and cleans the URL.
@@ -729,6 +762,10 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
+    // Guests have no images to sweep and no credentials to sweep with — the
+    // endpoint is Clerk-only, so this would just 401 into the console on every
+    // project they open.
+    if (isGuest) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -932,7 +969,7 @@ export default function App() {
         user.uid,
         { ...parsed, ownerId: user.uid },
         undefined,
-        { folderId: openFolderId, onMissingAudio: 'detach' },
+        { folderId: openFolderId },
       )
       persistedRef.current.set(imported.id, imported)
       setProjects((ps) => [imported, ...ps])
@@ -975,40 +1012,41 @@ export default function App() {
     }
   }
 
-  async function attachAudioFile(file: File) {
+  /**
+   * Point the track at an audio file already on the web. Nothing is uploaded —
+   * the URL is stored as-is and wavesurfer streams from it, so the file stays
+   * the host's problem (and their bandwidth). Whether it actually loads is up
+   * to that host's CORS policy; see components/AudioUrlForm.
+   */
+  function attachAudioUrl(rawUrl: string) {
     if (!current || !user) return
     const projectId = current.id
     const startTitle = current.title
+    // A name for the UI only — the last path segment, minus any query string.
+    let fileName = 'Linked audio'
+    try {
+      const parsed = new URL(rawUrl)
+      fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '') || fileName
+    } catch {
+      alert("That doesn't look like a link. Paste a full URL starting with https://")
+      return
+    }
 
-    // Play the local file immediately while the upload runs in the background.
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
-    const localUrl = URL.createObjectURL(file)
-    audioUrlRef.current = localUrl
-    setAudioUrl(localUrl)
     setNeedsAudioFile(false)
-    setUploadPct(0)
-
-    // Switch to the player view right away (with local playback) so the upload
-    // progress bar is visible. The audioUrl gets filled in once the upload ends.
+    // Point the player at it now: the load effect keys on `currentId`, and this
+    // is the project already open, so it won't re-run and won't do it for us.
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+    setAudioUrl(rawUrl)
     patchProject(projectId, {
-      source: { type: 'audio', fileName: file.name },
+      source: { type: 'audio', fileName, audioUrl: rawUrl },
       title:
         startTitle === 'Untitled track'
-          ? file.name.replace(/\.[^.]+$/, '')
+          ? fileName.replace(/\.[^.]+$/, '')
           : startTitle,
     })
-
-    try {
-      const url = await uploadAudio(user.uid, projectId, file, setUploadPct)
-      patchProject(projectId, {
-        source: { type: 'audio', fileName: file.name, audioUrl: url },
-      })
-    } catch (err) {
-      console.error('Audio upload failed:', err)
-      alert('Audio upload failed — check your connection and try again.')
-    } finally {
-      setUploadPct(null)
-    }
   }
 
   // ---- annotation mutations ---------------------------------------------
@@ -1465,6 +1503,9 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
+      {/* Guests have no account to hold their work — their links are the only
+          way back to it, so the bar sits above everything, not in a menu. */}
+      {isGuest && <GuestLinkBar />}
       {/* ---- Global header ---- */}
       {/* While the open track is editable ("armed"), the chrome takes the
           signal — `masthead-armed` washes it accent with an accent hairline,
@@ -1477,12 +1518,15 @@ export default function App() {
         }`}
       >
         {/* The wordmark doubles as the way home (the title sub-bar's back
-            arrow is the explicit route while a track is open). */}
+            arrow is the explicit route while a track is open) — except for a
+            guest, who has no library: one project is all they can have, and
+            "home" would offer them a New track the API refuses to create. */}
         <button
           type="button"
-          onClick={goHome}
-          title="Back to the library"
-          className="press flex items-center gap-[9px]"
+          onClick={isGuest ? undefined : goHome}
+          disabled={isGuest}
+          title={isGuest ? 'Sound Annotator' : 'Back to the library'}
+          className="press flex items-center gap-[9px] disabled:cursor-default"
         >
           <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
           <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
@@ -1668,19 +1712,22 @@ export default function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Sub-bar: track title + per-track tools. */}
           <div className="flex h-[50px] items-center gap-2 border-b border-line bg-ink/60 px-3.5">
-            {/* Back to where the track lives: its folder, or the root library. */}
-            <button
-              type="button"
-              onClick={goBack}
-              title={`Back to ${
-                folders.find((f) => f.id === current.folderId)?.name ??
-                'the library'
-              }`}
-              aria-label="Back"
-              className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
-            >
-              <ArrowLeft size={16} />
-            </button>
+            {/* Back to where the track lives: its folder, or the root library.
+                A guest has neither — this project is the whole session. */}
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={goBack}
+                title={`Back to ${
+                  folders.find((f) => f.id === current.folderId)?.name ??
+                  'the library'
+                }`}
+                aria-label="Back"
+                className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
             {effectiveViewOnly ? (
               <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
                 {current.title}
@@ -1781,8 +1828,12 @@ export default function App() {
             )}
             {current.source && <ExportJsonButton project={current} />}
             {/* Sharing is the owner's call alone — never shown on a foreign
-                (link-edited) track; the rules refuse the writes anyway. */}
-            {current.source && !isForeign && (
+                (link-edited) track; the rules refuse the writes anyway.
+                A guest is nominally their project's owner, so `isForeign` is
+                false for them — but sharing and publishing are account-holder
+                powers (the API clips both off a guest's writes), and their
+                links live in GuestLinkBar instead. */}
+            {current.source && !isForeign && !isGuest && (
               <SharePanel
                 project={current}
                 onChange={(patch) => patchProject(current.id, patch)}
@@ -1800,7 +1851,7 @@ export default function App() {
               ) : (
                 <SourcePicker
                   onYoutube={setYoutubeSource}
-                  onAudioFile={attachAudioFile}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
             </div>
@@ -1817,7 +1868,7 @@ export default function App() {
               ) : (
                 <ReattachAudio
                   fileName={current.source.fileName}
-                  onAudioFile={attachAudioFile}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
             </div>
@@ -1876,18 +1927,6 @@ export default function App() {
                       />
                     </div>
                   </div>
-
-                  {uploadPct != null && (
-                    <div className="flex shrink-0 items-center gap-2 rounded border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                        <span
-                          className="block h-full bg-accent transition-[width]"
-                          style={{ width: `${Math.round(uploadPct * 100)}%` }}
-                        />
-                      </span>
-                      Uploading {Math.round(uploadPct * 100)}%
-                    </div>
-                  )}
 
                   {/* Folded transport: Play + clock + volume. Seeking lives in
                       the board (ruler / minimap / chips / lyric headings). */}
@@ -1994,18 +2033,6 @@ export default function App() {
                       />
                     </div>
                   </div>
-
-                  {uploadPct != null && (
-                    <div className="flex shrink-0 items-center gap-2 rounded border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                        <span
-                          className="block h-full bg-accent transition-[width]"
-                          style={{ width: `${Math.round(uploadPct * 100)}%` }}
-                        />
-                      </span>
-                      Uploading {Math.round(uploadPct * 100)}%
-                    </div>
-                  )}
 
                   <Transport
                     isPlaying={isPlaying}
@@ -2190,6 +2217,7 @@ export default function App() {
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
+                          allowImages={!isGuest}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2237,6 +2265,7 @@ export default function App() {
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
+            allowImages={!isGuest}
           />
         </PluginWindow>
       )}
@@ -2304,49 +2333,27 @@ function ReadOnlyNotice({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * A track whose `audioUrl` is missing or has gone dead (a link that rotted, or
+ * a project from before links replaced uploads). The notes are untouched — only
+ * the sound is gone — so this offers a new link rather than losing the work.
+ */
 function ReattachAudio({
   fileName,
-  onAudioFile,
+  onAudioUrl,
 }: {
   fileName?: string
-  onAudioFile: (file: File) => void
+  onAudioUrl: (url: string) => void
 }) {
-  const [over, setOver] = useState(false)
-  const take = (file?: File | null) => {
-    if (file && file.type.startsWith('audio/')) onAudioFile(file)
-  }
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault()
-        setOver(true)
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setOver(false)
-        take(e.dataTransfer.files?.[0])
-      }}
-      className={`rounded border p-6 text-center ${
-        over ? 'border-accent bg-accent/10' : 'border-accent/40 bg-accent/5'
-      }`}
-    >
+    <div className="rounded border border-accent/40 bg-accent/5 p-6">
       <p className="text-sm text-fg">
-        The audio file{fileName ? ` (${fileName})` : ''} for this track isn't
-        loaded. Re-open or drag it in to keep annotating. Your notes are safe.
+        The audio{fileName ? ` (${fileName})` : ''} for this track isn't
+        loading. Paste a link to it to keep annotating — your notes are safe.
       </p>
-      <label className="mt-3 inline-flex cursor-pointer rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20">
-        <input
-          type="file"
-          accept="audio/*"
-          className="hidden"
-          onChange={(e) => {
-            take(e.target.files?.[0])
-            e.target.value = ''
-          }}
-        />
-        Re-open audio file
-      </label>
+      <div className="mt-3">
+        <AudioUrlForm onAudioUrl={onAudioUrl} compact />
+      </div>
     </div>
   )
 }
