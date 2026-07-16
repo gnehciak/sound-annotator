@@ -40,7 +40,11 @@ export default function DetectSectionsButton({
     file: File,
     onProgress: (fraction: number) => void,
   ) => Promise<string>
-  onSections: (sections: DetectedSection[], bpm?: number) => void
+  onSections: (
+    sections: DetectedSection[],
+    bpm?: number,
+    stems?: Record<string, string>,
+  ) => void
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   // The poll loop is cancelled on unmount; the server-side run keeps going
@@ -50,7 +54,7 @@ export default function DetectSectionsButton({
 
   function settle(state: AnalysisState) {
     if (state.status === 'done' && state.sections) {
-      onSections(state.sections, state.bpm)
+      onSections(state.sections, state.bpm, state.stems)
       setPhase({ kind: 'done', count: state.sections.length })
       return true
     }

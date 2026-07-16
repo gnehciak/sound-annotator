@@ -70,6 +70,10 @@ export function rowToProject(
     published: r.published === true,
     publishedByName: r.published_by_name ?? undefined,
   }
+  // Saved stem URLs surface as a read-only field (PUT never accepts them —
+  // the analyze endpoint is their only writer).
+  const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems
+  if (stems && Object.keys(stems).length > 0) p.stems = stems
   if (opts?.withLock) p.lock = r.lock ?? null
   return p
 }

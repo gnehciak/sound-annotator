@@ -77,6 +77,7 @@ import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import DetectSectionsButton from './components/DetectSectionsButton'
+import StemMixer from './components/StemMixer'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
@@ -199,6 +200,9 @@ export default function App() {
   // Player volume (0–1, sticky) and a separate mute that remembers the level.
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  // While any stem is soloed the main player is silenced — the stems are the
+  // sound, the player stays the clock (see StemMixer).
+  const [stemActive, setStemActive] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
   // Settings modal — central knob for cross-cutting prefs. Each pref's effective
   // value is project.settings.X ?? user-local fallback (localStorage). Writes
@@ -698,6 +702,7 @@ export default function App() {
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
+    setStemActive(false) // the mixer remounts per track (key), silent again
     setTagFilter(new Set())
     setSearch('')
     setSearchOpen(false)
@@ -1187,16 +1192,24 @@ export default function App() {
 
   // Apply AI-detected sections as structure notes — one undoable step that
   // also replaces any previous AI batch (re-detect refines, never duplicates).
+  // The run's saved stems ride along raw (non-undoable): the server-side
+  // analysis owns them, this just lets the mixer appear without a refetch.
   const applyDetectedSections = useCallback(
-    (sections: DetectedSection[]) => {
-      if (!currentIdRef.current) return
+    (
+      sections: DetectedSection[],
+      _bpm?: number,
+      stems?: Record<string, string>,
+    ) => {
+      const id = currentIdRef.current
+      if (!id) return
       const fresh = sectionsToAnnotations(sections)
-      commitAnnotations(currentIdRef.current, (anns) => [
+      commitAnnotations(id, (anns) => [
         ...anns.filter((a) => !a.id.startsWith(AI_SECTION_PREFIX)),
         ...fresh,
       ])
+      if (stems && Object.keys(stems).length > 0) patchProject(id, { stems })
     },
-    [commitAnnotations],
+    [commitAnnotations, patchProject],
   )
 
   function markIn() {
@@ -1836,7 +1849,7 @@ export default function App() {
                         audioUrl={audioUrl}
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
-                        volume={muted ? 0 : volume}
+                        volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -1875,6 +1888,21 @@ export default function App() {
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
                   />
+
+                  {/* Stem mixer — only on analyzed tracks (section detection
+                      saved their separated stems). Playback-only, so it stays
+                      available in view mode. */}
+                  {current.stems && (
+                    <StemMixer
+                      key={current.id}
+                      stems={current.stems}
+                      playerRef={playerRef}
+                      isPlaying={isPlaying}
+                      volume={muted ? 0 : volume}
+                      playbackRate={playbackRate}
+                      onActiveChange={setStemActive}
+                    />
+                  )}
                 </div>
 
                 {/* A short, toggleable timeline strip below the player. The

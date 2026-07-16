@@ -33,6 +33,10 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
       data.settings && typeof data.settings === 'object'
         ? (data.settings as Project['settings'])
         : undefined,
+    stems:
+      data.stems && typeof data.stems === 'object'
+        ? (data.stems as Project['stems'])
+        : undefined,
   }
 }
 
