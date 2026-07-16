@@ -31,6 +31,7 @@ import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
+import LyricsPanel from './structure/LyricsPanel'
 import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
@@ -451,8 +452,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       </header>
 
       {isStructure ? (
-        /* Structure board: full-width player over the read-only section
-           timeline — the same layout the editor uses, minus editing. */
+        /* Structure board: player over the read-only section timeline, with
+           the Lyrics column beside it when the owner wrote any — the same
+           layout the editor uses, minus editing. */
+        <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <TitleBar
@@ -524,6 +527,19 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onUpdate={() => {}}
             onDelete={() => {}}
           />
+        </div>
+        {annotations.some((a) => a.lyrics?.trim()) && (
+          <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+            <LyricsPanel
+              sections={annotations}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
+              readOnly
+              onSeek={seek}
+              onUpdateLyrics={() => {}}
+            />
+          </div>
+        )}
         </div>
       ) : (
       /* Body: the same resizable player|notes split the editor uses — notes is

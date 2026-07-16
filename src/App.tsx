@@ -83,6 +83,7 @@ import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
 import StructureEditor from './components/structure/StructureEditor'
+import LyricsPanel from './components/structure/LyricsPanel'
 import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -1797,10 +1798,11 @@ export default function App() {
               )}
             </div>
           ) : isStructure ? (
-            /* Song-structure board: full-width player over the section
-               timeline. No notes column, overview strip, or inspector — the
-               timeline IS the workspace. */
-            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in flex-col">
+            /* Song-structure board: player over the section timeline, with
+               the per-section Lyrics column on the right. No notes column,
+               overview strip, or inspector — the timeline IS the workspace. */
+            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TitleBar
                   left="Player"
@@ -1897,6 +1899,22 @@ export default function App() {
                 onUpdate={updateAnnotation}
                 onDelete={deleteAnnotation}
               />
+            </div>
+
+            {/* Lyrics — whole-section lyrics beside the board (wide screens).
+                Typing coalesces into one undo step per section. */}
+            <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+              <LyricsPanel
+                sections={current.annotations}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                readOnly={effectiveViewOnly}
+                onSeek={seek}
+                onUpdateLyrics={(id, lyrics) =>
+                  updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
+                }
+              />
+            </div>
             </div>
           ) : (
             /* Two columns: resizable player on the left, notes scroll on the right */
