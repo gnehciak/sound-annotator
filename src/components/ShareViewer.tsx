@@ -34,6 +34,7 @@ import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import MiniTransport from './structure/MiniTransport'
+import ChordsPlayer from './structure/ChordsPlayer'
 import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
@@ -513,6 +514,23 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
+          {/* Chords player — only when the owner built one (tempo + chords);
+              tempo controls stay hidden without canEditTempo. */}
+          {!!project.settings?.bpm &&
+            annotations.some((a) => a.chords?.trim()) && (
+              <ChordsPlayer
+                sections={annotations}
+                settings={project.settings}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                playbackRate={playbackRate}
+                readOnly
+                canEditTempo={false}
+                onSeek={seek}
+                onPatchSettings={() => {}}
+              />
+            )}
           {/* readOnly: the board never calls the mutation props. */}
           <StructureEditor
             key={project.id}
@@ -528,7 +546,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onDelete={() => {}}
           />
         </div>
-        {annotations.some((a) => a.lyrics?.trim()) && (
+        {annotations.some((a) => a.lyrics?.trim() || a.chords?.trim()) && (
           <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
             <LyricsPanel
               sections={annotations}
@@ -537,6 +555,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               readOnly
               onSeek={seek}
               onUpdateLyrics={() => {}}
+              onUpdateChords={() => {}}
             />
           </div>
         )}

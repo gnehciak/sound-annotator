@@ -89,6 +89,15 @@ export interface Annotation {
    * meaningful on structure projects' sections.
    */
   lyrics?: string
+  /**
+   * The section's chord chart, in bar notation ("Am | F | C G" — bars split
+   * on |, chords in a bar divide it evenly, "." holds, "%" repeats a bar).
+   * A chart shorter than the section loops to fill it. Rendered by the
+   * structure board's Chords player against the project's beat grid
+   * (settings.bpm / beatsPerBar / beatOffset); see lib/chords.ts. Only
+   * meaningful on structure projects' sections.
+   */
+  chords?: string
   createdAt: number
 }
 
@@ -160,6 +169,18 @@ export interface ProjectSettings {
   overviewOpen?: boolean
   /** Default ordering for the notes list. See AnnotationList for the modes. */
   noteOrder?: 'timeline' | 'auto' | 'live'
+  /**
+   * The beat grid behind the structure board's Chords player (lib/chords.ts):
+   * tempo, meter, and the track time of beat 1. Owner-set (the API clips
+   * settings writes from link editors); all primitives, so they round-trip
+   * through JSON export/import with no sanitizer work. Absent until the
+   * owner sets a tempo — the Chords player shows its setup state.
+   */
+  bpm?: number
+  beatsPerBar?: number
+  beatOffset?: number
+  /** Whether the Chords player band opens unfolded. Defaults on. */
+  chordsOpen?: boolean
 }
 
 /**

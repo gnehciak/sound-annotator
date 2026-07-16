@@ -148,6 +148,10 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   if (a.structure === true) ann.structure = true
   const sectionName = str(a.sectionName)
   if (sectionName) ann.sectionName = sectionName
+  const lyrics = str(a.lyrics)
+  if (lyrics) ann.lyrics = lyrics
+  const chords = str(a.chords)
+  if (chords) ann.chords = chords
   const blocks = sanitizeBlocks(a.blocks)
   if (blocks) ann.blocks = blocks
   // Legacy exports (contentHtml only) get their text block here, like any read.

@@ -13,6 +13,11 @@ import TitleBar from '../TitleBar'
  * the section name in its own hue. While the song plays, the sounding
  * section stays lit and the others fall back, karaoke-sheet style.
  *
+ * Each section also carries its chord chart on one mono line under the
+ * heading ("Am | F | C | G" — see lib/chords.ts for the notation). The
+ * sheet is where chords are *written*; the Chords player band under the
+ * player is where they *perform*.
+ *
  * Auto-pin: whenever the sounding section changes — playback rolling into
  * the next section, or any seek (ruler, chips, a lyric heading) — and again
  * when Play is pressed, the sheet scrolls that section to its top, like the
@@ -29,6 +34,7 @@ interface Props {
   readOnly: boolean
   onSeek: (t: number) => void
   onUpdateLyrics: (id: string, lyrics: string) => void
+  onUpdateChords: (id: string, chords: string) => void
 }
 
 export default function LyricsPanel({
@@ -38,6 +44,7 @@ export default function LyricsPanel({
   readOnly,
   onSeek,
   onUpdateLyrics,
+  onUpdateChords,
 }: Props) {
   const theme = useResolvedTheme()
   const ordered = sortedSections(sections)
@@ -95,7 +102,7 @@ export default function LyricsPanel({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <TitleBar left="Lyrics" />
+      <TitleBar left="Lyrics & chords" />
       <div ref={setScrollEl} className="flex-1 overflow-y-auto bg-note">
         {ordered.length === 0 ? (
           <p className="px-5 py-10 text-center text-[12.5px] leading-relaxed text-muted">
@@ -111,7 +118,8 @@ export default function LyricsPanel({
               // section stays lit. At rest the whole sheet reads evenly.
               const dimmed = isPlaying && activeId !== null && !active
               const lyrics = sec.lyrics ?? ''
-              if (readOnly && !lyrics.trim()) return null
+              const chords = sec.chords ?? ''
+              if (readOnly && !lyrics.trim() && !chords.trim()) return null
               return (
                 <section
                   key={sec.id}
@@ -151,10 +159,31 @@ export default function LyricsPanel({
                       />
                     )}
                   </button>
+                  {/* The chord chart — one mono line, read by the Chords
+                      player band (bars split on |; see lib/chords.ts). */}
                   {readOnly ? (
-                    <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
-                      {lyrics}
-                    </p>
+                    chords.trim() && (
+                      <p className="mt-1.5 max-w-[62ch] truncate font-mono text-[12px] leading-none text-muted">
+                        {chords}
+                      </p>
+                    )
+                  ) : (
+                    <input
+                      value={chords}
+                      onChange={(e) => onUpdateChords(sec.id, e.target.value)}
+                      placeholder="Chords — Am | F | C | G"
+                      aria-label={`Chords for ${sectionName(sec)}`}
+                      title="One bar per | — chords in a bar split it evenly; a short chart loops to fill the section"
+                      spellCheck={false}
+                      className="mt-1.5 block w-full max-w-[62ch] rounded-sm bg-transparent font-mono text-[12px] leading-[1.6] text-fg outline-none transition-colors placeholder:text-muted/60 hover:bg-fg/5 focus:bg-fg/5"
+                    />
+                  )}
+                  {readOnly ? (
+                    lyrics.trim() && (
+                      <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
+                        {lyrics}
+                      </p>
+                    )
                   ) : (
                     <GrowingTextarea
                       value={lyrics}

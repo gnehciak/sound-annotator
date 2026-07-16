@@ -87,6 +87,7 @@ import NoteInspector from './components/NoteInspector'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
+import ChordsPlayer from './components/structure/ChordsPlayer'
 import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -1904,6 +1905,23 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Chords player — diagrams + beat lane against the project's
+                  beat grid. Tempo is settings (owner-only); chord text lives
+                  on the sections and is edited in the Lyrics panel. */}
+              <ChordsPlayer
+                key={`chords:${current.id}`}
+                sections={current.annotations}
+                settings={current.settings}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                playbackRate={playbackRate}
+                readOnly={effectiveViewOnly}
+                canEditTempo={canEditSettings}
+                onSeek={seek}
+                onPatchSettings={patchProjectSettings}
+              />
+
               {/* keyed per track so tool/zoom/selection state resets on switch */}
               <StructureEditor
                 key={current.id}
@@ -1920,8 +1938,8 @@ export default function App() {
               />
             </div>
 
-            {/* Lyrics — whole-section lyrics beside the board (wide screens).
-                Typing coalesces into one undo step per section. */}
+            {/* Lyrics & chords — the per-section sheet beside the board (wide
+                screens). Typing coalesces into one undo step per section. */}
             <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
               <LyricsPanel
                 sections={current.annotations}
@@ -1931,6 +1949,9 @@ export default function App() {
                 onSeek={seek}
                 onUpdateLyrics={(id, lyrics) =>
                   updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
+                }
+                onUpdateChords={(id, chords) =>
+                  updateAnnotation(id, { chords }, { coalesceKey: `chords:${id}` })
                 }
               />
             </div>
