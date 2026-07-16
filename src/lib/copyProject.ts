@@ -170,6 +170,9 @@ export async function copySharedProject(
     title,
     source,
     annotations: src.annotations.map((a) => rewriteAnnotation(a, urlMap)),
+    // Settings travel with the copy — they carry presentation prefs and the
+    // project kind (a song-structure copy must open as a structure board).
+    settings: src.settings,
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
