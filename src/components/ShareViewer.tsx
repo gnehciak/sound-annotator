@@ -414,8 +414,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
-      {/* Header — `chrome-dark`: light mode's dark masthead (see index.css). */}
-      <header className="chrome-dark flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
         <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
         <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator

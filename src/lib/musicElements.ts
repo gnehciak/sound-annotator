@@ -41,10 +41,10 @@ export interface ElementsData {
 }
 
 export const LAYERS: Layer[] = [
-  { id: 'melody', label: 'Melody', color: '#5aa8e6' },
-  { id: 'harmony', label: 'Harmony', color: '#3bb6a6' },
-  { id: 'bass', label: 'Bass', color: '#a07bf0' },
-  { id: 'rhythm', label: 'Rhythm', color: '#ef8b4b' },
+  { id: 'melody', label: 'Melody', color: '#5aa8ff' },
+  { id: 'harmony', label: 'Harmony', color: '#2dd4bf' },
+  { id: 'bass', label: 'Bass', color: '#a06bff' },
+  { id: 'rhythm', label: 'Rhythm', color: '#ff9f2e' },
 ]
 
 export const ELEMENTS: ElementCategory[] = [

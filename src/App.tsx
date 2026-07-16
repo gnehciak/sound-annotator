@@ -1464,14 +1464,11 @@ export default function App() {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       {/* ---- Global header ---- */}
-      {/* `chrome-dark`: in light mode the masthead keeps the active palette's
-          dark-theme chrome (see index.css) — a dark bar anchoring the white
-          page; the LED clock gets its glow back. No-op in dark mode.
-          While the open track is editable ("armed"), the chrome takes the
+      {/* While the open track is editable ("armed"), the chrome takes the
           signal — `masthead-armed` washes it accent with an accent hairline,
           echoing the lit Edit key. View mode / the lock return it to panel. */}
       <header
-        className={`chrome-dark flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
+        className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
             : 'border-line bg-panel'
