@@ -7,6 +7,14 @@
 // back into a Project shape; App then runs it through copySharedProject so the
 // imported track gets a fresh id and owns its bytes (audio + note images are
 // re-uploaded under the importer's storage while the referenced URLs live).
+//
+// MAINTENANCE CONTRACT: every persisted content field on Project /
+// ProjectSource / Annotation / ProjectSettings must round-trip through here.
+// When adding one, add it to the export envelope (content only — never
+// account/sharing state) AND teach the matching sanitizer below to accept it;
+// settings keys holding primitives already pass through automatically. Bump
+// PROJECT_JSON_VERSION only for breaking shape changes (old files must keep
+// importing). See the note atop src/types.ts.
 import type {
   Annotation,
   NoteBlock,
@@ -148,15 +156,33 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
 
 const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
 
+/**
+ * Settings pass through leniently: any key holding a primitive survives, so a
+ * settings knob added later — including the project `kind` that makes a track
+ * open as a song-structure board — round-trips without this file having to
+ * know it. Only `noteOrder` is checked against its enum (an unknown value
+ * would silently break the notes-list sorting); everything non-primitive
+ * (nested objects, arrays) is dropped.
+ */
 function sanitizeSettings(v: unknown): ProjectSettings | undefined {
-  if (!v || typeof v !== 'object') return undefined
-  const s = v as Record<string, unknown>
-  const settings: ProjectSettings = {}
-  if (typeof s.playOnce === 'boolean') settings.playOnce = s.playOnce
-  if (typeof s.overviewOpen === 'boolean') settings.overviewOpen = s.overviewOpen
-  if (typeof s.noteOrder === 'string' && NOTE_ORDERS.has(s.noteOrder))
-    settings.noteOrder = s.noteOrder as ProjectSettings['noteOrder']
-  return Object.keys(settings).length > 0 ? settings : undefined
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const settings: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(v)) {
+    if (
+      typeof val === 'boolean' ||
+      (typeof val === 'number' && Number.isFinite(val)) ||
+      (typeof val === 'string' && val.length <= 200)
+    )
+      settings[key] = val
+  }
+  if (
+    settings.noteOrder !== undefined &&
+    !NOTE_ORDERS.has(settings.noteOrder as string)
+  )
+    delete settings.noteOrder
+  return Object.keys(settings).length > 0
+    ? (settings as ProjectSettings)
+    : undefined
 }
 
 /**

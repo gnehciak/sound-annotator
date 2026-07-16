@@ -17,6 +17,16 @@ scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
+**JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
+versioned portable JSON envelope (export buttons in the editor sub-bar, share
+viewer, and track-tile menu; Import on the home page). When adding or changing
+any persisted field on `Project` / `Annotation` / `ProjectSource` /
+`ProjectSettings` (in `src/types.ts`), update `projectJson.ts` in the same
+change: add the field to the export envelope and the import sanitizer, or
+imported files silently lose it. Primitive-valued `settings` keys (including
+the project `kind`, e.g. song-structure boards) pass through automatically.
+Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
+
 ## Design Context
 
 This project uses **impeccable** for design work. Two root docs hold the
