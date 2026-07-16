@@ -9,7 +9,16 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { Bold, Italic, Heading2, List, Quote, ImagePlus, Loader2 } from 'lucide-react'
+import {
+  Bold,
+  Italic,
+  Heading2,
+  List,
+  Quote,
+  ImagePlus,
+  Loader2,
+  TriangleAlert,
+} from 'lucide-react'
 import { fileToScaledBlob, blobToDataUrl } from '../lib/image'
 import { ResizableImage } from './resizableImage'
 import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
@@ -66,11 +75,20 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   const editorRef = useRef<Editor | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(0)
+  /** Transient: a guest tried to add an image (see insertImageFile). */
+  const [imagesRefused, setImagesRefused] = useState(false)
 
   const insertImageFile = async (file: File) => {
     const ed = editorRef.current
     if (!ed) return
-    if (!allowImages) return
+    // Refused (guest): say so. The image button is already hidden, but paste
+    // and drag-drop have no button to hide — without this the image would just
+    // vanish and the student would assume the app was broken.
+    if (!allowImages) {
+      setImagesRefused(true)
+      window.setTimeout(() => setImagesRefused(false), 4000)
+      return
+    }
     // No uploader available → keep the old inline-data-URL behaviour.
     if (!uploadImage) {
       try {
@@ -208,7 +226,12 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
               />
             </>
           )}
-          {uploading > 0 ? (
+          {imagesRefused ? (
+            <span className="ml-1 flex animate-fade-in items-center gap-1 font-mono text-[10px] text-peak">
+              <TriangleAlert size={11} />
+              Images need an account — sign in to add them
+            </span>
+          ) : uploading > 0 ? (
             <span className="ml-1 flex items-center gap-1 font-mono text-[10px] text-accentink">
               <Loader2 size={11} className="animate-spin" />
               Uploading image…
