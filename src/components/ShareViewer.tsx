@@ -25,6 +25,7 @@ import NotesHeaderControls from './NotesHeaderControls'
 import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
+import ExportJsonButton from './ExportJsonButton'
 import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
@@ -438,8 +439,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </a>
         )}
         {/* PDF export renders the notes list — nothing to print on a
-            structure board (its sections have no note bodies). */}
+            structure board (its sections have no note bodies). JSON export
+            carries any project kind, structure boards included. */}
         {!isStructure && <ExportPdfButton project={project} />}
+        <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
           href={window.location.pathname}
