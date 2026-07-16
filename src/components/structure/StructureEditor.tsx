@@ -617,9 +617,6 @@ export default function StructureEditor({
         >
           <ZoomIn size={13} />
         </button>
-        <span className="w-[44px] text-right font-mono text-[10px] tabular-nums text-muted">
-          {Math.round(zoom * 100)}%
-        </span>
         <button
           type="button"
           onClick={() => setView(null)}
@@ -900,9 +897,12 @@ export default function StructureEditor({
         )}
       </div>
 
-      {/* Detail row for the selected section: name, presets, times, delete. */}
-      {selected && !readOnly && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-panel px-3.5 py-2">
+      {/* Footer — a FIXED slot so selecting a section never reflows the
+          board: the selected section's controls, or a one-line hint. */}
+      {!readOnly && (
+      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line bg-panel px-3.5">
+      {selected ? (
+        <>
           <span
             aria-hidden
             className="h-3.5 w-3.5 shrink-0 rounded-sm"
@@ -985,9 +985,6 @@ export default function StructureEditor({
                 })
               }}
             />
-            <span className="tabular-nums">
-              · {formatTime((selected.end ?? selected.start) - selected.start)}
-            </span>
           </div>
           <div className="flex-1" />
           <button
@@ -1002,39 +999,14 @@ export default function StructureEditor({
           >
             <Trash2 size={13} />
           </button>
-        </div>
+        </>
+      ) : (
+        <p className="truncate text-[12px] text-muted">
+          Drag across the track to draw a section — click one to name it.
+        </p>
       )}
-
-      {/* Quick-reference gesture hints, matching the transport's style. */}
-      <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1 border-t border-line px-3.5 py-1.5 opacity-70">
-        {(readOnly
-          ? [
-              { keys: ['Click'], label: 'Seek' },
-              { keys: ['⇧', 'Scroll'], label: 'Zoom' },
-            ]
-          : [
-              { keys: ['Drag'], label: 'New section' },
-              { keys: ['S'], label: 'Select' },
-              { keys: ['C'], label: 'Cut' },
-              { keys: ['⌫'], label: 'Delete' },
-              { keys: ['⇧', 'Scroll'], label: 'Zoom' },
-              { keys: ['⇧', 'Drag'], label: 'Pan' },
-            ]
-        ).map((h) => (
-          <span key={h.label} className="flex items-center gap-[5px]">
-            <span className="flex items-center gap-0.5">
-              {h.keys.map((k) => (
-                <kbd key={k} className="kbd-cap">
-                  {k}
-                </kbd>
-              ))}
-            </span>
-            <span className="font-mono text-[9.5px] uppercase leading-none tracking-[0.14em] text-muted">
-              {h.label}
-            </span>
-          </span>
-        ))}
       </div>
+      )}
     </section>
   )
 }

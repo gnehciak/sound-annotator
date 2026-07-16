@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react'
 import type { Annotation } from '../../types'
-import { noteLabel } from '../../lib/format'
-import { colorForId } from '../../lib/noteColors'
+import { formatTime } from '../../lib/format'
+import { colorForId, hueText } from '../../lib/noteColors'
+import { useResolvedTheme } from '../../lib/theme'
 import { sectionAt, sectionName, sortedSections } from '../../lib/sections'
 import TitleBar from '../TitleBar'
 
 /**
- * The structure board's right column: whole-section lyrics, stacked in
- * timeline order. Each section is a flush row in the note-list language —
- * 3px colour spine, name chip, clickable timecode — over a paste-in lyrics
- * body (plain text, section granularity; deliberately not line-synced).
- * The sounding section tints like the playing note row and the list follows
- * it during playback, so projected lyrics track the song by themselves.
+ * The structure board's right column: a lyric sheet. Whole-section lyrics
+ * (deliberately not line-synced) set like a score page — generous spacing
+ * instead of dividers, one thin hue rail per section as its identity mark,
+ * the section name in its own hue. While the song plays, the sounding
+ * section stays lit and the others fall back, karaoke-sheet style, and the
+ * sheet follows the playhead by itself. Click any heading to play from there.
  */
 
 interface Props {
@@ -32,12 +33,13 @@ export default function LyricsPanel({
   onSeek,
   onUpdateLyrics,
 }: Props) {
+  const theme = useResolvedTheme()
   const ordered = sortedSections(sections)
   const activeId = sectionAt(ordered, currentTime)?.id ?? null
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Follow the song: bring the sounding section into view while playing —
-  // but never yank the list out from under someone typing or selecting in it.
+  // but never yank the sheet out from under someone typing or selecting in it.
   useEffect(() => {
     if (!isPlaying || !activeId) return
     const panel = scrollRef.current
@@ -49,77 +51,77 @@ export default function LyricsPanel({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <TitleBar
-        left="Lyrics"
-        right={`${ordered.filter((a) => a.lyrics?.trim()).length} / ${ordered.length}`}
-      />
+      <TitleBar left="Lyrics" />
       <div ref={scrollRef} className="flex-1 overflow-y-auto bg-note">
         {ordered.length === 0 ? (
-          <p className="px-4 py-8 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-            Sketch sections on the timeline first
+          <p className="px-5 py-10 text-center text-[12.5px] leading-relaxed text-muted">
+            Draw sections on the timeline first — their lyrics go here.
           </p>
         ) : (
-          ordered.map((sec) => {
-            const color = sec.color ?? colorForId(sec.id)
-            const active = sec.id === activeId
-            const lyrics = sec.lyrics ?? ''
-            return (
-              <section
-                key={sec.id}
-                id={`lyrics-${sec.id}`}
-                aria-label={`${sectionName(sec)} lyrics`}
-                className={`relative border-b border-line py-2.5 pl-4 pr-3.5 transition-colors duration-150 ${
-                  active ? 'bg-rowsel' : ''
-                }`}
-              >
-                {/* Identity spine, exactly the note rows' device. */}
-                <span
-                  aria-hidden
-                  className="absolute inset-y-0 left-0 w-[3px]"
-                  style={{ background: color }}
-                />
-                <div className="flex items-center gap-2">
+          <div className="space-y-1 px-2.5 py-3">
+            {ordered.map((sec) => {
+              const color = sec.color ?? colorForId(sec.id)
+              const ink = hueText(color, theme)
+              const active = sec.id === activeId
+              // Karaoke focus: while the song plays, only the sounding
+              // section stays lit. At rest the whole sheet reads evenly.
+              const dimmed = isPlaying && activeId !== null && !active
+              const lyrics = sec.lyrics ?? ''
+              if (readOnly && !lyrics.trim()) return null
+              return (
+                <section
+                  key={sec.id}
+                  id={`lyrics-${sec.id}`}
+                  aria-label={`${sectionName(sec)} lyrics`}
+                  className={`relative rounded-md py-3 pl-4 pr-3 transition-[background-color,opacity] duration-300 ${
+                    active ? 'bg-rowsel' : ''
+                  } ${dimmed ? 'opacity-50' : ''}`}
+                >
+                  {/* The section's identity rail — its hue, nothing else. */}
+                  <span
+                    aria-hidden
+                    className="absolute bottom-3 left-1 top-3 w-[2px] rounded-full"
+                    style={{ background: color }}
+                  />
                   <button
                     type="button"
                     onClick={() => onSeek(sec.start)}
-                    title={`Play from ${sectionName(sec)} (${noteLabel(sec.start, sec.end)})`}
-                    className="press flex min-w-0 items-center gap-2"
+                    title={`Play from here (${formatTime(sec.start)})`}
+                    className="press flex w-full min-w-0 items-baseline gap-2 text-left"
                   >
                     <span
-                      className="truncate rounded-sm px-1.5 py-[2px] font-mono text-[10px] font-semibold leading-none text-onbright"
-                      style={{ background: color }}
+                      className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em]"
+                      style={{ color: ink }}
                     >
                       {sectionName(sec)}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
-                      {noteLabel(sec.start, sec.end)}
+                      {formatTime(sec.start)}
                     </span>
+                    {active && (
+                      <span
+                        aria-label="Now playing"
+                        className={`ml-auto h-1.5 w-1.5 shrink-0 self-center rounded-full bg-accent ${
+                          isPlaying ? 'animate-now-pulse' : ''
+                        }`}
+                      />
+                    )}
                   </button>
-                  {active && (
-                    <span
-                      aria-label="Now playing"
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full bg-accent ${
-                        isPlaying ? 'animate-now-pulse' : ''
-                      }`}
-                    />
-                  )}
-                </div>
-                {readOnly ? (
-                  lyrics.trim() && (
-                    <p className="mt-1.5 max-w-[65ch] whitespace-pre-wrap text-[13px] leading-relaxed text-fg">
+                  {readOnly ? (
+                    <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
                       {lyrics}
                     </p>
-                  )
-                ) : (
-                  <GrowingTextarea
-                    value={lyrics}
-                    onChange={(v) => onUpdateLyrics(sec.id, v)}
-                    ariaLabel={`Lyrics for ${sectionName(sec)}`}
-                  />
-                )}
-              </section>
-            )
-          })
+                  ) : (
+                    <GrowingTextarea
+                      value={lyrics}
+                      onChange={(v) => onUpdateLyrics(sec.id, v)}
+                      ariaLabel={`Lyrics for ${sectionName(sec)}`}
+                    />
+                  )}
+                </section>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -159,9 +161,9 @@ function GrowingTextarea({
       rows={1}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder="Paste this section’s lyrics…"
+      placeholder="Paste lyrics…"
       aria-label={ariaLabel}
-      className="mt-1.5 block w-full max-w-[65ch] resize-none overflow-hidden rounded-sm bg-transparent text-[13px] leading-relaxed text-fg outline-none transition-colors placeholder:text-muted/70 hover:bg-fg/5 focus:bg-fg/5"
+      className="mt-1.5 block w-full max-w-[62ch] resize-none overflow-hidden rounded-sm bg-transparent text-[13.5px] leading-[1.75] text-fg outline-none transition-colors placeholder:text-muted/60 hover:bg-fg/5 focus:bg-fg/5"
     />
   )
 }

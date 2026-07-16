@@ -86,6 +86,7 @@ import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
+import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -1888,20 +1889,15 @@ export default function App() {
                     </div>
                   )}
 
-                  <Transport
+                  {/* Folded transport: Play + clock + volume. Seeking lives in
+                      the board (ruler / minimap / chips / lyric headings). */}
+                  <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
                     duration={duration}
-                    playbackRate={playbackRate}
                     volume={volume}
                     muted={muted}
-                    // Only trims the note-hotkey hints (N / I·O), which don't
-                    // apply here — the board shows its own gesture hints.
-                    readOnly
                     onPlayPause={() => (isPlaying ? pause() : play())}
-                    onSeek={seek}
-                    onStep={step}
-                    onSetRate={setPlaybackRate}
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
                   />
