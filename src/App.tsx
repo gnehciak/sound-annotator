@@ -41,6 +41,11 @@ import {
 import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { copySharedProject } from './lib/copyProject'
 import { makeTextBlock } from './lib/noteBlocks'
+import {
+  sectionsToAnnotations,
+  AI_SECTION_PREFIX,
+  type DetectedSection,
+} from './lib/sectionDetect'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
@@ -66,6 +71,7 @@ import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
+import DetectSectionsButton from './components/DetectSectionsButton'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
@@ -1171,6 +1177,20 @@ export default function App() {
     updateAnnotation(id, patch, { coalesceKey: `region:${id}` })
   }
 
+  // Apply AI-detected sections as structure notes — one undoable step that
+  // also replaces any previous AI batch (re-detect refines, never duplicates).
+  const applyDetectedSections = useCallback(
+    (sections: DetectedSection[]) => {
+      if (!currentIdRef.current) return
+      const fresh = sectionsToAnnotations(sections)
+      commitAnnotations(currentIdRef.current, (anns) => [
+        ...anns.filter((a) => !a.id.startsWith(AI_SECTION_PREFIX)),
+        ...fresh,
+      ])
+    },
+    [commitAnnotations],
+  )
+
   function markIn() {
     const t = playerRef.current?.getCurrentTime?.() ?? currentTime
     setPendingIn((prev) =>
@@ -1768,6 +1788,15 @@ export default function App() {
                         <Play size={12} />
                         YouTube
                       </a>
+                    ) : /* Detection reads the uploaded audio from Blob and is
+                         the owner's call (it spends their Replicate credit),
+                         so it needs the cloud URL, edit mode, and ownership. */
+                    current.source.audioUrl && !effectiveViewOnly && !isForeign ? (
+                      <DetectSectionsButton
+                        key={current.id}
+                        projectId={current.id}
+                        onSections={applyDetectedSections}
+                      />
                     ) : undefined
                   }
                 />

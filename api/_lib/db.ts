@@ -28,6 +28,8 @@ export interface ProjectRow {
   published: boolean
   published_at: string | number | null
   published_by_name: string | null
+  /** AI section-detection job state + cached result (api/projects/[id]/analyze.ts). */
+  analysis: unknown
 }
 
 export interface FolderRow {

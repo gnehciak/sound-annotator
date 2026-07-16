@@ -28,6 +28,12 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS published_by_name text;
 
 CREATE INDEX IF NOT EXISTS projects_published_idx ON projects (published_at DESC) WHERE published;
 
+-- AI section detection (api/projects/[id]/analyze.ts). Job state + the cached
+-- result of the Replicate music-structure run, e.g.
+-- { status: 'running'|'done'|'error', predictionId, sections: [{start,end,label}],
+--   bpm, startedAt, finishedAt, error }.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS analysis jsonb;
+
 CREATE TABLE IF NOT EXISTS folders (
   id         text PRIMARY KEY,
   owner_id   text NOT NULL,
