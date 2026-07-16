@@ -34,7 +34,11 @@ import { json, err } from '../../_lib/respond.js'
 export const maxDuration = 300
 
 const REPLICATE_API = 'https://api.replicate.com/v1'
-const MODEL = 'erickluis00/all-in-one-audio'
+// erickluis00/all-in-one-audio, pinned to its latest (2023) version — the
+// model-scoped predictions endpoint is official-models-only, so community
+// models are run by version hash via POST /v1/predictions.
+const MODEL_VERSION =
+  'f2a8516c9084ef460592deaa397acd4a97f60f18c3d15d273644c72500cdff0e'
 
 // A 'finalizing' stamp older than this is presumed crashed and retried.
 const FINALIZE_STALE_MS = 5 * 60_000
@@ -175,9 +179,12 @@ export async function POST(request: Request): Promise<Response> {
     return err(400, 'Section detection needs an audio source')
   }
 
-  const { ok, status, data } = await replicate(`/models/${MODEL}/predictions`, {
+  const { ok, status, data } = await replicate('/predictions', {
     method: 'POST',
-    body: JSON.stringify({ input: { music_input: audioUrl } }),
+    body: JSON.stringify({
+      version: MODEL_VERSION,
+      input: { music_input: audioUrl },
+    }),
   })
   if (!ok || typeof data.id !== 'string') {
     const detail = typeof data.detail === 'string' ? data.detail : `HTTP ${status}`
