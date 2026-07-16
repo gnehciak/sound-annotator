@@ -6,9 +6,13 @@
 //   always fetch their own. The response carries the edit lock so the client
 //   can poll it (src/lib/editLock.ts).
 // - PUT: upsert. Owners may write everything except reassigning ownerId;
-//   link editors (editableByLink) may write content fields only. Content
-//   writes must hold the edit lock while someone else's claim is live.
+//   link editors (editableByLink) and guests may write content fields only.
+//   Content writes must hold the edit lock while someone else's claim is live.
 // - DELETE: owner only.
+//
+// Three kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
+// and a signed-out guest holding their project's key (see _lib/guest.ts). The
+// last two have identical rights — content only — so they share one code path.
 import { getUid, getUserName } from '../../_lib/auth.js'
 import {
   sql,
@@ -18,6 +22,14 @@ import {
   jsonb,
   type LockValue,
 } from '../../_lib/db.js'
+import {
+  guestKeyFrom,
+  guestKeyOpens,
+  hashGuestKey,
+  mintGuestKey,
+  newGuestOwnerId,
+  takeGuestCreateSlot,
+} from '../../_lib/guest.js'
 import { json, err } from '../../_lib/respond.js'
 
 function idFrom(request: Request): string {
@@ -48,6 +60,8 @@ interface Claim {
 }
 
 function claimFrom(body: Record<string, unknown>, uid: string): LockValue | null {
+  // `uid` is the caller's principal: a Clerk uid, or a guest project's
+  // synthetic `guest:<uuid>` owner. Either way it's server-supplied.
   const c = body.lock as Claim | null | undefined
   if (!c || typeof c.sessionId !== 'string') return null
   return {
@@ -60,19 +74,44 @@ function claimFrom(body: Record<string, unknown>, uid: string): LockValue | null
 
 export async function PUT(request: Request): Promise<Response> {
   const uid = await getUid(request)
-  if (!uid) return err(401, 'Sign in required')
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return err(400, 'Invalid JSON body')
-  const stamped = claimFrom(body, uid)
 
   const existing = await getProjectRow(id)
 
-  // Create: the row is stamped with the caller as owner, exactly like the old
-  // `create` rule (ownerId must be yours).
+  // Create.
   if (!existing) {
+    // Guest create (`{ guest: true }`, signed out): mint the synthetic owner
+    // and the key that will authorize every later write. `shared` is forced on
+    // so the plain ?view= link a student hands in renders through the existing
+    // read-only viewer, and the key is returned exactly once — it is never
+    // stored in the clear, so a lost key cannot be recovered, only abandoned.
+    if (!uid) {
+      if (body.guest !== true) return err(401, 'Sign in required')
+      if (!(await takeGuestCreateSlot(request)))
+        return err(429, 'Too many projects created from this network. Try again later.')
+      const guestKey = mintGuestKey()
+      const ownerId = newGuestOwnerId()
+      await sql`
+        INSERT INTO projects
+          (id, owner_id, title, source, annotations, updated_at, shared,
+           editable_by_link, folder_id, settings, lock, guest_token_hash)
+        VALUES
+          (${id}, ${ownerId},
+           ${typeof body.title === 'string' ? body.title : 'Untitled track'},
+           ${jsonb(body.source)}::jsonb, ${jsonb(body.annotations ?? [])}::jsonb,
+           ${typeof body.updatedAt === 'number' ? body.updatedAt : 0},
+           ${true}, ${false}, ${null}, ${jsonb(body.settings)}::jsonb,
+           ${null}, ${await hashGuestKey(guestKey)})
+      `
+      return json({ ok: true, guestKey, ownerId })
+    }
+
+    // The row is stamped with the caller as owner, exactly like the old
+    // `create` rule (ownerId must be yours).
     if (typeof body.ownerId === 'string' && body.ownerId !== uid)
       return err(403, 'ownerId must be your own')
     await sql`
@@ -85,10 +124,19 @@ export async function PUT(request: Request): Promise<Response> {
          ${typeof body.updatedAt === 'number' ? body.updatedAt : 0},
          ${body.shared === true}, ${body.editableByLink === true},
          ${typeof body.folderId === 'string' ? body.folderId : null},
-         ${jsonb(body.settings)}::jsonb, ${jsonb(stamped)}::jsonb)
+         ${jsonb(body.settings)}::jsonb, ${jsonb(claimFrom(body, uid))}::jsonb)
     `
     return json({ ok: true })
   }
+
+  // Update. Resolve the caller to a principal: a Clerk uid, or the guest who
+  // holds this row's key. Anyone else is a stranger.
+  const guestKey = uid ? null : guestKeyFrom(request)
+  const isGuest =
+    guestKey != null && (await guestKeyOpens(guestKey, existing.guest_token_hash))
+  if (!uid && !isGuest) return err(401, 'Sign in required')
+  const principal = uid ?? existing.owner_id
+  const stamped = claimFrom(body, principal)
 
   // holdsLock: a free or expired lock gates nothing; a live lock demands the
   // write carry the holder's own claim.
@@ -96,17 +144,28 @@ export async function PUT(request: Request): Promise<Response> {
     !lockLive(existing.lock) ||
     (stamped != null && existing.lock!.sessionId === stamped.sessionId)
 
-  const isOwner = existing.owner_id === uid
-  if (!isOwner && existing.editable_by_link !== true) return err(403, 'Not yours')
+  const isOwner = uid != null && existing.owner_id === uid
+  // A guest with the right key stands in for the link editor: same content-only
+  // rights, so the clipping below covers both without a second branch.
+  if (!isOwner && !isGuest && existing.editable_by_link !== true)
+    return err(403, 'Not yours')
   if (!holds) return err(409, 'Another session is editing this project')
   if (isOwner && typeof body.ownerId === 'string' && body.ownerId !== uid)
     return err(403, 'ownerId cannot be reassigned')
 
   // Merge semantics (the old `mergeFields`): only keys the payload carries
-  // change; link editors' writes are additionally clipped to content fields —
-  // never permissions, ownership, the source, or folders.
+  // change; non-owners' writes are additionally clipped — never permissions,
+  // ownership, or folders.
+  //
+  // A link editor and a guest are NOT the same, despite both being non-owners.
+  // A link editor annotates someone else's track, so the source isn't theirs to
+  // change. A guest's project is their own — clip the source away and they can
+  // never load the video they came to annotate, which is the whole task.
   const canTouch = (k: string) =>
-    isOwner || ['title', 'annotations', 'updatedAt'].includes(k)
+    isOwner ||
+    (isGuest
+      ? ['title', 'annotations', 'updatedAt', 'source', 'settings'].includes(k)
+      : ['title', 'annotations', 'updatedAt'].includes(k))
   const pick = <T>(k: string, ok: (v: unknown) => boolean, fallback: T): T =>
     k in body && canTouch(k) && ok(body[k]) ? (body[k] as T) : fallback
 
@@ -124,7 +183,8 @@ export async function PUT(request: Request): Promise<Response> {
         ? body.folderId
         : null
       : existing.folder_id
-  const settings = 'settings' in body && isOwner ? body.settings : existing.settings
+  const settings =
+    'settings' in body && canTouch('settings') ? body.settings : existing.settings
   // A save carrying a claim refreshes the lock (that's what keeps the holder's
   // heartbeat warm on every save); one without a claim leaves it untouched.
   const lock = stamped ?? existing.lock
@@ -136,9 +196,8 @@ export async function PUT(request: Request): Promise<Response> {
     'published' in body && isOwner ? body.published === true : existing.published
   const nowPublishing = published && existing.published !== true
   const publishedAt = nowPublishing ? Date.now() : existing.published_at
-  const publishedByName = nowPublishing
-    ? await getUserName(uid)
-    : existing.published_by_name
+  const publishedByName =
+    nowPublishing && uid ? await getUserName(uid) : existing.published_by_name
 
   await sql`
     UPDATE projects SET

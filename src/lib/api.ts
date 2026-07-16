@@ -20,6 +20,14 @@ export function registerTokenGetter(fn: TokenGetter | null): void {
   getToken = fn
 }
 
+/** The guest project key, when a signed-out student is editing (lib/guest.ts).
+ *  Never sent alongside a Clerk token — a real session always wins. */
+let guestKey: string | null = null
+
+export function registerGuestKey(key: string | null): void {
+  guestKey = key
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -42,6 +50,8 @@ export async function api<T>(
   if (token) {
     lastToken = token
     headers.set('Authorization', `Bearer ${token}`)
+  } else if (guestKey) {
+    headers.set('X-Guest-Key', guestKey)
   }
   let body: BodyInit | undefined
   if (init?.json !== undefined) {

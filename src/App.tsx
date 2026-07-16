@@ -60,6 +60,7 @@ import {
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
+import GuestLinkBar from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
@@ -110,7 +111,7 @@ function syncUrl(id: string | null, mode: 'push' | 'replace' = 'push') {
 const STEP_WINDOW = 1200
 
 export default function App() {
-  const { user, signOut } = useAuth()
+  const { user, isGuest, signOut } = useAuth()
   // Color theme controller (System / Light / Dark mode + signal palette).
   // Owns <html data-theme> and <html data-palette>.
   const {
@@ -577,6 +578,29 @@ export default function App() {
     let cancelled = false
     setLoadingProjects(true)
     hydratedRef.current = false
+
+    // A guest owns exactly one project and has no library to list (GET
+    // /api/projects is Clerk-only by design — a guest owner id is not a
+    // secret, so it must never be a key to anything). Their project comes
+    // straight off the URL, and they land in it rather than on a home screen
+    // that would be empty by construction.
+    if (isGuest) {
+      const id = new URLSearchParams(window.location.search).get('track')
+      void (async () => {
+        const p = id ? await fetchSharedProject(id) : null
+        if (cancelled) return
+        const all = p ? [p] : []
+        setFolders([])
+        resetHistory(all, p ? p.id : null)
+        persistedRef.current = new Map(all.map((x) => [x.id, x]))
+        hydratedRef.current = true
+        setLoadingProjects(false)
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
+
     Promise.all([
       fetchProjects(user.uid),
       // Folders are non-critical chrome: a failed read (offline blip, rules
@@ -619,7 +643,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [user, resetHistory])
+  }, [user, isGuest, resetHistory])
 
   // Back/forward: re-derive the open track from the URL. An id that no longer
   // exists (deleted track, stale entry) falls back to home and cleans the URL.
@@ -941,6 +965,13 @@ export default function App() {
 
   async function attachAudioFile(file: File) {
     if (!current || !user) return
+    // Guests have no Blob storage: the upload would 401 after we'd already
+    // swapped the project to a local-file source it could never restore from.
+    // Refuse before touching the project, not after.
+    if (isGuest) {
+      alert('Audio files need an account. As a guest you can annotate a YouTube video.')
+      return
+    }
     const projectId = current.id
     const startTitle = current.title
 
@@ -1383,6 +1414,9 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
+      {/* Guests have no account to hold their work — their links are the only
+          way back to it, so the bar sits above everything, not in a menu. */}
+      {isGuest && <GuestLinkBar />}
       {/* ---- Global header ---- */}
       {/* `chrome-dark`: in light mode the masthead keeps the active palette's
           dark-theme chrome (see index.css) — a dark bar anchoring the white
@@ -1398,12 +1432,15 @@ export default function App() {
         }`}
       >
         {/* The wordmark doubles as the way home (the title sub-bar's back
-            arrow is the explicit route while a track is open). */}
+            arrow is the explicit route while a track is open) — except for a
+            guest, who has no library: one project is all they can have, and
+            "home" would offer them a New track the API refuses to create. */}
         <button
           type="button"
-          onClick={goHome}
-          title="Back to the library"
-          className="press flex items-center gap-[9px]"
+          onClick={isGuest ? undefined : goHome}
+          disabled={isGuest}
+          title={isGuest ? 'Sound Annotator' : 'Back to the library'}
+          className="press flex items-center gap-[9px] disabled:cursor-default"
         >
           <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
           <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
@@ -1588,19 +1625,22 @@ export default function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Sub-bar: track title + per-track tools. */}
           <div className="flex h-[50px] items-center gap-2 border-b border-line bg-ink/60 px-3.5">
-            {/* Back to where the track lives: its folder, or the root library. */}
-            <button
-              type="button"
-              onClick={goBack}
-              title={`Back to ${
-                folders.find((f) => f.id === current.folderId)?.name ??
-                'the library'
-              }`}
-              aria-label="Back"
-              className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
-            >
-              <ArrowLeft size={16} />
-            </button>
+            {/* Back to where the track lives: its folder, or the root library.
+                A guest has neither — this project is the whole session. */}
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={goBack}
+                title={`Back to ${
+                  folders.find((f) => f.id === current.folderId)?.name ??
+                  'the library'
+                }`}
+                aria-label="Back"
+                className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
             {effectiveViewOnly ? (
               <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
                 {current.title}
@@ -1695,8 +1735,12 @@ export default function App() {
             )}
             {current.source && <ExportPdfButton project={current} />}
             {/* Sharing is the owner's call alone — never shown on a foreign
-                (link-edited) track; the rules refuse the writes anyway. */}
-            {current.source && !isForeign && (
+                (link-edited) track; the rules refuse the writes anyway.
+                A guest is nominally their project's owner, so `isForeign` is
+                false for them — but sharing and publishing are account-holder
+                powers (the API clips both off a guest's writes), and their
+                links live in GuestLinkBar instead. */}
+            {current.source && !isForeign && !isGuest && (
               <SharePanel
                 project={current}
                 onChange={(patch) => patchProject(current.id, patch)}
@@ -1715,6 +1759,7 @@ export default function App() {
                 <SourcePicker
                   onYoutube={setYoutubeSource}
                   onAudioFile={attachAudioFile}
+                  allowAudioFile={!isGuest}
                 />
               )}
             </div>
@@ -1990,6 +2035,7 @@ export default function App() {
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
+                          allowImages={!isGuest}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2037,6 +2083,7 @@ export default function App() {
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
+            allowImages={!isGuest}
           />
         </PluginWindow>
       )}

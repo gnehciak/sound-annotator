@@ -28,6 +28,9 @@ export interface ProjectRow {
   published: boolean
   published_at: string | number | null
   published_by_name: string | null
+  // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
+  // it is a credential, not project data.
+  guest_token_hash: string | null
 }
 
 export interface FolderRow {

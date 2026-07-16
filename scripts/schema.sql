@@ -28,6 +28,20 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS published_by_name text;
 
 CREATE INDEX IF NOT EXISTS projects_published_idx ON projects (published_at DESC) WHERE published;
 
+-- Guest projects (students who never sign in). owner_id holds a synthetic
+-- `guest:<uuid>`; this column holds the SHA-256 of the key that rides in the
+-- student's URL — never the key itself. NULL on every signed-in project.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS guest_token_hash text;
+
+-- Rate limit for signed-out project creation (there is no account to attach a
+-- limit to). Keyed by a HASH of the caller's IP: a limiter needs to recognise
+-- a repeat caller, not to know who they are, and these are schoolchildren.
+CREATE TABLE IF NOT EXISTS guest_quota (
+  ip_hash      text PRIMARY KEY,
+  window_start bigint NOT NULL,
+  count        int NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS folders (
   id         text PRIMARY KEY,
   owner_id   text NOT NULL,

@@ -4,9 +4,20 @@ import { Play, FileAudio } from 'lucide-react'
 interface Props {
   onYoutube: (url: string) => void
   onAudioFile: (file: File) => void
+  /**
+   * False for guests: audio files need Blob storage, which is signed-in only
+   * (api/blobs/upload.ts). Offering the drop zone and failing at upload time
+   * would be a lie told after the student already picked a file — so the
+   * option isn't shown at all, and YouTube stands alone.
+   */
+  allowAudioFile?: boolean
 }
 
-export default function SourcePicker({ onYoutube, onAudioFile }: Props) {
+export default function SourcePicker({
+  onYoutube,
+  onAudioFile,
+  allowAudioFile = true,
+}: Props) {
   const [url, setUrl] = useState('')
   const [over, setOver] = useState(false)
 
@@ -42,50 +53,58 @@ export default function SourcePicker({ onYoutube, onAudioFile }: Props) {
         </form>
       </div>
 
-      <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-muted">
-        <span className="h-px flex-1 bg-line" />
-        or
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {allowAudioFile ? (
+        <>
+        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-muted">
+          <span className="h-px flex-1 bg-line" />
+          or
+          <span className="h-px flex-1 bg-line" />
+        </div>
 
-      <div>
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-          Open an audio file
-        </h2>
-        <p className="mt-1 text-xs text-muted">
-          MP3, WAV, M4A… Plays as a waveform you can click through, and syncs to
-          your account so it's there next time.
-        </p>
-        <label
-          onDragOver={(e) => {
-            e.preventDefault()
-            setOver(true)
-          }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setOver(false)
-            take(e.dataTransfer.files?.[0])
-          }}
-          className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded border-2 border-dashed px-4 py-6 text-sm ${
-            over
-              ? 'border-accent bg-accent/5 text-accentink'
-              : 'border-line text-muted hover:border-accent hover:text-accentink'
-          }`}
-        >
-          <input
-            type="file"
-            accept="audio/*"
-            className="hidden"
-            onChange={(e) => {
-              take(e.target.files?.[0])
-              e.target.value = ''
+        <div>
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+            Open an audio file
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            MP3, WAV, M4A… Plays as a waveform you can click through, and syncs to
+            your account so it's there next time.
+          </p>
+          <label
+            onDragOver={(e) => {
+              e.preventDefault()
+              setOver(true)
             }}
-          />
-          <FileAudio size={18} />{' '}
-          {over ? 'Drop to open' : 'Click or drag an audio file here'}
-        </label>
-      </div>
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setOver(false)
+              take(e.dataTransfer.files?.[0])
+            }}
+            className={`mt-2 flex cursor-pointer items-center justify-center gap-2 rounded border-2 border-dashed px-4 py-6 text-sm ${
+              over
+                ? 'border-accent bg-accent/5 text-accentink'
+                : 'border-line text-muted hover:border-accent hover:text-accentink'
+            }`}
+          >
+            <input
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(e) => {
+                take(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+            <FileAudio size={18} />{' '}
+            {over ? 'Drop to open' : 'Click or drag an audio file here'}
+          </label>
+        </div>
+        </>
+      ) : (
+        <p className="text-xs text-muted">
+          Guests annotate YouTube videos. Sign in to open your own audio files.
+        </p>
+      )}
     </div>
   )
 }

@@ -62,6 +62,8 @@ interface Props {
     blob: Blob,
     onProgress?: (fraction: number) => void,
   ) => Promise<string>
+  /** False for guests — see AnnotationEditor's `allowImages`. */
+  allowImages?: boolean
 }
 
 /**
@@ -85,6 +87,7 @@ export default function NoteInspector({
   onSeekNote,
   mentionItems,
   uploadImage,
+  allowImages = true,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
@@ -277,6 +280,7 @@ export default function NoteInspector({
                 noteId={annotation.id}
                 mentionItems={mentionItems}
                 uploadImage={uploadImage}
+                allowImages={allowImages}
                 showToolbar
                 content={asTextData(block)?.html ?? ''}
                 onChange={(html) => updateTextBlock(block.id, html)}

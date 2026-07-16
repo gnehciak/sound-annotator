@@ -42,6 +42,19 @@ createRoot(document.getElementById('root')!).render(
       <ClerkProvider
         publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string}
         afterSignOutUrl="/"
+        // Clerk titles its card with the instance name from the dashboard
+        // ("clerk-aureolin-lever"); say who we actually are instead. The
+        // `Combined` keys are the ones the withSignUp flow renders (see
+        // components/Gate.tsx).
+        localization={{
+          signIn: {
+            start: {
+              titleCombined: 'Sign in to Sound Annotator',
+              subtitleCombined:
+                'Keep your tracks and notes synced across devices.',
+            },
+          },
+        }}
       >
         <ApiTokenBridge />
         {ssoCallback ? (

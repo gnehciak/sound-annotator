@@ -3,13 +3,28 @@
 A web app for time-anchored music annotation in the classroom: load a YouTube
 video or an audio file, then attach timestamped rich-text notes that seek the
 player when clicked. Vite + React 19 + TypeScript + Tailwind + TipTap +
-wavesurfer.js. Backed by Vercel: Google sign-in via Clerk, projects/notes in
+wavesurfer.js. Backed by Vercel: sign-in via Clerk's prebuilt card (Google *or*
+email + password, with verification and reset — themed from our tokens in
+`src/lib/clerkAppearance.ts`, which must hand Clerk hex: its JS color parser
+rejects the space-separated `rgb()` that `cssRgb` emits). Projects/notes in
 Neon Postgres (one row per project, notes inline in `annotations` jsonb),
 audio/images in Vercel Blob (`users/{uid}/audio/{projectId}`,
 `users/{uid}/images/{projectId}/…`). The SPA calls Vercel Functions in `/api`
 (Web signature), which enforce all authorization — owner-only access,
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
-the server-stamped edit lock (see `api/projects/[id]/index.ts`). Schema lives
+the server-stamped edit lock (see `api/projects/[id]/index.ts`).
+
+**Guests** (students, who have no accounts) are the third kind of caller:
+"Continue as guest" mints one project whose *key is its URL* — a capability
+token, SHA-256 at rest, owner `guest:<uuid>`, rate-limited per hashed IP
+(`api/_lib/guest.ts`, `src/lib/guest.ts`; the cap is loose because a school
+NATs a whole class behind one address). A guest writes content **and** their
+own `source`/`settings` — never sharing/publishing/ownership — so unlike a link
+editor they can load the video they came to annotate. Uploads stay signed-in
+only: guests are YouTube-only and get `allowImages={false}`, because merely
+omitting the uploader makes the editor inline base64 into `annotations`. Their
+project is born `shared`, so the `?view=` link they hand in is the existing
+read-only viewer. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only
