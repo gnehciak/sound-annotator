@@ -623,8 +623,17 @@ export default function App() {
         if (urlId && !loaded.some((p) => p.id === urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
-          if (foreign && foreign.editableByLink && foreign.ownerId !== user.uid)
-            all = [...loaded, foreign]
+          // Guest projects join the session too — that's the admin page's Edit
+          // button (components/AdminGuests). Admin-ness isn't decided here: the
+          // API grants owner rights over guest rows only to an ADMIN_EMAILS
+          // address, so a non-admin who opened this URL would just watch their
+          // saves fail. Keeping the check server-side is the point.
+          const joinable =
+            foreign != null &&
+            foreign.ownerId !== user.uid &&
+            (foreign.editableByLink === true ||
+              foreign.ownerId?.startsWith('guest:') === true)
+          if (joinable) all = [...loaded, foreign]
         }
         const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
         if (urlId && !deepLink) syncUrl(null, 'replace')

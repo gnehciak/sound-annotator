@@ -22,6 +22,7 @@ import { backendReady } from './lib/api'
 import Gate, { SetupNotice } from './components/Gate'
 import ShareViewer from './components/ShareViewer'
 import { PublicBrowsePage } from './components/BrowseGallery'
+import AdminGuests from './components/AdminGuests'
 import './plugins/register' // registers note plugins (side effect)
 
 const params = new URLSearchParams(window.location.search)
@@ -31,6 +32,10 @@ const params = new URLSearchParams(window.location.search)
 const viewId = params.get('view')
 // `?browse=1` opens the public gallery of published tracks — no sign-in.
 const browse = params.get('browse') === '1'
+// `?admin=1` is the teacher's guest-project console. It sits behind <Gate> for
+// sign-in, but the URL is not what protects it: /api/admin/guests enforces an
+// ADMIN_EMAILS allowlist and 404s everyone else (see components/AdminGuests).
+const admin = params.get('admin') === '1'
 // Clerk's OAuth redirect lands here mid-sign-in (see lib/auth.tsx).
 const ssoCallback = window.location.pathname === '/sso-callback'
 
@@ -65,9 +70,7 @@ createRoot(document.getElementById('root')!).render(
           <PublicBrowsePage />
         ) : (
           <AuthProvider>
-            <Gate>
-              <App />
-            </Gate>
+            <Gate>{admin ? <AdminGuests /> : <App />}</Gate>
           </AuthProvider>
         )}
       </ClerkProvider>
