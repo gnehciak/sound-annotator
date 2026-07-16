@@ -40,6 +40,7 @@ import {
 } from './lib/imageCloud'
 import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { copySharedProject } from './lib/copyProject'
+import { parseProjectJson } from './lib/projectJson'
 import { makeTextBlock } from './lib/noteBlocks'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
@@ -78,6 +79,7 @@ import { computeFitLayout } from './lib/autoLayout'
 import SharePanel from './components/SharePanel'
 import HomePage from './components/HomePage'
 import ExportPdfButton from './components/ExportPdfButton'
+import ExportJsonButton from './components/ExportJsonButton'
 import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
@@ -904,6 +906,27 @@ export default function App() {
     [user, setProjects],
   )
 
+  // Import a track from an exported JSON file (see lib/projectJson.ts): parse
+  // and sanitise the document, then run it through the copy machinery so the
+  // import gets a fresh id and re-hosts its audio/images under this account.
+  // Lands in the folder that's open on the home page. Errors (bad file, dead
+  // audio the strict path would trip on) surface in the Import button's alert.
+  const importTrack = useCallback(
+    async (file: File) => {
+      if (!user) return
+      const parsed = parseProjectJson(await file.text())
+      const imported = await copySharedProject(
+        user.uid,
+        { ...parsed, ownerId: user.uid },
+        undefined,
+        { folderId: openFolderId, onMissingAudio: 'detach' },
+      )
+      persistedRef.current.set(imported.id, imported)
+      setProjects((ps) => [imported, ...ps])
+    },
+    [user, openFolderId, setProjects],
+  )
+
   // Turn on view-only sharing for a track without opening the editor — the
   // home-page "Share link" menu item flips the gate so the link works.
   const enableTrackShare = useCallback(
@@ -1579,6 +1602,7 @@ export default function App() {
           onDeleteTrack={removeProject}
           onMoveTrack={moveTrackToFolder}
           onCopyTrack={copyTrack}
+          onImportTrack={importTrack}
           onShareTrack={enableTrackShare}
           onCreateFolder={createFolder}
           onRenameFolder={renameFolder}
@@ -1694,6 +1718,7 @@ export default function App() {
               </button>
             )}
             {current.source && <ExportPdfButton project={current} />}
+            {current.source && <ExportJsonButton project={current} />}
             {/* Sharing is the owner's call alone — never shown on a foreign
                 (link-edited) track; the rules refuse the writes anyway. */}
             {current.source && !isForeign && (

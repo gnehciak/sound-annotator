@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Braces,
   Check,
   Copy,
   ExternalLink,
   Eye,
+  FileUp,
   Folder as FolderIcon,
   FolderPlus,
   Globe,
@@ -18,6 +20,7 @@ import {
 } from 'lucide-react'
 import type { Folder, Project } from '../types'
 import { formatRelativeTime } from '../lib/format'
+import { downloadProjectJson } from '../lib/projectJson'
 import { colorForId, hueText } from '../lib/noteColors'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
@@ -38,6 +41,9 @@ interface Props {
   onMoveTrack: (id: string, folderId: string | null) => void
   /** Clone a track into the user's library — resolves once the copy is saved. */
   onCopyTrack: (project: Project) => Promise<void>
+  /** Import a track from an exported JSON file into the open folder — resolves
+      once the import is saved; rejects with a user-facing message. */
+  onImportTrack: (file: File) => Promise<void>
   /** Turn on view-only sharing for a track (no-op if already shared). */
   onShareTrack: (id: string) => void
   /** Optimistically creates "New folder" and returns its id. */
@@ -109,6 +115,7 @@ export default function HomePage({
   onDeleteTrack,
   onMoveTrack,
   onCopyTrack,
+  onImportTrack,
   onShareTrack,
   onCreateFolder,
   onRenameFolder,
@@ -250,13 +257,16 @@ export default function HomePage({
               Add a YouTube video or an audio file, then pin notes to any moment
               (or a whole section) with text, lists, and screenshots.
             </p>
-            <button
-              type="button"
-              onClick={onCreateTrack}
-              className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
-            >
-              <Plus size={14} /> New track
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onCreateTrack}
+                className="press inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+              >
+                <Plus size={14} /> New track
+              </button>
+              <ImportTrackButton onImport={onImportTrack} variant="hero" />
+            </div>
           </div>
         ) : (
           /* The key replays the stagger cascade on every folder navigation —
@@ -327,14 +337,17 @@ export default function HomePage({
                   </p>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={onCreateTrack}
-                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
-              >
-                <Plus size={13} />
-                <span className="hidden sm:inline">New track</span>
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <ImportTrackButton onImport={onImportTrack} variant="header" />
+                <button
+                  type="button"
+                  onClick={onCreateTrack}
+                  className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+                >
+                  <Plus size={13} />
+                  <span className="hidden sm:inline">New track</span>
+                </button>
+              </div>
             </div>
 
             {/* Search well — spans every folder, like the old sub-bar's. */}
@@ -507,6 +520,82 @@ export default function HomePage({
         )}
       </div>
     </main>
+  )
+}
+
+/* ---- import button --------------------------------------------------------- */
+
+/**
+ * "Import" — brings an exported track JSON back in through a hidden file
+ * picker. Import runs async (audio/images are re-hosted), so the button shows
+ * its own busy state; failures surface as an alert with the parser's message.
+ * `variant` picks the chrome: the quiet secondary next to "New track", or the
+ * matching-size hero button for the first-run empty state.
+ */
+function ImportTrackButton({
+  onImport,
+  variant,
+}: {
+  onImport: (file: File) => Promise<void>
+  variant: 'header' | 'hero'
+}) {
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File) {
+    setBusy(true)
+    try {
+      await onImport(file)
+    } catch (err) {
+      console.error('Import failed:', err)
+      const detail = err instanceof Error && err.message ? err.message : ''
+      alert(
+        detail
+          ? `Import failed — ${detail}`
+          : 'Import failed — check the file and try again.',
+      )
+    } finally {
+      setBusy(false)
+      // Re-arm the picker so re-choosing the same file fires change again.
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        aria-hidden
+        tabIndex={-1}
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void handleFile(f)
+        }}
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+        title="Import a track from an exported JSON file"
+        className={`press inline-flex shrink-0 items-center gap-1.5 rounded border font-mono font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg disabled:cursor-wait disabled:opacity-70 ${
+          variant === 'hero'
+            ? 'border-line px-4 py-2 text-[11px]'
+            : 'border-line px-3 py-[7px] text-[10px]'
+        }`}
+      >
+        {busy ? (
+          <Loader2 size={13} className="animate-spin" />
+        ) : (
+          <FileUp size={13} />
+        )}
+        <span className={variant === 'hero' ? '' : 'hidden sm:inline'}>
+          {busy ? 'Importing…' : 'Import'}
+        </span>
+      </button>
+    </>
   )
 }
 
@@ -802,6 +891,7 @@ function TrackTile({
  *   • Open YouTube link (only for YouTube-sourced tracks)
  *   • Make a copy            — clones into the library, in place
  *   • Share link             — turns on view-only sharing and copies the URL
+ *   • Export JSON            — downloads the portable track file
  *   • Move to {folder}…      — inline section (only when folders exist)
  *   • Delete
  *
@@ -994,6 +1084,17 @@ function TrackActionsMenu({
                   ? 'Copy share link'
                   : 'Share link'}
             </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              downloadProjectJson(p)
+              setOpen(false)
+            }}
+            className={actionCls}
+          >
+            <Braces size={13} className="shrink-0 text-muted" />
+            <span>Export JSON</span>
           </button>
           {folders.length > 0 && (
             <>

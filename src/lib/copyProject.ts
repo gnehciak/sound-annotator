@@ -83,18 +83,35 @@ async function fetchBlob(url: string): Promise<Blob> {
   return res.blob()
 }
 
+export interface CopyProjectOptions {
+  /**
+   * Folder the copy lands in. Defaults to the source's folder for a
+   * same-owner copy, the root otherwise (a foreign folder id means nothing
+   * in the recipient's library).
+   */
+  folderId?: string | null
+  /**
+   * What to do when the source audio can't be downloaded. `'fail'` (default)
+   * aborts the whole copy — right for live shares, where a copy with broken
+   * audio is worse than no copy. `'detach'` keeps the copy but drops the dead
+   * audioUrl, so the editor offers its re-attach flow — right for imports of
+   * older exports whose original bytes may be long gone.
+   */
+  onMissingAudio?: 'fail' | 'detach'
+}
+
 /**
  * Copy a (shared) project into `uid`'s account and resolve with the saved
  * copy (id, ownerId, etc. populated). `onStatus` receives short progress
- * labels for the UI. Audio is copied strictly (a copy with broken audio is
- * worse than a failed copy); images are best-effort — one that can't be
- * fetched keeps its original URL. A same-owner copy stays in the source's
- * folder; a cross-owner copy (from the share viewer) lands in the root.
+ * labels for the UI. Audio is copied strictly by default (see
+ * {@link CopyProjectOptions.onMissingAudio}); images are best-effort — one
+ * that can't be fetched keeps its original URL.
  */
 export async function copySharedProject(
   uid: string,
   src: Project,
   onStatus?: (label: string) => void,
+  opts?: CopyProjectOptions,
 ): Promise<Project> {
   const newId = crypto.randomUUID()
 
@@ -114,11 +131,19 @@ export async function copySharedProject(
   let source = src.source
   if (source?.type === 'audio' && source.audioUrl) {
     onStatus?.('Copying audio…')
-    const blob = await fetchBlob(source.audioUrl)
-    const audioUrl = await uploadAudio(uid, newId, blob, (f) =>
-      onStatus?.(`Copying audio… ${Math.round(f * 100)}%`),
-    )
-    source = { ...source, audioUrl }
+    try {
+      const blob = await fetchBlob(source.audioUrl)
+      const audioUrl = await uploadAudio(uid, newId, blob, (f) =>
+        onStatus?.(`Copying audio… ${Math.round(f * 100)}%`),
+      )
+      source = { ...source, audioUrl }
+    } catch (err) {
+      if (opts?.onMissingAudio !== 'detach') throw err
+      // The referenced audio is gone (source project deleted, etc.) — keep the
+      // copy but drop the URL, so opening it lands on the re-attach prompt.
+      console.error('Source audio unavailable — copying without it:', err)
+      source = { type: source.type, fileName: source.fileName }
+    }
   }
 
   // Note images: re-upload each referenced image and map old URL → new.
@@ -148,10 +173,16 @@ export async function copySharedProject(
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
-    // Same-account copies stay in the source's folder; cross-account copies
-    // (the share viewer) land in the root — the source's folder id is the
-    // original owner's and means nothing in the recipient's library.
-    folderId: src.ownerId === uid ? src.folderId ?? null : null,
+    // An explicit destination (import) wins; otherwise same-account copies
+    // stay in the source's folder and cross-account copies (the share viewer)
+    // land in the root — the source's folder id is the original owner's and
+    // means nothing in the recipient's library.
+    folderId:
+      opts?.folderId !== undefined
+        ? opts.folderId
+        : src.ownerId === uid
+          ? src.folderId ?? null
+          : null,
   }
   await saveProject(uid, copy)
   return copy

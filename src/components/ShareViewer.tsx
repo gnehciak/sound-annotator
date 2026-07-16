@@ -25,6 +25,7 @@ import NotesHeaderControls from './NotesHeaderControls'
 import NotesSearch from './NotesSearch'
 import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
+import ExportJsonButton from './ExportJsonButton'
 import CopyProjectButton from './CopyProjectButton'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
@@ -431,6 +432,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </a>
         )}
         <ExportPdfButton project={project} />
+        <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
           href={window.location.pathname}
