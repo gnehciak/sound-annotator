@@ -8,14 +8,14 @@ export interface NoteTag {
 }
 
 export const TAGS: NoteTag[] = [
-  { id: 'pitch', label: 'Pitch', color: '#5aa8e6' },
-  { id: 'rhythm', label: 'Rhythm', color: '#ef8b4b' },
-  { id: 'duration', label: 'Duration', color: '#a07bf0' },
-  { id: 'dynamics', label: 'Dynamics', color: '#ef6f8b' },
-  { id: 'harmony', label: 'Harmony', color: '#3bb6a6' },
-  { id: 'form', label: 'Form', color: '#9ccb63' },
-  { id: 'timbre', label: 'Timbre', color: '#f5a623' },
-  { id: 'comment', label: 'Comment', color: '#968d7c' },
+  { id: 'pitch', label: 'Pitch', color: '#5aa8ff' },
+  { id: 'rhythm', label: 'Rhythm', color: '#ff9f2e' },
+  { id: 'duration', label: 'Duration', color: '#a06bff' },
+  { id: 'dynamics', label: 'Dynamics', color: '#f472b6' },
+  { id: 'harmony', label: 'Harmony', color: '#2dd4bf' },
+  { id: 'form', label: 'Form', color: '#3ddc74' },
+  { id: 'timbre', label: 'Timbre', color: '#ffd633' },
+  { id: 'comment', label: 'Comment', color: '#9a9aa2' },
 ]
 
 const BY_ID = new Map(TAGS.map((t) => [t.id, t]))

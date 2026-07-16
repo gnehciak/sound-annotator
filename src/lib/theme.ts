@@ -97,7 +97,7 @@ export function useResolvedTheme(): ResolvedTheme {
 export function useThemeKey(): string {
   const read = () => {
     const el = document.documentElement
-    return `${el.dataset.theme === 'light' ? 'light' : 'dark'}/${el.dataset.palette ?? 'amber'}`
+    return `${el.dataset.theme === 'light' ? 'light' : 'dark'}/${el.dataset.palette ?? 'tangerine'}`
   }
   const [key, setKey] = useState<string>(read)
   useEffect(() => {

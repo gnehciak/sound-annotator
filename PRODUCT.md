@@ -27,15 +27,16 @@ class.
 
 ## Brand Personality
 
-Precise, technical, pro-tool. The interface should feel like a piece of studio
-gear or an editing application (DAW / NLE), not a web dashboard: confident,
-dense, instrument-like. Quiet tonal surfaces (a dark default and a light theme
-that frames a literal-white page in tinted chrome — "a white score on the
-bench"), IBM Plex type in two voices (a humanist-technical sans, its matching
-mono for timecodes), softly squared corners, LED-style readouts, and one
-committed signal accent (amber by default; the user can choose cyan, vermilion,
-violet, or an achromatic mono palette — always a single signal). UI copy is terse and functional (verb plus
-object on buttons, no marketing tone).
+Precise, technical, pro-tool — with a playful signal. The interface should feel
+like a piece of studio gear or an editing application (DAW / NLE), not a web
+dashboard: confident, dense, instrument-like. One untinted neutral stage
+(graphite dark default; a pure-white light theme where hairlines carry the
+structure), IBM Plex type in two voices (a humanist-technical sans, its
+matching mono for timecodes), softly squared corners, LED-style readouts, and
+**color as accent, never as canvas**: one committed playful signal hue
+(tangerine by default; the user can choose bubblegum, limeade, or crayon —
+always a single signal) plus a crayon-box note-data palette. UI copy is terse
+and functional (verb plus object on buttons, no marketing tone).
 
 ## Anti-references
 
@@ -61,9 +62,9 @@ object on buttons, no marketing tone).
 3. **Dense but never cluttered.** Optimize for an expert who returns daily. Show
    what is useful at rest; reveal secondary controls on hover or focus rather
    than crowding them on screen or burying them in menus.
-4. **Committed, not tasteful-by-default.** One warm-dark palette, one amber
-   accent, softly squared corners (5–10px), monospace numerics. No hedging back
-   toward the generic.
+4. **Committed, not tasteful-by-default.** One untinted neutral canvas, one
+   playful signal accent, softly squared corners (5–10px), monospace numerics.
+   No hedging back toward the generic.
 5. **Legible under classroom conditions.** It gets projected and read at a
    distance, so contrast and sizing must hold up on a dim display, and meaning
    must never depend on color alone.

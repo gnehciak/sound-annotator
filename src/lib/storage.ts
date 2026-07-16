@@ -49,7 +49,7 @@ export function saveTheme(pref: ThemePref): void {
 
 // Signal-color palette — the second theme axis (mode picks dark/light, the
 // palette picks the hue family). Painted flash-free by the same boot script.
-export const PALETTES = ['amber', 'cyan', 'vermilion', 'violet', 'mono'] as const
+export const PALETTES = ['tangerine', 'bubblegum', 'limeade', 'crayon'] as const
 export type Palette = (typeof PALETTES)[number]
 
 const PALETTE_KEY = 'sound-annotator:palette'
@@ -57,11 +57,12 @@ const PALETTE_KEY = 'sound-annotator:palette'
 export function loadPalette(): Palette {
   try {
     const v = localStorage.getItem(PALETTE_KEY)
+    // A stored pre-reskin palette (amber/cyan/…) falls through to the default.
     return (PALETTES as readonly string[]).includes(v ?? '')
       ? (v as Palette)
-      : 'amber'
+      : 'tangerine'
   } catch {
-    return 'amber'
+    return 'tangerine'
   }
 }
 
