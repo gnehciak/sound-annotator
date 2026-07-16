@@ -65,6 +65,12 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
       if (cancelled) return
       playerRef.current = new YT.Player(host, {
         videoId,
+        // Privacy-enhanced embed host: the player runs without the viewer's
+        // signed-in YouTube session (no cookies from youtube.com). Besides
+        // being the right default for a classroom, it stops YouTube pausing
+        // our embed with "your account is being used on another device"
+        // whenever the teacher's account streams elsewhere.
+        host: 'https://www.youtube-nocookie.com',
         // controls: 0 hides YouTube's own control bar (we have our own transport)
         playerVars: {
           rel: 0,
