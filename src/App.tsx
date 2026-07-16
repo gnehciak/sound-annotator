@@ -32,7 +32,7 @@ import {
 import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
-import { uploadAudio, deleteAudioCloud } from './lib/audioCloud'
+import { deleteAudioCloud } from './lib/audioCloud'
 import {
   uploadNoteImage,
   deleteProjectImages,
@@ -67,6 +67,7 @@ import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
+import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
 import NotesHeaderControls from './components/NotesHeaderControls'
@@ -161,7 +162,6 @@ export default function App() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [needsAudioFile, setNeedsAudioFile] = useState(false)
-  const [uploadPct, setUploadPct] = useState<number | null>(null)
   // overviewOpen, playOnce, noteOrder are now derived below from project
   // settings (with the user-fallback states above as defaults).
   // Whether the notes search row is revealed (the query itself lives in
@@ -741,6 +741,10 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
+    // Guests have no images to sweep and no credentials to sweep with — the
+    // endpoint is Clerk-only, so this would just 401 into the console on every
+    // project they open.
+    if (isGuest) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -963,47 +967,41 @@ export default function App() {
     }
   }
 
-  async function attachAudioFile(file: File) {
+  /**
+   * Point the track at an audio file already on the web. Nothing is uploaded —
+   * the URL is stored as-is and wavesurfer streams from it, so the file stays
+   * the host's problem (and their bandwidth). Whether it actually loads is up
+   * to that host's CORS policy; see components/AudioUrlForm.
+   */
+  function attachAudioUrl(rawUrl: string) {
     if (!current || !user) return
-    // Guests have no Blob storage: the upload would 401 after we'd already
-    // swapped the project to a local-file source it could never restore from.
-    // Refuse before touching the project, not after.
-    if (isGuest) {
-      alert('Audio files need an account. As a guest you can annotate a YouTube video.')
-      return
-    }
     const projectId = current.id
     const startTitle = current.title
+    // A name for the UI only — the last path segment, minus any query string.
+    let fileName = 'Linked audio'
+    try {
+      const parsed = new URL(rawUrl)
+      fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '') || fileName
+    } catch {
+      alert("That doesn't look like a link. Paste a full URL starting with https://")
+      return
+    }
 
-    // Play the local file immediately while the upload runs in the background.
-    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
-    const localUrl = URL.createObjectURL(file)
-    audioUrlRef.current = localUrl
-    setAudioUrl(localUrl)
     setNeedsAudioFile(false)
-    setUploadPct(0)
-
-    // Switch to the player view right away (with local playback) so the upload
-    // progress bar is visible. The audioUrl gets filled in once the upload ends.
+    // Point the player at it now: the load effect keys on `currentId`, and this
+    // is the project already open, so it won't re-run and won't do it for us.
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+    setAudioUrl(rawUrl)
     patchProject(projectId, {
-      source: { type: 'audio', fileName: file.name },
+      source: { type: 'audio', fileName, audioUrl: rawUrl },
       title:
         startTitle === 'Untitled track'
-          ? file.name.replace(/\.[^.]+$/, '')
+          ? fileName.replace(/\.[^.]+$/, '')
           : startTitle,
     })
-
-    try {
-      const url = await uploadAudio(user.uid, projectId, file, setUploadPct)
-      patchProject(projectId, {
-        source: { type: 'audio', fileName: file.name, audioUrl: url },
-      })
-    } catch (err) {
-      console.error('Audio upload failed:', err)
-      alert('Audio upload failed — check your connection and try again.')
-    } finally {
-      setUploadPct(null)
-    }
   }
 
   // ---- annotation mutations ---------------------------------------------
@@ -1758,8 +1756,7 @@ export default function App() {
               ) : (
                 <SourcePicker
                   onYoutube={setYoutubeSource}
-                  onAudioFile={attachAudioFile}
-                  allowAudioFile={!isGuest}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
             </div>
@@ -1776,7 +1773,7 @@ export default function App() {
               ) : (
                 <ReattachAudio
                   fileName={current.source.fileName}
-                  onAudioFile={attachAudioFile}
+                  onAudioUrl={attachAudioUrl}
                 />
               )}
             </div>
@@ -1839,18 +1836,6 @@ export default function App() {
                       />
                     </div>
                   </div>
-
-                  {uploadPct != null && (
-                    <div className="flex shrink-0 items-center gap-2 rounded border border-line bg-inset px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted">
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                        <span
-                          className="block h-full bg-accent transition-[width]"
-                          style={{ width: `${Math.round(uploadPct * 100)}%` }}
-                        />
-                      </span>
-                      Uploading {Math.round(uploadPct * 100)}%
-                    </div>
-                  )}
 
                   <Transport
                     isPlaying={isPlaying}
@@ -2151,49 +2136,27 @@ function ReadOnlyNotice({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * A track whose `audioUrl` is missing or has gone dead (a link that rotted, or
+ * a project from before links replaced uploads). The notes are untouched — only
+ * the sound is gone — so this offers a new link rather than losing the work.
+ */
 function ReattachAudio({
   fileName,
-  onAudioFile,
+  onAudioUrl,
 }: {
   fileName?: string
-  onAudioFile: (file: File) => void
+  onAudioUrl: (url: string) => void
 }) {
-  const [over, setOver] = useState(false)
-  const take = (file?: File | null) => {
-    if (file && file.type.startsWith('audio/')) onAudioFile(file)
-  }
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault()
-        setOver(true)
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setOver(false)
-        take(e.dataTransfer.files?.[0])
-      }}
-      className={`rounded border p-6 text-center ${
-        over ? 'border-accent bg-accent/10' : 'border-accent/40 bg-accent/5'
-      }`}
-    >
+    <div className="rounded border border-accent/40 bg-accent/5 p-6">
       <p className="text-sm text-fg">
-        The audio file{fileName ? ` (${fileName})` : ''} for this track isn't
-        loaded. Re-open or drag it in to keep annotating. Your notes are safe.
+        The audio{fileName ? ` (${fileName})` : ''} for this track isn't
+        loading. Paste a link to it to keep annotating — your notes are safe.
       </p>
-      <label className="mt-3 inline-flex cursor-pointer rounded border border-accent/70 bg-accent/10 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-accentink hover:bg-accent/20">
-        <input
-          type="file"
-          accept="audio/*"
-          className="hidden"
-          onChange={(e) => {
-            take(e.target.files?.[0])
-            e.target.value = ''
-          }}
-        />
-        Re-open audio file
-      </label>
+      <div className="mt-3">
+        <AudioUrlForm onAudioUrl={onAudioUrl} compact />
+      </div>
     </div>
   )
 }

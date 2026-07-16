@@ -1,8 +1,13 @@
 // POST /api/blobs/upload — token handler for @vercel/blob/client uploads.
 // The browser streams bytes straight to Blob storage; this endpoint only
 // mints the short-lived token, pinning every upload inside the caller's own
-// users/{uid}/ prefix (the port of the old storage.rules) and capping size
-// at the same 60 MB.
+// users/{uid}/images/ prefix (the port of the old storage.rules) and capping
+// size at 60 MB.
+//
+// Note images are the only thing that uploads now: a track's audio is a link
+// the user pastes, not bytes we host (see src/components/AudioUrlForm). The
+// prefix check is narrowed to /images/ to match — the legacy users/{uid}/audio/
+// objects are still served and still deleted, just never written.
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { getUid } from '../_lib/auth.js'
 import { json, err } from '../_lib/respond.js'
@@ -19,8 +24,8 @@ export async function POST(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        if (!pathname.startsWith(`users/${uid}/`))
-          throw new Error('Uploads must stay under your own path')
+        if (!pathname.startsWith(`users/${uid}/images/`))
+          throw new Error('Only note images can be uploaded, under your own path')
         return {
           // Paths are already unique (audio: one object per project; images:
           // a fresh uuid per upload) — keep them stable so audio re-uploads

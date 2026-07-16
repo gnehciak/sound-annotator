@@ -1,10 +1,11 @@
 // Clone a shared project into the signed-in user's own account ("make a copy"
-// from the read-only viewer). The copy gets a fresh doc id and *owns its
-// bytes*: the audio blob and every note image are re-uploaded under the new
-// owner's Storage path, so the copy keeps working even if the original is
-// unshared or deleted. Note ids are kept as-is — @mentions in note HTML link
-// notes by id, and the id also seeds each note's fallback colour.
-import { uploadAudio } from './audioCloud'
+// from the read-only viewer). The copy gets a fresh doc id and owns the bytes
+// we host: every note image is re-uploaded under the new owner's Storage path,
+// so it survives the original being unshared or deleted. The *source* is only
+// a link now (YouTube, or a direct audio URL), so it's copied verbatim and
+// both projects point at the same audio — if that link dies, both lose it.
+// Note ids are kept as-is — @mentions in note HTML link notes by id, and the
+// id also seeds each note's fallback colour.
 import { uploadNoteImage } from './imageCloud'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
@@ -86,10 +87,9 @@ async function fetchBlob(url: string): Promise<Blob> {
 /**
  * Copy a (shared) project into `uid`'s account and resolve with the saved
  * copy (id, ownerId, etc. populated). `onStatus` receives short progress
- * labels for the UI. Audio is copied strictly (a copy with broken audio is
- * worse than a failed copy); images are best-effort — one that can't be
- * fetched keeps its original URL. A same-owner copy stays in the source's
- * folder; a cross-owner copy (from the share viewer) lands in the root.
+ * labels for the UI. Images are best-effort — one that can't be fetched keeps
+ * its original URL. A same-owner copy stays in the source's folder; a
+ * cross-owner copy (from the share viewer) lands in the root.
  */
 export async function copySharedProject(
   uid: string,
@@ -109,17 +109,11 @@ export async function copySharedProject(
   )
   const title = untakenTitle(src.title, taken)
 
-  // Audio: re-upload the blob under the new owner's path. YouTube sources are
-  // just metadata and copy as-is.
-  let source = src.source
-  if (source?.type === 'audio' && source.audioUrl) {
-    onStatus?.('Copying audio…')
-    const blob = await fetchBlob(source.audioUrl)
-    const audioUrl = await uploadAudio(uid, newId, blob, (f) =>
-      onStatus?.(`Copying audio… ${Math.round(f * 100)}%`),
-    )
-    source = { ...source, audioUrl }
-  }
+  // Both source kinds are now just a link (YouTube or a direct audio URL), so
+  // the source copies as-is — a copy points at the same audio the original
+  // does. Note images still get duplicated below: those we host, and they'd
+  // die with the original owner's project.
+  const source = src.source
 
   // Note images: re-upload each referenced image and map old URL → new.
   const urls = [...new Set(src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)))]
