@@ -83,6 +83,12 @@ export interface Annotation {
    * in the overview. Only meaningful when `structure` is set.
    */
   sectionName?: string
+  /**
+   * Plain-text lyrics for a song-structure section (whole-section granularity,
+   * not line-synced), shown in the structure board's Lyrics panel. Only
+   * meaningful on structure projects' sections.
+   */
+  lyrics?: string
   createdAt: number
 }
 
