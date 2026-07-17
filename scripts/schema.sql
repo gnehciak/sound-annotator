@@ -28,6 +28,12 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS published_by_name text;
 
 CREATE INDEX IF NOT EXISTS projects_published_idx ON projects (published_at DESC) WHERE published;
 
+-- AI section detection (api/projects/[id]/analyze.ts). Job state + the cached
+-- result of the Replicate music-structure run, e.g.
+-- { status: 'running'|'done'|'error', predictionId, sections: [{start,end,label}],
+--   stems, bpm, startedAt, finishedAt, error }.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS analysis jsonb;
+
 -- Guest projects (students who never sign in). owner_id holds a synthetic
 -- `guest:<uuid>`; this column holds the SHA-256 of the key that rides in the
 -- student's URL — never the key itself. NULL on every signed-in project.

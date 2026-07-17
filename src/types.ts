@@ -142,6 +142,13 @@ export interface Project {
    * substitute the user's local pref or a hard default.
    */
   settings?: ProjectSettings
+  /**
+   * Blob URLs of the separated stems (vocals/drums/bass/guitar/piano/other),
+   * saved by AI section detection (api/projects/[id]/analyze.ts). Read-only
+   * client-side: the server ignores it on writes — the analyze endpoint is
+   * its only writer. Present only on analyzed tracks; drives the stem mixer.
+   */
+  stems?: Record<string, string>
 }
 
 export interface ProjectSettings {

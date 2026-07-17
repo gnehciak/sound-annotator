@@ -34,7 +34,8 @@ in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only
 `VITE_CLERK_PUBLISHABLE_KEY`; functions read `DATABASE_URL`,
-`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`). Local dev with API:
+`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, and `REPLICATE_API_TOKEN` —
+the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a

@@ -28,6 +28,8 @@ export interface ProjectRow {
   published: boolean
   published_at: string | number | null
   published_by_name: string | null
+  /** AI section-detection job state + cached result (api/projects/[id]/analyze.ts). */
+  analysis: unknown
   // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
   // it is a credential, not project data.
   guest_token_hash: string | null
@@ -71,6 +73,10 @@ export function rowToProject(
     published: r.published === true,
     publishedByName: r.published_by_name ?? undefined,
   }
+  // Saved stem URLs surface as a read-only field (PUT never accepts them —
+  // the analyze endpoint is their only writer).
+  const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems
+  if (stems && Object.keys(stems).length > 0) p.stems = stems
   if (opts?.withLock) p.lock = r.lock ?? null
   return p
 }
