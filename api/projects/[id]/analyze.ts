@@ -15,16 +15,20 @@
 // (vocals/drums/bass/guitar/piano/other — free by-products of the analysis,
 // but expiring on Replicate within the hour) into Blob under
 // users/{uid}/stems/{projectId}/, deletes the temporary analysis upload, and
-// caches it all on the row. Finalizing is guarded by a status + timestamp so
-// concurrent polls don't copy twice, and a finalize killed mid-copy (function
-// timeout) goes stale and is retried by a later poll. The client applies the
-// sections as structure annotations — the server never touches `annotations`
-// (those writes stay behind the edit lock in index.ts).
+// caches it all on the row. The copying runs in the background (waitUntil)
+// while polls return `finalizing` with a per-stem progress count the client
+// renders as a bar — `done` is only ever reported once everything is saved.
+// Finalizing is guarded by a status + timestamp so concurrent polls don't
+// copy twice, and a finalize killed mid-copy (function timeout) goes stale
+// and is retried by a later poll. The client applies the sections as
+// structure annotations — the server never touches `annotations` (those
+// writes stay behind the edit lock in index.ts).
 //
 // No webhook on purpose: polling behaves identically under `vercel dev` and
 // in production, and a run someone abandoned mid-flight simply resumes the
 // next time the button is pressed.
 import { put, del } from '@vercel/blob'
+import { waitUntil } from '@vercel/functions'
 import { getUid } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type ProjectRow } from '../../_lib/db.js'
 import { json, err } from '../../_lib/respond.js'
@@ -66,6 +70,9 @@ interface Analysis {
   bpm?: number
   /** Blob URLs of the separated stems, keyed vocals/drums/bass/guitar/piano/other. */
   stems?: Record<string, string>
+  /** Finalize progress: stems saved so far / stems the run produced. */
+  stemsDone?: number
+  stemsTotal?: number
   /** The temporary analysis upload (YouTube flow) — deleted at finalize. */
   sourceAudioUrl?: string
   startedAt?: number
@@ -98,15 +105,17 @@ async function saveAnalysis(id: string, a: Analysis): Promise<void> {
 }
 
 /** Strip the analysis to what the client needs (never the prediction id or
- *  the temp upload URL). Finalizing reads as running — same client behavior,
- *  keep polling. */
+ *  the temp upload URL). `finalizing` carries the stem-save progress the
+ *  button renders as a bar; `done` is only reported once everything landed. */
 function toClient(a: Analysis | null): Record<string, unknown> {
   if (!a) return { status: 'none' }
   return {
-    status: a.status === 'finalizing' ? 'running' : a.status,
+    status: a.status,
     sections: a.sections,
     bpm: a.bpm,
     stems: a.stems,
+    stemsDone: a.stemsDone,
+    stemsTotal: a.stemsTotal,
     error: a.error,
   }
 }
@@ -209,12 +218,20 @@ export async function GET(request: Request): Promise<Response> {
 
   const analysis = row.analysis as Analysis | null
 
-  // A finalize that died mid-copy (timeout, crash) goes stale and is retried;
-  // a live one just reads as running.
+  // Finalizing: report the live stem-save progress. A finalize that died
+  // mid-copy (timeout, crash) goes stale and is retried in the background
+  // (the copies are idempotent overwrites).
   if (analysis?.status === 'finalizing' && analysis.predictionId) {
     if (Date.now() - (analysis.finalizeAt ?? 0) < FINALIZE_STALE_MS)
       return json(toClient(analysis))
-    return finalize(id, row.owner_id, { ...analysis, finalizeAt: Date.now() })
+    const reclaimed: Analysis = {
+      ...analysis,
+      finalizeAt: Date.now(),
+      stemsDone: 0,
+    }
+    await saveAnalysis(id, reclaimed)
+    runInBackground(finalize(id, row.owner_id, reclaimed))
+    return json(toClient(reclaimed))
   }
 
   if (!analysis || analysis.status !== 'running' || !analysis.predictionId)
@@ -225,7 +242,12 @@ export async function GET(request: Request): Promise<Response> {
 
   const state = data.status as string
   if (state === 'starting' || state === 'processing')
-    return json(toClient(analysis))
+    // `stage` (not persisted) lets the button say "warming up" vs "analyzing"
+    // — a cold model can sit in Replicate's queue for a couple of minutes.
+    return json({
+      ...toClient(analysis),
+      stage: state === 'starting' ? 'queue' : 'analyze',
+    })
 
   if (state !== 'succeeded') {
     const failed: Analysis = {
@@ -242,19 +264,38 @@ export async function GET(request: Request): Promise<Response> {
 
   // Claim the finalize before the heavy copying, so a concurrent poll (second
   // tab) sees 'finalizing' and stands down instead of copying stems twice.
+  // The copy itself runs in the background: this poll (and every later one)
+  // returns immediately with the progress count.
+  const output = (data.output ?? {}) as Record<string, unknown>
   const claimed: Analysis = {
     ...analysis,
     status: 'finalizing',
     finalizeAt: Date.now(),
+    stemsDone: 0,
+    stemsTotal: STEM_KEYS.filter((k) => typeof output[k] === 'string').length,
   }
   await saveAnalysis(id, claimed)
-  return finalize(id, row.owner_id, claimed, data.output)
+  runInBackground(finalize(id, row.owner_id, claimed, data.output))
+  return json(toClient(claimed))
+}
+
+/** Hand work past the response to the platform (waitUntil); if that API is
+ *  ever unavailable, the promise still runs — we just can't extend the
+ *  function's lifetime for it, and the stale-finalize retry covers a kill. */
+function runInBackground(work: Promise<void>): void {
+  try {
+    waitUntil(work)
+  } catch {
+    void work
+  }
 }
 
 /**
  * Turn a succeeded prediction into the cached result: sections from the
  * analyzer JSON, stems copied into the owner's Blob space (Replicate deletes
  * its outputs within about an hour), the temporary analysis upload deleted.
+ * Runs in the background after the claiming poll's response; each stem copy
+ * bumps `stemsDone` on the row, which later polls report as progress.
  * `output` is passed through from a fresh poll; a stale-finalize retry
  * refetches the prediction instead.
  */
@@ -263,7 +304,7 @@ async function finalize(
   uid: string,
   analysis: Analysis,
   output?: unknown,
-): Promise<Response> {
+): Promise<void> {
   try {
     if (output === undefined) {
       const { ok, data } = await replicate(`/predictions/${analysis.predictionId}`)
@@ -290,7 +331,6 @@ async function finalize(
       ...result,
     }
     await saveAnalysis(id, done)
-    return json(toClient(done))
   } catch (e) {
     const failed: Analysis = {
       status: 'error',
@@ -298,12 +338,12 @@ async function finalize(
       finishedAt: Date.now(),
     }
     await saveAnalysis(id, failed)
-    return json(toClient(failed))
   }
 }
 
 /** Stream each Demucs stem from Replicate's expiring output into the owner's
- *  Blob space. Per-stem best-effort: sections must never fail because one
+ *  Blob space, bumping the row's `stemsDone` as each lands (the progress the
+ *  polls report). Per-stem best-effort: sections must never fail because one
  *  stem copy did. */
 async function copyStems(
   uid: string,
@@ -329,6 +369,15 @@ async function copyStems(
             contentType: res.headers.get('content-type') ?? undefined,
           },
         )
+        // Atomic in-SQL increment: the six copies land in any order, and a
+        // read-modify-write here would lose counts to races.
+        await sql`
+          UPDATE projects SET analysis = jsonb_set(
+            analysis,
+            '{stemsDone}',
+            to_jsonb(COALESCE((analysis->>'stemsDone')::int, 0) + 1)
+          ) WHERE id = ${projectId} AND analysis->>'status' = 'finalizing'
+        `.catch(() => {})
         return [name, blob.url] as const
       } catch {
         return null

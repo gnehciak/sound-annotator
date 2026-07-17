@@ -15,12 +15,19 @@ export interface DetectedSection {
 }
 
 export interface AnalysisState {
-  /** 'audio-required': a YouTube project needs an analysis audio upload first. */
-  status: 'none' | 'audio-required' | 'running' | 'done' | 'error'
+  /** 'audio-required': a YouTube project needs an analysis audio upload first.
+   *  'finalizing': analysis done, stems still saving — carries the progress. */
+  status: 'none' | 'audio-required' | 'running' | 'finalizing' | 'done' | 'error'
+  /** While running: whether the model is still cold-booting ('queue') or
+   *  actually analyzing ('analyze'). */
+  stage?: 'queue' | 'analyze'
   sections?: DetectedSection[]
   bpm?: number
   /** Blob URLs of the saved stems (vocals/drums/bass/guitar/piano/other). */
   stems?: Record<string, string>
+  /** Finalize progress: stems saved so far / stems the run produced. */
+  stemsDone?: number
+  stemsTotal?: number
   error?: string
 }
 

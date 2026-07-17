@@ -13,7 +13,8 @@ type Phase =
   | { kind: 'idle' }
   | { kind: 'prompting' } // YouTube: waiting for the analysis audio drop
   | { kind: 'uploading'; pct: number }
-  | { kind: 'running' }
+  | { kind: 'running'; stage?: 'queue' | 'analyze' }
+  | { kind: 'finalizing'; done: number; total: number }
   | { kind: 'done'; count: number }
   | { kind: 'error'; message: string }
 
@@ -52,6 +53,9 @@ export default function DetectSectionsButton({
   const runRef = useRef(0)
   useEffect(() => () => void runRef.current++, [])
 
+  // Reflect a poll response in the button. Only 'done' (sections AND stems
+  // all saved) and 'error' end the run; the in-flight states just update the
+  // label/progress and keep the poll loop going.
   function settle(state: AnalysisState) {
     if (state.status === 'done' && state.sections) {
       onSections(state.sections, state.bpm, state.stems)
@@ -61,6 +65,15 @@ export default function DetectSectionsButton({
     if (state.status === 'error') {
       setPhase({ kind: 'error', message: state.error ?? 'Analysis failed' })
       return true
+    }
+    if (state.status === 'finalizing') {
+      setPhase({
+        kind: 'finalizing',
+        done: state.stemsDone ?? 0,
+        total: state.stemsTotal ?? 0,
+      })
+    } else if (state.status === 'running') {
+      setPhase({ kind: 'running', stage: state.stage })
     }
     return false
   }
@@ -116,23 +129,43 @@ export default function DetectSectionsButton({
     }
   }
 
-  const busy = phase.kind === 'running' || phase.kind === 'uploading'
+  const busy =
+    phase.kind === 'running' ||
+    phase.kind === 'uploading' ||
+    phase.kind === 'finalizing'
   const label =
     phase.kind === 'uploading'
       ? `Uploading ${Math.round(phase.pct * 100)}%`
       : phase.kind === 'running'
-        ? 'Analyzing…'
-        : phase.kind === 'done'
-          ? `${phase.count} sections`
-          : phase.kind === 'error'
-            ? 'Retry detection'
-            : 'Detect sections'
+        ? phase.stage === 'queue'
+          ? 'Warming up…'
+          : 'Analyzing…'
+        : phase.kind === 'finalizing'
+          ? phase.total > 0
+            ? `Saving stems ${Math.min(phase.done, phase.total)}/${phase.total}`
+            : 'Saving results…'
+          : phase.kind === 'done'
+            ? `${phase.count} sections`
+            : phase.kind === 'error'
+              ? 'Retry detection'
+              : 'Detect sections'
+  // 0–1 fill for the button's progress track (upload bytes, then saved stems).
+  const progress =
+    phase.kind === 'uploading'
+      ? phase.pct
+      : phase.kind === 'finalizing' && phase.total > 0
+        ? Math.min(phase.done, phase.total) / phase.total
+        : null
   const title =
     phase.kind === 'error'
       ? `Section detection failed: ${phase.message}`
       : phase.kind === 'done'
         ? 'Sections added as structure notes — press again to re-apply'
-        : 'Detect song sections (intro / verse / chorus…) with AI — takes a minute or two'
+        : phase.kind === 'finalizing'
+          ? 'Analysis done — saving the separated stems to your library'
+          : phase.kind === 'running' && phase.stage === 'queue'
+            ? 'The model is booting on the GPU — a cold start can take a couple of minutes'
+            : 'Detect song sections (intro / verse / chorus…) with AI — takes a minute or two'
 
   return (
     <>
@@ -156,6 +189,22 @@ export default function DetectSectionsButton({
           <Sparkles size={12} />
         )}
         {label}
+        {/* Progress track: upload % while the file streams up, then one tick
+            per stem landed in Blob while results save. */}
+        {progress != null && (
+          <span
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress * 100)}
+            className="h-[5px] w-14 overflow-hidden rounded-full bg-inset"
+          >
+            <span
+              className="block h-full rounded-full bg-accent transition-[width] duration-300"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </span>
+        )}
       </button>
 
       {phase.kind === 'prompting' && (
