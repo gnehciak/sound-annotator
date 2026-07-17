@@ -19,6 +19,42 @@ export function parseVideoId(input: string): string | null {
   return null
 }
 
+/**
+ * Seconds from a YouTube time param — plain seconds ("90") or YouTube's
+ * duration form ("1h2m3s", "1m30s", "90s"). null when it's neither.
+ */
+export function parseYouTubeTime(input: string): number | null {
+  const v = input.trim().toLowerCase()
+  if (/^\d+$/.test(v)) return Number(v)
+  const m = v.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/)
+  if (!m || (!m[1] && !m[2] && !m[3])) return null
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
+}
+
+/**
+ * The clip window a YouTube link already carries in its own params — `t` or
+ * `start` (what "Copy link at current time" writes) and `end`. Used to prefill
+ * the source picker's clip fields, so pasting a link that points at a moment
+ * lands the track there.
+ */
+export function parseClipWindow(input: string): {
+  start?: number
+  end?: number
+} {
+  let url: URL
+  try {
+    url = new URL(input.trim())
+  } catch {
+    return {}
+  }
+  const read = (key: string) => {
+    const raw = url.searchParams.get(key)
+    const secs = raw == null ? null : parseYouTubeTime(raw)
+    return secs != null && secs > 0 ? secs : undefined
+  }
+  return { start: read('start') ?? read('t'), end: read('end') }
+}
+
 /** Fetch a video's title via the public oEmbed endpoint (no API key). */
 export async function fetchVideoTitle(videoId: string): Promise<string | null> {
   try {

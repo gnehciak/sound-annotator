@@ -1,6 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Brackets, Eye, ListOrdered, X } from 'lucide-react'
 import type { NoteOrder } from '../lib/storage'
+import ClipFields from './ClipFields'
+import { readClipFields, type ClipDraft } from '../lib/clip'
+import { formatTime } from '../lib/format'
 
 /**
  * Centralised settings modal — surfaces a handful of cross-cutting preferences
@@ -15,6 +18,8 @@ export default function SettingsModal({
   onOverviewOpen,
   noteOrder,
   onNoteOrder,
+  clip,
+  onClip,
   onClose,
 }: {
   playOnce: boolean
@@ -23,8 +28,28 @@ export default function SettingsModal({
   onOverviewOpen: (on: boolean) => void
   noteOrder: NoteOrder
   onNoteOrder: (mode: NoteOrder) => void
+  /** The YouTube clip window, or null when the track isn't a clippable one. */
+  clip: { start?: number; end?: number } | null
+  onClip: (next: { start?: number; end?: number }) => void
   onClose: () => void
 }) {
+  const [clipDraft, setClipDraft] = useState<ClipDraft>({
+    start: clip?.start ? formatTime(clip.start) : '',
+    end: clip?.end ? formatTime(clip.end) : '',
+  })
+  const [clipError, setClipError] = useState<string | null>(null)
+
+  const commitClip = () => {
+    const parsed = readClipFields(clipDraft)
+    if ('error' in parsed) {
+      setClipError(parsed.error)
+      return
+    }
+    setClipError(null)
+    if (parsed.clip.start !== clip?.start || parsed.clip.end !== clip?.end)
+      onClip(parsed.clip)
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -65,6 +90,26 @@ export default function SettingsModal({
         </div>
 
         <div className="flex flex-col gap-6 px-5 py-5">
+          {clip && (
+            <Section title="Clip">
+              <div className="min-w-0">
+                <div className="mb-2.5 text-[11.5px] leading-snug text-muted">
+                  Trim the track to part of the video. Notes move with the clip,
+                  so they stay on the same music.
+                </div>
+                <ClipFields
+                  value={clipDraft}
+                  onChange={(d) => {
+                    setClipDraft(d)
+                    setClipError(null)
+                  }}
+                  onCommit={commitClip}
+                  error={clipError}
+                />
+              </div>
+            </Section>
+          )}
+
           <Section title="Playback">
             <ToggleRow
               icon={<Brackets size={14} strokeWidth={2.4} />}

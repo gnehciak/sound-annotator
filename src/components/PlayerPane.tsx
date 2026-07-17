@@ -30,6 +30,8 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
       <YouTubePlayer
         ref={ref}
         videoId={source.videoId}
+        clipStart={source.clipStart}
+        clipEnd={source.clipEnd}
         playbackRate={props.playbackRate}
         volume={props.volume}
         onTime={props.onTime}

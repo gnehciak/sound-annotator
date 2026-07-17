@@ -91,8 +91,14 @@ function sanitizeSource(v: unknown): ProjectSource | undefined {
     const source: ProjectSource = { type: 'youtube' }
     const youtubeUrl = str(s.youtubeUrl)
     const videoId = str(s.videoId)
+    const clipStart = num(s.clipStart)
+    const clipEnd = num(s.clipEnd)
     if (youtubeUrl) source.youtubeUrl = youtubeUrl
     if (videoId) source.videoId = videoId
+    // A clip only means anything as a forward window; anything else (negative,
+    // inverted) is dropped, leaving the track the whole video.
+    if (clipStart != null && clipStart > 0) source.clipStart = clipStart
+    if (clipEnd != null && clipEnd > (source.clipStart ?? 0)) source.clipEnd = clipEnd
     return videoId || youtubeUrl ? source : undefined
   }
   if (s.type === 'audio') {

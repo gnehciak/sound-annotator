@@ -1068,7 +1068,7 @@ export default function App() {
     [patchProject],
   )
 
-  function setYoutubeSource(url: string) {
+  function setYoutubeSource(url: string, clip?: { start?: number; end?: number }) {
     if (!current) return
     const videoId = parseVideoId(url)
     if (!videoId) {
@@ -1076,7 +1076,13 @@ export default function App() {
       return
     }
     commitProject(current.id, {
-      source: { type: 'youtube', youtubeUrl: url, videoId },
+      source: {
+        type: 'youtube',
+        youtubeUrl: url,
+        videoId,
+        ...(clip?.start ? { clipStart: clip.start } : {}),
+        ...(clip?.end ? { clipEnd: clip.end } : {}),
+      },
     })
     // Derive the initial title from the video (mirrors the audio-file path).
     // Re-checked at resolve time so a rename during the fetch wins; raw
@@ -1095,6 +1101,41 @@ export default function App() {
       })
     }
   }
+
+  /**
+   * Retune the clip window on an existing YouTube track (the Settings modal).
+   * Note times are clip-relative, so moving the window's start would slide
+   * every note off the music it was written about — shift them back by the
+   * same delta to hold them in place. Notes the new window excludes are pinned
+   * to its edges rather than dropped; the whole thing rides one undo step, so
+   * a clip typed wrong is one ⌘Z away.
+   */
+  const setClip = useCallback(
+    (next: { start?: number; end?: number }) => {
+      if (!current?.source || current.source.type !== 'youtube') return
+      const before = current.source.clipStart ?? 0
+      const after = next.start ?? 0
+      const delta = before - after
+      const len = next.end != null ? next.end - after : Infinity
+      const slide = (t: number) => Math.min(Math.max(t + delta, 0), len)
+      commitProject(current.id, {
+        source: {
+          ...current.source,
+          clipStart: next.start,
+          clipEnd: next.end,
+        },
+        annotations:
+          delta === 0 && len === Infinity
+            ? current.annotations
+            : current.annotations.map((a) => ({
+                ...a,
+                start: slide(a.start),
+                ...(a.end != null ? { end: slide(a.end) } : {}),
+              })),
+      })
+    },
+    [current, commitProject],
+  )
 
   /**
    * Point the track at an audio file already on the web. Nothing is uploaded —
@@ -2448,6 +2489,17 @@ export default function App() {
           onOverviewOpen={setOverviewOpenPref}
           noteOrder={noteOrder}
           onNoteOrder={changeNoteOrder}
+          clip={
+            // The source belongs to the owner: a link editor or a view-only
+            // reader sees the clip the track came with, not a way to retrim it.
+            canEditSettings && current?.source?.type === 'youtube'
+              ? {
+                  start: current.source.clipStart,
+                  end: current.source.clipEnd,
+                }
+              : null
+          }
+          onClip={setClip}
           onClose={() => setShowSettings(false)}
         />
       )}
