@@ -88,7 +88,10 @@ import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
+import KaraokeStage from './components/structure/KaraokeStage'
+import KaraokeControls from './components/structure/KaraokeControls'
 import MiniTransport from './components/structure/MiniTransport'
+import { useFullscreen } from './lib/fullscreen'
 import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -302,6 +305,30 @@ export default function App() {
   // Song-structure projects open the visual section board instead of the
   // notes workspace; their annotations are the sections (lib/sections.ts).
   const isStructure = isStructureProject(current)
+
+  // Karaoke: the player's box, given over to the sounding section's lyrics.
+  // A view, not a project setting — it never persists or travels on a share.
+  // Held as the track it was armed on rather than a bare boolean, so the
+  // stage stands down by derivation once the grounds for it go — another
+  // track opened, the library, the last lyric deleted — with no reset to
+  // remember to fire.
+  const hasLyrics = !!current?.annotations.some((a) => a.lyrics?.trim())
+  const [karaokeFor, setKaraokeFor] = useState<string | null>(null)
+  const playerColumnRef = useRef<HTMLDivElement>(null)
+  const {
+    isFullscreen: stageFullscreen,
+    supported: fullscreenSupported,
+    toggle: toggleStageFullscreen,
+    exit: exitStageFullscreen,
+  } = useFullscreen(playerColumnRef)
+  const karaokeOn =
+    !!current && karaokeFor === current.id && isStructure && hasLyrics
+
+  // Fullscreen exists to project the stage, so it leaves with it — otherwise
+  // standing the stage down mid-song strands the window on a bare player.
+  useEffect(() => {
+    if (!karaokeOn) void exitStageFullscreen()
+  }, [karaokeOn, exitStageFullscreen])
 
   // Home vs editor: no router — the home page is simply "no open track".
   // Deriving from `current` (not just currentId) self-heals a dangling id.
@@ -1878,38 +1905,69 @@ export default function App() {
                overview strip, or inspector — the timeline IS the workspace. */
             <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div
+                ref={playerColumnRef}
+                className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+                  stageFullscreen ? 'bg-ink' : ''
+                }`}
+              >
                 <TitleBar
-                  left="Player"
+                  left={karaokeOn ? 'Karaoke' : 'Player'}
                   right={
-                    current.source.type === 'youtube' ? undefined : 'Audio'
+                    current.source.type === 'youtube' || karaokeOn
+                      ? undefined
+                      : 'Audio'
                   }
                   actions={
-                    current.source.type === 'youtube' ? (
-                      <a
-                        href={
-                          current.source.youtubeUrl ??
-                          (current.source.videoId
-                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                            : undefined)
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open the original video on YouTube (new tab)"
-                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-                      >
-                        <Play size={12} />
-                        YouTube
-                      </a>
-                    ) : undefined
+                    <>
+                      {hasLyrics && (
+                        <KaraokeControls
+                          karaoke={karaokeOn}
+                          fullscreen={stageFullscreen}
+                          fullscreenSupported={fullscreenSupported}
+                          onToggleKaraoke={() =>
+                            setKaraokeFor(karaokeOn ? null : current.id)
+                          }
+                          onToggleFullscreen={toggleStageFullscreen}
+                        />
+                      )}
+                      {current.source.type === 'youtube' && !karaokeOn && (
+                        <a
+                          href={
+                            current.source.youtubeUrl ??
+                            (current.source.videoId
+                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                              : undefined)
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open the original video on YouTube (new tab)"
+                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                          <Play size={12} />
+                          YouTube
+                        </a>
+                      )}
+                    </>
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
                   <div
                     ref={setPlayerArea}
-                    className="flex min-h-0 flex-1 flex-col justify-center"
+                    className="relative flex min-h-0 flex-1 flex-col justify-center"
                   >
-                    <div ref={playerBoxRef}>
+                    {/* Karaoke clips the player rather than unmounting it —
+                        tearing down the iframe would stop the song the stage
+                        exists to sing along to. */}
+                    <div
+                      ref={playerBoxRef}
+                      className={
+                        karaokeOn
+                          ? 'pointer-events-none absolute h-px w-px overflow-hidden opacity-0'
+                          : undefined
+                      }
+                      aria-hidden={karaokeOn || undefined}
+                    >
                       <PlayerPane
                         ref={playerRef}
                         source={current.source}
@@ -1926,6 +1984,15 @@ export default function App() {
                         onUpdateRegion={updateRegionGeom}
                       />
                     </div>
+                    {karaokeOn && (
+                      <KaraokeStage
+                        sections={current.annotations}
+                        currentTime={currentTime}
+                        isPlaying={isPlaying}
+                        large={stageFullscreen}
+                        onSeek={seek}
+                      />
+                    )}
                   </div>
 
                   {/* Folded transport: Play + clock + volume. Seeking lives in

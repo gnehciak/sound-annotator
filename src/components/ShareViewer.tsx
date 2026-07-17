@@ -33,7 +33,10 @@ import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
+import KaraokeStage from './structure/KaraokeStage'
+import KaraokeControls from './structure/KaraokeControls'
 import MiniTransport from './structure/MiniTransport'
+import { useFullscreen } from '../lib/fullscreen'
 import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
@@ -183,6 +186,24 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   }, [projectId])
 
   const annotations = useMemo(() => project?.annotations ?? [], [project])
+
+  // Karaoke: the player's box, given over to the sounding section's lyrics.
+  // Offered here too — the `?view=` link is what a class actually sings from.
+  const hasLyrics = annotations.some((a) => a.lyrics?.trim())
+  const [karaoke, setKaraoke] = useState(false)
+  const playerColumnRef = useRef<HTMLDivElement>(null)
+  const {
+    isFullscreen: stageFullscreen,
+    supported: fullscreenSupported,
+    toggle: toggleStageFullscreen,
+    exit: exitStageFullscreen,
+  } = useFullscreen(playerColumnRef)
+  const karaokeOn = karaoke && hasLyrics
+
+  // Fullscreen exists to project the stage, so it leaves with it.
+  useEffect(() => {
+    if (!karaokeOn) void exitStageFullscreen()
+  }, [karaokeOn, exitStageFullscreen])
 
   // The same resizable split + notes-view controls the editor uses (read-only
   // here, but filter/order/pin/cue never mutate notes).
@@ -460,10 +481,32 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
            layout the editor uses, minus editing. */
         <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            ref={playerColumnRef}
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${
+              stageFullscreen ? 'bg-ink' : ''
+            }`}
+          >
             <TitleBar
-              left="Player"
-              right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
+              left={karaokeOn ? 'Karaoke' : 'Player'}
+              right={
+                karaokeOn
+                  ? undefined
+                  : source?.type === 'youtube'
+                    ? 'YouTube'
+                    : 'Audio'
+              }
+              actions={
+                hasPlayer && hasLyrics ? (
+                  <KaraokeControls
+                    karaoke={karaokeOn}
+                    fullscreen={stageFullscreen}
+                    fullscreenSupported={fullscreenSupported}
+                    onToggleKaraoke={() => setKaraoke(!karaokeOn)}
+                    onToggleFullscreen={toggleStageFullscreen}
+                  />
+                ) : undefined
+              }
             />
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
               {hasPlayer ? (
@@ -471,26 +514,47 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   <div
                     ref={setPlayerArea}
                     className={
-                      source?.type === 'youtube'
-                        ? 'flex min-h-0 flex-1 flex-col justify-center'
-                        : 'shrink-0'
+                      source?.type === 'youtube' || karaokeOn
+                        ? 'relative flex min-h-0 flex-1 flex-col justify-center'
+                        : 'relative shrink-0'
                     }
                   >
-                    <PlayerPane
-                      ref={playerRef}
-                      source={source}
-                      audioUrl={audioUrl}
-                      regionSpecs={regionSpecs}
-                      playbackRate={playbackRate}
-                      volume={muted ? 0 : volume}
-                      readOnly
-                      onTime={handleTime}
-                      onDuration={handleDuration}
-                      onPlayingChange={handlePlaying}
-                      onSeek={seek}
-                      onCreateRange={() => {}}
-                      onUpdateRegion={() => {}}
-                    />
+                    {/* Karaoke clips the player rather than unmounting it —
+                        tearing down the iframe would stop the song the stage
+                        exists to sing along to. */}
+                    <div
+                      className={
+                        karaokeOn
+                          ? 'pointer-events-none absolute h-px w-px overflow-hidden opacity-0'
+                          : undefined
+                      }
+                      aria-hidden={karaokeOn || undefined}
+                    >
+                      <PlayerPane
+                        ref={playerRef}
+                        source={source}
+                        audioUrl={audioUrl}
+                        regionSpecs={regionSpecs}
+                        playbackRate={playbackRate}
+                        volume={muted ? 0 : volume}
+                        readOnly
+                        onTime={handleTime}
+                        onDuration={handleDuration}
+                        onPlayingChange={handlePlaying}
+                        onSeek={seek}
+                        onCreateRange={() => {}}
+                        onUpdateRegion={() => {}}
+                      />
+                    </div>
+                    {karaokeOn && (
+                      <KaraokeStage
+                        sections={annotations}
+                        currentTime={currentTime}
+                        isPlaying={isPlaying}
+                        large={stageFullscreen}
+                        onSeek={seek}
+                      />
+                    )}
                   </div>
                   {/* Folded transport: Play + clock + volume. Seeking lives in
                       the board (ruler / minimap / chips / lyric headings). */}
