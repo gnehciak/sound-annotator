@@ -7,9 +7,9 @@
 // by confirming the page exists to someone who can't use it.
 //
 // Reading and editing happen through the normal /api/projects/:id routes, which
-// grant admins owner rights; deleting goes through [id]/trash.ts DELETE, the
-// purge (this console is the one caller that skips the trash). This endpoint
-// only answers "what exists", which nothing else can — guest owners are
+// grant admins owner rights; deleting goes through DELETE [id]?purge=1, the
+// hard delete (this console is the one caller that skips the trash). This
+// endpoint only answers "what exists", which nothing else can — guest owners are
 // synthetic, and an account's library is otherwise visible only to that account.
 import { getUid, isAdmin } from '../_lib/auth.js'
 import { sql, rowToProject, type ProjectRow } from '../_lib/db.js'

@@ -22,21 +22,32 @@ the server-stamped edit lock (see `api/projects/[id]/index.ts`).
 `deleted_at`; the row stays whole (notes, images, `shared`/`published`) so
 restore is exact, and every read filters on `deleted_at IS NULL` rather than
 clearing those flags — so a trashed track's `?view=` links and gallery card go
-dark and come back on restore. `api/projects/[id]/trash.ts` holds the two ways
-out — POST restore, and DELETE purge, **the app's only hard delete**: an owner
-may purge only their own row and only out of the trash, while an admin may
-purge any row, live or trashed (the console's permanent delete, which tears
-down the bytes client-side first). `api/cron/purge-trash.ts` hard-deletes
-anything past `TRASH_TTL_MS` (30 days, `api/_lib/db.ts`) plus its blobs —
-daily, gated on a `CRON_SECRET` env var it refuses to run without. Blobs are
-torn down **only at purge**, never at trash. The trash rides its own listing
-(`?trash=1`) into its own App state, never `projects` — a trashed track must
-never reach search, folder tallies, or the undo history.
+dark and come back on restore. The two ways out are query verbs on the same
+route: `POST …?restore=1` (owner only), and `DELETE …?purge=1`, **the app's
+only hard delete** — an owner may purge only their own row and only out of the
+trash, while an admin may purge any row, live or trashed (the console's
+permanent delete, which tears down the bytes client-side first).
+`api/cron/purge-trash.ts` hard-deletes anything past `TRASH_TTL_MS` (30 days,
+`api/_lib/db.ts`) plus **every** blob prefix a project owns (images, legacy
+audio, stems, analysis — keep it in step with App's `purgeProject`, since a
+prefix only one of them knows is bytes nobody collects). Daily, and gated on a
+`CRON_SECRET` env var it refuses to run without. Blobs are torn down **only at
+purge**, never at trash. The trash rides its own listing (`?trash=1`) into its
+own App state, never `projects` — a trashed track must never reach search,
+folder tallies, or the undo history.
 
-Note the split: `DELETE /api/projects/:id` trashes and has **no admin branch**,
-because the admin is an account holder too and such a branch would silently opt
-them out of their own trash. Permanence is a separate route, never an inference
-about who is calling. `api/admin/projects.ts` lists live rows only.
+Note the split: plain `DELETE /api/projects/:id` trashes and has **no admin
+branch**, because the admin is an account holder too and such a branch would
+silently opt them out of their own trash. Permanence is always asked for
+explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
+live rows only.
+
+**The Hobby plan caps a deployment at 12 Serverless Functions, and `/api` is at
+exactly 12.** That's why restore/purge are query verbs on `[id]/index.ts`
+rather than a route of their own. Adding any new `/api/*` file fails the
+deploy at `patchBuild` (`exceeded_serverless_functions_per_deployment`, and the
+build log looks *successful* — the error is only in the deployment's API
+record); fold new endpoints into an existing function, or upgrade to Pro.
 
 **Guests** (students, who have no accounts) are the third kind of caller:
 "Continue as guest" mints one project whose *key is its URL* — a capability

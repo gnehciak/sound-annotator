@@ -1,5 +1,5 @@
-// GET / PUT / DELETE /api/projects/:id — the server-side authorization for a
-// project, enforced here in code:
+// GET / PUT / POST / DELETE /api/projects/:id — the server-side authorization
+// for a project, enforced here in code:
 //
 // - GET: shared docs (view or edit links) are fetchable by id by anyone
 //   holding the link (the unguessable id is the share token); owners can
@@ -8,8 +8,20 @@
 // - PUT: upsert. Owners may write everything except reassigning ownerId;
 //   link editors (editableByLink) and guests may write content fields only.
 //   Content writes must hold the edit lock while someone else's claim is live.
-// - DELETE: owner only — a move to the trash, not a delete. The two ways back
-//   out of it (restore, purge) live in [id]/trash.ts.
+// - DELETE: owner only — a move to the trash, not a delete.
+// - DELETE ?purge=1: the app's ONE hard delete. An owner reaches only their own
+//   trashed row; a teacher-admin reaches any row, live or trashed (the console's
+//   permanent delete).
+// - POST ?restore=1: owner only — lift a project back out of the trash.
+//
+// The trash's two exits ride query verbs on this route rather than a route of
+// their own only because the Hobby plan caps a deployment at 12 Serverless
+// Functions and we sit on exactly 12; the cron is the one that had to be its
+// own path. What matters is unchanged: permanence is something a caller asks
+// for explicitly, never something inferred from who they are. There is
+// deliberately no isAdmin() branch on plain DELETE — the admin is an account
+// holder too, and such a branch would quietly opt the one guaranteed admin (the
+// teacher) out of their own trash.
 //
 // Four kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
 // a signed-out guest holding their project's key (see _lib/guest.ts), and a
@@ -241,23 +253,53 @@ export async function PUT(request: Request): Promise<Response> {
   return json({ ok: true })
 }
 
+/** POST ?restore=1 — lift a project back out of the trash, exactly as it left:
+ *  nothing was cleared on the way in, so nothing has to be rebuilt on the way
+ *  out. Owner only. */
+export async function POST(request: Request): Promise<Response> {
+  const uid = await getUid(request)
+  if (!uid) return err(401, 'Sign in required')
+  const id = idFrom(request)
+  if (!id) return err(400, 'Missing project id')
+  if (new URL(request.url).searchParams.get('restore') !== '1')
+    return err(400, 'Unsupported action')
+
+  await sql`
+    UPDATE projects SET deleted_at = NULL
+    WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NOT NULL
+  `
+  return json({ ok: true })
+}
+
 export async function DELETE(request: Request): Promise<Response> {
   const uid = await getUid(request)
   if (!uid) return err(401, 'Sign in required')
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
 
-  // Every delete that lands here is a move to the trash. The row stays whole —
-  // notes, images, share flags — so Restore is exact; api/cron/purge-trash.ts
-  // hard-deletes it once the window is up. Re-deleting an already-trashed
-  // project must not restart that clock, hence `deleted_at IS NULL`.
-  //
-  // A teacher-admin gets no shortcut here, deliberately: deleting from their
-  // own library has to be the same trash it is for everyone, and since the
-  // admin IS an account holder, an isAdmin() branch above this would quietly
-  // opt them out of the feature. The console's permanent delete is a different
-  // verb on a different route — [id]/trash.ts DELETE — so nothing turns on
-  // guessing which button a request came from.
+  // ?purge=1 is the app's only hard delete, and it has to be asked for by name.
+  // The client tears down the project's blobs alongside it (App's purgeProject,
+  // AdminProjects' remove); api/cron/purge-trash.ts does its own.
+  if (new URL(request.url).searchParams.get('purge') === '1') {
+    // The console deletes live projects outright — the one caller allowed to
+    // skip the trash, and it owns the "cannot be undone" confirm that says so.
+    if (await isAdmin(uid)) {
+      await sql`DELETE FROM projects WHERE id = ${id}`
+      return json({ ok: true })
+    }
+    // An owner purges only out of their own trash: unreachable except through
+    // it, so no stray call hard-deletes a track that was never deleted.
+    await sql`
+      DELETE FROM projects
+      WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NOT NULL
+    `
+    return json({ ok: true })
+  }
+
+  // Otherwise: a move to the trash. The row stays whole — notes, images, share
+  // flags — so Restore is exact; api/cron/purge-trash.ts hard-deletes it once
+  // the window is up. Re-deleting an already-trashed project must not restart
+  // that clock, hence `deleted_at IS NULL`.
   await sql`
     UPDATE projects SET deleted_at = ${Date.now()}
     WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NULL

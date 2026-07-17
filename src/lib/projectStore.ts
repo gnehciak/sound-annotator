@@ -131,14 +131,25 @@ export async function deleteProjectDoc(id: string): Promise<void> {
 
 /** Put a trashed project back in the library, exactly as it left. */
 export async function restoreProjectDoc(id: string): Promise<void> {
-  await api(`/api/projects/${encodeURIComponent(id)}/trash`, { method: 'POST' })
+  await api(`/api/projects/${encodeURIComponent(id)}?restore=1`, {
+    method: 'POST',
+  })
 }
 
-/** Delete a trashed project for good. The API only purges from the trash, so
- *  this can never take a live track; its blobs are torn down alongside by the
- *  caller (App's purgeProject). */
+/**
+ * Delete a project for good — the app's one hard delete, which is why it says
+ * so out loud rather than leaving the API to infer it from the caller. Blobs
+ * are torn down alongside by the caller (App's purgeProject, AdminProjects'
+ * remove).
+ *
+ * An owner can only purge out of their own trash, so this can't take a live
+ * track. A teacher-admin can purge any project outright — the console's
+ * permanent delete.
+ */
 export async function purgeProjectDoc(id: string): Promise<void> {
-  await api(`/api/projects/${encodeURIComponent(id)}/trash`, { method: 'DELETE' })
+  await api(`/api/projects/${encodeURIComponent(id)}?purge=1`, {
+    method: 'DELETE',
+  })
 }
 
 /** The public Browse gallery: every published project, newest first. No auth
