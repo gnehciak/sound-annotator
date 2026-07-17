@@ -18,6 +18,20 @@ are served and deleted but never written). The SPA calls Vercel Functions in `/a
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
 the server-stamped edit lock (see `api/projects/[id]/index.ts`).
 
+**Deleting is a trash, not a delete.** `DELETE /api/projects/:id` only stamps
+`deleted_at`; the row stays whole (notes, images, `shared`/`published`) so
+restore is exact, and every read filters on `deleted_at IS NULL` rather than
+clearing those flags — so a trashed track's `?view=` links and gallery card go
+dark and come back on restore. `api/projects/[id]/trash.ts` holds the two ways
+out (POST restore / DELETE purge, owner-only, both refusing live rows), and
+`api/cron/purge-trash.ts` hard-deletes anything past `TRASH_TTL_MS` (30 days,
+`api/_lib/db.ts`) plus its blobs — daily, gated on a `CRON_SECRET` env var it
+refuses to run without. Blobs are torn down **only at purge**, never at trash.
+The trash rides its own listing (`?trash=1`) into its own App state, never
+`projects` — a trashed track must never reach search, folder tallies, or the
+undo history. The one real delete is the admin page's, over guest projects,
+which have no trash to restore from.
+
 **Guests** (students, who have no accounts) are the third kind of caller:
 "Continue as guest" mints one project whose *key is its URL* — a capability
 token, SHA-256 at rest, owner `guest:<uuid>`, rate-limited per hashed IP

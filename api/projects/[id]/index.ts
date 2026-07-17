@@ -8,7 +8,8 @@
 // - PUT: upsert. Owners may write everything except reassigning ownerId;
 //   link editors (editableByLink) and guests may write content fields only.
 //   Content writes must hold the edit lock while someone else's claim is live.
-// - DELETE: owner only.
+// - DELETE: owner only — a move to the trash, not a delete. The two ways back
+//   out of it (restore, purge) live in [id]/trash.ts.
 //
 // Three kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
 // and a signed-out guest holding their project's key (see _lib/guest.ts). The
@@ -46,11 +47,18 @@ export async function GET(request: Request): Promise<Response> {
   // brand-new project has no row until its first save. Ids are unguessable,
   // so existence probing gains nothing.
   if (!row) return err(404, 'Not found')
-  if (row.shared || row.editable_by_link || row.published)
+  // A trashed project is nobody's to read but its owner's, who still needs it
+  // for the trash view. Its ?view= links and its gallery card go dark the
+  // moment it's trashed and light up again on restore — trashing never touches
+  // `shared` or `published`, so the way back is exact.
+  const trashed = row.deleted_at != null
+  if (!trashed && (row.shared || row.editable_by_link || row.published))
     return json(rowToProject(row, { withLock: true }))
   const uid = await getUid(request)
   if (uid && row.owner_id === uid) return json(rowToProject(row, { withLock: true }))
-  return err(403, 'Not shared')
+  // Trashed reads as gone, not as forbidden: to a link holder the difference
+  // between "deleted" and "never existed" is nothing they can act on.
+  return trashed ? err(404, 'Not found') : err(403, 'Not shared')
 }
 
 /** The claim a save carries to prove it holds the edit lock. The server
@@ -164,7 +172,10 @@ export async function PUT(request: Request): Promise<Response> {
 
   // Merge semantics (the old `mergeFields`): only keys the payload carries
   // change; non-owners' writes are additionally clipped — never permissions,
-  // ownership, or folders.
+  // ownership, or folders. `deleted_at` is absent from this whole merge on
+  // purpose: only the trash routes move a row in or out of the trash, so a
+  // straggling save from a tab that hasn't noticed the delete writes content
+  // to a trashed row and leaves it trashed, rather than resurrecting it.
   //
   // A link editor and a guest are NOT the same, despite both being non-owners.
   // A link editor annotates someone else's track, so the source isn't theirs to
@@ -236,12 +247,25 @@ export async function DELETE(request: Request): Promise<Response> {
   // A teacher-admin may delete a guest project (the admin page's whole point);
   // the owner_id guard still stands for everything else, so no admin can reach
   // another teacher's library through here.
+  //
+  // That one stays a real delete rather than a move to the trash: a guest has
+  // no library and no trash view, so a trashed guest row would be work nobody
+  // could see or restore, waiting a month to die. Guests upload no images
+  // (allowImages={false}), so there are no blobs left behind either.
   const row = await getProjectRow(id)
   if (row && isGuestOwner(row.owner_id) && (await isAdmin(uid))) {
     await sql`DELETE FROM projects WHERE id = ${id}`
     return json({ ok: true })
   }
 
-  await sql`DELETE FROM projects WHERE id = ${id} AND owner_id = ${uid}`
+  // The owner's delete is a move to the trash. The row stays whole — notes,
+  // images, share flags — so Restore is exact; api/cron/purge-trash.ts hard-
+  // deletes it once the window is up, and [id]/trash.ts is the way to do it
+  // sooner. Re-deleting an already-trashed project must not restart that
+  // clock, hence `deleted_at IS NULL`.
+  await sql`
+    UPDATE projects SET deleted_at = ${Date.now()}
+    WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NULL
+  `
   return json({ ok: true })
 }

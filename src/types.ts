@@ -142,6 +142,20 @@ export interface Project {
    * substitute the user's local pref or a hard default.
    */
   settings?: ProjectSettings
+  /**
+   * Epoch ms of the move to the trash; absent on a live project. A trashed
+   * track keeps everything — notes, images, share and publish state — so
+   * restoring it puts it back exactly as it left; after 30 days the purge cron
+   * (api/cron/purge-trash.ts) deletes it for good. Trashed projects live in
+   * their own App state and their own listing (`GET /api/projects?trash=1`),
+   * never alongside the library.
+   *
+   * Server-set only: a save never carries it (the API drops it — see
+   * api/projects/[id]/index.ts), and only the trash routes move a project in
+   * or out. Deliberately absent from exported JSON, like the other row state —
+   * see lib/projectJson.ts.
+   */
+  deletedAt?: number
 }
 
 export interface ProjectSettings {

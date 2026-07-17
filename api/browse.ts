@@ -2,6 +2,10 @@
 // first. No auth: publishing is an explicit opt-in to public listing (unlike
 // `shared`, which stays unlisted by design — see api/projects/index.ts).
 //
+// Trashed projects delist here immediately and relist on restore: `published`
+// survives a trip through the trash untouched, so the gallery is the live
+// projects that are published, never the column alone.
+//
 // The payload is deliberately light. Note HTML (which can carry many inline
 // image URLs) never leaves this endpoint — the cue line only needs each
 // note's position and colour, and the card only needs a count.
@@ -33,7 +37,8 @@ export async function GET(): Promise<Response> {
   const rows = (await sql`
     SELECT id, owner_id, title, source, annotations, updated_at,
            published_at, published_by_name
-    FROM projects WHERE published ORDER BY published_at DESC NULLS LAST
+    FROM projects WHERE published AND deleted_at IS NULL
+    ORDER BY published_at DESC NULLS LAST
     LIMIT 200
   `) as ProjectRow[]
 

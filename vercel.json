@@ -2,5 +2,8 @@
   "regions": ["syd1"],
   "rewrites": [
     { "source": "/sso-callback", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/purge-trash", "schedule": "0 15 * * *" }
   ]
 }
