@@ -89,6 +89,14 @@ export interface Annotation {
    * meaningful on structure projects' sections.
    */
   lyrics?: string
+  /**
+   * Marks this note as a listening-task question: the note's rich text is the
+   * prompt, anchored to its moment. A shared track carrying question notes
+   * opens through its `?view=` link as a worksheet — students get an answer
+   * box under each question (answers stay on their device, see lib/answers.ts)
+   * and hand back a PDF answer sheet (lib/answerSheet.ts). Off by default.
+   */
+  question?: boolean
   createdAt: number
 }
 

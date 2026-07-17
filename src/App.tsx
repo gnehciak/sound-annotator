@@ -101,6 +101,7 @@ import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
+import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
 
@@ -495,6 +496,11 @@ export default function App() {
   // Custom tags already used in this project, offered for reuse in the picker.
   const projectTags = useMemo(
     () => customTagsUsedIn(current?.annotations ?? []),
+    [current?.annotations],
+  )
+  // Listening-task numbering for the Q chips — matches the student worksheet.
+  const qNumbers = useMemo(
+    () => questionNumbers(current?.annotations ?? []),
     [current?.annotations],
   )
   // Notes-list view state (tag filter, order, auto-pin, auto-cue) — shared with
@@ -2272,6 +2278,7 @@ export default function App() {
                     onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
+                    questionNumbers={qNumbers}
                   />
                   {visibleAnnotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />

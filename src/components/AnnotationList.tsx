@@ -44,6 +44,12 @@ interface Props {
   onReorder?: (orderedIds: string[]) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
+  /** Question numbering (note id → 1-based Q number) for the Q chips. */
+  questionNumbers?: Map<string, number>
+  /** Listening-task viewer: the student's answers by note id. */
+  answers?: Record<string, string>
+  /** Listening-task viewer: update a question's answer (renders the boxes). */
+  onAnswer?: (id: string, text: string) => void
 }
 
 const endOf = (a: Annotation) => (a.end != null ? a.end : a.start + 3)
@@ -68,6 +74,9 @@ export default function AnnotationList({
   onReorder,
   onSeekNote,
   mentionItems,
+  questionNumbers,
+  answers,
+  onAnswer,
 }: Props) {
   const activeIds = useMemo(() => {
     const ids = new Set<string>()
@@ -388,6 +397,11 @@ export default function AnnotationList({
           onSeek={onSeek}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
+          questionNumber={questionNumbers?.get(a.id)}
+          answer={answers?.[a.id]}
+          onAnswer={
+            onAnswer && a.question ? (text) => onAnswer(a.id, text) : undefined
+          }
         />
       ))}
     </div>
