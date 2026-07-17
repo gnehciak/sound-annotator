@@ -33,10 +33,12 @@ interface Props {
  * the sound source changes. Toggling everything off (or ✕) returns the
  * original mix.
  *
- * Each stem is an HTMLAudioElement streaming straight from Blob. Every
- * created element plays muted in lockstep so a toggle is instant; a short
- * interval loop corrects drift against the player. Mount with
- * key={projectId} — stems must not leak across tracks.
+ * Each stem is an HTMLAudioElement streaming straight from Blob, created on
+ * the chip's first press (press one, load one — nothing downloads on open);
+ * the chip wears a spinner until the stem can play. Once created, elements
+ * run muted in lockstep so later toggles are instant; a short interval loop
+ * corrects drift against the player. Mount with key={projectId} — stems must
+ * not leak across tracks.
  */
 export default function StemMixer({
   stems,
@@ -63,27 +65,24 @@ export default function StemMixer({
   const names = STEM_ORDER.filter((n) => typeof stems[n] === 'string')
   const anyActive = active.size > 0
 
-  // Create every element up front: opening an analyzed track starts the stem
-  // downloads in the background, so by the time a chip is pressed it's
-  // usually already playable. (The server-side "Saving stems" progress put
-  // them in Blob storage; this is the browser fetching them from it.)
-  useEffect(() => {
-    const created = els.current
-    for (const name of STEM_ORDER) {
-      const url = stems[name]
-      if (typeof url !== 'string' || created.has(name)) continue
-      const el = new Audio(url)
-      el.preload = 'auto'
-      el.muted = true
-      el.addEventListener('canplay', () =>
-        setReady((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
-      )
-      el.addEventListener('error', () =>
-        setFailed((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
-      )
-      created.set(name, el)
-    }
-  }, [stems])
+  // Press one, load one: a stem's element (and its ~stem-sized download from
+  // Blob) is only created the first time its chip is switched on — nothing
+  // preloads on open (classroom wifi; six WAVs would be a couple hundred MB
+  // per view). The chip wears a spinner until 'canplay'.
+  function ensureEl(name: string): void {
+    const url = stems[name]
+    if (typeof url !== 'string' || els.current.has(name)) return
+    const el = new Audio(url)
+    el.preload = 'auto'
+    el.muted = true
+    el.addEventListener('canplay', () =>
+      setReady((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
+    )
+    el.addEventListener('error', () =>
+      setFailed((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
+    )
+    els.current.set(name, el)
+  }
 
   function toggle(name: string) {
     // A failed load retries on press (fresh fetch) instead of toggling a
@@ -97,6 +96,7 @@ export default function StemMixer({
       els.current.get(name)?.load()
       return
     }
+    ensureEl(name)
     setActive((prev) => {
       const next = new Set(prev)
       if (next.has(name)) next.delete(name)
