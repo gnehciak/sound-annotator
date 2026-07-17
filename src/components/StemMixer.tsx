@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react'
-import { AudioLines, X } from 'lucide-react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { AudioLines, Loader2, X } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 
 // Display order for whichever of the six Demucs stems the analysis saved.
@@ -53,6 +47,11 @@ export default function StemMixer({
   onActiveChange,
 }: Props) {
   const [active, setActive] = useState<Set<string>>(new Set())
+  // Buffering state per stem: 'canplay' promotes to ready, a network/decode
+  // failure to failed (the chip offers a retry). Both are display state — the
+  // audio elements themselves live in the ref below.
+  const [ready, setReady] = useState<Set<string>>(new Set())
+  const [failed, setFailed] = useState<Set<string>>(new Set())
   const els = useRef<Map<string, HTMLAudioElement>>(new Map())
   // Latest callback, read without re-running the notify effect (mirrors
   // AudioPlayer's cb ref) — an inline onActiveChange must not retrigger it.
@@ -64,24 +63,40 @@ export default function StemMixer({
   const names = STEM_ORDER.filter((n) => typeof stems[n] === 'string')
   const anyActive = active.size > 0
 
-  // Lazily create an element the first time its stem is switched on (starts
-  // the ~stem-sized download, so not before it's wanted).
-  const elFor = useCallback(
-    (name: string): HTMLAudioElement => {
-      let el = els.current.get(name)
-      if (!el) {
-        el = new Audio(stems[name])
-        el.preload = 'auto'
-        el.muted = true
-        els.current.set(name, el)
-      }
-      return el
-    },
-    [stems],
-  )
+  // Create every element up front: opening an analyzed track starts the stem
+  // downloads in the background, so by the time a chip is pressed it's
+  // usually already playable. (The server-side "Saving stems" progress put
+  // them in Blob storage; this is the browser fetching them from it.)
+  useEffect(() => {
+    const created = els.current
+    for (const name of STEM_ORDER) {
+      const url = stems[name]
+      if (typeof url !== 'string' || created.has(name)) continue
+      const el = new Audio(url)
+      el.preload = 'auto'
+      el.muted = true
+      el.addEventListener('canplay', () =>
+        setReady((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
+      )
+      el.addEventListener('error', () =>
+        setFailed((prev) => (prev.has(name) ? prev : new Set(prev).add(name))),
+      )
+      created.set(name, el)
+    }
+  }, [stems])
 
   function toggle(name: string) {
-    elFor(name)
+    // A failed load retries on press (fresh fetch) instead of toggling a
+    // silent chip on.
+    if (failed.has(name)) {
+      setFailed((prev) => {
+        const next = new Set(prev)
+        next.delete(name)
+        return next
+      })
+      els.current.get(name)?.load()
+      return
+    }
     setActive((prev) => {
       const next = new Set(prev)
       if (next.has(name)) next.delete(name)
@@ -167,23 +182,35 @@ export default function StemMixer({
       </span>
       {names.map((name) => {
         const on = active.has(name)
+        const isFailed = failed.has(name)
+        // Loading only matters once the chip is on: background prefetch stays
+        // silent, but an audible-but-unbuffered stem must say so.
+        const loading = on && !ready.has(name) && !isFailed
         return (
           <button
             key={name}
             type="button"
             onClick={() => toggle(name)}
             aria-pressed={on}
+            aria-busy={loading}
             title={
-              on
-                ? `Mute the ${name} stem`
-                : `Hear the ${name} stem (silences the original mix)`
+              isFailed
+                ? `The ${name} stem failed to load — press to retry`
+                : loading
+                  ? `Loading the ${name} stem…`
+                  : on
+                    ? `Mute the ${name} stem`
+                    : `Hear the ${name} stem (silences the original mix)`
             }
-            className={`press rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-              on
-                ? 'border-accent bg-accent text-onaccent'
-                : 'border-line text-muted hover:border-line-strong hover:text-fg'
+            className={`press inline-flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+              isFailed
+                ? 'border-danger/60 text-danger hover:border-danger'
+                : on
+                  ? 'border-accent bg-accent text-onaccent'
+                  : 'border-line text-muted hover:border-line-strong hover:text-fg'
             }`}
           >
+            {loading && <Loader2 size={11} className="animate-spin" />}
             {name}
           </button>
         )
