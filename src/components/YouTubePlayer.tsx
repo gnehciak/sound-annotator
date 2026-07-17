@@ -11,6 +11,14 @@ import { loadYouTubeApi } from '../lib/youtube'
 
 interface Props {
   videoId: string
+  /**
+   * Clip window in seconds of the source video (see ProjectSource.clipStart).
+   * This component is the only translator between the two clocks: everything
+   * outside it — notes, transport, overview — speaks clip time, where 0 is
+   * `clipStart`. Undefined `clipEnd` means "to the end of the video".
+   */
+  clipStart?: number
+  clipEnd?: number
   playbackRate: number
   /** 0–1; mapped to YouTube's 0–100 scale. */
   volume: number
@@ -19,15 +27,40 @@ interface Props {
   onPlayingChange: (playing: boolean) => void
 }
 
+/**
+ * How long the track reads to everyone outside this file: the clip's span,
+ * with the video's real duration standing in for an open-ended `to`. Clamped
+ * against `videoLen` so a window pointing past the end of the video (a stale
+ * clip, a link's bogus `end`) still reports something playable.
+ */
+const clipLen = (videoLen: number, win: { from: number; to: number }) =>
+  Math.max(0, Math.min(win.to, videoLen) - Math.min(win.from, videoLen))
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { videoId, playbackRate, volume, onTime, onDuration, onPlayingChange },
+  {
+    videoId,
+    clipStart,
+    clipEnd,
+    playbackRate,
+    volume,
+    onTime,
+    onDuration,
+    onPlayingChange,
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<any>(null)
+  // Clip time (0 = clipStart), like every other time in the app.
   const timeRef = useRef(0)
   const playingRef = useRef(false)
+  const from = Math.max(0, clipStart ?? 0)
+  // The window's edges, read from inside the poll/onReady closures so they
+  // stay current without another remount. `to` is Infinity until we know the
+  // video's real duration, which arrives with onReady.
+  const winRef = useRef({ from, to: clipEnd ?? Infinity })
+  winRef.current = { from, to: clipEnd ?? Infinity }
   // Read inside the (videoId-keyed) onReady closure so a remount picks up the
   // current rate without re-creating the player on every speed change.
   const rateRef = useRef(playbackRate)
@@ -79,11 +112,16 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           controls: 0,
           disablekb: 1,
           fs: 0,
+          // Cue the clip's first frame, so the poster we uncover on pause is
+          // the excerpt rather than the video's opening titles. `start` only
+          // seeds the initial position — the window is enforced below, since a
+          // seek can leave it at any time.
+          ...(winRef.current.from ? { start: Math.floor(winRef.current.from) } : {}),
         },
         events: {
           onReady: (e: any) => {
             setReady(true)
-            onDuration(e.target.getDuration() || 0)
+            onDuration(clipLen(e.target.getDuration() || 0, winRef.current))
             e.target.setPlaybackRate?.(rateRef.current)
             // Autoplay policies can start the player muted — unmute (unless we
             // want silence) so our volume level actually takes effect.
@@ -109,17 +147,27 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
               setBuffering(false)
             }
             const d = e.target.getDuration?.() || 0
-            if (d) onDuration(d)
+            if (d) onDuration(clipLen(d, winRef.current))
           },
         },
       })
       poll = window.setInterval(() => {
         const p = playerRef.current
-        if (p?.getCurrentTime) {
-          const t = p.getCurrentTime()
-          timeRef.current = t
-          onTime(t)
+        if (!p?.getCurrentTime) return
+        const { from, to } = winRef.current
+        const raw = p.getCurrentTime()
+        // Playing out of the clip's end stops the track, exactly as reaching a
+        // whole video's end would. Ticks are coarse (250ms), so snap the
+        // playhead back onto the edge rather than leave it a beat past.
+        if (playingRef.current && raw >= to) {
+          p.pauseVideo?.()
+          p.seekTo?.(to, true)
+          timeRef.current = to - from
+          onTime(timeRef.current)
+          return
         }
+        timeRef.current = Math.max(0, raw - from)
+        onTime(timeRef.current)
       }, 250)
     })
 
@@ -150,12 +198,29 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
     p.setVolume?.(Math.round(volume * 100))
   }, [volume])
 
+  // A clip edit doesn't remount the player (winRef already carries the new
+  // edges): re-report the length, and pull the playhead back inside if the
+  // window moved out from under it.
+  useEffect(() => {
+    const p = playerRef.current
+    if (!p?.getDuration) return
+    const { from, to } = winRef.current
+    onDuration(clipLen(p.getDuration() || 0, winRef.current))
+    const raw = p.getCurrentTime?.() ?? 0
+    if (raw < from || raw > to) p.seekTo?.(Math.min(Math.max(raw, from), to), true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, clipEnd])
+
   useImperativeHandle(
     ref,
     () => ({
       play: () => playerRef.current?.playVideo?.(),
       pause: () => playerRef.current?.pauseVideo?.(),
-      seekTo: (s: number) => playerRef.current?.seekTo?.(s, true),
+      // Callers hand us clip time; YouTube only ever hears video time.
+      seekTo: (s: number) => {
+        const { from, to } = winRef.current
+        playerRef.current?.seekTo?.(Math.min(Math.max(from + s, from), to), true)
+      },
       getCurrentTime: () => timeRef.current,
     }),
     [],

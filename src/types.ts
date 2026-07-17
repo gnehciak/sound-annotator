@@ -14,6 +14,19 @@ export interface ProjectSource {
   /** YouTube */
   youtubeUrl?: string
   videoId?: string
+  /**
+   * Clip window into the source video, in seconds of that video. When set, the
+   * track *is* the excerpt: the player opens at `clipStart`, stops at
+   * `clipEnd`, and the rest of the app sees an ordinary 0-based track
+   * `clipEnd - clipStart` long — note times are clip-relative, and
+   * YouTubePlayer is the only place that maps them back to video time. Absent
+   * means the whole video (`clipStart` 0, `clipEnd` the real duration).
+   * Retuning the window later shifts the notes with it (see App's setClip) so
+   * they stay on the same music. YouTube only — an audio track's clip would
+   * have to fight wavesurfer's own waveform extent.
+   */
+  clipStart?: number
+  clipEnd?: number
   /** Audio file */
   fileName?: string
   /** Cloud Storage download URL for the uploaded audio (used to load it back) */
