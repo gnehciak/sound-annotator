@@ -42,6 +42,7 @@
   --accent-ink: 255 106 61; /* = accent in dark; text/LED/focus */
   --meter: 255 206 51; /* #ffce33 sunshine level meter */
   --peak: 255 82 82; /* #ff5252 meter peak */
+  --ok: 61 220 116; /* #3ddc74 success — the Saved indicator; palette-independent */
   --danger: 251 113 133; /* #fb7185 rose-400 — delete affordances */
   --on-bright: 22 22 24; /* text that sits ON a data-hue fill (timecode chips) — dark in both themes */
   --on-accent: var(--on-bright); /* text ON the signal fill (Play, sign-in, copy). Diverges only where a palette's light accent is too dark for dark text (Crayon light) */
@@ -85,6 +86,7 @@
   --accent-ink: 166 58 16; /* #a63a10 AA tangerine — text/LED/focus, ≥4.5:1 incl. on inset */
   --meter: 185 134 0; /* #b98600 light-safe sunshine meter */
   --peak: 213 54 47; /* #d5362f meter peak — saturated lamp red */
+  --ok: 21 128 61; /* #15803d success — AA as small text on white */
   --danger: 190 18 60; /* #be123c rose-700 — delete affordances */
   --on-bright: 22 22 24; /* text on data-hue fills stays dark on light too */
   --on-accent: var(--on-bright); /* see dark block — diverges only in Crayon light */
@@ -198,40 +200,6 @@ body {
   color: rgb(var(--accent-ink));
   text-shadow: var(--led-glow);
   font-variant-numeric: tabular-nums;
-}
-
-/* Animated level meter bars (header) */
-@keyframes meterPulse {
-  0% {
-    transform: scaleY(0.22);
-  }
-  100% {
-    transform: scaleY(1);
-  }
-}
-.meter-bar {
-  transform-origin: bottom;
-  animation: meterPulse 0.45s ease-in-out infinite alternate;
-}
-
-/* Segmented LED level meter (header) — bars bounce from their base (the
-   segments carry origin-bottom) while flickering, like the prototype's. */
-@keyframes segFlicker {
-  0% {
-    opacity: 0.18;
-    transform: scaleY(0.45);
-  }
-  45% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-  100% {
-    opacity: 0.28;
-    transform: scaleY(0.5);
-  }
-}
-.meter-seg {
-  animation: segFlicker 0.85s ease-in-out infinite;
 }
 
 /* Inline "now playing" equalizer — the time chip's play triangle becomes a set
@@ -470,7 +438,7 @@ body {
   border-radius: 5px;
 }
 
-/* Reduced motion is not optional: still the level meter and any transitions. */
+/* Reduced motion is not optional: still any and all transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -478,12 +446,6 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-  }
-  .meter-bar,
-  .meter-seg {
-    animation: none !important;
-    opacity: 0.5;
-    transform: none;
   }
   /* Rest the eq bars at a readable mid-height so they read as a static waveform
      glyph rather than collapsing to the animation's trough frame. */
