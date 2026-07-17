@@ -9,10 +9,12 @@ import {
   Pencil,
   FileDown,
   Braces,
+  ClipboardList,
 } from 'lucide-react'
 import type { Project } from '../types'
 import { exportProjectPdf } from '../lib/exportPdf'
 import { downloadProjectJson } from '../lib/projectJson'
+import { isListeningTask, questionsOf } from '../lib/questions'
 
 interface Props {
   project: Project
@@ -55,6 +57,10 @@ export default function ShareExportMenu({
   const canEdit = shared && project.editableByLink === true
   const published = canShare && project.published === true
   const url = shareUrl(project.id)
+  // Question notes make the view link a listening task (see lib/questions.ts).
+  const questionCount = isListeningTask(project)
+    ? questionsOf(project.annotations).length
+    : 0
 
   // Close on outside-click or Escape.
   useEffect(() => {
@@ -208,6 +214,23 @@ export default function ShareExportMenu({
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
+
+                  {/* The question notes turn this link into a worksheet — tell
+                      the teacher what students will actually get. */}
+                  {questionCount > 0 && (
+                    <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-muted">
+                      <ClipboardList
+                        size={12}
+                        className="mt-[1px] shrink-0 text-accentink"
+                      />
+                      <span>
+                        This track asks {questionCount}{' '}
+                        {questionCount === 1 ? 'question' : 'questions'} — the
+                        link opens as a listening task: students type answers
+                        under each question and hand back a PDF answer sheet.
+                      </span>
+                    </p>
+                  )}
                 </>
               )}
 

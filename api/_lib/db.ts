@@ -28,6 +28,10 @@ export interface ProjectRow {
   published: boolean
   published_at: string | number | null
   published_by_name: string | null
+  /** AI section-detection job state + cached result (api/projects/[id]/analyze.ts). */
+  analysis: unknown
+  // Trash: NULL while live, epoch ms of the move to the trash otherwise.
+  deleted_at: string | number | null
   // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
   // it is a credential, not project data.
   guest_token_hash: string | null
@@ -44,6 +48,12 @@ export interface FolderRow {
 // as stale at 45s (LOCK_TTL_MS in src/lib/editLock.ts), so a claim the client
 // still defends is never one the server has already released.
 export const LOCK_LIVE_MS = 40_000
+
+// How long a trashed project is kept before the daily purge cron
+// (api/cron/purge-trash.ts) hard-deletes it. The home page's trash view states
+// the same window to the user in days (see TRASH_TTL_DAYS in HomePage.tsx) —
+// keep the two in step.
+export const TRASH_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 export function lockLive(lock: LockValue | null | undefined): boolean {
   return (
@@ -70,7 +80,12 @@ export function rowToProject(
     settings: r.settings ?? undefined,
     published: r.published === true,
     publishedByName: r.published_by_name ?? undefined,
+    deletedAt: r.deleted_at == null ? undefined : Number(r.deleted_at),
   }
+  // Saved stem URLs surface as a read-only field (PUT never accepts them —
+  // the analyze endpoint is their only writer).
+  const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems
+  if (stems && Object.keys(stems).length > 0) p.stems = stems
   if (opts?.withLock) p.lock = r.lock ?? null
   return p
 }
@@ -83,6 +98,9 @@ export function rowToFolder(r: FolderRow): Record<string, unknown> {
   }
 }
 
+/** The raw row, trashed or not — restore and purge need to read a trashed one,
+ *  so the filter belongs at the call sites that must not serve it (GET, the
+ *  library listing, the public gallery). */
 export async function getProjectRow(id: string): Promise<ProjectRow | null> {
   const rows = (await sql`SELECT * FROM projects WHERE id = ${id}`) as ProjectRow[]
   return rows[0] ?? null

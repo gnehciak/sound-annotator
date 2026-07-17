@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, ExternalLink, Pencil } from 'lucide-react'
+import {
+  Eye,
+  ExternalLink,
+  Pencil,
+  ClipboardList,
+  FileDown,
+  RotateCcw,
+} from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
@@ -35,6 +42,18 @@ import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
+import {
+  countAnswered,
+  isListeningTask,
+  questionNumbers,
+  questionsOf,
+} from '../lib/questions'
+import {
+  clearTaskResponse,
+  loadTaskResponse,
+  saveTaskResponse,
+} from '../lib/answers'
+import { exportAnswerSheetPdf } from '../lib/answerSheet'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
@@ -50,6 +69,12 @@ const STEP_WINDOW = 1200
  * the URL carries `?view={id}`. Anyone with the link can open it — no sign-in.
  * It reuses the same player + transport + notes components the editor uses, all
  * in `readOnly` mode, so clicking a note seeks the track but nothing is editable.
+ *
+ * When the track carries question notes it opens as a **listening task**: the
+ * notes panel becomes a worksheet — a name field, an answer box under each
+ * question, and a PDF export of the answer sheet to hand back to the teacher.
+ * Answers live only on the student's device (lib/answers.ts); the project
+ * itself stays read-only.
  */
 export default function ShareViewer({ projectId }: { projectId: string }) {
   // Without the backend configured there's nothing to fetch — start at 'notfound'.
@@ -57,6 +82,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     backendReady ? 'loading' : 'notfound',
   )
   const [project, setProject] = useState<Project | null>(null)
+  // Listening task: this shared track asks questions (and isn't a structure
+  // board). Drives the worksheet chrome below.
+  const isTask = project != null && isListeningTask(project)
 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -83,6 +111,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     if (s?.playOnce !== undefined) setPlayOnce(s.playOnce)
     if (s?.overviewOpen !== undefined) setOverviewOpen(s.overviewOpen)
     if (s?.noteOrder !== undefined) setNoteOrderState(s.noteOrder)
+    // A worksheet reads top-to-bottom: unless the owner pinned an order,
+    // listening tasks open in timeline order, stable under the playhead.
+    else if (isListeningTask(project)) setNoteOrderState('timeline')
   }, [project])
   const toggleOverview = useCallback(() => {
     setOverviewOpen((on) => {
@@ -183,6 +214,51 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   }, [projectId])
 
   const annotations = useMemo(() => project?.annotations ?? [], [project])
+
+  // ---- Listening-task worksheet state ------------------------------------
+  // The student's name + answers, restored per project id and autosaved on
+  // every change — refresh-proof through a lesson, never written to the doc
+  // (the PDF answer sheet is what travels back to the teacher).
+  const [studentName, setStudentName] = useState('')
+  const [studentAnswers, setStudentAnswers] = useState<Record<string, string>>(
+    {},
+  )
+  const taskLoadedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!project || !isTask) return
+    if (taskLoadedFor.current === project.id) return
+    taskLoadedFor.current = project.id
+    const r = loadTaskResponse(project.id)
+    setStudentName(r.name)
+    setStudentAnswers(r.answers)
+  }, [project, isTask])
+  useEffect(() => {
+    if (!project || !isTask || taskLoadedFor.current !== project.id) return
+    saveTaskResponse(project.id, { name: studentName, answers: studentAnswers })
+  }, [project, isTask, studentName, studentAnswers])
+
+  const setAnswer = useCallback((id: string, text: string) => {
+    setStudentAnswers((prev) => ({ ...prev, [id]: text }))
+  }, [])
+
+  // "New student" reset — school machines are shared; the next student needs
+  // a blank sheet without hunting through browser storage.
+  const resetTask = () => {
+    if (!project) return
+    if (
+      !window.confirm(
+        'Clear the name and all answers saved on this device? Export the PDF first if you need to keep them.',
+      )
+    )
+      return
+    clearTaskResponse(project.id)
+    setStudentName('')
+    setStudentAnswers({})
+  }
+
+  const questions = useMemo(() => questionsOf(annotations), [annotations])
+  const qNumbers = useMemo(() => questionNumbers(annotations), [annotations])
+  const answeredCount = countAnswered(questions, studentAnswers)
 
   // The same resizable split + notes-view controls the editor uses (read-only
   // here, but filter/order/pin/cue never mutate notes).
@@ -421,9 +497,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
           Sound&nbsp;Annotator
         </span>
-        <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
-          <Eye size={11} /> Read only
-        </span>
+        {isTask ? (
+          <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+            <ClipboardList size={11} /> Listening task
+          </span>
+        ) : (
+          <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+            <Eye size={11} /> Read only
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
           {project.title}
         </span>
@@ -440,9 +522,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </a>
         )}
         {/* PDF export renders the notes list — nothing to print on a
-            structure board (its sections have no note bodies). JSON export
-            carries any project kind, structure boards included. */}
-        {!isStructure && <ExportPdfButton project={project} />}
+            structure board (its sections have no note bodies), and on a
+            listening task the worksheet strip's export (the answer sheet)
+            is the one true PDF. JSON export carries any project kind. */}
+        {!isStructure && !isTask && <ExportPdfButton project={project} />}
         <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
@@ -636,14 +719,20 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           onDoubleClick={resetSplit}
         />
 
-        {/* Notes column — the fixed-width column. */}
+        {/* Notes column — the fixed-width column. On a listening task the
+            panel is the worksheet: answered progress in the title, the name
+            strip below, and an answer box under each question note. */}
         <div className={`flex min-w-0 flex-1 flex-col ${NOTES_SPLIT_660.notes}`}>
           <TitleBar
-            left={`Notes (${
-              isFiltered
-                ? `${visibleAnnotations.length} / ${annotations.length}`
-                : annotations.length
-            })`}
+            left={
+              isTask
+                ? `Questions (${answeredCount}/${questions.length} answered)`
+                : `Notes (${
+                    isFiltered
+                      ? `${visibleAnnotations.length} / ${annotations.length}`
+                      : annotations.length
+                  })`
+            }
             actions={
               <NotesHeaderControls
                 filterTags={filterTags}
@@ -668,6 +757,49 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               onClose={toggleSearch}
             />
           )}
+          {/* Worksheet strip — who's answering, and the hand-in export. The
+              name and answers live in this browser only; Export builds the
+              PDF answer sheet the student returns to the teacher. */}
+          {isTask && (
+            <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
+              <label
+                htmlFor="student-name"
+                className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted"
+              >
+                Name
+              </label>
+              <input
+                id="student-name"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+                placeholder="Your name"
+                className="bevel-inset w-full min-w-0 flex-1 rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  exportAnswerSheetPdf(project, {
+                    name: studentName,
+                    answers: studentAnswers,
+                  })
+                }
+                title="Export your answers as a PDF answer sheet to hand in (opens in a new tab)"
+                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+              >
+                <FileDown size={12} />
+                Export <span className="hidden sm:inline">PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={resetTask}
+                title="New student — clear the name and answers saved on this device"
+                aria-label="Clear the name and all answers"
+                className="press grid h-[29px] w-[29px] shrink-0 place-items-center rounded border border-line text-muted transition-colors hover:border-danger/60 hover:text-danger"
+              >
+                <RotateCcw size={13} />
+              </button>
+            </div>
+          )}
           <div
             ref={setNotesScroll}
             className="relative flex-1 overflow-y-auto"
@@ -689,6 +821,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               playOnce={playOnce}
               onSeekNote={seekToNote}
               mentionItems={getMentionItems}
+              questionNumbers={qNumbers}
+              answers={isTask ? studentAnswers : undefined}
+              onAnswer={isTask ? setAnswer : undefined}
             />
             {visibleAnnotations.length > 0 && (
               <div aria-hidden style={{ height: notesPad }} />

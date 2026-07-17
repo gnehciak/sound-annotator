@@ -4,6 +4,7 @@ import {
   Braces,
   Check,
   ChevronDown,
+  Clock,
   Copy,
   ExternalLink,
   Eye,
@@ -18,6 +19,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react'
 import type { Folder, Project } from '../types'
@@ -33,6 +35,10 @@ import { WaveArt, CueLine } from './trackArt'
 
 interface Props {
   projects: Project[]
+  /** Deleted tracks, newest first — the Trash tile's contents. Kept apart from
+   *  `projects` all the way up in App, so nothing here has to remember to
+   *  filter them out of a search or a tally. */
+  trashed: Project[]
   folders: Folder[]
   /** Open folder (null = root library). Owned by App so it survives editor trips. */
   openFolderId: string | null
@@ -41,7 +47,13 @@ interface Props {
   /** Creates in the open folder (App reads openFolderId) and opens the editor.
    *  Pass 'structure' for a song-structure board (the section timeline). */
   onCreateTrack: (kind?: 'structure') => void
+  /** Moves the track to the trash — reversible for 30 days, tears nothing down. */
   onDeleteTrack: (id: string) => void
+  /** Puts a trashed track back in the library, exactly as it left. */
+  onRestoreTrack: (id: string) => void
+  /** The real delete: the track and its images, for good. */
+  onPurgeTrack: (id: string) => void
+  onEmptyTrash: () => void
   onMoveTrack: (id: string, folderId: string | null) => void
   /** Clone a track into the user's library — resolves once the copy is saved. */
   onCopyTrack: (project: Project) => Promise<void>
@@ -64,6 +76,20 @@ const TRACK_MIME = 'application/x-sound-annotator-track'
 /** True while a track-tile drag is over this event's target. */
 const hasTrack = (e: React.DragEvent) =>
   e.dataTransfer.types.includes(TRACK_MIME)
+
+/**
+ * How long a deleted track waits in the trash before the purge cron deletes it
+ * for good. Stated to the user in the trash view and counted down on each tile,
+ * so it has to be the truth: it mirrors TRASH_TTL_MS in api/_lib/db.ts, which
+ * is the one the cron actually enforces.
+ */
+const TRASH_TTL_DAYS = 30
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Whole days left before a trashed track is purged (0 = going on the next run). */
+const daysLeft = (deletedAt: number) =>
+  Math.max(0, Math.ceil((deletedAt + TRASH_TTL_DAYS * DAY_MS - Date.now()) / DAY_MS))
 
 /** The rack's old source glyph: video / audio / no source yet. */
 const sourceGlyph = (p: Project) =>
@@ -103,6 +129,10 @@ const stagger = (base: number, i: number) => `${base + Math.min(i, 11) * 40}ms`
  * Library crumb to unfile) and through each tile's "move to" menu. All data
  * mutations live in App; this component owns only ephemeral UI state.
  *
+ * Deleting is Drive's too: a track moves to the Trash — a tile in the same row,
+ * holding its own view — and stays restorable there for 30 days before the
+ * purge cron takes it. Only that view can really delete anything.
+ *
  * Visual scheme ("Station Cards"): every track leads with its cover — the
  * YouTube thumbnail, or a waveform mark generated from the track id — over a
  * slim cue line drawing each note as a tick at its real position in its own
@@ -111,12 +141,16 @@ const stagger = (base: number, i: number) => `${base + Math.min(i, 11) * 40}ms`
  */
 export default function HomePage({
   projects,
+  trashed,
   folders,
   openFolderId,
   onOpenFolder,
   onOpenTrack,
   onCreateTrack,
   onDeleteTrack,
+  onRestoreTrack,
+  onPurgeTrack,
+  onEmptyTrash,
   onMoveTrack,
   onCopyTrack,
   onImportTrack,
@@ -150,9 +184,15 @@ export default function HomePage({
   // with no stagger — instant feedback for a deliberate click, instead of
   // waiting for a phantom slot at the tail of the cascade.
   const [cascading, setCascading] = useState(true)
-  const [lastFolderId, setLastFolderId] = useState(openFolderId)
-  if (lastFolderId !== openFolderId) {
-    setLastFolderId(openFolderId)
+  // The trash is a destination like a folder, but not a folder: App must never
+  // see it as openFolderId, or a track created while it's open would be born
+  // into it. So it's local, and this key — not openFolderId alone — is what
+  // "which view am I in" means for the cascade and the remount below.
+  const [trashOpen, setTrashOpen] = useState(false)
+  const viewKey = trashOpen ? 'trash' : openFolderId ?? 'root'
+  const [lastViewKey, setLastViewKey] = useState(viewKey)
+  if (lastViewKey !== viewKey) {
+    setLastViewKey(viewKey)
     setCascading(true)
   }
   useEffect(() => {
@@ -160,7 +200,21 @@ export default function HomePage({
     // cap stagger (440ms) + animation duration (420ms) with a small margin.
     const t = setTimeout(() => setCascading(false), 1200)
     return () => clearTimeout(t)
-  }, [openFolderId])
+  }, [viewKey])
+
+  // Opening the trash clears the search: the two would otherwise fight over the
+  // same tile grid, and a stale query would hide the track you came to restore.
+  const openTrash = () => {
+    setQuery('')
+    setTrashOpen(true)
+  }
+  const leaveTrash = () => setTrashOpen(false)
+  // Any folder navigation leaves the trash — it's a sibling destination, not a
+  // layer on top of one.
+  const goToFolder = (id: string | null) => {
+    setTrashOpen(false)
+    onOpenFolder(id)
+  }
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -195,7 +249,12 @@ export default function HomePage({
     return m
   }, [projects, folderIds])
 
-  const empty = projects.length === 0 && folders.length === 0
+  // The first-run hero is for a station with nothing in it at all. A library
+  // whose every track is in the trash still counts as furnished — the hero has
+  // no Trash tile, and a teacher who deleted their last track has to be able to
+  // get it back.
+  const empty =
+    projects.length === 0 && folders.length === 0 && trashed.length === 0
   const firstName = user?.displayName?.trim().split(/\s+/)[0]
 
   // One view-selector tab. The active one sits raised in the inset well —
@@ -272,15 +331,41 @@ export default function HomePage({
              not a snap. Search refines in place (no remount) so typing stays
              live. */
           <div
-            key={openFolderId ?? 'root'}
+            key={viewKey}
             className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6"
           >
-            {/* Top block: greeting at the root, breadcrumb inside a folder. */}
+            {/* Top block: greeting at the root, breadcrumb inside a folder or
+                the trash. */}
             <div
               className="mb-6 flex animate-rise-in items-start justify-between gap-4"
               style={{ animationDelay: stagger(0, 0) }}
             >
-              {openFolder ? (
+              {trashOpen ? (
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={leaveTrash}
+                      title="Back to the library"
+                      className="press rounded border border-transparent px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted transition-colors hover:text-fg"
+                    >
+                      Library
+                    </button>
+                    <span aria-hidden className="text-muted">
+                      ›
+                    </span>
+                    <h1 className="flex min-w-0 items-center gap-2 truncate text-xl font-semibold tracking-tight text-fg-strong">
+                      <Trash2 size={16} className="shrink-0 text-muted" />
+                      Trash
+                    </h1>
+                  </div>
+                  <p className="mt-1 text-[13px] text-muted">
+                    Deleted tracks wait here for {TRASH_TTL_DAYS} days, then
+                    delete themselves. Restore one and it comes back whole —
+                    notes, screenshots, and share links.
+                  </p>
+                </div>
+              ) : openFolder ? (
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-1.5">
                     {/* The root crumb doubles as the "unfile" drop target. */}
@@ -336,13 +421,41 @@ export default function HomePage({
                 </div>
               )}
               <div className="flex shrink-0 items-center gap-2">
-                <ImportTrackButton onImport={onImportTrack} variant="header" />
-                <NewTrackButton onCreate={onCreateTrack} />
+                {trashOpen ? (
+                  <button
+                    type="button"
+                    disabled={trashed.length === 0}
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `Delete all ${trashed.length} ${
+                            trashed.length === 1 ? 'track' : 'tracks'
+                          } in the trash forever? This can’t be undone.`,
+                        )
+                      )
+                        onEmptyTrash()
+                    }}
+                    className="press flex h-8 items-center gap-1.5 rounded border border-line px-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:border-danger hover:text-danger disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <Trash2 size={13} /> Empty trash
+                  </button>
+                ) : (
+                  <>
+                    <ImportTrackButton
+                      onImport={onImportTrack}
+                      variant="header"
+                    />
+                    <NewTrackButton onCreate={onCreateTrack} />
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Search well — spans every folder, like the old sub-bar's. */}
+            {/* Search well — spans every folder, like the old sub-bar's. Off in
+                the trash: it's a short list you arrived at to find one known
+                track, and the grid below is already the whole of it. */}
             <div
+              hidden={trashOpen}
               className="relative mb-8 max-w-[520px] animate-rise-in"
               style={{ animationDelay: stagger(60, 0) }}
             >
@@ -372,7 +485,7 @@ export default function HomePage({
             </div>
 
             {/* Folder cards — root only, and hidden while a search is on. */}
-            {!searching && !openFolder && (
+            {!searching && !openFolder && !trashOpen && (
               <section className="mb-8">
                 <h2
                   className="mb-2.5 animate-rise-in font-mono text-[10px] uppercase tracking-[0.2em] text-muted"
@@ -390,7 +503,7 @@ export default function HomePage({
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       enterDelay={cascading ? stagger(140, i) : '0ms'}
-                      onOpen={() => onOpenFolder(f.id)}
+                      onOpen={() => goToFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
                         setRenamingId(null)
@@ -401,12 +514,23 @@ export default function HomePage({
                       onDropTrack={(id) => onMoveTrack(id, f.id)}
                     />
                   ))}
+                  {/* Trash sits with the folders: a destination, not an
+                      action — so it comes before the dashed "add" affordance,
+                      and after the folders a teacher actually files into. */}
+                  <TrashTile
+                    count={trashed.length}
+                    enterDelay={
+                      cascading ? stagger(140, folders.length) : '0ms'
+                    }
+                    onOpen={openTrash}
+                    onDropTrack={onDeleteTrack}
+                  />
                   <button
                     type="button"
                     onClick={() => setRenamingId(onCreateFolder())}
                     style={{
                       animationDelay: cascading
-                        ? stagger(140, folders.length)
+                        ? stagger(140, folders.length + 1)
                         : '0ms',
                     }}
                     className="press flex min-h-[58px] animate-tile-in items-center justify-center gap-2 rounded border border-dashed border-line font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:border-line-strong hover:text-fg"
@@ -417,7 +541,16 @@ export default function HomePage({
               </section>
             )}
 
-            {(() => {
+            {trashOpen ? (
+              <TrashView
+                trashed={trashed}
+                theme={theme}
+                folders={folders}
+                cascading={cascading}
+                onRestore={onRestoreTrack}
+                onPurge={onPurgeTrack}
+              />
+            ) : (() => {
               /* Stack the tracks section onto the same cascade. When folder
                  cards are above, the heading waits for the folders to finish;
                  inside a folder (or while searching) it follows the search well
@@ -487,10 +620,11 @@ export default function HomePage({
                               : null
                           }
                           onOpen={() => onOpenTrack(p.id)}
-                          onDelete={() => {
-                            if (confirm(`Delete “${p.title}” and its notes?`))
-                              onDeleteTrack(p.id)
-                          }}
+                          // No confirm: the trash *is* the confirmation now.
+                          // Asking "are you sure?" about a move you can undo
+                          // for the next 30 days only teaches the teacher to
+                          // click through dialogs without reading them.
+                          onDelete={() => onDeleteTrack(p.id)}
                           onMove={(folderId) => onMoveTrack(p.id, folderId)}
                           onCopy={() => onCopyTrack(p)}
                           onShare={() => onShareTrack(p.id)}
@@ -826,6 +960,164 @@ function FolderTile({
   )
 }
 
+/* ---- trash tile + view ---------------------------------------------------- */
+
+/**
+ * The Trash, as a tile in the folders row. Same card as a FolderTile, minus the
+ * hue (the trash is not one of your places, it's the one that empties itself)
+ * and minus the rename/delete controls. Dropping a track on it deletes the
+ * track — the mirror of dragging one onto a folder, and safe to do without a
+ * confirm because it's exactly what Restore undoes.
+ */
+function TrashTile({
+  count,
+  enterDelay,
+  onOpen,
+  onDropTrack,
+}: {
+  count: number
+  enterDelay: string
+  onOpen: () => void
+  onDropTrack: (id: string) => void
+}) {
+  const [over, setOver] = useState(false)
+  return (
+    <div
+      onClick={onOpen}
+      onDragOver={(e) => {
+        if (!hasTrack(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setOver(true)
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setOver(false)
+      }}
+      onDrop={(e) => {
+        if (!hasTrack(e)) return
+        e.preventDefault()
+        setOver(false)
+        onDropTrack(e.dataTransfer.getData(TRACK_MIME))
+      }}
+      style={{ animationDelay: enterDelay }}
+      title="Deleted tracks, kept for 30 days (drop a track here to delete it)"
+      /* Danger, not accent, on drag-over: this is the one tile in the row where
+         the drop takes the track away from you. */
+      className={`group flex animate-tile-in cursor-pointer items-center gap-3 rounded border p-3.5 transition duration-200 ease-instr ${
+        over
+          ? 'border-danger bg-danger/10'
+          : 'border-line bg-panel hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
+      }`}
+    >
+      <div
+        aria-hidden
+        className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded bg-inset ${
+          over ? 'text-danger' : 'text-muted'
+        }`}
+      >
+        <Trash2 size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen()
+          }}
+          className="block w-full truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
+        >
+          Trash
+        </button>
+        <p className="mt-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+          {count === 0
+            ? 'Empty'
+            : `${count} ${count === 1 ? 'track' : 'tracks'}`}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The trash's contents: the same track tiles as the library, in their trash
+ * dress — inert, dimmed, counting down, and offering only the two ways out.
+ */
+function TrashView({
+  trashed,
+  theme,
+  folders,
+  cascading,
+  onRestore,
+  onPurge,
+}: {
+  trashed: Project[]
+  theme: ResolvedTheme
+  folders: Folder[]
+  cascading: boolean
+  onRestore: (id: string) => void
+  onPurge: (id: string) => void
+}) {
+  // No folder row above, so the heading follows the header directly — the same
+  // beat a searched view gets.
+  const headDelay = 120
+  const tilesBaseDelay = headDelay + 40
+  return (
+    <section>
+      <h2
+        className="mb-2.5 animate-rise-in font-mono text-[10px] uppercase tracking-[0.2em] text-muted"
+        style={{ animationDelay: stagger(headDelay, 0) }}
+      >
+        Trash — {trashed.length}
+      </h2>
+      {trashed.length === 0 ? (
+        <div
+          className="flex animate-tile-in flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center"
+          style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
+        >
+          <Trash2 size={22} className="text-muted/50" />
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+            The trash is empty
+          </p>
+          <p className="max-w-xs text-[12px] leading-relaxed text-muted/70">
+            Tracks you delete land here first, so a wrong click is never the end
+            of a lesson’s work.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+          {trashed.map((p, i) => (
+            <TrackTile
+              key={p.id}
+              project={p}
+              theme={theme}
+              folders={folders}
+              trashed
+              enterDelay={cascading ? stagger(tilesBaseDelay, i) : '0ms'}
+              folderName={null}
+              onOpen={() => {}}
+              onRestore={() => onRestore(p.id)}
+              // The one delete in the app that really deletes — and the one
+              // that has to ask, because nothing here can take it back.
+              onDelete={() => {
+                if (
+                  confirm(
+                    `Delete “${p.title}” forever? Its notes and screenshots go with it, and this can’t be undone.`,
+                  )
+                )
+                  onPurge(p.id)
+              }}
+              onMove={() => {}}
+              onCopy={async () => {}}
+              onShare={() => {}}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 /* ---- track tile ----------------------------------------------------------- */
 
 function TrackTile({
@@ -834,7 +1126,9 @@ function TrackTile({
   folders,
   folderName,
   enterDelay,
+  trashed = false,
   onOpen,
+  onRestore,
   onDelete,
   onMove,
   onCopy,
@@ -846,7 +1140,16 @@ function TrackTile({
   /** Shown as a chip on cross-folder search results (null hides it). */
   folderName: string | null
   enterDelay: string
+  /**
+   * Trash dress: the tile becomes a record of a deleted track rather than a way
+   * into one. It doesn't open, drag, or lift, its cover dims, and its actions
+   * are Restore and Delete forever instead of the "…" menu — a trashed track
+   * isn't in App's `projects`, so there'd be nothing to open or move it into.
+   */
+  trashed?: boolean
   onOpen: () => void
+  onRestore?: () => void
+  /** Trash it (library) — or, in trash dress, purge it for good. */
   onDelete: () => void
   onMove: (folderId: string | null) => void
   onCopy: () => Promise<void>
@@ -860,24 +1163,37 @@ function TrackTile({
   const [thumbBroken, setThumbBroken] = useState(false)
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(TRACK_MIME, p.id)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      onClick={onOpen}
+      draggable={!trashed}
+      onDragStart={
+        trashed
+          ? undefined
+          : (e) => {
+              e.dataTransfer.setData(TRACK_MIME, p.id)
+              e.dataTransfer.effectAllowed = 'move'
+            }
+      }
+      onClick={trashed ? undefined : onOpen}
       style={{ animationDelay: enterDelay }}
       /* Hover: subtle lift + soft drop shadow, eased on the house curve. The
          duration here matches FolderTile's so a mixed row of cards floats
-         together. */
-      className="group flex animate-tile-in cursor-pointer flex-col overflow-hidden rounded border border-line bg-panel transition duration-200 ease-instr hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10"
+         together. A trashed tile stays put — nothing about it is clickable, so
+         nothing about it should invite a click. */
+      className={`group flex animate-tile-in flex-col overflow-hidden rounded border border-line bg-panel transition duration-200 ease-instr ${
+        trashed
+          ? ''
+          : 'cursor-pointer hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
+      }`}
     >
       {/* Cover — the tile's "viewer screen": an inset well under a hairline.
           overflow-hidden so the hover ken-burns stays within the well, and the
           inner cover scales rather than the tile chrome — the screen comes
           alive, the frame doesn't. */}
       <div className="relative aspect-video w-full overflow-hidden border-b border-line bg-inset">
-        <div className="absolute inset-0 transition-transform duration-700 ease-instr group-hover:scale-[1.04]">
+        <div
+          className={`absolute inset-0 transition-transform duration-700 ease-instr ${
+            trashed ? 'opacity-45 grayscale' : 'group-hover:scale-[1.04]'
+          }`}
+        >
           {videoId && !thumbBroken ? (
             <img
               src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
@@ -900,27 +1216,61 @@ function TrackTile({
         <span aria-hidden className="font-mono text-xs text-accentink/70">
           {sourceGlyph(p)}
         </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpen()
-          }}
-          title={p.title}
-          className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
-        >
-          {p.title}
-        </button>
-        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-          <TrackActionsMenu
-            project={p}
-            folders={folders}
-            onCopy={onCopy}
-            onShare={onShare}
-            onMove={onMove}
-            onDelete={onDelete}
-          />
-        </div>
+        {trashed ? (
+          <span
+            title={p.title}
+            className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
+          >
+            {p.title}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen()
+            }}
+            title={p.title}
+            className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-fg-strong"
+          >
+            {p.title}
+          </button>
+        )}
+        {trashed ? (
+          /* Always visible, unlike the library tile's hover-revealed menu: in
+             the trash the actions are the only reason the tile is on screen. */
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onRestore}
+              title="Put this track back in your library"
+              aria-label={`Restore ${p.title}`}
+              className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-accentink"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Delete this track forever"
+              aria-label={`Delete ${p.title} forever`}
+              className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <TrackActionsMenu
+              project={p}
+              folders={folders}
+              onCopy={onCopy}
+              onShare={onShare}
+              onMove={onMove}
+              onDelete={onDelete}
+            />
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 pb-3.5 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         <span>
@@ -929,18 +1279,43 @@ function TrackTile({
             : `${n} ${n === 1 ? 'note' : 'notes'}`}
         </span>
         <span aria-hidden>·</span>
-        <span>{formatRelativeTime(p.updatedAt)}</span>
+        {trashed ? (
+          <>
+            <span>Deleted {formatRelativeTime(p.deletedAt ?? 0)}</span>
+            {/* The countdown is the whole promise of the trash, so it's stated
+                per track rather than left to the header's "30 days". Danger
+                only in the last week — before that it's a fact, not a warning. */}
+            <span
+              className={`flex items-center gap-1 rounded border px-1 py-px ${
+                daysLeft(p.deletedAt ?? 0) <= 7
+                  ? 'border-danger/60 text-danger'
+                  : 'border-line'
+              }`}
+            >
+              <Clock size={10} />
+              {daysLeft(p.deletedAt ?? 0) === 0
+                ? 'Deleting today'
+                : `${daysLeft(p.deletedAt ?? 0)}d left`}
+            </span>
+          </>
+        ) : (
+          <span>{formatRelativeTime(p.updatedAt)}</span>
+        )}
         {isStructureProject(p) && (
           <span className="flex items-center gap-1 rounded border border-line px-1 py-px">
             <Blocks size={10} /> Structure
           </span>
         )}
-        {p.published && (
+        {/* Share state survives the trash intact (that's what makes Restore
+            exact) but stops being true while it's in there — the links 404 and
+            the gallery card is gone. So the chips go quiet too, rather than
+            promise a live link for a track nobody can reach. */}
+        {!trashed && p.published && (
           <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
             <Globe size={10} /> Published
           </span>
         )}
-        {p.shared && (
+        {!trashed && p.shared && (
           <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
             <Eye size={10} /> Shared
           </span>
@@ -967,7 +1342,7 @@ function TrackTile({
  *   • Share link             — turns on view-only sharing and copies the URL
  *   • Export JSON            — downloads the portable track file
  *   • Move to {folder}…      — inline section (only when folders exist)
- *   • Delete
+ *   • Move to trash          — reversible for 30 days; the Trash tile has it
  *
  * Copy and Share show inline progress / confirmation in their own row; the
  * menu then auto-closes so the next pass is a fresh click.
@@ -1190,7 +1565,7 @@ function TrackActionsMenu({
             className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs text-fg transition-colors hover:bg-raised hover:text-danger"
           >
             <Trash2 size={13} className="shrink-0 text-muted" />
-            <span>Delete</span>
+            <span>Move to trash</span>
           </button>
         </div>
       </Popover>

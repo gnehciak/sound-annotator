@@ -33,16 +33,32 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
       data.settings && typeof data.settings === 'object'
         ? (data.settings as Project['settings'])
         : undefined,
+    stems:
+      data.stems && typeof data.stems === 'object'
+        ? (data.stems as Project['stems'])
+        : undefined,
+    deletedAt: typeof data.deletedAt === 'number' ? data.deletedAt : undefined,
   }
 }
 
-/** Load every project owned by this user, newest first. (The uid rides in the
- *  session token; the parameter survives for call-site compatibility.) */
+/** Load every live project owned by this user, newest first — the trash is a
+ *  separate listing (fetchTrashedProjects). (The uid rides in the session
+ *  token; the parameter survives for call-site compatibility.) */
 export async function fetchProjects(_uid: string): Promise<Project[]> {
   const rows = await api<Record<string, unknown>[]>('/api/projects')
   return rows
     .map((r) => toProject(String(r.id), r))
     .sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** Load this user's trash, most recently deleted first — the order a mis-click
+ *  wants to be found in. Each project carries its `deletedAt` stamp, which is
+ *  what the home page counts the 30 days down from. */
+export async function fetchTrashedProjects(): Promise<Project[]> {
+  const rows = await api<Record<string, unknown>[]>('/api/projects?trash=1')
+  return rows
+    .map((r) => toProject(String(r.id), r))
+    .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
 }
 
 /**
@@ -99,8 +115,41 @@ export async function saveProject(
   })
 }
 
+/**
+ * Move a project to the trash. The row survives whole — notes, images, share
+ * links — and either comes back through restoreProjectDoc or is deleted for
+ * good 30 days on by the purge cron. Nothing of the project's is torn down
+ * here; that's purgeProjectDoc's job.
+ *
+ * The one exception is the admin page deleting a guest project, which goes
+ * through this same route and *is* immediate and final — a guest has no trash
+ * to restore from (see api/projects/[id]/index.ts).
+ */
 export async function deleteProjectDoc(id: string): Promise<void> {
   await api(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Put a trashed project back in the library, exactly as it left. */
+export async function restoreProjectDoc(id: string): Promise<void> {
+  await api(`/api/projects/${encodeURIComponent(id)}?restore=1`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Delete a project for good — the app's one hard delete, which is why it says
+ * so out loud rather than leaving the API to infer it from the caller. Blobs
+ * are torn down alongside by the caller (App's purgeProject, AdminProjects'
+ * remove).
+ *
+ * An owner can only purge out of their own trash, so this can't take a live
+ * track. A teacher-admin can purge any project outright — the console's
+ * permanent delete.
+ */
+export async function purgeProjectDoc(id: string): Promise<void> {
+  await api(`/api/projects/${encodeURIComponent(id)}?purge=1`, {
+    method: 'DELETE',
+  })
 }
 
 /** The public Browse gallery: every published project, newest first. No auth
