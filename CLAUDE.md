@@ -70,8 +70,9 @@ the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Loca
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
-versioned portable JSON envelope (export buttons in the editor sub-bar, share
-viewer, and track-tile menu; Import on the home page). When adding or changing
+versioned portable JSON envelope (exports live in the editor header's
+share/export menu, the share viewer, and the track-tile menu; Import on the
+home page). When adding or changing
 any persisted field on `Project` / `Annotation` / `ProjectSource` /
 `ProjectSettings` (in `src/types.ts`), update `projectJson.ts` in the same
 change: add the field to the export envelope and the import sanitizer, or

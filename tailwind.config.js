@@ -24,6 +24,8 @@ export default {
         accentink: 'rgb(var(--accent-ink) / <alpha-value>)',
         meter: 'rgb(var(--meter) / <alpha-value>)',
         peak: 'rgb(var(--peak) / <alpha-value>)',
+        // Success/status green (the Saved indicator) — not a note-data hue.
+        ok: 'rgb(var(--ok) / <alpha-value>)',
         danger: 'rgb(var(--danger) / <alpha-value>)',
         // Text that sits on an amber/hue fill — dark in both themes.
         onbright: 'rgb(var(--on-bright) / <alpha-value>)',

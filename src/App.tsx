@@ -55,18 +55,15 @@ import {
   type DetectedSection,
 } from './lib/sectionDetect'
 import { useMediaQuery } from './lib/useMediaQuery'
-import { formatTime, noteLabel, notePreview } from './lib/format'
+import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
-  ArrowLeft,
-  LogOut,
   Eye,
   Pencil,
   Check,
   Play,
   Proportions,
-  Settings as SettingsIcon,
   Undo2,
   Redo2,
 } from 'lucide-react'
@@ -92,10 +89,10 @@ import { useNotesView } from './lib/useNotesView'
 import { usePassagePlayback } from './lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from './lib/notesSplit'
 import { computeFitLayout } from './lib/autoLayout'
-import SharePanel from './components/SharePanel'
+import ShareExportMenu from './components/ShareExportMenu'
 import HomePage from './components/HomePage'
-import ExportPdfButton from './components/ExportPdfButton'
-import ExportJsonButton from './components/ExportJsonButton'
+import SettingsMenu from './components/SettingsMenu'
+import UserMenu from './components/UserMenu'
 import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
@@ -1615,10 +1612,13 @@ export default function App() {
       {/* Guests have no account to hold their work — their links are the only
           way back to it, so the bar sits above everything, not in a menu. */}
       {isGuest && <GuestLinkBar />}
-      {/* ---- Global header ---- */}
-      {/* While the open track is editable ("armed"), the chrome takes the
-          signal — `masthead-armed` washes it accent with an accent hairline,
-          echoing the lit Edit key. View mode / the lock return it to panel. */}
+      {/* ---- Global header — the one bar (2026-07-17 unified nav) ----
+          On the home page: wordmark, theme, account. With a track open it
+          carries the whole track chrome too: dot-as-back, editable title,
+          save state, history, mode, fit, settings, share/export. While the
+          open track is editable ("armed") the chrome takes the signal —
+          `masthead-armed` washes it accent with an accent hairline, echoing
+          the lit Edit key. View mode / the lock return it to panel. */}
       <header
         className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
@@ -1626,28 +1626,122 @@ export default function App() {
             : 'border-line bg-panel'
         }`}
       >
-        {/* The wordmark doubles as the way home (the title sub-bar's back
-            arrow is the explicit route while a track is open) — except for a
-            guest, who has no library: one project is all they can have, and
-            "home" would offer them a New track the API refuses to create. */}
-        <button
-          type="button"
-          onClick={isGuest ? undefined : goHome}
-          disabled={isGuest}
-          title={isGuest ? 'Sound Annotator' : 'Back to the library'}
-          className="press flex items-center gap-[9px] disabled:cursor-default"
-        >
-          <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-          <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
-            Sound&nbsp;Annotator
-          </span>
-        </button>
+        {/* While a track is open the chrome slims to the signal dot alone —
+            the whole way back to the track's folder or the root library (the
+            old back arrow and wordmark text in one device). The full wordmark
+            returns on the home page. A guest has no library behind them: one
+            project is all they can have, so their dot is inert. */}
+        {view === 'track' && current ? (
+          <button
+            type="button"
+            onClick={isGuest ? undefined : goBack}
+            disabled={isGuest}
+            title={
+              isGuest
+                ? 'Sound Annotator'
+                : `Back to ${
+                    folders.find((f) => f.id === current.folderId)?.name ??
+                    'the library'
+                  }`
+            }
+            aria-label={isGuest ? 'Sound Annotator' : 'Back'}
+            className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded transition-colors hover:bg-raised disabled:cursor-default disabled:hover:bg-transparent"
+          >
+            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={isGuest ? undefined : goHome}
+            disabled={isGuest}
+            title={isGuest ? 'Sound Annotator' : 'Back to the library'}
+            className="press flex items-center gap-[9px] disabled:cursor-default"
+          >
+            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+            <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
+              Sound&nbsp;Annotator
+            </span>
+          </button>
+        )}
+        {/* The track title (editable in place) rides right off the dot — the
+            project itself is the breadcrumb — with the save indicator. */}
+        {view === 'track' && current && (
+          <>
+            {effectiveViewOnly ? (
+              <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
+                {current.title}
+              </span>
+            ) : (
+              /* The input hugs its text — an invisible twin of the title sets
+                 the grid cell's width — and a pencil fades in on hover (and
+                 while editing) as the "this is editable" cue. */
+              <div className="group flex min-w-0 items-center gap-1.5">
+                <div className="inline-grid min-w-0">
+                  <span
+                    aria-hidden
+                    className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em]"
+                  >
+                    {current.title || 'Untitled track'}
+                  </span>
+                  <input
+                    value={current.title}
+                    onChange={(e) =>
+                      commitProject(
+                        current.id,
+                        { title: e.target.value },
+                        { coalesceKey: `title:${current.id}` },
+                      )
+                    }
+                    placeholder="Untitled track"
+                    aria-label="Track title"
+                    className="col-start-1 row-start-1 w-full min-w-0 rounded bg-transparent px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg transition-colors placeholder:text-muted hover:bg-fg/5"
+                  />
+                </div>
+                <Pencil
+                  size={12}
+                  aria-hidden
+                  className="shrink-0 text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
+                />
+              </div>
+            )}
+            {/* Save indicator: editing… (dirty, debouncing) → saving… (write
+                in flight) → saved. Driven by the persistence effect above. */}
+            {saveStatus !== 'idle' && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted"
+              >
+                {saveStatus === 'editing' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted" />
+                    Editing…
+                  </>
+                )}
+                {saveStatus === 'saving' && (
+                  <>
+                    <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
+                    Saving…
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <span className="flex items-center gap-1 text-ok">
+                    <Check size={12} /> Saved
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className="text-accentink">Save failed</span>
+                )}
+              </div>
+            )}
+          </>
+        )}
         {view === 'track' && viewOnly && !lockBlocked && (
           <span className="flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
             <Eye size={11} /> View only
           </span>
         )}
-        <div className="flex-1" />
+        <div className="min-w-0 flex-1" />
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
             body keeps its own in-editor undo. ⌘Z / ⌘⇧Z (Ctrl on Win/Linux). */}
@@ -1748,49 +1842,61 @@ export default function App() {
             )}
           </div>
         )}
-        <ThemeToggle
-          pref={themePref}
-          resolved={resolvedTheme}
-          palette={palette}
-          onChange={setThemePref}
-          onPaletteChange={setPalette}
-        />
-        {view === 'track' && (
-          <span className="hidden min-[860px]:block">
-            <LevelMeter active={isPlaying} />
-          </span>
+        {view === 'track' && current?.source && !isStructure && (
+          <button
+            type="button"
+            onClick={fitLayout}
+            title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
+            aria-label="Fit layout to screen"
+            className="press grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+          >
+            <Proportions size={16} />
+          </button>
         )}
+        {/* The gear holds the theme axes while a track is open (the
+            standalone toggle below serves the home page) plus the entry to
+            the track settings modal. */}
         {view === 'track' && (
-          <div className="bevel-inset hidden items-baseline gap-1.5 rounded border border-line bg-inset px-[13px] py-[7px] min-[720px]:flex">
-            <span className="led text-[15px] font-medium leading-none">{formatTime(currentTime)}</span>
-            <span className="font-mono text-[10.5px] text-muted">
-              / {formatTime(duration)}
-            </span>
-          </div>
+          <SettingsMenu
+            theme={{
+              pref: themePref,
+              resolved: resolvedTheme,
+              palette,
+              onChange: setThemePref,
+              onPaletteChange: setPalette,
+            }}
+            canEditTrack={canEditSettings && !isStructure}
+            onOpenTrackSettings={() => setShowSettings(true)}
+          />
+        )}
+        {/* One outputs control: sharing (the owner's call alone — never a
+            foreign link-edited track, and never a guest, whose links live in
+            GuestLinkBar; the API clips those writes anyway) plus the exports.
+            PDF renders the notes list — nothing to print on a structure
+            board; JSON carries any project kind. */}
+        {view === 'track' && current?.source && (
+          <ShareExportMenu
+            project={current}
+            canShare={!isForeign && !isGuest}
+            canPdf={!isStructure}
+            onChange={(patch) => patchProject(current.id, patch)}
+          />
+        )}
+        {view !== 'track' && (
+          <ThemeToggle
+            pref={themePref}
+            resolved={resolvedTheme}
+            palette={palette}
+            onChange={setThemePref}
+            onPaletteChange={setPalette}
+          />
         )}
 
+        {/* The avatar is the whole account control — sign out lives in its
+            menu, not loose in the chrome. */}
         {user && (
-          <div className="flex items-center gap-[7px] border-l border-line pl-3">
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt=""
-                referrerPolicy="no-referrer"
-                className="h-7 w-7 rounded-full border border-line-strong"
-              />
-            ) : (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line-strong bg-raised text-xs font-semibold uppercase text-fg">
-                {(user.displayName ?? user.email ?? '?').slice(0, 1)}
-              </span>
-            )}
-            <button
-              onClick={() => void signOut()}
-              title={`Sign out${user.email ? ` (${user.email})` : ''}`}
-              aria-label="Sign out"
-              className="press grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
-            >
-              <LogOut size={16} />
-            </button>
+          <div className="flex items-center border-l border-line pl-3">
+            <UserMenu user={user} onSignOut={() => void signOut()} />
           </div>
         )}
       </header>
@@ -1823,138 +1929,7 @@ export default function App() {
         />
       ) : (
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Sub-bar: track title + per-track tools. */}
-          <div className="flex h-[50px] items-center gap-2 border-b border-line bg-ink/60 px-3.5">
-            {/* Back to where the track lives: its folder, or the root library.
-                A guest has neither — this project is the whole session. */}
-            {!isGuest && (
-              <button
-                type="button"
-                onClick={goBack}
-                title={`Back to ${
-                  folders.find((f) => f.id === current.folderId)?.name ??
-                  'the library'
-                }`}
-                aria-label="Back"
-                className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
-              >
-                <ArrowLeft size={16} />
-              </button>
-            )}
-            {effectiveViewOnly ? (
-              <span className="min-w-0 truncate rounded px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg">
-                {current.title}
-              </span>
-            ) : (
-              /* The input hugs its text — an invisible twin of the title sets
-                 the grid cell's width — and a pencil fades in on hover (and
-                 while editing) as the "this is editable" cue. */
-              <div className="group flex min-w-0 items-center gap-1.5">
-                <div className="inline-grid min-w-0">
-                  <span
-                    aria-hidden
-                    className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em]"
-                  >
-                    {current.title || 'Untitled track'}
-                  </span>
-                  <input
-                    value={current.title}
-                    onChange={(e) =>
-                      commitProject(
-                        current.id,
-                        { title: e.target.value },
-                        { coalesceKey: `title:${current.id}` },
-                      )
-                    }
-                    placeholder="Untitled track"
-                    aria-label="Track title"
-                    className="col-start-1 row-start-1 w-full min-w-0 rounded bg-transparent px-[9px] py-[5px] text-[14.5px] font-semibold tracking-[0.01em] text-fg transition-colors placeholder:text-muted hover:bg-fg/5"
-                  />
-                </div>
-                <Pencil
-                  size={12}
-                  aria-hidden
-                  className="shrink-0 text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
-                />
-              </div>
-            )}
-            {/* Save indicator: editing… (dirty, debouncing) → saving… (write in
-                flight) → saved. Driven by the persistence effect above. */}
-            {saveStatus !== 'idle' && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted"
-              >
-                {saveStatus === 'editing' && (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-muted" />
-                    Editing…
-                  </>
-                )}
-                {saveStatus === 'saving' && (
-                  <>
-                    <span className="h-1.5 w-1.5 animate-now-pulse rounded-full bg-accent" />
-                    Saving…
-                  </>
-                )}
-                {saveStatus === 'saved' && (
-                  <span className="flex items-center gap-1 text-meter">
-                    <Check size={12} /> Saved
-                  </span>
-                )}
-                {saveStatus === 'error' && (
-                  <span className="text-accentink">Save failed</span>
-                )}
-              </div>
-            )}
-            <div className="min-w-0 flex-1" />
-            {canEditSettings && !isStructure && (
-              <button
-                type="button"
-                onClick={() => setShowSettings(true)}
-                title="Settings"
-                aria-label="Open settings"
-                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-              >
-                <SettingsIcon size={12} />
-                Settings
-              </button>
-            )}
-            {current.source && !isStructure && (
-              <button
-                type="button"
-                onClick={fitLayout}
-                title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
-                aria-label="Fit layout to screen"
-                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-              >
-                <Proportions size={12} />
-                Fit
-              </button>
-            )}
-            {/* PDF export renders the notes list — nothing to print on a
-                structure board (its sections have no note bodies). JSON
-                export carries any project kind, structure boards included. */}
-            {current.source && !isStructure && (
-              <ExportPdfButton project={current} />
-            )}
-            {current.source && <ExportJsonButton project={current} />}
-            {/* Sharing is the owner's call alone — never shown on a foreign
-                (link-edited) track; the rules refuse the writes anyway.
-                A guest is nominally their project's owner, so `isForeign` is
-                false for them — but sharing and publishing are account-holder
-                powers (the API clips both off a guest's writes), and their
-                links live in GuestLinkBar instead. */}
-            {current.source && !isForeign && !isGuest && (
-              <SharePanel
-                project={current}
-                onChange={(patch) => patchProject(current.id, patch)}
-              />
-            )}
-          </div>
-
-          {/* Body */}
+          {/* Body (the track chrome lives in the global header above). */}
           {!current.source ? (
             <div className="flex-1 animate-fade-in overflow-y-auto px-6 py-6">
               {/* The source (and its Storage path) belongs to the owner — a
@@ -2476,40 +2451,6 @@ export default function App() {
           onClose={() => setShowSettings(false)}
         />
       )}
-    </div>
-  )
-}
-
-function LevelMeter({ active }: { active: boolean }) {
-  const SEGS = 16
-  return (
-    <div
-      className="flex h-[18px] items-end gap-[2.5px]"
-      title="Output level"
-      aria-hidden="true"
-    >
-      {Array.from({ length: SEGS }, (_, i) => {
-        const color =
-          i >= 14
-            ? 'rgb(var(--peak))'
-            : i >= 11
-              ? 'rgb(var(--accent))'
-              : 'rgb(var(--meter))'
-        return (
-          <span
-            key={i}
-            className={`origin-bottom rounded-[2px] ${active ? 'meter-seg' : ''}`}
-            style={{
-              width: '3.5px',
-              height: `${30 + Math.sin((i / (SEGS - 1)) * Math.PI) * 60}%`,
-              background: color,
-              opacity: active ? undefined : i < 5 ? 0.55 : 0.2,
-              animationDelay: active ? `${i * 45}ms` : undefined,
-              animationDuration: active ? `${700 + (i % 5) * 90}ms` : undefined,
-            }}
-          />
-        )
-      })}
     </div>
   )
 }
