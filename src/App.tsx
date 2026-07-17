@@ -25,9 +25,12 @@ import {
 } from './lib/storage'
 import {
   fetchProjects,
+  fetchTrashedProjects,
   fetchSharedProject,
   saveProject,
   deleteProjectDoc,
+  restoreProjectDoc,
+  purgeProjectDoc,
 } from './lib/projectStore'
 import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
@@ -163,6 +166,13 @@ export default function App() {
   // editor and folder deletion can clear it in one place.
   const [folders, setFolders] = useState<Folder[]>([])
   const [openFolderId, setOpenFolderId] = useState<string | null>(null)
+
+  // The trash, deliberately kept out of `projects`: a deleted track must never
+  // turn up in search, a folder's tally, the editor, or the undo history, and
+  // the dirty-save effect below would happily re-save one that did. It rides
+  // its own listing (projectStore.fetchTrashedProjects) and its own state, and
+  // the only routes between the two are removeProject and restoreProject.
+  const [trashed, setTrashed] = useState<Project[]>([])
 
   // Last version of each project persisted to the backend, keyed by id. Used to
   // write only the projects that actually changed (mutations replace the
@@ -641,10 +651,18 @@ export default function App() {
         console.error('Failed to load folders:', err)
         return [] as Folder[]
       }),
+      // The trash rides along on the same load rather than waiting to be
+      // opened, so its tile can carry an honest count from the first paint.
+      // Non-critical in exactly the same way as folders.
+      fetchTrashedProjects().catch((err) => {
+        console.error('Failed to load the trash:', err)
+        return [] as Project[]
+      }),
     ])
-      .then(async ([loaded, loadedFolders]) => {
+      .then(async ([loaded, loadedFolders, loadedTrash]) => {
         if (cancelled) return
         setFolders(loadedFolders)
+        setTrashed(loadedTrash)
         // Land on the home page — unless the URL deep-links (`?track=`) to a
         // track we actually own; a dead link falls back home and is cleaned.
         const urlId = new URLSearchParams(window.location.search).get('track')
@@ -902,7 +920,50 @@ export default function App() {
     syncUrl(p.id)
   }
 
+  // ---- trash ---------------------------------------------------------------
+  // Deleting a track moves it to the trash; nothing of its is torn down until
+  // it's purged (by hand, or by the 30-day cron). Optimistic local state plus a
+  // fire-and-forget write, matching the folder CRUD below.
+
   function removeProject(id: string) {
+    const victim = projects.find((p) => p.id === id)
+    void deleteProjectDoc(id).catch((err) =>
+      console.error('Failed to trash project:', err),
+    )
+    persistedRef.current.delete(id)
+    // The track keeps its audio and images: a trashed project is whole, so
+    // restoring one is exact rather than a husk with broken screenshots.
+    // Only purgeProject tears anything down.
+    if (victim) setTrashed((t) => [{ ...victim, deletedAt: now() }, ...t])
+    const remaining = projects.filter((p) => p.id !== id)
+    // Moving a track to the trash is a lifecycle boundary, not an undoable
+    // edit — Restore is the way back, so re-baseline history rather than leave
+    // an undo that would resurrect a track the server has trashed. Deleting
+    // the open track lands back on the home page.
+    resetHistory(remaining, currentId === id ? null : currentId)
+    if (currentId === id) syncUrl(null, 'replace')
+  }
+
+  function restoreProject(id: string) {
+    const p = trashed.find((x) => x.id === id)
+    if (!p) return
+    void restoreProjectDoc(id).catch((err) =>
+      console.error('Failed to restore project:', err),
+    )
+    setTrashed((t) => t.filter((x) => x.id !== id))
+    const live: Project = { ...p }
+    delete live.deletedAt
+    // Baseline the restored track as already-persisted: it came back unchanged,
+    // and the dirty-save effect would otherwise re-PUT it on the next render.
+    persistedRef.current.set(id, live)
+    // A lifecycle boundary again, for the mirror-image reason removeProject is.
+    resetHistory([live, ...projects], currentId)
+  }
+
+  /** The real delete, reachable only from the trash: the row and every asset
+   *  the track owns. The purge cron does the same sweep server-side once the
+   *  30 days are up (api/cron/purge-trash.ts). */
+  function purgeProject(id: string) {
     void deleteAudio(id) // legacy local copy, if any
     if (user) {
       void deleteAudioCloud(user.uid, id).catch((err) =>
@@ -915,16 +976,14 @@ export default function App() {
         console.error('Failed to delete analysis artifacts:', err),
       )
     }
-    void deleteProjectDoc(id).catch((err) =>
-      console.error('Failed to delete project:', err),
+    void purgeProjectDoc(id).catch((err) =>
+      console.error('Failed to purge project:', err),
     )
-    persistedRef.current.delete(id)
-    const remaining = projects.filter((p) => p.id !== id)
-    // Deleting a track tears down its cloud assets irreversibly — re-baseline
-    // history so a later undo can't resurrect it into a broken state. Deleting
-    // the open track lands back on the home page.
-    resetHistory(remaining, currentId === id ? null : currentId)
-    if (currentId === id) syncUrl(null, 'replace')
+    setTrashed((t) => t.filter((x) => x.id !== id))
+  }
+
+  function emptyTrash() {
+    for (const p of trashed) purgeProject(p.id)
   }
 
   // ---- folders -------------------------------------------------------------
@@ -1744,12 +1803,16 @@ export default function App() {
           projects={projects.filter(
             (p) => !p.ownerId || p.ownerId === user?.uid,
           )}
+          trashed={trashed}
           folders={folders}
           openFolderId={openFolderId}
           onOpenFolder={setOpenFolderId}
           onOpenTrack={openTrack}
           onCreateTrack={createProject}
           onDeleteTrack={removeProject}
+          onRestoreTrack={restoreProject}
+          onPurgeTrack={purgeProject}
+          onEmptyTrash={emptyTrash}
           onMoveTrack={moveTrackToFolder}
           onCopyTrack={copyTrack}
           onImportTrack={importTrack}

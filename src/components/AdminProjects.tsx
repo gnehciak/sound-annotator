@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Eye, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
-import { deleteProjectDoc, saveProject } from '../lib/projectStore'
+import { purgeProjectDoc, saveProject } from '../lib/projectStore'
 import { deleteAudioCloud } from '../lib/audioCloud'
 import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
@@ -95,7 +95,10 @@ export default function AdminProjects() {
           deleteProjectImages(p.ownerId, p.id),
         ])
       }
-      await deleteProjectDoc(p.id)
+      // The purge route, not the delete route: deleting a project now moves it
+      // to its owner's trash, which is not what this console's confirm just
+      // promised. An admin's purge takes any project, trashed or live.
+      await purgeProjectDoc(p.id)
       setProjects((ps) => ps.filter((x) => x.id !== p.id))
     } catch (e) {
       alert(
