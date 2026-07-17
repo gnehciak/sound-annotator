@@ -1,5 +1,12 @@
-import { useMemo, useState, type MouseEvent } from 'react'
-import { Play, ArrowUp, ArrowDown, RotateCw, Brackets } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import {
+  Play,
+  ArrowUp,
+  ArrowDown,
+  RotateCw,
+  Brackets,
+  CircleHelp,
+} from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
@@ -48,6 +55,15 @@ interface Props {
   onSeek?: (t: number) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
+  /** This note's 1-based question number, when it's a question (the Q chip). */
+  questionNumber?: number
+  /** Listening-task viewer: the student's current answer for this question. */
+  answer?: string
+  /**
+   * Listening-task viewer: update the answer. Its presence (on a question
+   * note) renders the answer box under the note body.
+   */
+  onAnswer?: (text: string) => void
 }
 
 /**
@@ -77,6 +93,9 @@ export default function AnnotationItem({
   onSeek,
   onSeekNote,
   mentionItems,
+  questionNumber,
+  answer,
+  onAnswer,
 }: Props) {
   const theme = useResolvedTheme()
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
@@ -113,6 +132,17 @@ export default function AnnotationItem({
   })
 
   const stop = (e: MouseEvent) => e.stopPropagation()
+
+  // The answer box grows with its text (a worksheet field, not a scrollbox).
+  // Recomputed on every answer change — including external ones, like the
+  // worksheet strip's "new student" reset collapsing it back to two rows.
+  const answerRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const el = answerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px` // +2: the 1px borders
+  }, [answer, onAnswer])
 
   // Fade in only notes that rest at full opacity (active/selected); dimmed notes
   // carry opacity-50, which a fade-in would fight, so they just appear.
@@ -291,6 +321,22 @@ export default function AnnotationItem({
           )}
         </span>
 
+        {/* Question chip — this note is a listening-task prompt. Numbered in
+            worksheet order so Q3 here is Q3 on the student's answer sheet. */}
+        {annotation.question && (
+          <span
+            title="Question — students answer this in the shared listening task"
+            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+            style={{
+              borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
+              color: hueText(color, theme),
+            }}
+          >
+            <CircleHelp size={9} strokeWidth={2.4} className="shrink-0" />
+            {questionNumber != null ? `Q${questionNumber}` : 'Q'}
+          </span>
+        )}
+
         {/* Section chip — names a structure note's span (display-only). */}
         {annotation.structure && annotation.sectionName && (
           <span
@@ -409,6 +455,32 @@ export default function AnnotationItem({
           )
         })}
       </div>
+      )}
+
+      {/* Answer box — the listening-task viewer's worksheet field for a
+          question note. Clicks stay inside it (the row itself seeks). */}
+      {annotation.question && onAnswer && (
+        <div
+          className="pb-3 pl-3 pr-2"
+          onClick={stop}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <label
+            htmlFor={`answer-${annotation.id}`}
+            className="mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-muted"
+          >
+            Your answer
+          </label>
+          <textarea
+            id={`answer-${annotation.id}`}
+            ref={answerRef}
+            value={answer ?? ''}
+            onChange={(e) => onAnswer(e.target.value)}
+            placeholder="Type your answer…"
+            rows={2}
+            className="bevel-inset block w-full resize-none overflow-hidden rounded border border-line bg-inset px-[9px] py-[7px] text-[13px] leading-relaxed text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+        </div>
       )}
     </div>
   )

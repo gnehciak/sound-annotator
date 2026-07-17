@@ -1,8 +1,9 @@
 // GET /api/cron/purge-trash — the daily sweep that keeps the trash a trash and
 // not an attic: every project trashed longer than TRASH_TTL_MS ago is
-// hard-deleted here, along with its note images and any legacy audio blob.
+// hard-deleted here, along with every blob it owns.
 // Scheduled in vercel.json; the same teardown a manual "Delete forever" does
-// from the client (App.tsx's purgeProject).
+// from the client (App.tsx's purgeProject) — keep the two in step, since a
+// prefix that only one of them knows about is a byte nobody ever collects.
 //
 // Guarded by CRON_SECRET, which Vercel sends as `Authorization: Bearer …` on
 // its own invocations. With the var unset this route refuses to run at all,
@@ -52,8 +53,13 @@ export async function GET(request: Request): Promise<Response> {
     // just come back round on tomorrow's pass. So the cheap failure is the one
     // to arrange for.
     try {
+      // Every prefix a project can own — note images, the legacy audio upload,
+      // and AI section detection's separated stems + analysis audio. Mirrors
+      // App.tsx's purgeProject (imageCloud.ts / audioCloud.ts hold the paths).
       blobs += await deletePrefix(`users/${r.owner_id}/images/${r.id}/`)
       blobs += await deletePrefix(`users/${r.owner_id}/audio/${r.id}`)
+      blobs += await deletePrefix(`users/${r.owner_id}/stems/${r.id}/`)
+      blobs += await deletePrefix(`users/${r.owner_id}/analysis/${r.id}`)
     } catch (e) {
       console.error(`Failed to purge blobs for ${r.id}:`, e)
       continue // leave the row; it's still expired tomorrow

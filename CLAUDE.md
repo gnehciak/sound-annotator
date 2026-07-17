@@ -23,14 +23,20 @@ the server-stamped edit lock (see `api/projects/[id]/index.ts`).
 restore is exact, and every read filters on `deleted_at IS NULL` rather than
 clearing those flags — so a trashed track's `?view=` links and gallery card go
 dark and come back on restore. `api/projects/[id]/trash.ts` holds the two ways
-out (POST restore / DELETE purge, owner-only, both refusing live rows), and
-`api/cron/purge-trash.ts` hard-deletes anything past `TRASH_TTL_MS` (30 days,
-`api/_lib/db.ts`) plus its blobs — daily, gated on a `CRON_SECRET` env var it
-refuses to run without. Blobs are torn down **only at purge**, never at trash.
-The trash rides its own listing (`?trash=1`) into its own App state, never
-`projects` — a trashed track must never reach search, folder tallies, or the
-undo history. The one real delete is the admin page's, over guest projects,
-which have no trash to restore from.
+out — POST restore, and DELETE purge, **the app's only hard delete**: an owner
+may purge only their own row and only out of the trash, while an admin may
+purge any row, live or trashed (the console's permanent delete, which tears
+down the bytes client-side first). `api/cron/purge-trash.ts` hard-deletes
+anything past `TRASH_TTL_MS` (30 days, `api/_lib/db.ts`) plus its blobs —
+daily, gated on a `CRON_SECRET` env var it refuses to run without. Blobs are
+torn down **only at purge**, never at trash. The trash rides its own listing
+(`?trash=1`) into its own App state, never `projects` — a trashed track must
+never reach search, folder tallies, or the undo history.
+
+Note the split: `DELETE /api/projects/:id` trashes and has **no admin branch**,
+because the admin is an account holder too and such a branch would silently opt
+them out of their own trash. Permanence is a separate route, never an inference
+about who is calling. `api/admin/projects.ts` lists live rows only.
 
 **Guests** (students, who have no accounts) are the third kind of caller:
 "Continue as guest" mints one project whose *key is its URL* — a capability
@@ -48,7 +54,8 @@ in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only
 `VITE_CLERK_PUBLISHABLE_KEY`; functions read `DATABASE_URL`,
-`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`). Local dev with API:
+`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, and `REPLICATE_API_TOKEN` —
+the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a

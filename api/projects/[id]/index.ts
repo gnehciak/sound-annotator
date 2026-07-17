@@ -11,9 +11,11 @@
 // - DELETE: owner only — a move to the trash, not a delete. The two ways back
 //   out of it (restore, purge) live in [id]/trash.ts.
 //
-// Three kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
-// and a signed-out guest holding their project's key (see _lib/guest.ts). The
-// last two have identical rights — content only — so they share one code path.
+// Four kinds of caller reach PUT: a signed-in owner, a signed-in link editor,
+// a signed-out guest holding their project's key (see _lib/guest.ts), and a
+// teacher-admin (ADMIN_EMAILS, see _lib/auth.ts), who stands in as the owner of
+// ANY project. Link editors and guests have identical rights — content only —
+// so they share one code path.
 import { getUid, getUserName, isAdmin } from '../../_lib/auth.js'
 import {
   sql,
@@ -27,7 +29,6 @@ import {
   guestKeyFrom,
   guestKeyOpens,
   hashGuestKey,
-  isGuestOwner,
   mintGuestKey,
   newGuestOwnerId,
   takeGuestCreateSlot,
@@ -56,6 +57,9 @@ export async function GET(request: Request): Promise<Response> {
     return json(rowToProject(row, { withLock: true }))
   const uid = await getUid(request)
   if (uid && row.owner_id === uid) return json(rowToProject(row, { withLock: true }))
+  // The admin console lists every project, so an admin must be able to open one
+  // that was never shared.
+  if (uid && (await isAdmin(uid))) return json(rowToProject(row, { withLock: true }))
   // Trashed reads as gone, not as forbidden: to a link holder the difference
   // between "deleted" and "never existed" is nothing they can act on.
   return trashed ? err(404, 'Not found') : err(403, 'Not shared')
@@ -153,10 +157,9 @@ export async function PUT(request: Request): Promise<Response> {
     !lockLive(existing.lock) ||
     (stamped != null && existing.lock!.sessionId === stamped.sessionId)
 
-  // A teacher-admin gets owner rights over GUEST projects only (never over
-  // another teacher's library) — that's the whole scope of the admin page.
-  const admin =
-    uid != null && isGuestOwner(existing.owner_id) && (await isAdmin(uid))
+  // A teacher-admin stands in as the owner of any project — the console
+  // manages the whole database, not just guest submissions.
+  const admin = uid != null && (await isAdmin(uid))
   const isOwner = uid != null && (existing.owner_id === uid || admin)
   // A guest with the right key stands in for the link editor: same content-only
   // rights, so the clipping below covers both without a second branch.
@@ -244,25 +247,17 @@ export async function DELETE(request: Request): Promise<Response> {
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
 
-  // A teacher-admin may delete a guest project (the admin page's whole point);
-  // the owner_id guard still stands for everything else, so no admin can reach
-  // another teacher's library through here.
+  // Every delete that lands here is a move to the trash. The row stays whole —
+  // notes, images, share flags — so Restore is exact; api/cron/purge-trash.ts
+  // hard-deletes it once the window is up. Re-deleting an already-trashed
+  // project must not restart that clock, hence `deleted_at IS NULL`.
   //
-  // That one stays a real delete rather than a move to the trash: a guest has
-  // no library and no trash view, so a trashed guest row would be work nobody
-  // could see or restore, waiting a month to die. Guests upload no images
-  // (allowImages={false}), so there are no blobs left behind either.
-  const row = await getProjectRow(id)
-  if (row && isGuestOwner(row.owner_id) && (await isAdmin(uid))) {
-    await sql`DELETE FROM projects WHERE id = ${id}`
-    return json({ ok: true })
-  }
-
-  // The owner's delete is a move to the trash. The row stays whole — notes,
-  // images, share flags — so Restore is exact; api/cron/purge-trash.ts hard-
-  // deletes it once the window is up, and [id]/trash.ts is the way to do it
-  // sooner. Re-deleting an already-trashed project must not restart that
-  // clock, hence `deleted_at IS NULL`.
+  // A teacher-admin gets no shortcut here, deliberately: deleting from their
+  // own library has to be the same trash it is for everyone, and since the
+  // admin IS an account holder, an isAdmin() branch above this would quietly
+  // opt them out of the feature. The console's permanent delete is a different
+  // verb on a different route — [id]/trash.ts DELETE — so nothing turns on
+  // guessing which button a request came from.
   await sql`
     UPDATE projects SET deleted_at = ${Date.now()}
     WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NULL

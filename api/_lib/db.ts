@@ -28,6 +28,8 @@ export interface ProjectRow {
   published: boolean
   published_at: string | number | null
   published_by_name: string | null
+  /** AI section-detection job state + cached result (api/projects/[id]/analyze.ts). */
+  analysis: unknown
   // Trash: NULL while live, epoch ms of the move to the trash otherwise.
   deleted_at: string | number | null
   // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
@@ -80,6 +82,10 @@ export function rowToProject(
     publishedByName: r.published_by_name ?? undefined,
     deletedAt: r.deleted_at == null ? undefined : Number(r.deleted_at),
   }
+  // Saved stem URLs surface as a read-only field (PUT never accepts them —
+  // the analyze endpoint is their only writer).
+  const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems
+  if (stems && Object.keys(stems).length > 0) p.stems = stems
   if (opts?.withLock) p.lock = r.lock ?? null
   return p
 }

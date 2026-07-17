@@ -35,7 +35,11 @@ import {
 import { useEditLock } from './lib/editLock'
 import { fetchFolders, saveFolder, deleteFolderDoc } from './lib/folderStore'
 import { deleteAudio } from './lib/audioStore'
-import { deleteAudioCloud } from './lib/audioCloud'
+import {
+  deleteAudioCloud,
+  uploadAnalysisAudio,
+  deleteAnalysisArtifacts,
+} from './lib/audioCloud'
 import {
   uploadNoteImage,
   deleteProjectImages,
@@ -45,6 +49,11 @@ import { fetchVideoTitle, parseVideoId } from './lib/youtube'
 import { copySharedProject } from './lib/copyProject'
 import { parseProjectJson } from './lib/projectJson'
 import { makeTextBlock } from './lib/noteBlocks'
+import {
+  sectionsToAnnotations,
+  AI_SECTION_PREFIX,
+  type DetectedSection,
+} from './lib/sectionDetect'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatTime, noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
@@ -71,6 +80,8 @@ import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
+import DetectSectionsButton from './components/DetectSectionsButton'
+import StemMixer from './components/StemMixer'
 import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
@@ -93,6 +104,7 @@ import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
+import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
 
@@ -205,6 +217,9 @@ export default function App() {
   // Player volume (0–1, sticky) and a separate mute that remembers the level.
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  // While any stem is soloed the main player is silenced — the stems are the
+  // sound, the player stays the clock (see StemMixer).
+  const [stemActive, setStemActive] = useState(false)
   const [viewOnly, setViewOnly] = useState(loadViewOnly)
   // Settings modal — central knob for cross-cutting prefs. Each pref's effective
   // value is project.settings.X ?? user-local fallback (localStorage). Writes
@@ -493,6 +508,11 @@ export default function App() {
     () => customTagsUsedIn(current?.annotations ?? []),
     [current?.annotations],
   )
+  // Listening-task numbering for the Q chips — matches the student worksheet.
+  const qNumbers = useMemo(
+    () => questionNumbers(current?.annotations ?? []),
+    [current?.annotations],
+  )
   // Notes-list view state (tag filter, order, auto-pin, auto-cue) — shared with
   // the read-only ShareViewer; none of it mutates notes.
   const {
@@ -653,16 +673,20 @@ export default function App() {
         if (urlId && !loaded.some((p) => p.id === urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
-          // Guest projects join the session too — that's the admin page's Edit
-          // button (components/AdminGuests). Admin-ness isn't decided here: the
-          // API grants owner rights over guest rows only to an ADMIN_EMAILS
-          // address, so a non-admin who opened this URL would just watch their
-          // saves fail. Keeping the check server-side is the point.
+          // A foreign project joins the session when its link says it may
+          // (editableByLink), when it's a guest's, or when the admin console
+          // sent us here with `&admin=1`. Admin-ness isn't decided here: the
+          // API grants owner rights only to an ADMIN_EMAILS address, so anyone
+          // else arriving with that flag would simply watch their saves fail.
+          // Keeping the real check server-side is the point.
+          const sentByConsole =
+            new URLSearchParams(window.location.search).get('admin') === '1'
           const joinable =
             foreign != null &&
             foreign.ownerId !== user.uid &&
             (foreign.editableByLink === true ||
-              foreign.ownerId?.startsWith('guest:') === true)
+              foreign.ownerId?.startsWith('guest:') === true ||
+              sentByConsole)
           if (joinable) all = [...loaded, foreign]
         }
         const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
@@ -750,6 +774,7 @@ export default function App() {
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
+    setStemActive(false) // the mixer remounts per track (key), silent again
     setTagFilter(new Set())
     setSearch('')
     setSearchOpen(false)
@@ -946,6 +971,9 @@ export default function App() {
       )
       void deleteProjectImages(user.uid, id).catch((err) =>
         console.error('Failed to delete cloud images:', err),
+      )
+      void deleteAnalysisArtifacts(user.uid, id).catch((err) =>
+        console.error('Failed to delete analysis artifacts:', err),
       )
     }
     void purgeProjectDoc(id).catch((err) =>
@@ -1303,6 +1331,28 @@ export default function App() {
     // A drag fires many updates — collapse them into one undo step.
     updateAnnotation(id, patch, { coalesceKey: `region:${id}` })
   }
+
+  // Apply AI-detected sections as structure notes — one undoable step that
+  // also replaces any previous AI batch (re-detect refines, never duplicates).
+  // The run's saved stems ride along raw (non-undoable): the server-side
+  // analysis owns them, this just lets the mixer appear without a refetch.
+  const applyDetectedSections = useCallback(
+    (
+      sections: DetectedSection[],
+      _bpm?: number,
+      stems?: Record<string, string>,
+    ) => {
+      const id = currentIdRef.current
+      if (!id) return
+      const fresh = sectionsToAnnotations(sections)
+      commitAnnotations(id, (anns) => [
+        ...anns.filter((a) => !a.id.startsWith(AI_SECTION_PREFIX)),
+        ...fresh,
+      ])
+      if (stems && Object.keys(stems).length > 0) patchProject(id, { stems })
+    },
+    [commitAnnotations, patchProject],
+  )
 
   // ---- song-structure sections (structure projects only) -----------------
   // A section is an annotation with `structure: true` + a name; both live in
@@ -1948,23 +1998,45 @@ export default function App() {
                     current.source.type === 'youtube' ? undefined : 'Audio'
                   }
                   actions={
-                    current.source.type === 'youtube' ? (
-                      <a
-                        href={
-                          current.source.youtubeUrl ??
-                          (current.source.videoId
-                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                            : undefined)
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open the original video on YouTube (new tab)"
-                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-                      >
-                        <Play size={12} />
-                        YouTube
-                      </a>
-                    ) : undefined
+                    <>
+                      {current.source.type === 'youtube' && (
+                        <a
+                          href={
+                            current.source.youtubeUrl ??
+                            (current.source.videoId
+                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                              : undefined)
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open the original video on YouTube (new tab)"
+                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                          <Play size={12} />
+                          YouTube
+                        </a>
+                      )}
+                      {/* AI section detection — it fills this very board. */}
+                      {user &&
+                        !effectiveViewOnly &&
+                        !isForeign &&
+                        (current.source.type === 'youtube' ||
+                          current.source.audioUrl) && (
+                          <DetectSectionsButton
+                            key={current.id}
+                            projectId={current.id}
+                            uploadAnalysisAudio={(file, onProgress) =>
+                              uploadAnalysisAudio(
+                                user.uid,
+                                current.id,
+                                file,
+                                onProgress,
+                              )
+                            }
+                            onSections={applyDetectedSections}
+                          />
+                        )}
+                    </>
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -1979,7 +2051,7 @@ export default function App() {
                         audioUrl={audioUrl}
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
-                        volume={muted ? 0 : volume}
+                        volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2003,6 +2075,19 @@ export default function App() {
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
                   />
+
+                  {/* Stem mixer — hear one part while studying the form. */}
+                  {current.stems && (
+                    <StemMixer
+                      key={current.id}
+                      stems={current.stems}
+                      playerRef={playerRef}
+                      isPlaying={isPlaying}
+                      volume={muted ? 0 : volume}
+                      playbackRate={playbackRate}
+                      onActiveChange={setStemActive}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -2054,23 +2139,48 @@ export default function App() {
                   left="Player"
                   right={current.source.type === 'youtube' ? undefined : 'Audio'}
                   actions={
-                    current.source.type === 'youtube' ? (
-                      <a
-                        href={
-                          current.source.youtubeUrl ??
-                          (current.source.videoId
-                            ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                            : undefined)
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open the original video on YouTube (new tab)"
-                        className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
-                      >
-                        <Play size={12} />
-                        YouTube
-                      </a>
-                    ) : undefined
+                    <>
+                      {current.source.type === 'youtube' && (
+                        <a
+                          href={
+                            current.source.youtubeUrl ??
+                            (current.source.videoId
+                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
+                              : undefined)
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open the original video on YouTube (new tab)"
+                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                          <Play size={12} />
+                          YouTube
+                        </a>
+                      )}
+                      {/* Detection is the owner's call (it spends their
+                          Replicate credit): audio tracks need their cloud
+                          URL; YouTube tracks prompt for a one-shot analysis
+                          upload inside the button. */}
+                      {user &&
+                        !effectiveViewOnly &&
+                        !isForeign &&
+                        (current.source.type === 'youtube' ||
+                          current.source.audioUrl) && (
+                          <DetectSectionsButton
+                            key={current.id}
+                            projectId={current.id}
+                            uploadAnalysisAudio={(file, onProgress) =>
+                              uploadAnalysisAudio(
+                                user.uid,
+                                current.id,
+                                file,
+                                onProgress,
+                              )
+                            }
+                            onSections={applyDetectedSections}
+                          />
+                        )}
+                    </>
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -2085,7 +2195,7 @@ export default function App() {
                         audioUrl={audioUrl}
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
-                        volume={muted ? 0 : volume}
+                        volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2112,6 +2222,21 @@ export default function App() {
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
                   />
+
+                  {/* Stem mixer — only on analyzed tracks (section detection
+                      saved their separated stems). Playback-only, so it stays
+                      available in view mode. */}
+                  {current.stems && (
+                    <StemMixer
+                      key={current.id}
+                      stems={current.stems}
+                      playerRef={playerRef}
+                      isPlaying={isPlaying}
+                      volume={muted ? 0 : volume}
+                      playbackRate={playbackRate}
+                      onActiveChange={setStemActive}
+                    />
+                  )}
                 </div>
 
                 {/* A short, toggleable timeline strip below the player. The
@@ -2216,6 +2341,7 @@ export default function App() {
                     onReorder={reorderAnnotations}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
+                    questionNumbers={qNumbers}
                   />
                   {visibleAnnotations.length > 0 && (
                     <div aria-hidden style={{ height: notesPad }} />

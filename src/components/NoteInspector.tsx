@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Crosshair,
   Brackets,
+  CircleHelp,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { formatTime, parseTime } from '../lib/format'
@@ -225,6 +226,42 @@ export default function NoteInspector({
             className="bevel-inset w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
           />
         )}
+
+        {/* Listening-task question: the note's text becomes a prompt students
+            answer. Shared through the view link, question notes grow an answer
+            box and the class hands back a PDF answer sheet (lib/questions.ts). */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={annotation.question ?? false}
+          onClick={() => onUpdate({ question: !annotation.question })}
+          title="Question notes turn the shared view link into a listening task — students type an answer under this note and export their sheet as a PDF"
+          className={`press flex w-full items-center justify-between gap-2.5 rounded border px-[11px] py-2 text-left transition-colors ${
+            annotation.question
+              ? 'border-accent/60 bg-accent/10'
+              : 'border-line hover:border-line-strong'
+          }`}
+        >
+          <span
+            className={`flex items-center gap-2 text-[12.5px] ${
+              annotation.question ? 'text-fg' : 'text-muted'
+            }`}
+          >
+            <CircleHelp size={14} className="shrink-0" />
+            Ask as a question
+          </span>
+          <span
+            className={`relative inline-flex h-[17px] w-[30px] shrink-0 rounded-full border transition-colors ${
+              annotation.question ? 'border-accent bg-accent' : 'border-line bg-inset'
+            }`}
+          >
+            <span
+              className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
+                annotation.question ? 'left-[14px] bg-onaccent' : 'left-[2px] bg-muted'
+              }`}
+            />
+          </span>
+        </button>
       </div>
 
       {/* Times — a mini range bar; Begin on the left, End on the right. Click an

@@ -89,6 +89,14 @@ export interface Annotation {
    * meaningful on structure projects' sections.
    */
   lyrics?: string
+  /**
+   * Marks this note as a listening-task question: the note's rich text is the
+   * prompt, anchored to its moment. A shared track carrying question notes
+   * opens through its `?view=` link as a worksheet — students get an answer
+   * box under each question (answers stay on their device, see lib/answers.ts)
+   * and hand back a PDF answer sheet (lib/answerSheet.ts). Off by default.
+   */
+  question?: boolean
   createdAt: number
 }
 
@@ -142,6 +150,13 @@ export interface Project {
    * substitute the user's local pref or a hard default.
    */
   settings?: ProjectSettings
+  /**
+   * Blob URLs of the separated stems (vocals/drums/bass/guitar/piano/other),
+   * saved by AI section detection (api/projects/[id]/analyze.ts). Read-only
+   * client-side: the server ignores it on writes — the analyze endpoint is
+   * its only writer. Present only on analyzed tracks; drives the stem mixer.
+   */
+  stems?: Record<string, string>
   /**
    * Epoch ms of the move to the trash; absent on a live project. A trashed
    * track keeps everything — notes, images, share and publish state — so
