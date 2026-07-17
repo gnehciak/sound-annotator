@@ -12,6 +12,7 @@ import TitleBar from '../TitleBar'
  * instead of dividers, one thin hue rail per section as its identity mark,
  * the section name in its own hue. While the song plays, the sounding
  * section stays lit and the others fall back, karaoke-sheet style.
+ * (Chords are painted directly in the Chords player band, not here.)
  *
  * Auto-pin: whenever the sounding section changes — playback rolling into
  * the next section, or any seek (ruler, chips, a lyric heading) — and again
@@ -152,9 +153,11 @@ export default function LyricsPanel({
                     )}
                   </button>
                   {readOnly ? (
-                    <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
-                      {lyrics}
-                    </p>
+                    lyrics.trim() && (
+                      <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
+                        {lyrics}
+                      </p>
+                    )
                   ) : (
                     <GrowingTextarea
                       value={lyrics}

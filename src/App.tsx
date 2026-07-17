@@ -100,6 +100,7 @@ import NoteInspector from './components/NoteInspector'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
+import ChordsPlayer from './components/structure/ChordsPlayer'
 import { isStructureProject } from './lib/sections'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -2021,6 +2022,27 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {/* Chords player — diagrams + beat lane against the project's
+                  beat grid. Tempo is settings (owner-only); chords are
+                  painted straight onto the lane and stored per section, so
+                  each paint gesture is one undoable annotation edit. */}
+              <ChordsPlayer
+                key={`chords:${current.id}`}
+                sections={current.annotations}
+                settings={current.settings}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                playbackRate={playbackRate}
+                readOnly={effectiveViewOnly}
+                canEditTempo={canEditSettings}
+                onSeek={seek}
+                onPatchSettings={patchProjectSettings}
+                onUpdateChords={(id, chordEvents) =>
+                  updateAnnotation(id, { chordEvents })
+                }
+              />
 
               {/* keyed per track so tool/zoom/selection state resets on switch */}
               <StructureEditor

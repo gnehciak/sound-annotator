@@ -17,6 +17,7 @@
 // importing). See the note atop src/types.ts.
 import type {
   Annotation,
+  ChordStamp,
   NoteBlock,
   Project,
   ProjectSettings,
@@ -119,6 +120,22 @@ function sanitizeBlocks(v: unknown): NoteBlock[] | undefined {
   return blocks.length > 0 ? blocks : undefined
 }
 
+/** A section's painted chord stamps: whole-beat, positive, capped, sorted. */
+function sanitizeChordStamps(v: unknown): ChordStamp[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const out: ChordStamp[] = []
+  for (const raw of v.slice(0, 1000)) {
+    if (!raw || typeof raw !== 'object') continue
+    const e = raw as Record<string, unknown>
+    const b = num(e.b)
+    const d = num(e.d)
+    const n = str(e.n)
+    if (b == null || b < 0 || d == null || d < 1 || !n) continue
+    out.push({ b: Math.round(b), d: Math.round(d), n: n.slice(0, 32) })
+  }
+  return out.length > 0 ? out.sort((a, z) => a.b - z.b) : undefined
+}
+
 /** One note from the file, or null when it's beyond salvage (no valid start). */
 function sanitizeAnnotation(v: unknown): Annotation | null {
   if (!v || typeof v !== 'object') return null
@@ -148,6 +165,10 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   if (a.structure === true) ann.structure = true
   const sectionName = str(a.sectionName)
   if (sectionName) ann.sectionName = sectionName
+  const lyrics = str(a.lyrics)
+  if (lyrics) ann.lyrics = lyrics
+  const chordEvents = sanitizeChordStamps(a.chordEvents)
+  if (chordEvents) ann.chordEvents = chordEvents
   const blocks = sanitizeBlocks(a.blocks)
   if (blocks) ann.blocks = blocks
   // Legacy exports (contentHtml only) get their text block here, like any read.

@@ -34,6 +34,17 @@ export interface NoteBlock {
   data: unknown
 }
 
+/**
+ * One painted chord on a section's chord track (see Annotation.chordEvents):
+ * `b` = start, in whole beats after the section's grid-snapped start;
+ * `d` = duration in whole beats (≥ 1); `n` = the chord symbol as typed.
+ */
+export interface ChordStamp {
+  b: number
+  d: number
+  n: string
+}
+
 export interface Annotation {
   id: string
   /** seconds into the track */
@@ -89,6 +100,17 @@ export interface Annotation {
    * meaningful on structure projects' sections.
    */
   lyrics?: string
+  /**
+   * The section's chord track: stamps painted onto the project's beat grid
+   * (settings.bpm / beatsPerBar / beatOffset) from the Chords player's
+   * toolbar. Each stamp is `b` beats after the section's (grid-snapped)
+   * start, lasts `d` beats, and names chord `n` ("F#m7"). Anchoring to the
+   * section means chords travel when the section is dragged; stamps past
+   * the section's end are clipped at render. Kept non-overlapping by the
+   * paint operation (lib/chords.ts `paintStamps`). Only meaningful on
+   * structure projects' sections.
+   */
+  chordEvents?: ChordStamp[]
   createdAt: number
 }
 
@@ -167,6 +189,18 @@ export interface ProjectSettings {
   overviewOpen?: boolean
   /** Default ordering for the notes list. See AnnotationList for the modes. */
   noteOrder?: 'timeline' | 'auto' | 'live'
+  /**
+   * The beat grid behind the structure board's Chords player (lib/chords.ts):
+   * tempo, meter, and the track time of beat 1. Owner-set (the API clips
+   * settings writes from link editors); all primitives, so they round-trip
+   * through JSON export/import with no sanitizer work. Absent until the
+   * owner sets a tempo — the Chords player shows its setup state.
+   */
+  bpm?: number
+  beatsPerBar?: number
+  beatOffset?: number
+  /** Whether the Chords player band opens unfolded. Defaults on. */
+  chordsOpen?: boolean
 }
 
 /**

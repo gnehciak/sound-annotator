@@ -34,6 +34,7 @@ import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import MiniTransport from './structure/MiniTransport'
+import ChordsPlayer from './structure/ChordsPlayer'
 import { isStructureProject } from '../lib/sections'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
@@ -513,6 +514,24 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
+          {/* Chords player — only when the owner built one (tempo + painted
+              chords); read-only, so no paint bar or tempo controls. */}
+          {!!project.settings?.bpm &&
+            annotations.some((a) => a.chordEvents?.length) && (
+              <ChordsPlayer
+                sections={annotations}
+                settings={project.settings}
+                duration={duration}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                playbackRate={playbackRate}
+                readOnly
+                canEditTempo={false}
+                onSeek={seek}
+                onPatchSettings={() => {}}
+                onUpdateChords={() => {}}
+              />
+            )}
           {/* readOnly: the board never calls the mutation props. */}
           <StructureEditor
             key={project.id}
