@@ -1906,8 +1906,9 @@ export default function App() {
               </div>
 
               {/* Chords player — diagrams + beat lane against the project's
-                  beat grid. Tempo is settings (owner-only); chord text lives
-                  on the sections and is edited in the Lyrics panel. */}
+                  beat grid. Tempo is settings (owner-only); chords are
+                  painted straight onto the lane and stored per section, so
+                  each paint gesture is one undoable annotation edit. */}
               <ChordsPlayer
                 key={`chords:${current.id}`}
                 sections={current.annotations}
@@ -1920,6 +1921,9 @@ export default function App() {
                 canEditTempo={canEditSettings}
                 onSeek={seek}
                 onPatchSettings={patchProjectSettings}
+                onUpdateChords={(id, chordEvents) =>
+                  updateAnnotation(id, { chordEvents })
+                }
               />
 
               {/* keyed per track so tool/zoom/selection state resets on switch */}
@@ -1938,8 +1942,8 @@ export default function App() {
               />
             </div>
 
-            {/* Lyrics & chords — the per-section sheet beside the board (wide
-                screens). Typing coalesces into one undo step per section. */}
+            {/* Lyrics — whole-section lyrics beside the board (wide screens).
+                Typing coalesces into one undo step per section. */}
             <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
               <LyricsPanel
                 sections={current.annotations}
@@ -1949,9 +1953,6 @@ export default function App() {
                 onSeek={seek}
                 onUpdateLyrics={(id, lyrics) =>
                   updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
-                }
-                onUpdateChords={(id, chords) =>
-                  updateAnnotation(id, { chords }, { coalesceKey: `chords:${id}` })
                 }
               />
             </div>

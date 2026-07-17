@@ -514,10 +514,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
-          {/* Chords player — only when the owner built one (tempo + chords);
-              tempo controls stay hidden without canEditTempo. */}
+          {/* Chords player — only when the owner built one (tempo + painted
+              chords); read-only, so no paint bar or tempo controls. */}
           {!!project.settings?.bpm &&
-            annotations.some((a) => a.chords?.trim()) && (
+            annotations.some((a) => a.chordEvents?.length) && (
               <ChordsPlayer
                 sections={annotations}
                 settings={project.settings}
@@ -529,6 +529,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 canEditTempo={false}
                 onSeek={seek}
                 onPatchSettings={() => {}}
+                onUpdateChords={() => {}}
               />
             )}
           {/* readOnly: the board never calls the mutation props. */}
@@ -546,7 +547,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onDelete={() => {}}
           />
         </div>
-        {annotations.some((a) => a.lyrics?.trim() || a.chords?.trim()) && (
+        {annotations.some((a) => a.lyrics?.trim()) && (
           <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
             <LyricsPanel
               sections={annotations}
@@ -555,7 +556,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               readOnly
               onSeek={seek}
               onUpdateLyrics={() => {}}
-              onUpdateChords={() => {}}
             />
           </div>
         )}

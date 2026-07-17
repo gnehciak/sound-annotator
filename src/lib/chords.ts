@@ -13,12 +13,15 @@
 //     those into beat↔seconds math shared by the lane, the readout, and the
 //     event builder.
 //
-//  3. Progressions → a chord-event timeline. Each section annotation carries
-//     a `chords` string in chart notation ("Am | F | C G"); bars are split on
-//     `|`, chords inside a bar divide it evenly, `.` holds the previous
-//     chord, and a progression shorter than its section LOOPS to fill it —
-//     type a 4-bar pattern once and the whole verse is covered.
-import type { Annotation } from '../types'
+//  3. Stamps → a chord-event timeline. Each section annotation carries a
+//     `chordEvents` array of stamps painted from the Chords player's toolbar
+//     ({ b, d, n } — start beat within the section, duration in beats,
+//     symbol). `paintStamps` is the one editing operation: it overwrites the
+//     painted range, trimming/splitting whatever it lands on (or erasing,
+//     with a null name), and keeps a section's stamps sorted and
+//     non-overlapping. `buildChordEvents` lays every section's stamps onto
+//     the grid as absolute, section-clipped events for the rail and lane.
+import type { Annotation, ChordStamp } from '../types'
 import { sortedSections } from './sections'
 
 // ---- chord symbols ---------------------------------------------------------
@@ -415,51 +418,36 @@ export function tapBpm(taps: number[]): number | null {
   return Math.min(Math.max(Math.round(60_000 / mid), MIN_BPM), MAX_BPM)
 }
 
-// ---- progressions → events -------------------------------------------------
-
-/** Tokens that mean "no chord sounds here". */
-const NO_CHORD = new Set(['nc', 'n.c.', 'n.c', '–', '—'])
-/** Tokens that hold the previous chord for another slot. */
-const HOLD = new Set(['.', '-', '_'])
+// ---- stamps → events -------------------------------------------------------
 
 /**
- * Parse chart text into bars of slots. Bars split on `|` (or newlines);
- * chords inside a bar divide it evenly; `.` extends the previous chord;
- * `%` (or an empty bar between pipes) repeats the previous bar; `N.C.` is a
- * rest (null slot). Text with no bar marks at all reads one chord per bar.
+ * Paint a chord (or, with a null name, an eraser stroke) across
+ * [b, b + d) of a section's stamps. Whatever the stroke lands on is
+ * overwritten: fully covered stamps vanish, partially covered ones are
+ * trimmed, and a stamp that spans the whole stroke splits in two. Returns a
+ * new sorted, non-overlapping array — the caller persists it verbatim.
  */
-export function parseProgression(text: string): (string | null)[][] {
-  const src = text.replace(/[\r\n]+/g, '|').trim()
-  if (!src) return []
-  const rawBars = src.includes('|')
-    ? src.split('|').map((s) => s.trim())
-    : src.split(/\s+/).map((s) => s.trim())
-  // Outer empties from leading/trailing pipes vanish; interior ones repeat.
-  while (rawBars.length && rawBars[0] === '') rawBars.shift()
-  while (rawBars.length && rawBars[rawBars.length - 1] === '') rawBars.pop()
-
-  const bars: (string | null)[][] = []
-  let carry: string | null = null
-  for (const raw of rawBars) {
-    if (raw === '' || raw === '%') {
-      if (bars.length) bars.push([...bars[bars.length - 1]])
+export function paintStamps(
+  stamps: ChordStamp[] | undefined,
+  b: number,
+  d: number,
+  name: string | null,
+): ChordStamp[] {
+  const s = Math.max(0, Math.round(b))
+  const e = s + Math.max(1, Math.round(d))
+  const out: ChordStamp[] = []
+  for (const st of stamps ?? []) {
+    const sb = Math.max(0, Math.round(st.b))
+    const se = sb + Math.max(1, Math.round(st.d))
+    if (se <= s || sb >= e) {
+      out.push({ b: sb, d: se - sb, n: st.n })
       continue
     }
-    const bar: (string | null)[] = []
-    for (const token of raw.split(/\s+/)) {
-      const low = token.toLowerCase()
-      if (HOLD.has(token)) bar.push(carry)
-      else if (NO_CHORD.has(low)) {
-        carry = null
-        bar.push(null)
-      } else {
-        carry = token
-        bar.push(token)
-      }
-    }
-    if (bar.length) bars.push(bar)
+    if (sb < s) out.push({ b: sb, d: s - sb, n: st.n })
+    if (se > e) out.push({ b: e, d: se - e, n: st.n })
   }
-  return bars
+  if (name) out.push({ b: s, d: e - s, n: name })
+  return out.sort((a, z) => a.b - z.b)
 }
 
 export interface ChordEvent {
@@ -476,10 +464,34 @@ export interface ChordEvent {
 }
 
 /**
- * Lay every section's progression onto the grid as a sorted event list.
- * Section edges snap to the nearest beat; a progression shorter than its
- * section loops; one longer is clipped; consecutive repeats of the same
- * chord merge into one event (so a looped "| A | A |" reads as one span).
+ * A section's beat span on the grid: edges snapped to the nearest beat.
+ * The lane paints inside these; a span shorter than a beat is unusable.
+ */
+export interface SectionSpan {
+  id: string
+  b0: number
+  b1: number
+}
+
+export function sectionSpans(
+  sections: Annotation[],
+  grid: BeatGrid,
+): SectionSpan[] {
+  const spans: SectionSpan[] = []
+  for (const sec of sortedSections(sections)) {
+    const end = sec.end ?? sec.start
+    const b0 = Math.round(beatAt(grid, sec.start))
+    const b1 = Math.round(beatAt(grid, end))
+    if (b1 - b0 >= 1) spans.push({ id: sec.id, b0, b1 })
+  }
+  return spans
+}
+
+/**
+ * Lay every section's stamps onto the grid as a sorted event list, in
+ * absolute beats/seconds. Stamps are section-anchored, so they follow a
+ * dragged section; anything past the section's snapped end is clipped
+ * (a shortened section hides its tail rather than losing it).
  */
 export function buildChordEvents(
   sections: Annotation[],
@@ -498,50 +510,30 @@ export function buildChordEvents(
   }
 
   for (const sec of sortedSections(sections)) {
-    const text = sec.chords?.trim()
+    if (!sec.chordEvents?.length) continue
     const end = sec.end ?? sec.start
-    if (!text || end <= sec.start) continue
-    const bars = parseProgression(text)
-    if (bars.length === 0) continue
-
     const b0 = Math.round(beatAt(grid, sec.start))
     const b1 = Math.round(beatAt(grid, end))
     if (b1 - b0 < 1) continue
 
-    const B = grid.beatsPerBar
-    const nBars = Math.ceil((b1 - b0) / B)
-    for (let bi = 0; bi < nBars; bi++) {
-      const bar = bars[bi % bars.length]
-      const slotBeats = B / bar.length
-      for (let si = 0; si < bar.length; si++) {
-        const name = bar[si]
-        const startBeat = b0 + bi * B + si * slotBeats
-        if (startBeat >= b1 - 1e-6) break
-        const endBeat = Math.min(startBeat + slotBeats, b1)
-        if (!name) continue
-        const last = events[events.length - 1]
-        if (
-          last &&
-          last.sectionId === sec.id &&
-          last.name === name &&
-          Math.abs(last.endBeat - startBeat) < 1e-6
-        ) {
-          last.endBeat = endBeat
-          last.end = timeOfBeat(grid, endBeat)
-          continue
-        }
-        const { chord, shape } = lookup(name)
-        events.push({
-          name,
-          chord,
-          shape,
-          startBeat,
-          endBeat,
-          start: timeOfBeat(grid, startBeat),
-          end: timeOfBeat(grid, endBeat),
-          sectionId: sec.id,
-        })
-      }
+    for (const st of sec.chordEvents) {
+      const startBeat = b0 + Math.max(0, Math.round(st.b))
+      const endBeat = Math.min(
+        startBeat + Math.max(1, Math.round(st.d)),
+        b1,
+      )
+      if (!st.n || startBeat >= b1 || endBeat <= startBeat) continue
+      const { chord, shape } = lookup(st.n)
+      events.push({
+        name: st.n,
+        chord,
+        shape,
+        startBeat,
+        endBeat,
+        start: timeOfBeat(grid, startBeat),
+        end: timeOfBeat(grid, endBeat),
+        sectionId: sec.id,
+      })
     }
   }
   return events.sort((a, b) => a.startBeat - b.startBeat)

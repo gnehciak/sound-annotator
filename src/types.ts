@@ -34,6 +34,17 @@ export interface NoteBlock {
   data: unknown
 }
 
+/**
+ * One painted chord on a section's chord track (see Annotation.chordEvents):
+ * `b` = start, in whole beats after the section's grid-snapped start;
+ * `d` = duration in whole beats (≥ 1); `n` = the chord symbol as typed.
+ */
+export interface ChordStamp {
+  b: number
+  d: number
+  n: string
+}
+
 export interface Annotation {
   id: string
   /** seconds into the track */
@@ -90,14 +101,16 @@ export interface Annotation {
    */
   lyrics?: string
   /**
-   * The section's chord chart, in bar notation ("Am | F | C G" — bars split
-   * on |, chords in a bar divide it evenly, "." holds, "%" repeats a bar).
-   * A chart shorter than the section loops to fill it. Rendered by the
-   * structure board's Chords player against the project's beat grid
-   * (settings.bpm / beatsPerBar / beatOffset); see lib/chords.ts. Only
-   * meaningful on structure projects' sections.
+   * The section's chord track: stamps painted onto the project's beat grid
+   * (settings.bpm / beatsPerBar / beatOffset) from the Chords player's
+   * toolbar. Each stamp is `b` beats after the section's (grid-snapped)
+   * start, lasts `d` beats, and names chord `n` ("F#m7"). Anchoring to the
+   * section means chords travel when the section is dragged; stamps past
+   * the section's end are clipped at render. Kept non-overlapping by the
+   * paint operation (lib/chords.ts `paintStamps`). Only meaningful on
+   * structure projects' sections.
    */
-  chords?: string
+  chordEvents?: ChordStamp[]
   createdAt: number
 }
 
