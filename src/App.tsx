@@ -2079,8 +2079,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Folded transport: Play + clock + volume. Seeking lives in
-                      the board (ruler / minimap / chips / lyric headings). */}
+                  {/* Folded transport: Play + clock + volume, with the stem
+                      mixer folded in below. Seeking lives in the board (ruler /
+                      minimap / chips / lyric headings). */}
                   <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
@@ -2090,20 +2091,21 @@ export default function App() {
                     onPlayPause={() => (isPlaying ? pause() : play())}
                     onSetVolume={changeVolume}
                     onToggleMute={toggleMute}
-                  />
-
-                  {/* Stem mixer — hear one part while studying the form. */}
-                  {current.stems && (
-                    <StemMixer
-                      key={current.id}
-                      stems={current.stems}
-                      playerRef={playerRef}
-                      isPlaying={isPlaying}
-                      volume={muted ? 0 : volume}
-                      playbackRate={playbackRate}
-                      onActiveChange={setStemActive}
-                    />
-                  )}
+                  >
+                    {/* Stem mixer — hear one part while studying the form. */}
+                    {current.stems && (
+                      <StemMixer
+                        key={current.id}
+                        stems={current.stems}
+                        playerRef={playerRef}
+                        isPlaying={isPlaying}
+                        volume={muted ? 0 : volume}
+                        playbackRate={playbackRate}
+                        onActiveChange={setStemActive}
+                        bare
+                      />
+                    )}
+                  </MiniTransport>
                 </div>
               </div>
 

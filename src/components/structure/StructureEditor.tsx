@@ -70,6 +70,12 @@ const MIN_SECTION = 0.5
 /** Magnetic snap radius, in screen pixels. */
 const SNAP_PX = 7
 
+/** Resizable section-lane height (px) — bounds + where the drag persists. */
+const LANE_H_DEFAULT = 96
+const LANE_H_MIN = 56
+const LANE_H_MAX = 360
+const LANE_H_KEY = 'sa:structure-lane-h'
+
 const round1 = (x: number) => Math.round(x * 10) / 10
 const clamp = (x: number, lo: number, hi: number) =>
   Math.min(Math.max(x, lo), hi)
@@ -86,25 +92,34 @@ const gridFor = (pps: number) => (pps >= 48 ? 0.1 : pps >= 12 ? 0.5 : 1)
 /**
  * Run a drag gesture on window-level listeners (the pointer leaves the lane
  * constantly at this scale). Freezes the cursor + text selection for the
- * gesture's lifetime; each closure reads fresh state through refs.
+ * gesture's lifetime; each closure reads fresh state through refs. Returns a
+ * `cancel` that tears the gesture down *without* firing onUp — the escape
+ * hatch a starting pinch uses to abort a half-formed drag.
  */
 function windowDrag(
   onMove: (ev: PointerEvent) => void,
   onUp?: (ev: PointerEvent) => void,
   cursor?: string,
-) {
+): () => void {
   const move = (ev: PointerEvent) => onMove(ev)
-  const up = (ev: PointerEvent) => {
+  let done = false
+  const cleanup = () => {
+    if (done) return
+    done = true
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
+  }
+  const up = (ev: PointerEvent) => {
+    cleanup()
     onUp?.(ev)
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
   if (cursor) document.body.style.cursor = cursor
   document.body.style.userSelect = 'none'
+  return cleanup
 }
 
 /** Quantize to the grid, then let nearby magnet times (section edges, the
@@ -143,6 +158,16 @@ export default function StructureEditor({
   const [view, setView] = useState<{ s: number; e: number } | null>(null)
   // Live preview of a drag-to-create gesture (committed on release).
   const [ghost, setGhost] = useState<{ s: number; e: number } | null>(null)
+  // Section-lane height, drag-resizable and remembered across sessions.
+  const [laneH, setLaneH] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(LANE_H_KEY))
+      if (v >= LANE_H_MIN && v <= LANE_H_MAX) return v
+    } catch {
+      /* private mode / no storage — fall through to the default */
+    }
+    return LANE_H_DEFAULT
+  })
   // Focus the name field once the just-created section lands in props.
   const pendingFocusRef = useRef<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -183,6 +208,28 @@ export default function StructureEditor({
   useEffect(() => {
     liveRef.current = { sections, ordered, vs, ve, dur, pps, currentTime }
   })
+
+  // Every pointer gesture below runs through this so a second finger landing
+  // (pinch) can abort the half-formed drag the first one started.
+  const dragCancelRef = useRef<(() => void) | null>(null)
+  const beginDrag = useCallback(
+    (
+      onMove: (ev: PointerEvent) => void,
+      onUp?: (ev: PointerEvent) => void,
+      cursor?: string,
+    ) => {
+      dragCancelRef.current?.()
+      dragCancelRef.current = windowDrag(
+        onMove,
+        (ev) => {
+          dragCancelRef.current = null
+          onUp?.(ev)
+        },
+        cursor,
+      )
+    },
+    [],
+  )
 
   /** Clamp + apply a view window; a window ≈ the whole track collapses to fit. */
   const applyView = useCallback((s: number, e: number) => {
@@ -283,14 +330,14 @@ export default function StructureEditor({
     const seekAt = (cx: number) =>
       onSeek(clamp(tOfClient(cx), 0, liveRef.current.dur))
     seekAt(clientX)
-    windowDrag((ev) => seekAt(ev.clientX))
+    beginDrag((ev) => seekAt(ev.clientX))
   }
 
   function panDrag(clientX: number) {
     const { vs, ve, pps } = liveRef.current
     const s0 = vs
     const span = ve - vs
-    windowDrag((ev) => {
+    beginDrag((ev) => {
       const dx = (ev.clientX - clientX) / pps
       applyView(s0 - dx, s0 - dx + span)
     }, undefined, 'grabbing')
@@ -327,7 +374,7 @@ export default function StructureEditor({
     const anchor = clamp(snapTime(t, liveRef.current.pps, magnets), lo, hi)
     const x0 = e.clientX
     let g: { s: number; e: number } | null = null
-    windowDrag(
+    beginDrag(
       (ev) => {
         if (g == null && Math.abs(ev.clientX - x0) < 4) return
         const cur = clamp(
@@ -374,7 +421,7 @@ export default function StructureEditor({
     const magnets = magnetsExcept(sec.id)
     const x0 = e.clientX
     let moved = false
-    windowDrag(
+    beginDrag(
       (ev) => {
         if (!moved && Math.abs(ev.clientX - x0) < 3) return
         moved = true
@@ -406,7 +453,7 @@ export default function StructureEditor({
       const end = sec.end ?? sec.start
       const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
       const magnets = magnetsExcept(sec.id)
-      windowDrag(
+      beginDrag(
         (ev) => {
           const { pps, sections } = liveRef.current
           const cur = sections.find((a) => a.id === sec.id)
@@ -447,7 +494,7 @@ export default function StructureEditor({
     if (Math.abs(e.clientX - xL) <= 6) {
       // Drag the left edge: zoom with the right edge pinned.
       const fixedE = ve
-      windowDrag(
+      beginDrag(
         (ev) =>
           applyView(
             Math.min(toT(ev.clientX), fixedE - Math.max(1, dur / MAX_ZOOM)),
@@ -458,7 +505,7 @@ export default function StructureEditor({
       )
     } else if (Math.abs(e.clientX - xR) <= 6) {
       const fixedS = vs
-      windowDrag(
+      beginDrag(
         (ev) =>
           applyView(
             fixedS,
@@ -470,7 +517,7 @@ export default function StructureEditor({
     } else if (view && e.clientX >= xL && e.clientX <= xR) {
       // Drag the window body to pan.
       const offset = toT(e.clientX) - vs
-      windowDrag(
+      beginDrag(
         (ev) => {
           const s = toT(ev.clientX) - offset
           applyView(s, s + span)
@@ -482,14 +529,14 @@ export default function StructureEditor({
       // Click outside the window: center it there, keep dragging to pan.
       const t0 = toT(e.clientX)
       applyView(t0 - span / 2, t0 + span / 2)
-      windowDrag((ev) => {
+      beginDrag((ev) => {
         const t = toT(ev.clientX)
         applyView(t - span / 2, t + span / 2)
       })
     } else {
       // Fully zoomed out the minimap doubles as a scrubber.
       onSeek(toT(e.clientX))
-      windowDrag((ev) => onSeek(toT(ev.clientX)))
+      beginDrag((ev) => onSeek(toT(ev.clientX)))
     }
   }
 
@@ -517,6 +564,56 @@ export default function StructureEditor({
     return () => el.removeEventListener('wheel', onWheel)
   }, [zoomTo, applyView])
 
+  // ---- pinch-to-zoom (touch) ----------------------------------------------
+  // Two fingers on the ruler/lane zoom around the pinch midpoint (which also
+  // pans, so a diagonal spread does both). The first finger's pointerdown has
+  // already begun a scrub/create drag by the time the second lands, so the
+  // start of a pinch aborts it (see beginDrag).
+  useEffect(() => {
+    const el = timelineRef.current
+    if (!el) return
+    const spread = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const midX = (t: TouchList) => (t[0].clientX + t[1].clientX) / 2
+    let last = 0
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) {
+        last = 0
+        return
+      }
+      // Kill the single-finger drag the first touch started, and its ghost.
+      dragCancelRef.current?.()
+      dragCancelRef.current = null
+      setGhost(null)
+      last = spread(e.touches)
+    }
+    const onMove = (e: TouchEvent) => {
+      if (last <= 0 || e.touches.length !== 2) return
+      e.preventDefault()
+      const d = spread(e.touches)
+      if (d <= 0) return
+      const { vs, ve } = liveRef.current
+      const rect = el.getBoundingClientRect()
+      const frac = clamp((midX(e.touches) - rect.left) / rect.width, 0, 1)
+      const anchor = vs + frac * (ve - vs)
+      zoomTo((liveRef.current.dur / (ve - vs)) * (d / last), anchor)
+      last = d
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) last = 0
+    }
+    el.addEventListener('touchstart', onStart, { passive: false })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [zoomTo])
+
   // ---- ruler ticks + lane grid ---------------------------------------------
   const ticks = useMemo(() => {
     if (width <= 0 || ve <= vs) return { major: [] as { x: number; label: string }[], minor: [] as number[] }
@@ -542,6 +639,29 @@ export default function StructureEditor({
     : tool === 'cut'
       ? 'col-resize'
       : 'crosshair'
+
+  /** Drag the grip below the lane to grow/shrink it; the height persists. */
+  function onLaneResizeDown(e: React.PointerEvent) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const y0 = e.clientY
+    const h0 = laneH
+    let finalH = h0
+    beginDrag(
+      (ev) => {
+        finalH = clamp(h0 + (ev.clientY - y0), LANE_H_MIN, LANE_H_MAX)
+        setLaneH(finalH)
+      },
+      () => {
+        try {
+          localStorage.setItem(LANE_H_KEY, String(Math.round(finalH)))
+        } catch {
+          /* no storage — the height just won't outlive the session */
+        }
+      },
+      'ns-resize',
+    )
+  }
 
   // ---- header toolbar ------------------------------------------------------
   const toolBtn = (t: Tool, icon: React.ReactNode, label: string, key: string, title: string) => (
@@ -741,7 +861,7 @@ export default function StructureEditor({
       </div>
 
       {/* Ruler + section lane. */}
-      <div ref={timelineRef} className="relative mx-3.5 mb-2 mt-1">
+      <div ref={timelineRef} className="relative mx-3.5 mt-1">
         <div
           onPointerDown={(e) => {
             if (e.button === 0) scrubDrag(e.clientX)
@@ -775,8 +895,8 @@ export default function StructureEditor({
 
         <div
           onPointerDown={onLaneDown}
-          className="bevel-inset relative h-[96px] touch-none overflow-hidden rounded-b-sm border border-line bg-inset"
-          style={{ cursor: laneCursor }}
+          className="bevel-inset relative touch-none overflow-hidden rounded-b-sm border border-line bg-inset"
+          style={{ cursor: laneCursor, height: laneH }}
         >
           {/* Faint grid continuing the ruler's majors. */}
           {ticks.major.map((tk) => (
@@ -895,6 +1015,18 @@ export default function StructureEditor({
             <span className="absolute -left-[4px] top-0 h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[rgb(var(--accent))]" />
           </div>
         )}
+      </div>
+
+      {/* Resize grip — drag to grow/shrink the section lane. */}
+      <div
+        onPointerDown={onLaneResizeDown}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline height"
+        title="Drag to resize the timeline height"
+        className="group mx-3.5 mb-1.5 mt-0.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
+      >
+        <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
       </div>
 
       {/* Footer — a FIXED slot so selecting a section never reflows the
