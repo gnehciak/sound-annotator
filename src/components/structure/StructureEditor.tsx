@@ -546,10 +546,14 @@ export default function StructureEditor({
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       const { vs, ve, pps, dur } = liveRef.current
-      if (e.shiftKey) {
-        // Shift+scroll zooms around the cursor (some platforms report the
-        // shifted wheel on deltaX — take whichever axis actually moved).
+      // A trackpad pinch reaches the page as ctrl+wheel (macOS, and Chrome /
+      // precision-touchpad synthesise the same on Windows) — no touch events
+      // fire, so this is what makes pinch-to-zoom work on a laptop. Shift+wheel
+      // is the mouse equivalent. Both zoom around the cursor.
+      if (e.ctrlKey || e.shiftKey) {
         e.preventDefault()
+        // Some platforms report the modified wheel on deltaX — take whichever
+        // axis actually moved. Pinch deltas ride deltaY.
         const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX
         const rect = el.getBoundingClientRect()
         const anchor = vs + ((e.clientX - rect.left) / rect.width) * (ve - vs)
@@ -724,7 +728,7 @@ export default function StructureEditor({
             zoomTo(MAX_ZOOM ** (Number(e.target.value) / 100), zoomAnchor)
           }
           aria-label="Zoom level"
-          title="Zoom (Shift+scroll on the timeline)"
+          title="Zoom — pinch, or Shift+scroll, on the timeline"
           className="w-20 accent-accent"
         />
         <button
