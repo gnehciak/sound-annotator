@@ -23,6 +23,9 @@ interface Props {
   /** Fires with whether any stem is audible — the parent mutes the main
    *  player while true. */
   onActiveChange: (active: boolean) => void
+  /** Drop the standalone panel chrome (border/fill/padding) so the mixer can
+   *  nest inside another surface — e.g. folded into the structure transport. */
+  bare?: boolean
 }
 
 /**
@@ -47,6 +50,7 @@ export default function StemMixer({
   volume,
   playbackRate,
   onActiveChange,
+  bare = false,
 }: Props) {
   const [active, setActive] = useState<Set<string>>(new Set())
   // Buffering state per stem: 'canplay' promotes to ready, a network/decode
@@ -167,9 +171,13 @@ export default function StemMixer({
 
   return (
     <div
-      className={`flex shrink-0 flex-wrap items-center gap-1.5 rounded-lg border px-[13px] py-[9px] transition-colors ${
-        anyActive ? 'border-accent/50 bg-accent/5' : 'border-line bg-panel'
-      }`}
+      className={
+        bare
+          ? 'flex flex-wrap items-center gap-1.5'
+          : `flex shrink-0 flex-wrap items-center gap-1.5 rounded-lg border px-[13px] py-[9px] transition-colors ${
+              anyActive ? 'border-accent/50 bg-accent/5' : 'border-line bg-panel'
+            }`
+      }
     >
       <span
         className={`mr-1 flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] ${
