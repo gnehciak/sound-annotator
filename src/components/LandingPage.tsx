@@ -13,6 +13,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
   Blocks,
+  Check,
+  ChevronDown,
   Loader2,
   Pencil,
   Play,
@@ -30,6 +32,7 @@ import {
 import { useResolvedTheme, useTheme } from '../lib/theme'
 import ThemeToggle from './ThemeToggle'
 import HomeDot from './HomeDot'
+import Popover from './Popover'
 import BrowseGallery from './BrowseGallery'
 import { WaveArt } from './trackArt'
 
@@ -130,9 +133,10 @@ function Hero() {
   const [busy, setBusy] = useState<'link' | 'blank' | null>(null)
   const [history, setHistory] = useState<GuestTrackRef[]>(guestHistory)
   // Which of the app's two workspaces the link opens into. Same choice the
-  // signed-in "New track" menu offers; picked before the link because it
-  // decides what the visitor is about to be looking at.
-  const [kind, setKind] = useState<TrackKind>('notes')
+  // signed-in "New track" menu offers. Defaults to the section board: it's the
+  // faster thing to have something to show for, and the notes workspace is one
+  // pick away.
+  const [kind, setKind] = useState<TrackKind>('sections')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // The field is the page, so it takes focus on arrival — but `preventScroll`,
@@ -251,16 +255,12 @@ function Hero() {
           >
             Annotate music by the moment.
           </h1>
-          <p
-            className="mt-4 max-w-[54ch] animate-rise-in text-[15px] leading-relaxed text-muted"
-            style={{ animationDelay: '60ms', textWrap: 'pretty' }}
-          >
-            Paste a YouTube link, then pin rich-text notes to exact moments — or
-            map out the song’s sections. Click one and the player goes there. No
-            account needed to start.
-          </p>
 
           {/* ---- the source panel ---- */}
+          {/* No standfirst under the headline: the panel is one row now, so it
+              sits high enough that a paragraph explaining it would only push
+              the thing it explains further down. What each workspace does is
+              in the menu, at the moment of choosing. */}
           <form
             onSubmit={submit}
             className="mt-8 animate-panel-in overflow-hidden rounded-lg border border-line bg-panel"
@@ -275,9 +275,7 @@ function Hero() {
             </div>
 
             <div className="p-3.5 sm:p-4">
-              <KindSwitch value={kind} onChange={setKind} disabled={busy != null} />
-
-              <div className="mt-3.5 flex flex-col gap-2.5 sm:flex-row">
+              <div className="flex flex-col gap-2.5 sm:flex-row">
                 <div className="relative flex-1">
                   <span
                     aria-hidden
@@ -307,7 +305,6 @@ function Hero() {
                     placeholder="https://www.youtube.com/watch?v=…"
                     aria-label="YouTube link"
                     aria-invalid={status === 'error'}
-                    aria-describedby="source-help"
                     /* Placeholder at full muted, not a fraction of it: this is
                        the page's one field, and DESIGN.md §5 holds placeholders
                        to 4.5:1 — muted/80 on the light inset well misses it. */
@@ -329,10 +326,19 @@ function Hero() {
                     </button>
                   )}
                 </div>
+                {/* Left of the key, reading as one control group with it: pick
+                    the workspace, then press the thing that starts it. */}
+                <KindMenu
+                  value={kind}
+                  onChange={setKind}
+                  disabled={busy != null}
+                />
                 <button
                   type="submit"
                   disabled={busy != null}
-                  className="press bevel-raised inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded bg-accent px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-onaccent hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                  /* Fixed to the longest label, like the trigger beside it, so
+                     the row holds still while the workspace changes. */
+                  className="press bevel-raised inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded bg-accent px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-onaccent hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-[194px]"
                 >
                   {busy === 'link' ? (
                     <Loader2 size={15} className="animate-spin" />
@@ -340,7 +346,7 @@ function Hero() {
                     <Play size={15} />
                   )}
                   {/* The key names the job it's about to start, so the choice
-                      above stays visible right up to the click. */}
+                      beside it stays legible right up to the click. */}
                   {busy === 'link' ? 'Starting…' : picked.action}
                 </button>
               </div>
@@ -364,16 +370,15 @@ function Hero() {
             </div>
           </form>
 
-          {/* One line of the truth a guest has to know, and the two ways out of
-              it. Quiet by design: the panel above is the action. */}
+          {/* The two ways past the panel. Quiet by design: the panel is the
+              action. The "keep your private link" warning that used to lead
+              this line is gone from here — GuestLinkBar states it across the
+              top of the editor, where the work that could be lost actually
+              exists. */}
           <div
-            id="source-help"
             className="mt-3.5 flex animate-rise-in flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted"
             style={{ animationDelay: '180ms' }}
           >
-            <span>
-              Your work lives at a private link — keep it, or you lose access.
-            </span>
             <button
               type="button"
               disabled={busy != null}
@@ -420,22 +425,20 @@ function Hero() {
   )
 }
 
-/* ---- workspace switch ----------------------------------------------------- */
+/* ---- workspace menu ------------------------------------------------------- */
 
 /**
- * Which workspace the link opens into, as the app's own input-switch device:
- * the active option sits raised in an inset well, exactly like the home page's
- * Library/Browse selector and the Share panel's link-role group.
+ * Which workspace the link opens into, as the app's own dropdown device — the
+ * same shape as the signed-in home page's New-track menu (trigger with a
+ * chevron, rows of icon + name + one line of what it is).
  *
- * Real `<input type="radio">` elements under the chrome, not buttons — the
- * browser then gives arrow-key navigation, the roving tab stop, and radiogroup
- * semantics for free, which a pair of styled buttons would have to fake.
- *
- * The detail line under it is the whole reason a chooser beats a menu here: a
- * stranger doesn't know what "song sections" means, and the sentence changes
- * under their cursor before they've committed to anything.
+ * A menu rather than a visible switch because the panel is one row: the choice
+ * sits inside the control group it affects, immediately left of the key that
+ * acts on it, and the explanation of each workspace arrives at the moment
+ * someone is actually choosing between them rather than sitting on the page
+ * being read past.
  */
-function KindSwitch({
+function KindMenu({
   value,
   onChange,
   disabled,
@@ -444,44 +447,80 @@ function KindSwitch({
   onChange: (v: TrackKind) => void
   disabled: boolean
 }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const picked = KINDS.find((k) => k.value === value)!
+  const PickedIcon = picked.Icon
+
   return (
-    <div>
-      <div
-        role="radiogroup"
-        aria-label="What this track is for"
-        className="inline-flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Track type: ${picked.label}`}
+        title="What this track is for"
+        /* Fixed width from the desktop breakpoint up: the two labels differ in
+           length, and letting the trigger resize would twitch the input beside
+           it every time the workspace changes. */
+        className="press flex h-12 w-full shrink-0 items-center gap-2 rounded border border-line bg-inset px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg transition-colors hover:border-line-strong disabled:opacity-60 sm:w-[178px]"
       >
-        {KINDS.map(({ value: v, label, Icon }) => (
-          <label
-            key={v}
-            className={`press flex h-[26px] cursor-pointer items-center gap-1.5 rounded px-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 has-[:focus-visible]:outline has-[:focus-visible]:outline-1 has-[:focus-visible]:outline-accent ${
-              value === v ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
-            } ${disabled ? 'pointer-events-none opacity-60' : ''}`}
-          >
-            <input
-              type="radio"
-              name="track-kind"
-              value={v}
-              checked={value === v}
-              disabled={disabled}
-              onChange={() => onChange(v)}
-              className="sr-only"
-            />
-            <Icon size={11} aria-hidden />
-            {label}
-          </label>
-        ))}
-      </div>
-      {/* `key` restarts the fade, so switching reads as the panel answering
-          rather than as text quietly swapping underneath. */}
-      <p
-        key={value}
-        className="mt-2 max-w-[52ch] animate-fade-in text-[12.5px] leading-snug text-muted"
+        <PickedIcon size={13} className="shrink-0 text-accentink/80" />
+        <span className="flex-1 text-left">{picked.label}</span>
+        <ChevronDown
+          size={11}
+          className={`shrink-0 transition-transform duration-150 ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      <Popover
+        open={open}
+        anchorRef={btnRef}
+        onClose={() => setOpen(false)}
+        width={278}
       >
-        {picked.detail}
-      </p>
-    </div>
+        <div
+          role="menu"
+          className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
+        >
+          {KINDS.map((k) => {
+            const Icon = k.Icon
+            const on = k.value === value
+            return (
+              <button
+                key={k.value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={on}
+                onClick={() => {
+                  setOpen(false)
+                  onChange(k.value)
+                }}
+                className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-raised"
+              >
+                <Icon size={14} className="mt-[1px] shrink-0 text-accentink/80" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-semibold text-fg">
+                    {k.label}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+                    {k.detail}
+                  </span>
+                </span>
+                <Check
+                  size={12}
+                  className={`mt-[3px] shrink-0 text-accentink ${on ? '' : 'opacity-0'}`}
+                />
+              </button>
+            )
+          })}
+        </div>
+      </Popover>
+    </>
   )
 }
 
@@ -594,10 +633,6 @@ function DeviceTracks({
       <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         On this device — {tracks.length}
       </h2>
-      <p className="mt-1.5 text-[12.5px] text-muted">
-        Guest tracks you started here. They’re only remembered in this browser —
-        the private link is the one that travels.
-      </p>
       <ul className="mt-3 flex flex-wrap gap-2">
         {tracks.map((t) => (
           <li key={t.projectId} className="flex">

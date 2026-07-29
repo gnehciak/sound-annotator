@@ -402,14 +402,18 @@ that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
   a real Title Bar panel — silkscreen `NEW TRACK` label, right-aligned LED
   readout (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset
   input, one solid-signal key. It is the largest object on the page.
-- **Workspace before link.** The panel opens with the app's input-switch device
-  (active option raised in an inset well, as on the home page's Library/Browse
-  selector): *Listening notes* or *Song sections*, the same pair the signed-in
-  New-track menu offers. A sentence under it changes with the choice — a
-  stranger doesn't know what "song sections" means — and the primary key names
-  the job it's about to start ("Start annotating" / "Start mapping"). Built on
-  real radio inputs, so arrow-key navigation and radiogroup semantics are the
-  browser's, not a reimplementation.
+- **One row, no standfirst.** The panel body is a single control group: link
+  field, workspace menu, key. Nothing explains it in advance — no paragraph
+  under the headline, no caption under the menu, no warning under the panel.
+  The page is short enough to be read in one glance, which is the point.
+- **The workspace menu.** Immediately left of the key sits a dropdown in the
+  signed-in New-track menu's exact shape — trigger with a chevron, rows of icon
+  + name + one line of what it is: *Song sections* (the default) or *Listening
+  notes*. What each workspace does arrives inside the menu, at the moment
+  someone is choosing between them, rather than sitting on the page being read
+  past. The key names the job it will start ("Start mapping" / "Start
+  annotating"); trigger and key are both fixed-width from `sm` up, so switching
+  workspace doesn't twitch the field beside them.
 - **Live confirmation, not a form.** A parsed link resolves the video's real
   title (public oEmbed) and shows it beside the thumbnail in the library tile's
   own cover well. The same title becomes the new track's title.
@@ -422,7 +426,9 @@ that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
 - Guest tracks this browser holds keys to appear as a quiet chip row under the
   hero ("On this device"), each carrying the workspace glyph its track opens
   into. A guest key exists only in its URL, so this is the local record that
-  keeps a second visit from stranding the first track.
+  keeps a second visit from stranding the first track. The "keep your private
+  link" warning is **not** on this page — GuestLinkBar states it across the top
+  of the editor, where the work that could be lost actually exists.
 
 ### The Signal Dot Is The Way Home
 The accent dot is the app's identity mark and it sits at the left of every
