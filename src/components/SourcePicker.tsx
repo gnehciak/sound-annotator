@@ -8,14 +8,21 @@ import { formatTime } from '../lib/format'
 
 interface Props {
   onYoutube: (url: string, clip?: { start?: number; end?: number }) => void
-  onAudioUrl: (url: string) => void
+  /** Omit to offer YouTube only — the guest case (see below). */
+  onAudioUrl?: (url: string) => void
 }
 
 /**
  * The two ways a track gets its sound: a YouTube link, or a direct link to an
  * audio file. Uploading was removed deliberately — nothing here writes to
- * storage, so both options cost the same (nothing), which is why guests get
- * both.
+ * storage, so both options cost the same (nothing).
+ *
+ * Guests get YouTube only, and not for cost: their whole flow starts at the
+ * landing page's paste field, which takes a video link and nothing else. An
+ * audio-file form reachable only from a sourceless guest row would be a source
+ * kind the rest of their journey can't produce — plus it's the one option that
+ * needs a paragraph about CORS to be usable, which is a poor first minute for
+ * a student with no account. So App passes no `onAudioUrl` for them.
  */
 export default function SourcePicker({ onYoutube, onAudioUrl }: Props) {
   const [url, setUrl] = useState('')
@@ -80,13 +87,17 @@ export default function SourcePicker({ onYoutube, onAudioUrl }: Props) {
         </form>
       </div>
 
-      <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-muted">
-        <span className="h-px flex-1 bg-line" />
-        or
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {onAudioUrl && (
+        <>
+          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-muted">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <AudioUrlForm onAudioUrl={onAudioUrl} />
+          <AudioUrlForm onAudioUrl={onAudioUrl} />
+        </>
+      )}
     </div>
   )
 }

@@ -49,18 +49,25 @@ deploy at `patchBuild` (`exceeded_serverless_functions_per_deployment`, and the
 build log looks *successful* — the error is only in the deployment's API
 record); fold new endpoints into an existing function, or upgrade to Pro.
 
-**Guests** (students, who have no accounts) are the third kind of caller:
-"Continue as guest" mints one project whose *key is its URL* — a capability
-token, SHA-256 at rest, owner `guest:<uuid>`, rate-limited per hashed IP
-(`api/_lib/guest.ts`, `src/lib/guest.ts`; the cap is loose because a school
-NATs a whole class behind one address). A guest writes content **and** their
-own `source`/`settings` — never sharing/publishing/ownership — so unlike a link
-editor they can load the video they came to annotate. Guests get both source
-kinds (nothing uploads, so a link costs the same for anyone) but
-`allowImages={false}` — image upload is signed-in only, and merely omitting the
-uploader makes the editor inline base64 into `annotations` instead. Their
-project is born `shared`, so the `?view=` link they hand in is the existing
-read-only viewer. Schema lives
+**Guests** (students, who have no accounts) are the third kind of caller: the
+landing page's paste field (`src/components/LandingPage.tsx`) mints one project
+whose *key is its URL* — a capability token, SHA-256 at rest, owner
+`guest:<uuid>`, rate-limited per hashed IP (`api/_lib/guest.ts`,
+`src/lib/guest.ts`; the cap is loose because a school NATs a whole class behind
+one address). A guest writes content **and** their own `source`/`settings` —
+never sharing/publishing/ownership — so unlike a link editor they can load the
+video they came to annotate, and pick either project kind (listening notes or a
+song-section board) before they start.
+
+Two things a guest deliberately can't reach. **Source is YouTube only**: the
+landing offers no blank start, so App passes no `onAudioUrl` to `SourcePicker`
+— otherwise a sourceless guest row (they predate this) would be a door into a
+source kind nothing else in their flow produces. **`allowImages={false}`** —
+image upload is signed-in only, and merely omitting the uploader makes the
+editor inline base64 into `annotations` instead. **Detect sections is hidden
+too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
+guest's press could only 401. Their project is born `shared`, so the `?view=`
+link they hand in is the existing read-only viewer. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only

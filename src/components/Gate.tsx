@@ -1,12 +1,27 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { SignIn as ClerkSignIn } from '@clerk/clerk-react'
 import { useAuth } from '../lib/auth'
 import { useClerkAppearance } from '../lib/clerkAppearance'
-import { adoptGuestFromUrl, enterGuest, guestSessionFromUrl } from '../lib/guest'
+import { adoptGuestFromUrl, guestSessionFromUrl } from '../lib/guest'
+import LandingPage from './LandingPage'
+import HomeDot from './HomeDot'
+
+/**
+ * True when the URL is reaching for one specific thing that needs an account —
+ * a private track (`?track=` with no guest key) or the admin console. Those
+ * visitors want the sign-in card immediately; a landing page in front of it
+ * would just be a wall between them and the thing they clicked.
+ */
+function isAccountDeepLink(): boolean {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('track') != null || params.get('admin') != null
+}
 
 /**
  * Decides what to render based on auth state: a spinner while auth resolves,
- * the sign-in screen when signed out, and the app itself once signed in.
+ * the landing page (or the sign-in card, on a deep link) when signed out, and
+ * the app itself once signed in.
  * (When the backend isn't configured at all, main.tsx renders <SetupNotice>
  * instead of mounting Clerk — so this component can assume a live provider.)
  */
@@ -16,6 +31,9 @@ export default function Gate({ children }: { children: React.ReactNode }) {
   // before deciding anything, or we'd flash the sign-in screen at someone who
   // is already holding a valid credential.
   const [adopting, setAdopting] = useState(() => guestSessionFromUrl() != null)
+  // Which signed-out face is showing. There is no router, so this is plain
+  // state — the landing page is the default door and "Sign in" opens the card.
+  const [showSignIn, setShowSignIn] = useState(isAccountDeepLink)
 
   useEffect(() => {
     if (!adopting) return
@@ -29,7 +47,12 @@ export default function Gate({ children }: { children: React.ReactNode }) {
   }, [adopting])
 
   if (loading || adopting) return <Splash label="Connecting…" />
-  if (!user) return <SignIn />
+  if (!user)
+    return showSignIn ? (
+      <SignIn onBack={() => setShowSignIn(false)} />
+    ) : (
+      <LandingPage onSignIn={() => setShowSignIn(true)} />
+    )
   return <>{children}</>
 }
 
@@ -53,9 +76,11 @@ function Splash({ label }: { label: string }) {
  * path for Clerk to navigate to.
  *
  * The masthead sits above the card rather than inside it — Clerk owns the
- * card's own header.
+ * card's own header. The guest door used to sit below it; it's the landing
+ * page's paste field now, so the way back there is the only thing under the
+ * card.
  */
-function SignIn() {
+function SignIn({ onBack }: { onBack: () => void }) {
   const appearance = useClerkAppearance()
   // Clerk hard-navigates once sign-in completes; without this it would land on
   // "/" and drop a deep link (?track=…, ?copy=1) the visitor arrived on.
@@ -64,11 +89,12 @@ function SignIn() {
   return (
     <div className="flex h-full animate-fade-in items-center justify-center overflow-y-auto bg-ink py-8 text-fg">
       <div className="w-full max-w-sm animate-panel-in">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
-            Sound&nbsp;Annotator
-          </span>
+        <div className="mb-6 flex items-center justify-center">
+          <HomeDot size={10}>
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
+              Sound&nbsp;Annotator
+            </span>
+          </HomeDot>
         </div>
         <ClerkSignIn
           withSignUp
@@ -77,60 +103,17 @@ function SignIn() {
           fallbackRedirectUrl={here}
           signUpFallbackRedirectUrl={here}
         />
-        <GuestEntry />
+        <div className="mt-5 text-center">
+          <button
+            type="button"
+            onClick={onBack}
+            className="press inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:text-fg"
+          >
+            <ArrowLeft size={12} />
+            Start without an account
+          </button>
+        </div>
       </div>
-    </div>
-  )
-}
-
-/**
- * The students' door. Deliberately below Clerk's card and quieter than it:
- * teachers (who own libraries) should sign in, and only students handing in a
- * one-off assignment should come through here.
- */
-function GuestEntry() {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const go = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const session = await enterGuest()
-      // Land on the private, key-bearing URL so a reload (or a copied address
-      // bar) still reaches the project. enterGuest has already stored the key.
-      window.location.assign(`/?track=${session.projectId}&key=${session.key}`)
-    } catch (e) {
-      setError(
-        e instanceof Error && e.message.includes('Too many')
-          ? 'Too many projects started on this network right now. Try again in a little while.'
-          : 'Could not start a guest project. Try again.',
-      )
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="mt-6 text-center">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="h-px flex-1 bg-line" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
-          or
-        </span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
-      <button
-        onClick={go}
-        disabled={busy}
-        className="press bevel-raised w-full rounded border border-line bg-raised py-2.5 text-sm font-semibold text-fg hover:brightness-110 disabled:opacity-60"
-      >
-        {busy ? 'Starting…' : 'Continue as guest'}
-      </button>
-      <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted">
-        No account. You get a private link to your work — keep it, or you'll
-        lose access.
-      </p>
-      {error && <p className="mt-2 font-mono text-[11px] text-danger">{error}</p>}
     </div>
   )
 }

@@ -72,6 +72,7 @@ import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
 import GuestLinkBar from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
+import { homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
 import Transport from './components/Transport'
 import TrackOverview from './components/TrackOverview'
@@ -1670,35 +1671,39 @@ export default function App() {
         {/* While a track is open the chrome slims to the signal dot alone —
             the whole way back to the track's folder or the root library (the
             old back arrow and wordmark text in one device). The full wordmark
-            returns on the home page. A guest has no library behind them: one
-            project is all they can have, so their dot is inert. */}
+            returns on the home page.
+
+            A guest's dot used to be inert: one project is all they can have,
+            so there was no library behind them. There is a home page now —
+            the signed-out landing, which also lists the guest tracks this
+            device holds keys to — so their dot leaves the app for it instead
+            of doing nothing. A full navigation, not goHome: the in-app home
+            is the library, and a guest has none. */}
         {view === 'track' && current ? (
           <button
             type="button"
-            onClick={isGuest ? undefined : goBack}
-            disabled={isGuest}
+            onClick={isGuest ? () => window.location.assign(homeHref()) : goBack}
             title={
               isGuest
-                ? 'Sound Annotator'
+                ? 'Sound Annotator — home'
                 : `Back to ${
                     folders.find((f) => f.id === current.folderId)?.name ??
                     'the library'
                   }`
             }
-            aria-label={isGuest ? 'Sound Annotator' : 'Back'}
-            className="press -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded transition-colors hover:bg-raised disabled:cursor-default disabled:hover:bg-transparent"
+            aria-label={isGuest ? 'Sound Annotator — home' : 'Back'}
+            className="press group -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded transition-colors hover:bg-raised"
           >
-            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)] transition-transform duration-150 ease-instr group-hover:scale-110" />
           </button>
         ) : (
           <button
             type="button"
-            onClick={isGuest ? undefined : goHome}
-            disabled={isGuest}
-            title={isGuest ? 'Sound Annotator' : 'Back to the library'}
-            className="press flex items-center gap-[9px] disabled:cursor-default"
+            onClick={isGuest ? () => window.location.assign(homeHref()) : goHome}
+            title={isGuest ? 'Sound Annotator — home' : 'Back to the library'}
+            className="press group flex items-center gap-[9px]"
           >
-            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+            <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)] transition-transform duration-150 ease-instr group-hover:scale-110" />
             <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg min-[480px]:inline">
               Sound&nbsp;Annotator
             </span>
@@ -1980,7 +1985,14 @@ export default function App() {
               ) : (
                 <SourcePicker
                   onYoutube={setYoutubeSource}
-                  onAudioUrl={attachAudioUrl}
+                  // Guests are YouTube-only: the landing page mints their
+                  // track on a pasted video and offers no blank start, so the
+                  // audio-file form here would be a door into a source kind
+                  // nothing else in their flow can reach. Still rendered for
+                  // guest rows created before that (they exist, and they land
+                  // here sourceless) — hence hiding it rather than trusting
+                  // the landing to prevent it.
+                  onAudioUrl={isGuest ? undefined : attachAudioUrl}
                 />
               )}
             </div>
@@ -2032,8 +2044,14 @@ export default function App() {
                           YouTube
                         </a>
                       )}
-                      {/* AI section detection — it fills this very board. */}
+                      {/* AI section detection — it fills this very board.
+                          Not for guests: /analyze is Clerk-only (it spends an
+                          account's Replicate credit and writes stems under
+                          users/{uid}/), so a guest's press could only 401.
+                          Guests reach a structure board from the landing
+                          page's workspace switch. */}
                       {user &&
+                        !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&
                         (current.source.type === 'youtube' ||
@@ -2178,8 +2196,10 @@ export default function App() {
                       {/* Detection is the owner's call (it spends their
                           Replicate credit): audio tracks need their cloud
                           URL; YouTube tracks prompt for a one-shot analysis
-                          upload inside the button. */}
+                          upload inside the button. A guest has no account to
+                          spend from, and /analyze is Clerk-only. */}
                       {user &&
+                        !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&
                         (current.source.type === 'youtube' ||

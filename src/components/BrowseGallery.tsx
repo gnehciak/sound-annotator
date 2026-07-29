@@ -12,6 +12,8 @@ import { formatRelativeTime } from '../lib/format'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import { WaveArt, CueLine } from './trackArt'
+import HomeDot from './HomeDot'
+import { homeHref } from '../lib/nav'
 
 type Status = 'loading' | 'ready' | 'error'
 
@@ -175,17 +177,18 @@ export function PublicBrowsePage() {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       <header className="flex h-[54px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
-        <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
-          Sound&nbsp;Annotator
-        </span>
+        <HomeDot>
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
+            Sound&nbsp;Annotator
+          </span>
+        </HomeDot>
         <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
           <Globe size={11} /> Browse
         </span>
         <span className="flex-1" />
         {!loading && (
           <a
-            href={window.location.pathname}
+            href={homeHref()}
             className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             {user ? 'Your library' : 'Sign in'}

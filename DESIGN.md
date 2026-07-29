@@ -390,6 +390,65 @@ for a wider audience (2026-06-08) without leaving the system:
   action, the Shared chip, and the drag-and-drop drop highlight. The wordmark
   and a Home button return here from the editor.
 
+### Landing (Signed-Out) — "The Input Jack"
+The front door, and the only page in the system whose job is to explain the
+tool rather than operate it (`src/components/LandingPage.tsx`). A signed-out
+visitor is a student holding a link or a teacher sizing the app up, so the page
+leads with the one input that starts the work and follows it with the published
+gallery as the proof. Sign-in is a ghost button in the masthead; a deep link
+that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
+
+- **The panel is the hero, not the type.** The YouTube paste field is staged as
+  a real Title Bar panel — silkscreen `NEW TRACK` label, right-aligned LED
+  readout (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset
+  input, one solid-signal key. It is the largest object on the page.
+- **One row, no standfirst.** The panel body is a single control group: link
+  field, workspace menu, key. Nothing explains it in advance — no paragraph
+  under the headline, no caption under the menu, no warning under the panel.
+  The page is short enough to be read in one glance, which is the point.
+- **One door, not two.** There is no blank start beside the paste field; a
+  second call to action on a page whose whole argument is "paste a link" only
+  competes with it. That makes guests YouTube-only, which App enforces by
+  withholding `onAudioUrl` from their `SourcePicker` (see CLAUDE.md).
+- **The workspace menu.** Immediately left of the key sits a dropdown in the
+  signed-in New-track menu's exact shape — trigger with a chevron, rows of icon
+  + name + one line of what it is: *Song sections* (the default) or *Listening
+  notes*. What each workspace does arrives inside the menu, at the moment
+  someone is choosing between them, rather than sitting on the page being read
+  past. The key names the job it will start ("Start mapping" / "Start
+  annotating"); trigger and key are both fixed-width from `sm` up, so switching
+  workspace doesn't twitch the field beside them.
+- **Live confirmation, not a form.** A parsed link resolves the video's real
+  title (public oEmbed) and shows it beside the thumbnail in the library tile's
+  own cover well. The same title becomes the new track's title.
+- **The one No-Shouting exception.** Landing display type runs to
+  `clamp(1.75rem, 5.5vw, 2.75rem)`, above §3's in-app 1.25rem ceiling. It
+  applies here and nowhere else; the rule still governs all app chrome.
+- Hero, gallery, and footer share one 1180px container and one left edge — the
+  page reads as a single column, not two stacked pages. The gallery section
+  stays on Ink so its Panel tiles keep their tonal step.
+- Guest tracks this browser holds keys to appear as a quiet chip row under the
+  hero ("On this device"), each carrying the workspace glyph its track opens
+  into. A guest key exists only in its URL, so this is the local record that
+  keeps a second visit from stranding the first track. The "keep your private
+  link" warning is **not** on this page — GuestLinkBar states it across the top
+  of the editor, where the work that could be lost actually exists.
+
+### The Signal Dot Is The Way Home
+The accent dot is the app's identity mark and it sits at the left of every
+masthead — the landing page, the sign-in card, the share viewer, the public
+gallery, the admin console and the editor. Everywhere but the editor it is one
+component (`src/components/HomeDot.tsx`) wrapping a link to `homeHref()`
+(`src/lib/nav.ts`: the pathname with no query, so a sub-path deployment lands
+on its own root). The dot lifts 10% on hover from the group, so a wordmark
+beside it inside the same link answers too.
+
+The editor keeps its own: with a track open the dot means *back to this
+track's folder*, which is a different journey. A guest's dot there leaves the
+app for the landing page — a full navigation, since the in-app home is the
+library and a guest has none. It was inert before there was a signed-out home
+to send them to.
+
 ## 6. Do's and Don'ts
 
 ### Do:
