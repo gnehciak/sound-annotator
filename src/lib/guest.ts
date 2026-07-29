@@ -12,6 +12,7 @@
 import type { ProjectSource } from '../types'
 import { api, registerGuestKey } from './api'
 import { fetchSharedProject } from './projectStore'
+import { isStructureProject } from './sections'
 
 const STORE_KEY = 'sound-annotator:guest'
 
@@ -76,6 +77,8 @@ export interface GuestTrackRef {
   key: string
   /** Title at the moment it was started — never refreshed, so it can go stale. */
   title: string
+  /** Which surface it opens as, so the chip can say so (absent = notes). */
+  kind?: 'structure'
   /** When this device first saw it. Orders the list, newest first. */
   at: number
 }
@@ -155,12 +158,15 @@ export function guestHandInUrl(s: GuestSession): string {
  * `init` lets the caller land the project already loaded: the landing page
  * pastes a YouTube link, so the source (and the video's real title) are known
  * before the row exists, and the student arrives at a player rather than at
- * another form. A guest may write their own source — see the API's PUT — so
- * this is the same right they'd have a second later inside the editor.
+ * another form. `kind: 'structure'` is the same settings flag App's own
+ * createProject writes for a song-section board. A guest may write both their
+ * source and their settings — see the API's PUT — so these are the same rights
+ * they'd have a second later inside the editor.
  */
 export async function createGuestProject(init?: {
   title?: string
   source?: ProjectSource
+  kind?: 'structure'
 }): Promise<GuestSession> {
   const projectId = crypto.randomUUID()
   const title = init?.title?.trim() || 'Untitled track'
@@ -172,6 +178,7 @@ export async function createGuestProject(init?: {
         guest: true,
         title,
         ...(init?.source ? { source: init.source } : {}),
+        ...(init?.kind === 'structure' ? { settings: { kind: init.kind } } : {}),
         updatedAt: Date.now(),
       },
     },
@@ -182,7 +189,13 @@ export async function createGuestProject(init?: {
     ownerId: res.ownerId,
   }
   saveGuestSession(session)
-  rememberGuestTrack({ projectId, key: session.key, title, at: Date.now() })
+  rememberGuestTrack({
+    projectId,
+    key: session.key,
+    title,
+    kind: init?.kind,
+    at: Date.now(),
+  })
   return session
 }
 
@@ -230,6 +243,7 @@ function activate(s: GuestSession): void {
 export async function startGuestTrack(init?: {
   title?: string
   source?: ProjectSource
+  kind?: 'structure'
 }): Promise<GuestSession> {
   const s = await createGuestProject(init)
   activate(s)
@@ -260,6 +274,7 @@ export async function adoptGuestFromUrl(): Promise<GuestSession | null> {
     projectId: s.projectId,
     key: s.key,
     title: project.title || 'Untitled track',
+    kind: isStructureProject(project) ? 'structure' : undefined,
     at: Date.now(),
   })
   return s

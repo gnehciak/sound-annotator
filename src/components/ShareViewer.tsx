@@ -34,6 +34,8 @@ import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import ExportJsonButton from './ExportJsonButton'
 import CopyProjectButton from './CopyProjectButton'
+import HomeDot from './HomeDot'
+import { homeHref } from '../lib/nav'
 import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
@@ -461,17 +463,16 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     return (
       <div className="flex h-full items-center justify-center bg-ink p-6 text-fg">
         <div className="w-full max-w-md rounded border border-line bg-panel p-8 text-center">
-          <span
-            aria-hidden
-            className="mx-auto block h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]"
-          />
+          <div className="flex justify-center">
+            <HomeDot size={10} />
+          </div>
           <h1 className="mt-3 text-lg font-semibold">Link unavailable</h1>
           <p className="mt-2 text-sm text-muted">
             This shared track doesn’t exist or sharing was turned off. Ask
             whoever sent the link to share it again.
           </p>
           <a
-            href={window.location.pathname}
+            href={homeHref()}
             className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 rounded bg-accent px-4 py-2 text-sm font-bold text-onaccent hover:brightness-110"
           >
             Open Sound Annotator
@@ -493,10 +494,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       <header className="flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
-        <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-        <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
-          Sound&nbsp;Annotator
-        </span>
+        <HomeDot>
+          <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
+            Sound&nbsp;Annotator
+          </span>
+        </HomeDot>
         {isTask ? (
           <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
             <ClipboardList size={11} /> Listening task
@@ -529,7 +531,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
-          href={window.location.pathname}
+          href={homeHref()}
           title="Open the full app"
           className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
         >

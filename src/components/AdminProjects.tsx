@@ -5,6 +5,7 @@ import { purgeProjectDoc, saveProject } from '../lib/projectStore'
 import { deleteAudioCloud } from '../lib/audioCloud'
 import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
+import HomeDot from './HomeDot'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -119,7 +120,9 @@ export default function AdminProjects() {
     <div className="h-full overflow-y-auto bg-ink text-fg">
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
+          {/* No wordmark inside the link here — the heading beside it names
+              the console, not the app. */}
+          <HomeDot size={10} />
           <h1 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
             All projects
           </h1>

@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useClerkAppearance } from '../lib/clerkAppearance'
 import { adoptGuestFromUrl, guestSessionFromUrl } from '../lib/guest'
 import LandingPage from './LandingPage'
+import HomeDot from './HomeDot'
 
 /**
  * True when the URL is reaching for one specific thing that needs an account —
@@ -88,11 +89,12 @@ function SignIn({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full animate-fade-in items-center justify-center overflow-y-auto bg-ink py-8 text-fg">
       <div className="w-full max-w-sm animate-panel-in">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
-            Sound&nbsp;Annotator
-          </span>
+        <div className="mb-6 flex items-center justify-center">
+          <HomeDot size={10}>
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
+              Sound&nbsp;Annotator
+            </span>
+          </HomeDot>
         </div>
         <ClerkSignIn
           withSignUp

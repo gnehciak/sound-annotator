@@ -399,9 +399,17 @@ gallery as the proof. Sign-in is a ghost button in the masthead; a deep link
 that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
 
 - **The panel is the hero, not the type.** The YouTube paste field is staged as
-  a real Title Bar panel — silkscreen `SOURCE` label, right-aligned LED readout
-  (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset input,
-  one solid-signal key. It is the largest object on the page.
+  a real Title Bar panel — silkscreen `NEW TRACK` label, right-aligned LED
+  readout (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset
+  input, one solid-signal key. It is the largest object on the page.
+- **Workspace before link.** The panel opens with the app's input-switch device
+  (active option raised in an inset well, as on the home page's Library/Browse
+  selector): *Listening notes* or *Song sections*, the same pair the signed-in
+  New-track menu offers. A sentence under it changes with the choice — a
+  stranger doesn't know what "song sections" means — and the primary key names
+  the job it's about to start ("Start annotating" / "Start mapping"). Built on
+  real radio inputs, so arrow-key navigation and radiogroup semantics are the
+  browser's, not a reimplementation.
 - **Live confirmation, not a form.** A parsed link resolves the video's real
   title (public oEmbed) and shows it beside the thumbnail in the library tile's
   own cover well. The same title becomes the new track's title.
@@ -412,8 +420,24 @@ that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
   page reads as a single column, not two stacked pages. The gallery section
   stays on Ink so its Panel tiles keep their tonal step.
 - Guest tracks this browser holds keys to appear as a quiet chip row under the
-  hero ("On this device"). A guest key exists only in its URL, so this is the
-  local record that keeps a second visit from stranding the first track.
+  hero ("On this device"), each carrying the workspace glyph its track opens
+  into. A guest key exists only in its URL, so this is the local record that
+  keeps a second visit from stranding the first track.
+
+### The Signal Dot Is The Way Home
+The accent dot is the app's identity mark and it sits at the left of every
+masthead — the landing page, the sign-in card, the share viewer, the public
+gallery, the admin console and the editor. Everywhere but the editor it is one
+component (`src/components/HomeDot.tsx`) wrapping a link to `homeHref()`
+(`src/lib/nav.ts`: the pathname with no query, so a sub-path deployment lands
+on its own root). The dot lifts 10% on hover from the group, so a wordmark
+beside it inside the same link answers too.
+
+The editor keeps its own: with a track open the dot means *back to this
+track's folder*, which is a different journey. A guest's dot there leaves the
+app for the landing page — a full navigation, since the in-app home is the
+library and a guest has none. It was inert before there was a signed-out home
+to send them to.
 
 ## 6. Do's and Don'ts
 

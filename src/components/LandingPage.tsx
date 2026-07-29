@@ -12,7 +12,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  Blocks,
   Loader2,
+  Pencil,
   Play,
   TriangleAlert,
   X,
@@ -27,6 +29,7 @@ import {
 } from '../lib/guest'
 import { useResolvedTheme, useTheme } from '../lib/theme'
 import ThemeToggle from './ThemeToggle'
+import HomeDot from './HomeDot'
 import BrowseGallery from './BrowseGallery'
 import { WaveArt } from './trackArt'
 
@@ -36,6 +39,40 @@ type Status = 'idle' | 'ready' | 'working' | 'error'
 /** Scroll target for the hero's link down to the gallery. */
 const PUBLISHED_ID = 'published-tracks'
 
+/**
+ * The two workspaces a track can open into — the same pair the signed-in
+ * "New track" menu offers, named for what a visitor gets rather than for the
+ * shape of the data. 'notes' is the app's classic annotated track (no
+ * `settings.kind`); 'sections' is the song-structure board.
+ */
+type TrackKind = 'notes' | 'sections'
+
+const KINDS: {
+  value: TrackKind
+  label: string
+  detail: string
+  /** The verb the primary key promises for this workspace. */
+  action: string
+  Icon: typeof Pencil
+}[] = [
+  {
+    value: 'notes',
+    label: 'Listening notes',
+    detail:
+      'Pin timestamped rich-text notes to moments. Click one and the player seeks there.',
+    action: 'Start annotating',
+    Icon: Pencil,
+  },
+  {
+    value: 'sections',
+    label: 'Song sections',
+    detail:
+      'Map the song’s shape on a timeline — intro, verse, chorus — and play any section back.',
+    action: 'Start mapping',
+    Icon: Blocks,
+  },
+]
+
 export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
   const { pref, setPref, resolved, palette, setPalette } = useTheme()
 
@@ -44,10 +81,11 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
       {/* The app's own masthead, unchanged — the first thing a visitor sees is
           the thing they'll be looking at all lesson. */}
       <header className="sticky top-0 z-10 flex h-[54px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
-        <span className="h-[9px] w-[9px] shrink-0 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
-          Sound&nbsp;Annotator
-        </span>
+        <HomeDot>
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
+            Sound&nbsp;Annotator
+          </span>
+        </HomeDot>
         <span className="flex-1" />
         <ThemeToggle
           pref={pref}
@@ -91,6 +129,10 @@ function Hero() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'link' | 'blank' | null>(null)
   const [history, setHistory] = useState<GuestTrackRef[]>(guestHistory)
+  // Which of the app's two workspaces the link opens into. Same choice the
+  // signed-in "New track" menu offers; picked before the link because it
+  // decides what the visitor is about to be looking at.
+  const [kind, setKind] = useState<TrackKind>('notes')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // The field is the page, so it takes focus on arrival — but `preventScroll`,
@@ -102,6 +144,7 @@ function Hero() {
   }, [])
 
   const videoId = useMemo(() => parseVideoId(url), [url])
+  const picked = KINDS.find((k) => k.value === kind)!
   const typed = url.trim() !== ''
   const status: Status = busy
     ? 'working'
@@ -154,6 +197,9 @@ function Hero() {
         source: init
           ? { type: 'youtube', youtubeUrl: init.url, videoId: init.videoId }
           : undefined,
+        // 'notes' is the absence of a kind, exactly as App's createProject
+        // writes it — a classic track carries no settings at all.
+        kind: kind === 'sections' ? 'structure' : undefined,
       })
       // Land on the private, key-bearing URL so a reload (or a copied address
       // bar) still reaches the project. startGuestTrack has stored the key.
@@ -209,8 +255,9 @@ function Hero() {
             className="mt-4 max-w-[54ch] animate-rise-in text-[15px] leading-relaxed text-muted"
             style={{ animationDelay: '60ms', textWrap: 'pretty' }}
           >
-            Paste a YouTube link and pin rich-text notes to exact timestamps.
-            Click a note and the player seeks to it. No account needed to start.
+            Paste a YouTube link, then pin rich-text notes to exact moments — or
+            map out the song’s sections. Click one and the player goes there. No
+            account needed to start.
           </p>
 
           {/* ---- the source panel ---- */}
@@ -221,14 +268,16 @@ function Hero() {
           >
             <div className="flex h-10 items-center gap-2 border-b border-line bg-raised px-3.5">
               <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-                Source
+                New track
               </span>
               <span className="flex-1" />
               <StatusReadout status={status} />
             </div>
 
             <div className="p-3.5 sm:p-4">
-              <div className="flex flex-col gap-2.5 sm:flex-row">
+              <KindSwitch value={kind} onChange={setKind} disabled={busy != null} />
+
+              <div className="mt-3.5 flex flex-col gap-2.5 sm:flex-row">
                 <div className="relative flex-1">
                   <span
                     aria-hidden
@@ -290,7 +339,9 @@ function Hero() {
                   ) : (
                     <Play size={15} />
                   )}
-                  {busy === 'link' ? 'Starting…' : 'Start annotating'}
+                  {/* The key names the job it's about to start, so the choice
+                      above stays visible right up to the click. */}
+                  {busy === 'link' ? 'Starting…' : picked.action}
                 </button>
               </div>
 
@@ -366,6 +417,71 @@ function Hero() {
         </div>
       </div>
     </section>
+  )
+}
+
+/* ---- workspace switch ----------------------------------------------------- */
+
+/**
+ * Which workspace the link opens into, as the app's own input-switch device:
+ * the active option sits raised in an inset well, exactly like the home page's
+ * Library/Browse selector and the Share panel's link-role group.
+ *
+ * Real `<input type="radio">` elements under the chrome, not buttons — the
+ * browser then gives arrow-key navigation, the roving tab stop, and radiogroup
+ * semantics for free, which a pair of styled buttons would have to fake.
+ *
+ * The detail line under it is the whole reason a chooser beats a menu here: a
+ * stranger doesn't know what "song sections" means, and the sentence changes
+ * under their cursor before they've committed to anything.
+ */
+function KindSwitch({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: TrackKind
+  onChange: (v: TrackKind) => void
+  disabled: boolean
+}) {
+  const picked = KINDS.find((k) => k.value === value)!
+  return (
+    <div>
+      <div
+        role="radiogroup"
+        aria-label="What this track is for"
+        className="inline-flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+      >
+        {KINDS.map(({ value: v, label, Icon }) => (
+          <label
+            key={v}
+            className={`press flex h-[26px] cursor-pointer items-center gap-1.5 rounded px-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 has-[:focus-visible]:outline has-[:focus-visible]:outline-1 has-[:focus-visible]:outline-accent ${
+              value === v ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
+            } ${disabled ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            <input
+              type="radio"
+              name="track-kind"
+              value={v}
+              checked={value === v}
+              disabled={disabled}
+              onChange={() => onChange(v)}
+              className="sr-only"
+            />
+            <Icon size={11} aria-hidden />
+            {label}
+          </label>
+        ))}
+      </div>
+      {/* `key` restarts the fade, so switching reads as the panel answering
+          rather than as text quietly swapping underneath. */}
+      <p
+        key={value}
+        className="mt-2 max-w-[52ch] animate-fade-in text-[12.5px] leading-snug text-muted"
+      >
+        {picked.detail}
+      </p>
+    </div>
   )
 }
 
@@ -490,6 +606,14 @@ function DeviceTracks({
               title={`Open “${t.title}”`}
               className="press flex max-w-[280px] items-center gap-1.5 rounded-l border border-r-0 border-line bg-panel py-1.5 pl-2.5 pr-2 text-[12.5px] text-fg transition-colors hover:border-line-strong hover:bg-raised"
             >
+              {/* Which workspace it opens into — the same Blocks/Pencil pair
+                  the switch above uses, so a chip says what you'd be going
+                  back to. */}
+              {t.kind === 'structure' ? (
+                <Blocks size={12} className="shrink-0 text-muted" aria-hidden />
+              ) : (
+                <Pencil size={12} className="shrink-0 text-muted" aria-hidden />
+              )}
               <span className="truncate">{t.title}</span>
               <ArrowRight size={12} className="shrink-0 text-muted" />
             </a>
