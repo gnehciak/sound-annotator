@@ -9,6 +9,7 @@
 // it's what buys students an accounts-free, password-free workflow. It also
 // means anyone the link is forwarded to can edit, so the UI must be honest
 // about what the private link is (see components/GuestLinkBar.tsx).
+import type { ProjectSource } from '../types'
 import { api, registerGuestKey } from './api'
 import { fetchSharedProject } from './projectStore'
 
@@ -51,6 +52,73 @@ export function clearGuestSession(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The device's guest tracks.
+//
+// A guest's key exists in exactly one place — the URL — and the live session
+// above holds only the newest one. Starting a second track would therefore
+// overwrite the only pointer to the first, quietly stranding work nobody can
+// reach again. So every track this browser mints (or adopts off a link) is
+// also appended here, and the landing page lists them: not a library (the
+// server has no way to enumerate a guest's projects) but the honest local
+// record of "what you started on this machine".
+//
+// It is still only localStorage — a wiped school profile takes it — which is
+// exactly why the private link stays the thing students are told to keep.
+// ---------------------------------------------------------------------------
+
+const HISTORY_KEY = 'sound-annotator:guest-tracks'
+/** Keep the strip short; older entries fall off rather than growing forever. */
+const HISTORY_MAX = 8
+
+export interface GuestTrackRef {
+  projectId: string
+  key: string
+  /** Title at the moment it was started — never refreshed, so it can go stale. */
+  title: string
+  /** When this device first saw it. Orders the list, newest first. */
+  at: number
+}
+
+export function guestHistory(): GuestTrackRef[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const list = JSON.parse(raw) as unknown
+    if (!Array.isArray(list)) return []
+    return list.filter(
+      (e): e is GuestTrackRef =>
+        !!e &&
+        typeof (e as GuestTrackRef).projectId === 'string' &&
+        typeof (e as GuestTrackRef).key === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+/** Record a track this device holds the key to (newest first, de-duped by id). */
+function rememberGuestTrack(ref: GuestTrackRef): void {
+  try {
+    const next = [ref, ...guestHistory().filter((e) => e.projectId !== ref.projectId)]
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next.slice(0, HISTORY_MAX)))
+  } catch {
+    /* private mode / quota — the URL is still the real key */
+  }
+}
+
+/** Drop one track from the device's list (it stays on the server). */
+export function forgetGuestTrack(projectId: string): void {
+  try {
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify(guestHistory().filter((e) => e.projectId !== projectId)),
+    )
+  } catch {
+    /* nothing to clean up */
+  }
+}
+
 /** `?track=<id>&key=<key>` — a student returning on a different machine. */
 export function guestSessionFromUrl(): { projectId: string; key: string } | null {
   const params = new URLSearchParams(window.location.search)
@@ -59,12 +127,17 @@ export function guestSessionFromUrl(): { projectId: string; key: string } | null
   return projectId && key ? { projectId, key } : null
 }
 
+/** The private link for any track this device holds a key to. */
+export function guestTrackUrl(ref: { projectId: string; key: string }): string {
+  const url = new URL(window.location.origin)
+  url.searchParams.set('track', ref.projectId)
+  url.searchParams.set('key', ref.key)
+  return url.toString()
+}
+
 /** The private link a student keeps: opens their project with edit rights. */
 export function guestEditUrl(s: GuestSession): string {
-  const url = new URL(window.location.origin)
-  url.searchParams.set('track', s.projectId)
-  url.searchParams.set('key', s.key)
-  return url.toString()
+  return guestTrackUrl(s)
 }
 
 /** The link a student hands in: read-only, no key, opens the share viewer. */
@@ -78,12 +151,30 @@ export function guestHandInUrl(s: GuestSession): string {
  * Start a guest project. The server mints the key and returns it exactly once
  * — there is no second chance to read it, so it goes to localStorage before
  * this resolves.
+ *
+ * `init` lets the caller land the project already loaded: the landing page
+ * pastes a YouTube link, so the source (and the video's real title) are known
+ * before the row exists, and the student arrives at a player rather than at
+ * another form. A guest may write their own source — see the API's PUT — so
+ * this is the same right they'd have a second later inside the editor.
  */
-export async function createGuestProject(): Promise<GuestSession> {
+export async function createGuestProject(init?: {
+  title?: string
+  source?: ProjectSource
+}): Promise<GuestSession> {
   const projectId = crypto.randomUUID()
+  const title = init?.title?.trim() || 'Untitled track'
   const res = await api<{ guestKey: string; ownerId: string }>(
     `/api/projects/${encodeURIComponent(projectId)}`,
-    { method: 'PUT', json: { guest: true, title: 'Untitled track', updatedAt: Date.now() } },
+    {
+      method: 'PUT',
+      json: {
+        guest: true,
+        title,
+        ...(init?.source ? { source: init.source } : {}),
+        updatedAt: Date.now(),
+      },
+    },
   )
   const session: GuestSession = {
     projectId,
@@ -91,6 +182,7 @@ export async function createGuestProject(): Promise<GuestSession> {
     ownerId: res.ownerId,
   }
   saveGuestSession(session)
+  rememberGuestTrack({ projectId, key: session.key, title, at: Date.now() })
   return session
 }
 
@@ -100,8 +192,8 @@ export async function createGuestProject(): Promise<GuestSession> {
 // Deliberately NOT auto-resumed from localStorage: a stale guest session on a
 // shared classroom machine would swallow the sign-in screen, and the next
 // person would silently land in a stranger's project. A session becomes active
-// only via an explicit "Continue as guest" or a URL carrying the key — both of
-// which are someone actually asking for it.
+// only via an explicit start on the landing page or a URL carrying the key —
+// both of which are someone actually asking for it.
 //
 // A module-level store (not context) so it reaches every useAuth() caller,
 // including components mounted outside <AuthProvider> like the share viewer.
@@ -127,9 +219,19 @@ function activate(s: GuestSession): void {
   listeners.forEach((l) => l())
 }
 
-/** Resume this browser's guest project, or start a fresh one. */
-export async function enterGuest(): Promise<GuestSession> {
-  const s = loadGuestSession() ?? (await createGuestProject())
+/**
+ * Start a *new* guest track and make it the live session — the landing page's
+ * paste field and its "start without a link" fallback.
+ *
+ * Deliberately never resumes: the caller has just told us which video they
+ * want, and silently reopening last week's track instead would be a lie. Going
+ * back to an earlier track is its own explicit act, off `guestHistory()`.
+ */
+export async function startGuestTrack(init?: {
+  title?: string
+  source?: ProjectSource
+}): Promise<GuestSession> {
+  const s = await createGuestProject(init)
   activate(s)
   return s
 }
@@ -152,6 +254,14 @@ export async function adoptGuestFromUrl(): Promise<GuestSession | null> {
   }
   const s: GuestSession = { ...fromUrl, ownerId: project.ownerId }
   activate(s)
+  // The link worked, so this machine now holds a key it didn't mint — record
+  // it, or the landing page would claim the student has no tracks here.
+  rememberGuestTrack({
+    projectId: s.projectId,
+    key: s.key,
+    title: project.title || 'Untitled track',
+    at: Date.now(),
+  })
   return s
 }
 

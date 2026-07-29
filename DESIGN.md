@@ -390,6 +390,31 @@ for a wider audience (2026-06-08) without leaving the system:
   action, the Shared chip, and the drag-and-drop drop highlight. The wordmark
   and a Home button return here from the editor.
 
+### Landing (Signed-Out) — "The Input Jack"
+The front door, and the only page in the system whose job is to explain the
+tool rather than operate it (`src/components/LandingPage.tsx`). A signed-out
+visitor is a student holding a link or a teacher sizing the app up, so the page
+leads with the one input that starts the work and follows it with the published
+gallery as the proof. Sign-in is a ghost button in the masthead; a deep link
+that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
+
+- **The panel is the hero, not the type.** The YouTube paste field is staged as
+  a real Title Bar panel — silkscreen `SOURCE` label, right-aligned LED readout
+  (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset input,
+  one solid-signal key. It is the largest object on the page.
+- **Live confirmation, not a form.** A parsed link resolves the video's real
+  title (public oEmbed) and shows it beside the thumbnail in the library tile's
+  own cover well. The same title becomes the new track's title.
+- **The one No-Shouting exception.** Landing display type runs to
+  `clamp(1.75rem, 5.5vw, 2.75rem)`, above §3's in-app 1.25rem ceiling. It
+  applies here and nowhere else; the rule still governs all app chrome.
+- Hero, gallery, and footer share one 1180px container and one left edge — the
+  page reads as a single column, not two stacked pages. The gallery section
+  stays on Ink so its Panel tiles keep their tonal step.
+- Guest tracks this browser holds keys to appear as a quiet chip row under the
+  hero ("On this device"). A guest key exists only in its URL, so this is the
+  local record that keeps a second visit from stranding the first track.
+
 ## 6. Do's and Don'ts
 
 ### Do:
