@@ -406,6 +406,10 @@ that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
   field, workspace menu, key. Nothing explains it in advance — no paragraph
   under the headline, no caption under the menu, no warning under the panel.
   The page is short enough to be read in one glance, which is the point.
+- **One door, not two.** There is no blank start beside the paste field; a
+  second call to action on a page whose whole argument is "paste a link" only
+  competes with it. That makes guests YouTube-only, which App enforces by
+  withholding `onAudioUrl` from their `SourcePicker` (see CLAUDE.md).
 - **The workspace menu.** Immediately left of the key sits a dropdown in the
   signed-in New-track menu's exact shape — trigger with a chevron, rows of icon
   + name + one line of what it is: *Song sections* (the default) or *Listening

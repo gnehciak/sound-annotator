@@ -1985,7 +1985,14 @@ export default function App() {
               ) : (
                 <SourcePicker
                   onYoutube={setYoutubeSource}
-                  onAudioUrl={attachAudioUrl}
+                  // Guests are YouTube-only: the landing page mints their
+                  // track on a pasted video and offers no blank start, so the
+                  // audio-file form here would be a door into a source kind
+                  // nothing else in their flow can reach. Still rendered for
+                  // guest rows created before that (they exist, and they land
+                  // here sourceless) — hence hiding it rather than trusting
+                  // the landing to prevent it.
+                  onAudioUrl={isGuest ? undefined : attachAudioUrl}
                 />
               )}
             </div>

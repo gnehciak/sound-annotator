@@ -130,7 +130,7 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
 function Hero() {
   const [url, setUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'link' | 'blank' | null>(null)
+  const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<GuestTrackRef[]>(guestHistory)
   // Which of the app's two workspaces the link opens into. Same choice the
   // signed-in "New track" menu offers. Defaults to the section board: it's the
@@ -185,22 +185,20 @@ function Hero() {
     }
   }, [videoId])
 
-  async function start(init?: { videoId: string; url: string }) {
+  // Always with a link: there is no blank-start door here, so every guest
+  // track is born on a video. See the note on the panel below.
+  async function start(init: { videoId: string; url: string }) {
     if (busy) return
-    setBusy(init ? 'link' : 'blank')
+    setBusy(true)
     setError(null)
     try {
       const title =
-        init && meta?.videoId === init.videoId
+        meta?.videoId === init.videoId
           ? meta.title
-          : init
-            ? ((await fetchVideoTitle(init.videoId)) ?? undefined)
-            : undefined
+          : ((await fetchVideoTitle(init.videoId)) ?? undefined)
       const session = await startGuestTrack({
         title,
-        source: init
-          ? { type: 'youtube', youtubeUrl: init.url, videoId: init.videoId }
-          : undefined,
+        source: { type: 'youtube', youtubeUrl: init.url, videoId: init.videoId },
         // 'notes' is the absence of a kind, exactly as App's createProject
         // writes it — a classic track carries no settings at all.
         kind: kind === 'sections' ? 'structure' : undefined,
@@ -216,7 +214,7 @@ function Hero() {
           ? 'Too many tracks started on this network right now. Wait a few minutes, or sign in instead.'
           : 'Couldn’t start the track. Check your connection and try again.',
       )
-      setBusy(null)
+      setBusy(false)
     }
   }
 
@@ -291,7 +289,7 @@ function Hero() {
                     inputMode="url"
                     autoComplete="off"
                     spellCheck={false}
-                    disabled={busy != null}
+                    disabled={busy}
                     onChange={(e) => {
                       setUrl(e.target.value)
                       setError(null)
@@ -310,7 +308,7 @@ function Hero() {
                        to 4.5:1 — muted/80 on the light inset well misses it. */
                     className="bevel-inset h-12 w-full rounded border border-line bg-inset pl-9 pr-9 text-[15px] text-fg outline-none transition-colors placeholder:text-muted focus:border-accent disabled:opacity-60"
                   />
-                  {typed && busy == null && (
+                  {typed && !busy && (
                     <button
                       type="button"
                       onClick={() => {
@@ -331,23 +329,23 @@ function Hero() {
                 <KindMenu
                   value={kind}
                   onChange={setKind}
-                  disabled={busy != null}
+                  disabled={busy}
                 />
                 <button
                   type="submit"
-                  disabled={busy != null}
+                  disabled={busy}
                   /* Fixed to the longest label, like the trigger beside it, so
                      the row holds still while the workspace changes. */
                   className="press bevel-raised inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded bg-accent px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-onaccent hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-[194px]"
                 >
-                  {busy === 'link' ? (
+                  {busy ? (
                     <Loader2 size={15} className="animate-spin" />
                   ) : (
                     <Play size={15} />
                   )}
                   {/* The key names the job it's about to start, so the choice
                       beside it stays legible right up to the click. */}
-                  {busy === 'link' ? 'Starting…' : picked.action}
+                  {busy ? 'Starting…' : picked.action}
                 </button>
               </div>
 
@@ -370,26 +368,17 @@ function Hero() {
             </div>
           </form>
 
-          {/* The two ways past the panel. Quiet by design: the panel is the
-              action. The "keep your private link" warning that used to lead
-              this line is gone from here — GuestLinkBar states it across the
-              top of the editor, where the work that could be lost actually
-              exists. */}
+          {/* The one way past the panel. "Start without a link" used to sit
+              here as the old "Continue as guest" door; it's gone, and with it
+              the only route by which a guest could reach the audio-file source
+              (a blank track lands on SourcePicker, which used to offer both).
+              Guests are YouTube-only now, and App withholds `onAudioUrl` from
+              their picker so that holds for the blank guest rows predating
+              this, which still land there. */}
           <div
             className="mt-3.5 flex animate-rise-in flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted"
             style={{ animationDelay: '180ms' }}
           >
-            <button
-              type="button"
-              disabled={busy != null}
-              onClick={() => void start()}
-              className="press rounded text-fg underline decoration-line underline-offset-[3px] transition-colors hover:decoration-accent disabled:opacity-60"
-            >
-              {busy === 'blank' ? 'Starting…' : 'Start without a link'}
-            </button>
-            <span aria-hidden className="text-muted/50">
-              ·
-            </span>
             {/* Scrolls to the gallery below rather than opening ?browse=1 —
                 that page is the same list, and sending someone away from the
                 paste field to see what's already under it is a dead end. */}
