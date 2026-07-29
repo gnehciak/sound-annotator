@@ -70,6 +70,10 @@ const MIN_SECTION = 0.5
 /** Magnetic snap radius, in screen pixels. */
 const SNAP_PX = 7
 
+/** Wheel/pinch zoom sensitivity — larger zooms faster per unit of wheel or
+ *  pinch delta (the exponent's rate constant). */
+const ZOOM_WHEEL_RATE = 0.004
+
 /** Resizable section-lane height (px) — bounds + where the drag persists. */
 const LANE_H_DEFAULT = 96
 const LANE_H_MIN = 56
@@ -557,7 +561,7 @@ export default function StructureEditor({
         const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX
         const rect = el.getBoundingClientRect()
         const anchor = vs + ((e.clientX - rect.left) / rect.width) * (ve - vs)
-        zoomTo((dur / (ve - vs)) * Math.exp(-d * 0.0022), anchor)
+        zoomTo((dur / (ve - vs)) * Math.exp(-d * ZOOM_WHEEL_RATE), anchor)
       } else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         // Horizontal trackpad scroll pans the window.
         e.preventDefault()
