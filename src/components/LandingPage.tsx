@@ -21,7 +21,9 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react'
-import { fetchVideoTitle, parseVideoId } from '../lib/youtube'
+import { fetchVideoTitle } from '../lib/youtube'
+import { looksLikeDriveLink, driveThumbUrl } from '../lib/drive'
+import { parseVideoLink, sourceFromLink, type ParsedVideoLink } from '../lib/source'
 import {
   forgetGuestTrack,
   guestHistory,
@@ -147,21 +149,23 @@ function Hero() {
     inputRef.current?.focus({ preventScroll: true })
   }, [])
 
-  const videoId = useMemo(() => parseVideoId(url), [url])
+  // Either video kind: a YouTube link or a Google Drive file's share link.
+  const link = useMemo(() => parseVideoLink(url), [url])
   const picked = KINDS.find((k) => k.value === kind)!
   const typed = url.trim() !== ''
   const status: Status = busy
     ? 'working'
     : error
       ? 'error'
-      : videoId
+      : link
         ? 'ready'
         : 'idle'
 
   // The video's real title, read off YouTube's public oEmbed endpoint. It does
   // double duty: the preview strip below proves the right video is queued, and
   // the same string becomes the new track's title, so a student never lands on
-  // "Untitled track".
+  // "Untitled track". Drive has no anonymous equivalent, so a Drive track
+  // starts on the default name and the preview strip says so.
   //
   // Stamped with the id it describes rather than cleared on every keystroke —
   // a stale title then simply fails the `meta.videoId === videoId` guard at
@@ -169,6 +173,7 @@ function Hero() {
   const [meta, setMeta] = useState<{ videoId: string; title: string } | null>(
     null,
   )
+  const videoId = link?.kind === 'youtube' ? link.id : null
   useEffect(() => {
     if (!videoId) return
     let alive = true
@@ -187,18 +192,20 @@ function Hero() {
 
   // Always with a link: there is no blank-start door here, so every guest
   // track is born on a video. See the note on the panel below.
-  async function start(init: { videoId: string; url: string }) {
+  async function start(init: { link: ParsedVideoLink; url: string }) {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
       const title =
-        meta?.videoId === init.videoId
-          ? meta.title
-          : ((await fetchVideoTitle(init.videoId)) ?? undefined)
+        init.link.kind !== 'youtube'
+          ? undefined
+          : meta?.videoId === init.link.id
+            ? meta.title
+            : ((await fetchVideoTitle(init.link.id)) ?? undefined)
       const session = await startGuestTrack({
         title,
-        source: { type: 'youtube', youtubeUrl: init.url, videoId: init.videoId },
+        source: sourceFromLink(init.link, init.url),
         // 'notes' is the absence of a kind, exactly as App's createProject
         // writes it — a classic track carries no settings at all.
         kind: kind === 'sections' ? 'structure' : undefined,
@@ -222,18 +229,20 @@ function Hero() {
     e.preventDefault()
     const trimmed = url.trim()
     if (!trimmed) {
-      setError('Paste a YouTube link to start.')
+      setError('Paste a YouTube or Google Drive link to start.')
       inputRef.current?.focus()
       return
     }
-    if (!videoId) {
+    if (!link) {
       setError(
-        'That isn’t a YouTube link. Copy the URL from the address bar, or from the video’s Share button.',
+        looksLikeDriveLink(trimmed)
+          ? 'That Drive link doesn’t point at a video file. Open the file in Drive and copy the link from its Share button.'
+          : 'That isn’t a YouTube or Google Drive link. Copy the URL from the address bar, or from the video’s Share button.',
       )
       inputRef.current?.focus()
       return
     }
-    void start({ videoId, url: trimmed })
+    void start({ link, url: trimmed })
   }
 
   return (
@@ -278,7 +287,7 @@ function Hero() {
                   <span
                     aria-hidden
                     className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[13px] transition-colors ${
-                      videoId ? 'text-accentink' : 'text-muted'
+                      link ? 'text-accentink' : 'text-muted'
                     }`}
                   >
                     ▶
@@ -300,8 +309,8 @@ function Hero() {
                         setError(null)
                       }
                     }}
-                    placeholder="https://www.youtube.com/watch?v=…"
-                    aria-label="YouTube link"
+                    placeholder="Paste a YouTube or Google Drive link…"
+                    aria-label="YouTube or Google Drive link"
                     aria-invalid={status === 'error'}
                     /* Placeholder at full muted, not a fraction of it: this is
                        the page's one field, and DESIGN.md §5 holds placeholders
@@ -359,10 +368,10 @@ function Hero() {
                 </p>
               )}
 
-              {videoId && !error && (
-                  <QueuedVideo
-                  videoId={videoId}
-                  title={meta?.videoId === videoId ? meta.title : null}
+              {link && !error && (
+                <QueuedVideo
+                  link={link}
+                  title={meta?.videoId === link.id ? meta.title : null}
                 />
               )}
             </div>
@@ -556,17 +565,22 @@ function StatusReadout({ status }: { status: Status }) {
  * generated waveform mark exactly as a tile would.
  */
 function QueuedVideo({
-  videoId,
+  link,
   title,
 }: {
-  videoId: string
+  link: ParsedVideoLink
   title: string | null
 }) {
   const theme = useResolvedTheme()
   // Which id's thumbnail 404'd — not a bare boolean, so pasting a second link
   // isn't greyed out by the first one's dead thumb.
   const [brokenId, setBrokenId] = useState<string | null>(null)
+  const videoId = link.id
   const thumbBroken = brokenId === videoId
+  const thumbSrc =
+    link.kind === 'drive'
+      ? driveThumbUrl(videoId)
+      : `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
 
   return (
     <div className="mt-3.5 flex animate-rise-in items-center gap-3 rounded border border-line bg-inset p-2">
@@ -575,7 +589,7 @@ function QueuedVideo({
           <WaveArt id={videoId} theme={theme} />
         ) : (
           <img
-            src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+            src={thumbSrc}
             alt=""
             loading="lazy"
             draggable={false}
@@ -586,10 +600,11 @@ function QueuedVideo({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13.5px] font-semibold text-fg-strong">
-          {title ?? 'Reading the video…'}
+          {title ??
+            (link.kind === 'drive' ? 'Drive video' : 'Reading the video…')}
         </p>
         <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
-          YouTube · {videoId}
+          {link.kind === 'drive' ? 'Google Drive' : 'YouTube'} · {videoId}
         </p>
       </div>
     </div>

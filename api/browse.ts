@@ -44,7 +44,11 @@ export async function GET(): Promise<Response> {
 
   return json(
     rows.map((r) => {
-      const src = (r.source ?? {}) as { type?: string; videoId?: string }
+      const src = (r.source ?? {}) as {
+        type?: string
+        videoId?: string
+        driveFileId?: string
+      }
       const { ticks, count } = ticksOf(r.annotations)
       return {
         id: r.id,
@@ -52,6 +56,7 @@ export async function GET(): Promise<Response> {
         title: r.title,
         sourceType: src.type ?? null,
         videoId: src.type === 'youtube' ? src.videoId ?? null : null,
+        driveFileId: src.type === 'drive' ? src.driveFileId ?? null : null,
         noteCount: count,
         ticks,
         publishedByName: r.published_by_name ?? 'A teacher',

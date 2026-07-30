@@ -15,7 +15,7 @@ export interface DetectedSection {
 }
 
 export interface AnalysisState {
-  /** 'audio-required': a YouTube project needs an analysis audio upload first.
+  /** 'audio-required': a video project needs an analysis audio upload first.
    *  'finalizing': analysis done, stems still saving — carries the progress. */
   status: 'none' | 'audio-required' | 'running' | 'finalizing' | 'done' | 'error'
   /** While running: whether the model is still cold-booting ('queue') or
@@ -33,7 +33,7 @@ export interface AnalysisState {
 
 /**
  * Kick off (or join / return the cached result of) the project's analysis.
- * YouTube projects pass the just-uploaded analysis audio's URL; without one
+ * Video projects pass the just-uploaded analysis audio's URL; without one
  * the server answers 'audio-required'.
  */
 export function startSectionDetection(

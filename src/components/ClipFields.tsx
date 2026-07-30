@@ -2,7 +2,7 @@ import { Scissors } from 'lucide-react'
 import type { ClipDraft } from '../lib/clip'
 
 /**
- * The start/end pair that trims a YouTube track to an excerpt. Deliberately
+ * The start/end pair that trims a video track to an excerpt. Deliberately
  * text, not a scrubber: a teacher clipping a movement or a chorus is reading
  * the times off a score or the video itself, and typing "1:30" beats dragging
  * for a frame.

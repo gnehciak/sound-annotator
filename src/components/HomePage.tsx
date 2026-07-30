@@ -27,6 +27,7 @@ import { formatRelativeTime } from '../lib/format'
 import { downloadProjectJson } from '../lib/projectJson'
 import { colorForId, hueText } from '../lib/noteColors'
 import { isStructureProject } from '../lib/sections'
+import { isVideoSource, sourceLabel, sourceLinkUrl, sourceThumbUrl } from '../lib/source'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import Popover from './Popover'
@@ -93,7 +94,7 @@ const daysLeft = (deletedAt: number) =>
 
 /** The rack's old source glyph: video / audio / no source yet. */
 const sourceGlyph = (p: Project) =>
-  p.source?.type === 'youtube' ? '▶' : p.source?.type === 'audio' ? '♪' : '·'
+  isVideoSource(p.source) ? '▶' : p.source?.type === 'audio' ? '♪' : '·'
 
 /** Time-of-day salutation for the library greeting. */
 const salutation = () => {
@@ -134,7 +135,7 @@ const stagger = (base: number, i: number) => `${base + Math.min(i, 11) * 40}ms`
  * purge cron takes it. Only that view can really delete anything.
  *
  * Visual scheme ("Station Cards"): every track leads with its cover — the
- * YouTube thumbnail, or a waveform mark generated from the track id — over a
+ * video's thumbnail, or a waveform mark generated from the track id — over a
  * slim cue line drawing each note as a tick at its real position in its own
  * hue. Folders are hue-coded cards. Same flush-panel/hairline language as the
  * editor; the warmth comes from the covers and the note colors, not the chrome.
@@ -317,8 +318,9 @@ export default function HomePage({
               Annotate a piece of music
             </h2>
             <p className="max-w-sm text-sm text-muted">
-              Add a YouTube video or an audio file, then pin notes to any moment
-              (or a whole section) with text, lists, and screenshots.
+              Add a YouTube or Google Drive video, or an audio file, then pin
+              notes to any moment (or a whole section) with text, lists, and
+              screenshots.
             </p>
             <div className="flex items-center gap-2">
               <NewTrackButton onCreate={onCreateTrack} hero />
@@ -1156,10 +1158,11 @@ function TrackTile({
   onShare: () => void
 }) {
   const n = p.annotations.length
-  // YouTube tracks lead with the video's own thumbnail — derived straight from
-  // the stored videoId (static image CDN, no API). A 404 (deleted or private
-  // video) falls back to the generated waveform mark, like audio tracks.
-  const videoId = p.source?.type === 'youtube' ? p.source.videoId : undefined
+  // Video tracks lead with the host's own thumbnail — derived straight from
+  // the stored id (a static image URL, no API, for both YouTube and Drive). A
+  // 404/403 (deleted, or a Drive file that isn't link-shared) falls back to the
+  // generated waveform mark, like audio tracks.
+  const thumbUrl = sourceThumbUrl(p.source)
   const [thumbBroken, setThumbBroken] = useState(false)
   return (
     <div
@@ -1194,9 +1197,9 @@ function TrackTile({
             trashed ? 'opacity-45 grayscale' : 'group-hover:scale-[1.04]'
           }`}
         >
-          {videoId && !thumbBroken ? (
+          {thumbUrl && !thumbBroken ? (
             <img
-              src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+              src={thumbUrl}
               alt=""
               loading="lazy"
               draggable={false}
@@ -1337,7 +1340,7 @@ function TrackTile({
  * The track tile's one and only action affordance — a kebab popover hosting
  * everything you might do to a track without opening the editor:
  *
- *   • Open YouTube link (only for YouTube-sourced tracks)
+ *   • Open YouTube / Drive link (only for video-sourced tracks)
  *   • Make a copy            — clones into the library, in place
  *   • Share link             — turns on view-only sharing and copies the URL
  *   • Export JSON            — downloads the portable track file
@@ -1373,8 +1376,8 @@ function TrackActionsMenu({
   // Where the track lives now (dangling ids count as the root library).
   const here =
     p.folderId && folders.some((f) => f.id === p.folderId) ? p.folderId : null
-  const youtubeUrl =
-    p.source?.type === 'youtube' ? p.source.youtubeUrl ?? null : null
+  // "Open the original" — the YouTube watch page or the Drive file page.
+  const sourceUrl = isVideoSource(p.source) ? sourceLinkUrl(p.source) : null
 
   async function handleCopy() {
     if (busy) return
@@ -1416,9 +1419,9 @@ function TrackActionsMenu({
     }
   }
 
-  function openYoutube() {
-    if (!youtubeUrl) return
-    window.open(youtubeUrl, '_blank', 'noopener,noreferrer')
+  function openSource() {
+    if (!sourceUrl) return
+    window.open(sourceUrl, '_blank', 'noopener,noreferrer')
     setOpen(false)
   }
 
@@ -1483,10 +1486,10 @@ function TrackActionsMenu({
           onClick={(e) => e.stopPropagation()}
           className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
         >
-          {youtubeUrl && (
-            <button type="button" onClick={openYoutube} className={actionCls}>
+          {sourceUrl && (
+            <button type="button" onClick={openSource} className={actionCls}>
               <ExternalLink size={13} className="shrink-0 text-muted" />
-              <span>Open YouTube link</span>
+              <span>Open {sourceLabel(p.source)} link</span>
             </button>
           )}
           <button

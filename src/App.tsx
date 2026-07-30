@@ -45,7 +45,15 @@ import {
   deleteProjectImages,
   reconcileProjectImages,
 } from './lib/imageCloud'
-import { fetchVideoTitle, parseVideoId } from './lib/youtube'
+import { fetchVideoTitle } from './lib/youtube'
+import { looksLikeDriveLink } from './lib/drive'
+import {
+  isVideoSource,
+  parseVideoLink,
+  sourceFromLink,
+  sourceLabel,
+  sourceLinkUrl,
+} from './lib/source'
 import { copySharedProject } from './lib/copyProject'
 import { parseProjectJson } from './lib/projectJson'
 import { makeTextBlock } from './lib/noteBlocks'
@@ -1069,28 +1077,31 @@ export default function App() {
     [patchProject],
   )
 
-  function setYoutubeSource(url: string, clip?: { start?: number; end?: number }) {
+  /**
+   * Point the track at a video — YouTube or Google Drive, told apart by the
+   * link itself. Both end up the same kind of source to everything downstream
+   * (a video id, an optional clip window); only the player differs.
+   */
+  function setVideoSource(url: string, clip?: { start?: number; end?: number }) {
     if (!current) return
-    const videoId = parseVideoId(url)
-    if (!videoId) {
-      alert("Couldn't find a YouTube video id in that link.")
+    const link = parseVideoLink(url)
+    if (!link) {
+      alert(
+        looksLikeDriveLink(url)
+          ? "That Drive link doesn't point at a file — use a file's share link, not a folder's."
+          : "Couldn't find a YouTube video id in that link.",
+      )
       return
     }
-    commitProject(current.id, {
-      source: {
-        type: 'youtube',
-        youtubeUrl: url,
-        videoId,
-        ...(clip?.start ? { clipStart: clip.start } : {}),
-        ...(clip?.end ? { clipEnd: clip.end } : {}),
-      },
-    })
+    commitProject(current.id, { source: sourceFromLink(link, url, clip) })
     // Derive the initial title from the video (mirrors the audio-file path).
     // Re-checked at resolve time so a rename during the fetch wins; raw
-    // (non-undoable) like the audio attach's title patch.
-    if (current.title === 'Untitled track') {
+    // (non-undoable) like the audio attach's title patch. YouTube only —
+    // Drive publishes no anonymous metadata endpoint the way oEmbed is, so a
+    // Drive track keeps its default name until it's renamed.
+    if (link.kind === 'youtube' && current.title === 'Untitled track') {
       const projectId = current.id
-      void fetchVideoTitle(videoId).then((title) => {
+      void fetchVideoTitle(link.id).then((title) => {
         if (!title) return
         setProjects((ps) =>
           ps.map((p) =>
@@ -1104,7 +1115,7 @@ export default function App() {
   }
 
   /**
-   * Retune the clip window on an existing YouTube track (the Settings modal).
+   * Retune the clip window on an existing video track (the Settings modal).
    * Note times are clip-relative, so moving the window's start would slide
    * every note off the music it was written about — shift them back by the
    * same delta to hold them in place. Notes the new window excludes are pinned
@@ -1113,7 +1124,7 @@ export default function App() {
    */
   const setClip = useCallback(
     (next: { start?: number; end?: number }) => {
-      if (!current?.source || current.source.type !== 'youtube') return
+      if (!current?.source || !isVideoSource(current.source)) return
       const before = current.source.clipStart ?? 0
       const after = next.start ?? 0
       const delta = before - after
@@ -1984,8 +1995,8 @@ export default function App() {
                 <ReadOnlyNotice>This track has no source yet.</ReadOnlyNotice>
               ) : (
                 <SourcePicker
-                  onYoutube={setYoutubeSource}
-                  // Guests are YouTube-only: the landing page mints their
+                  onVideo={setVideoSource}
+                  // Guests are video-only: the landing page mints their
                   // track on a pasted video and offers no blank start, so the
                   // audio-file form here would be a door into a source kind
                   // nothing else in their flow can reach. Still rendered for
@@ -2022,26 +2033,21 @@ export default function App() {
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TitleBar
                   left="Player"
-                  right={
-                    current.source.type === 'youtube' ? undefined : 'Audio'
-                  }
+                  right={isVideoSource(current.source) ? undefined : 'Audio'}
                   actions={
                     <>
-                      {current.source.type === 'youtube' && (
+                      {isVideoSource(current.source) && (
                         <a
-                          href={
-                            current.source.youtubeUrl ??
-                            (current.source.videoId
-                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                              : undefined)
-                          }
+                          href={sourceLinkUrl(current.source) ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="Open the original video on YouTube (new tab)"
+                          title={`Open the original video on ${sourceLabel(
+                            current.source,
+                          )} (new tab)`}
                           className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
                         >
                           <Play size={12} />
-                          YouTube
+                          {sourceLabel(current.source)}
                         </a>
                       )}
                       {/* AI section detection — it fills this very board.
@@ -2054,7 +2060,7 @@ export default function App() {
                         !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&
-                        (current.source.type === 'youtube' ||
+                        (isVideoSource(current.source) ||
                           current.source.audioUrl) && (
                           <DetectSectionsButton
                             key={current.id}
@@ -2173,24 +2179,21 @@ export default function App() {
               >
                 <TitleBar
                   left="Player"
-                  right={current.source.type === 'youtube' ? undefined : 'Audio'}
+                  right={isVideoSource(current.source) ? undefined : 'Audio'}
                   actions={
                     <>
-                      {current.source.type === 'youtube' && (
+                      {isVideoSource(current.source) && (
                         <a
-                          href={
-                            current.source.youtubeUrl ??
-                            (current.source.videoId
-                              ? `https://www.youtube.com/watch?v=${current.source.videoId}`
-                              : undefined)
-                          }
+                          href={sourceLinkUrl(current.source) ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="Open the original video on YouTube (new tab)"
+                          title={`Open the original video on ${sourceLabel(
+                            current.source,
+                          )} (new tab)`}
                           className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
                         >
                           <Play size={12} />
-                          YouTube
+                          {sourceLabel(current.source)}
                         </a>
                       )}
                       {/* Detection is the owner's call (it spends their
@@ -2202,7 +2205,7 @@ export default function App() {
                         !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&
-                        (current.source.type === 'youtube' ||
+                        (isVideoSource(current.source) ||
                           current.source.audioUrl) && (
                           <DetectSectionsButton
                             key={current.id}
@@ -2514,7 +2517,7 @@ export default function App() {
           clip={
             // The source belongs to the owner: a link editor or a view-only
             // reader sees the clip the track came with, not a way to retrim it.
-            canEditSettings && current?.source?.type === 'youtube'
+            canEditSettings && current?.source && isVideoSource(current.source)
               ? {
                   start: current.source.clipStart,
                   end: current.source.clipEnd,

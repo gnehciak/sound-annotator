@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Globe, Play, RefreshCw, Search, X } from 'lucide-react'
 import type { BrowseItem } from '../types'
+import { driveThumbUrl } from '../lib/drive'
 import { fetchBrowse } from '../lib/projectStore'
 import { formatRelativeTime } from '../lib/format'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
@@ -228,6 +229,14 @@ function BrowseTile({
   enterDelay: string
 }) {
   const [thumbBroken, setThumbBroken] = useState(false)
+  // The card cover, from whichever video host the track sits on. A Drive file
+  // that isn't link-shared answers with a 403, which falls through to the
+  // waveform mark exactly as a dead YouTube thumb does.
+  const thumbUrl = it.videoId
+    ? `https://i.ytimg.com/vi/${it.videoId}/mqdefault.jpg`
+    : it.driveFileId
+      ? driveThumbUrl(it.driveFileId)
+      : null
   const open = () => {
     window.location.href = `${window.location.pathname}?view=${it.id}`
   }
@@ -248,9 +257,9 @@ function BrowseTile({
     >
       <div className="relative aspect-video w-full overflow-hidden border-b border-line bg-inset">
         <div className="absolute inset-0 transition-transform duration-700 ease-instr group-hover:scale-[1.04]">
-          {it.videoId && !thumbBroken ? (
+          {thumbUrl && !thumbBroken ? (
             <img
-              src={`https://i.ytimg.com/vi/${it.videoId}/mqdefault.jpg`}
+              src={thumbUrl}
               alt=""
               loading="lazy"
               draggable={false}

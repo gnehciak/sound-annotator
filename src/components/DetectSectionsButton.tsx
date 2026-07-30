@@ -11,7 +11,7 @@ const POLL_MS = 5000
 
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'prompting' } // YouTube: waiting for the analysis audio drop
+  | { kind: 'prompting' } // Video source: waiting for the analysis audio drop
   | { kind: 'uploading'; pct: number }
   | { kind: 'running'; stage?: 'queue' | 'analyze' }
   | { kind: 'finalizing'; done: number; total: number }
@@ -22,7 +22,7 @@ type Phase =
  * The Player title-bar action that runs AI section detection (a Replicate GPU
  * job — a couple of minutes) and hands the detected sections up to be applied
  * as structure notes. Audio tracks analyze their uploaded audio directly; a
- * YouTube track first prompts for a matching audio file, which is uploaded to
+ * video track first prompts for a matching audio file, which is uploaded to
  * a temporary path, analyzed, and deleted server-side once the run finishes —
  * only the sections and the separated stems are kept. The run itself is
  * server-tracked: navigating away and pressing the button again joins the
@@ -101,7 +101,7 @@ export default function DetectSectionsButton({
     try {
       const started = await startSectionDetection(projectId)
       if (run !== runRef.current || settle(started)) return
-      // A YouTube track with no cached/live run: ask for the audio first.
+      // A video track with no cached/live run: ask for the audio first.
       if (started.status === 'audio-required') {
         setPhase({ kind: 'prompting' })
         return
@@ -217,7 +217,7 @@ export default function DetectSectionsButton({
   )
 }
 
-/** Modal drop zone for the YouTube flow's analysis audio. */
+/** Modal drop zone for the video flow's analysis audio. */
 function AnalysisAudioPrompt({
   onFile,
   onCancel,
@@ -255,9 +255,9 @@ function AnalysisAudioPrompt({
           </button>
         </div>
         <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-          YouTube doesn’t hand apps the audio, so drop a recording of this
-          track to analyze. Use the <span className="text-fg">same edit as
-          the video</span> — otherwise the section timestamps won’t line up.
+          A video link doesn’t hand apps its audio, so drop a recording of
+          this track to analyze. Use the <span className="text-fg">same edit
+          as the video</span> — otherwise the section timestamps won’t line up.
           The file is used once and deleted after the analysis; only the
           detected sections and the separated stems are kept.
         </p>

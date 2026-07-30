@@ -2,8 +2,9 @@
 // from the read-only viewer). The copy gets a fresh doc id and owns the bytes
 // we host: every note image is re-uploaded under the new owner's Storage path,
 // so it survives the original being unshared or deleted. The *source* is only
-// a link now (YouTube, or a direct audio URL), so it's copied verbatim and
-// both projects point at the same audio — if that link dies, both lose it.
+// a link now (YouTube, Google Drive, or a direct audio URL), so it's copied
+// verbatim and both projects point at the same audio — if that link dies, both
+// lose it.
 // Note ids are kept as-is — @mentions in note HTML link notes by id, and the
 // id also seeds each note's fallback colour.
 import { uploadNoteImage } from './imageCloud'
@@ -119,9 +120,9 @@ export async function copySharedProject(
   )
   const title = untakenTitle(src.title, taken)
 
-  // Both source kinds are now just a link (YouTube or a direct audio URL), so
-  // the source copies as-is — a copy points at the same audio the original
-  // does. Nothing is fetched here, so a copy can no longer fail on dead audio:
+  // Every source kind is now just a link (YouTube, Drive, or a direct audio
+  // URL), so the source copies as-is — a copy points at the same audio the
+  // original does. Nothing is fetched here, so a copy can't fail on dead audio:
   // a link that has rotted simply lands the copy on the re-attach prompt, which
   // is what the old `onMissingAudio: 'detach'` existed to arrange.
   const source = src.source

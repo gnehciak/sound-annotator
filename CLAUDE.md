@@ -1,11 +1,22 @@
 # Sound Annotator
 
-A web app for time-anchored music annotation in the classroom: load a YouTube
-video or link a direct audio-file URL, then attach timestamped rich-text notes
-that seek the player when clicked. **Audio is never uploaded** — a track's
-sound is always a link, and wavesurfer streams it from wherever it lives, so
-the host's CORS policy decides whether it loads (see
-`src/components/AudioUrlForm.tsx`). Note images are the only bytes we host. Vite + React 19 + TypeScript + Tailwind + TipTap +
+A web app for time-anchored music annotation in the classroom: load a video
+(YouTube or a Google Drive file) or link a direct audio-file URL, then attach
+timestamped rich-text notes that seek the player when clicked. **Audio is never
+uploaded** — a track's sound is always a link, and wavesurfer streams it from
+wherever it lives, so the host's CORS policy decides whether it loads (see
+`src/components/AudioUrlForm.tsx`). Note images are the only bytes we host.
+
+**Three source kinds, two of them videos.** `youtube` and `drive` behave
+identically everywhere outside their own player — 16:9 frame, clip window,
+poster thumbnail, an "open the original" link — so ask `src/lib/source.ts`
+(`isVideoSource` / `videoIdOf` / `sourceLabel` / `sourceLinkUrl` /
+`sourceThumbUrl` / `parseVideoLink`) rather than spreading
+`type === 'youtube' || type === 'drive'` around. Drive has no scriptable embed,
+so `DrivePlayer` streams the file's own bytes into a plain `<video>`: the file
+must be shared **Anyone with the link**, the download URL needs `confirm=t`
+past ~100 MB, and Drive sends no CORS header — which is exactly why a Drive
+video can't be an `audio` source with a rewritten URL. See `src/lib/drive.ts`. Vite + React 19 + TypeScript + Tailwind + TipTap +
 wavesurfer.js. Backed by Vercel: sign-in via Clerk's prebuilt card (Google *or*
 email + password, with verification and reset — themed from our tokens in
 `src/lib/clerkAppearance.ts`, which must hand Clerk hex: its JS color parser
@@ -59,10 +70,10 @@ never sharing/publishing/ownership — so unlike a link editor they can load the
 video they came to annotate, and pick either project kind (listening notes or a
 song-section board) before they start.
 
-Two things a guest deliberately can't reach. **Source is YouTube only**: the
-landing offers no blank start, so App passes no `onAudioUrl` to `SourcePicker`
-— otherwise a sourceless guest row (they predate this) would be a door into a
-source kind nothing else in their flow produces. **`allowImages={false}`** —
+Two things a guest deliberately can't reach. **Source is video only** (YouTube
+or Drive): the landing offers no blank start, so App passes no `onAudioUrl` to
+`SourcePicker` — otherwise a sourceless guest row (they predate this) would be
+a door into a source kind nothing else in their flow produces. **`allowImages={false}`** —
 image upload is signed-in only, and merely omitting the uploader makes the
 editor inline base64 into `annotations` instead. **Detect sections is hidden
 too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a

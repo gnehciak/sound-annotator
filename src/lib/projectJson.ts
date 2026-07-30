@@ -23,6 +23,7 @@ import type {
   ProjectSource,
 } from '../types'
 import { withBlocks } from './noteBlocks'
+import { parseDriveFileId } from './drive'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -87,19 +88,36 @@ const num = (v: unknown): number | undefined =>
 function sanitizeSource(v: unknown): ProjectSource | undefined {
   if (!v || typeof v !== 'object') return undefined
   const s = v as Record<string, unknown>
+  // A clip only means anything as a forward window; anything else (negative,
+  // inverted) is dropped, leaving the track the whole video. Shared by both
+  // video kinds, which carry the same window.
+  const clipOnto = (source: ProjectSource) => {
+    const clipStart = num(s.clipStart)
+    const clipEnd = num(s.clipEnd)
+    if (clipStart != null && clipStart > 0) source.clipStart = clipStart
+    if (clipEnd != null && clipEnd > (source.clipStart ?? 0)) source.clipEnd = clipEnd
+    return source
+  }
   if (s.type === 'youtube') {
     const source: ProjectSource = { type: 'youtube' }
     const youtubeUrl = str(s.youtubeUrl)
     const videoId = str(s.videoId)
-    const clipStart = num(s.clipStart)
-    const clipEnd = num(s.clipEnd)
     if (youtubeUrl) source.youtubeUrl = youtubeUrl
     if (videoId) source.videoId = videoId
-    // A clip only means anything as a forward window; anything else (negative,
-    // inverted) is dropped, leaving the track the whole video.
-    if (clipStart != null && clipStart > 0) source.clipStart = clipStart
-    if (clipEnd != null && clipEnd > (source.clipStart ?? 0)) source.clipEnd = clipEnd
+    clipOnto(source)
     return videoId || youtubeUrl ? source : undefined
+  }
+  if (s.type === 'drive') {
+    const source: ProjectSource = { type: 'drive' }
+    const driveUrl = str(s.driveUrl)
+    // The id is what the player loads, so an export missing it is unplayable
+    // — re-derive it from the link rather than import a dead source.
+    const driveFileId =
+      str(s.driveFileId) ?? (driveUrl ? (parseDriveFileId(driveUrl) ?? undefined) : undefined)
+    if (driveUrl) source.driveUrl = driveUrl
+    if (driveFileId) source.driveFileId = driveFileId
+    clipOnto(source)
+    return driveFileId ? source : undefined
   }
   if (s.type === 'audio') {
     const source: ProjectSource = { type: 'audio' }

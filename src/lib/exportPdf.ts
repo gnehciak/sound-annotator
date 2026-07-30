@@ -15,6 +15,7 @@ import type { Annotation, Project } from '../types'
 import { formatTime, noteLabel } from './format'
 import { resolveTag, tagsOf } from './tags'
 import { colorForId } from './noteColors'
+import { isVideoSource, sourceLabel, sourceLinkUrl, sourceThumbUrl } from './source'
 import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
 import { getPlugin } from './notePlugins'
 import { layerOf, summarizeElements, type ElementsData } from './musicElements'
@@ -79,11 +80,6 @@ function projectUrl(id: string): string {
   return `${origin}${pathname}?view=${id}`
 }
 
-/** The watch URL for a YouTube source. */
-function youtubeUrl(source: NonNullable<Project['source']>): string {
-  return source.youtubeUrl ?? `https://www.youtube.com/watch?v=${source.videoId ?? ''}`
-}
-
 function tagsCell(note: Annotation): string {
   const tags = tagsOf(note)
   if (tags.length === 0) return '<span class="muted">—</span>'
@@ -141,21 +137,26 @@ function noteRange(notes: Annotation[]): string {
 function coverBlock(project: Project, notes: Annotation[]): string {
   const source = project.source
   const link = projectUrl(project.id)
-  // Thumbnail: YouTube poster, or a glyph banner for audio tracks that have
-  // no artwork.
+  // Thumbnail: the video host's poster, or a glyph banner for audio tracks
+  // that have no artwork.
   let thumb = ''
   let sourceRow = ''
-  if (source?.type === 'youtube' && source.videoId) {
-    const id = source.videoId
-    // hqdefault always exists (so it's reliably there by the time the user
-    // prints); it's 4:3 with letterbox bars, which the 16:9 cover-crop
-    // wrapper trims off.
+  const poster = sourceThumbUrl(source, 640)
+  const videoUrl = sourceLinkUrl(source)
+  if (isVideoSource(source) && poster) {
+    // YouTube's mqdefault/hqdefault always exists (so it's reliably there by
+    // the time the user prints). Drive's thumbnail endpoint answers only for
+    // link-shared files; an unshared one prints as a broken image, which is
+    // the same signal the tile cover gives.
     thumb = `<div class="thumb-wrap"><img class="thumb" alt="Video thumbnail"
-      src="https://img.youtube.com/vi/${id}/hqdefault.jpg" /></div>`
-    const url = youtubeUrl(source)
-    sourceRow = `<div class="link-row"><span class="link-k">YouTube</span><a class="link-v" href="${esc(
-      url,
-    )}">${esc(url)}</a></div>`
+      src="${esc(poster)}" /></div>`
+    sourceRow = videoUrl
+      ? `<div class="link-row"><span class="link-k">${sourceLabel(
+          source,
+        )}</span><a class="link-v" href="${esc(videoUrl)}">${esc(
+          videoUrl,
+        )}</a></div>`
+      : ''
   } else if (source?.type === 'audio') {
     const name = source.fileName || 'Audio track'
     thumb = `<div class="thumb-audio"><span class="glyph">♪</span><span class="thumb-name">${esc(

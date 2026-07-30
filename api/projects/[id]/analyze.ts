@@ -3,7 +3,7 @@
 // POST kicks off a run of the All-In-One Music Structure Analyzer (the allin1
 // model of Kim & Nam 2023, hosted on Replicate as erickluis00/all-in-one-audio)
 // and stamps the job state into the `analysis` jsonb column. Audio projects
-// analyze their own uploaded audio; YouTube projects analyze a *temporary*
+// analyze their own uploaded audio; video projects analyze a *temporary*
 // audio upload the owner drops in (users/{uid}/analysis/{projectId}) — the
 // client learns it's needed via `{ status: 'audio-required' }`. A finished
 // result is cached, so a repeat POST returns it instead of paying for a second
@@ -73,7 +73,7 @@ interface Analysis {
   /** Finalize progress: stems saved so far / stems the run produced. */
   stemsDone?: number
   stemsTotal?: number
-  /** The temporary analysis upload (YouTube flow) — deleted at finalize. */
+  /** The temporary analysis upload (video flow) — deleted at finalize. */
   sourceAudioUrl?: string
   startedAt?: number
   finalizeAt?: number
@@ -121,7 +121,7 @@ function toClient(a: Analysis | null): Record<string, unknown> {
 }
 
 /** True when `url` is a Vercel Blob object inside the owner's analysis
- *  prefix — the only audio a YouTube project may hand to the analyzer (our
+ *  prefix — the only audio a video project may hand to the analyzer (our
  *  GPU credit only ever runs against the caller's own upload). */
 function isOwnAnalysisUpload(url: string, uid: string): boolean {
   try {
@@ -172,10 +172,12 @@ export async function POST(request: Request): Promise<Response> {
   let temp = false
   if (source?.type === 'audio' && source.audioUrl) {
     audioUrl = source.audioUrl
-  } else if (source?.type === 'youtube') {
-    // YouTube gives us no audio: the owner supplies a matching recording,
-    // pre-uploaded to their own analysis prefix. Signalled as a state (not an
-    // error) so the client opens its drop prompt.
+  } else if (source?.type === 'youtube' || source?.type === 'drive') {
+    // A video source gives us no audio — YouTube hands apps none, and a Drive
+    // file is a video container behind a link-share we can't count on. Either
+    // way the owner supplies a matching recording, pre-uploaded to their own
+    // analysis prefix. Signalled as a state (not an error) so the client opens
+    // its drop prompt.
     const body = (await request.json().catch(() => null)) as
       | { audioUrl?: string }
       | null
@@ -317,7 +319,7 @@ async function finalize(
     const stems = await copyStems(uid, id, out)
 
     // The dropped audio was only ever fuel for the analysis — its deletion is
-    // the promise the YouTube flow makes. Best-effort: a failure here leaves
+    // the promise the video flow makes. Best-effort: a failure here leaves
     // a stray blob, not a broken analysis (swept with the project's other
     // artifacts on delete).
     if (analysis.sourceAudioUrl) await del(analysis.sourceAudioUrl).catch(() => {})

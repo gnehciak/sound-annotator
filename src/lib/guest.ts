@@ -156,8 +156,9 @@ export function guestHandInUrl(s: GuestSession): string {
  * this resolves.
  *
  * `init` lets the caller land the project already loaded: the landing page
- * pastes a YouTube link, so the source (and the video's real title) are known
- * before the row exists, and the student arrives at a player rather than at
+ * pastes a video link, so the source (and a YouTube video's real title) are
+ * known before the row exists, and the student arrives at a player rather than
+ * at
  * another form. `kind: 'structure'` is the same settings flag App's own
  * createProject writes for a song-section board. A guest may write both their
  * source and their settings — see the API's PUT — so these are the same rights
