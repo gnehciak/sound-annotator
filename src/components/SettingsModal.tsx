@@ -28,7 +28,7 @@ export default function SettingsModal({
   onOverviewOpen: (on: boolean) => void
   noteOrder: NoteOrder
   onNoteOrder: (mode: NoteOrder) => void
-  /** The YouTube clip window, or null when the track isn't a clippable one. */
+  /** The video clip window, or null when the track isn't a clippable one. */
   clip: { start?: number; end?: number } | null
   onClip: (next: { start?: number; end?: number }) => void
   onClose: () => void

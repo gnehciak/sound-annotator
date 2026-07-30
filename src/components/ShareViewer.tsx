@@ -21,6 +21,7 @@ import {
   type NoteOrder,
 } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
+import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
@@ -358,8 +359,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const src = project?.source
   const playerActive =
     status === 'ready' &&
-    ((src?.type === 'youtube' && !!src.videoId) ||
-      (src?.type === 'audio' && !!src.audioUrl))
+    (!!videoIdOf(src) || (src?.type === 'audio' && !!src.audioUrl))
   useHotkeys((e) => {
     if (e.key === 'Escape') {
       if (showHelp) setShowHelp(false)
@@ -484,9 +484,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
   const source = project.source
   const audioUrl = source?.type === 'audio' ? (source.audioUrl ?? null) : null
-  const hasPlayer =
-    (source?.type === 'youtube' && !!source.videoId) ||
-    (source?.type === 'audio' && !!audioUrl)
+  const hasPlayer = !!videoIdOf(source) || (source?.type === 'audio' && !!audioUrl)
   // Song-structure projects share as the section board, not the notes list —
   // the same StructureEditor the owner uses, in read-only mode.
   const isStructure = isStructureProject(project)
@@ -548,7 +546,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <TitleBar
               left="Player"
-              right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
+              right={sourceLabel(source)}
             />
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
               {hasPlayer ? (
@@ -556,7 +554,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   <div
                     ref={setPlayerArea}
                     className={
-                      source?.type === 'youtube'
+                      isVideoSource(source)
                         ? 'flex min-h-0 flex-1 flex-col justify-center'
                         : 'shrink-0'
                     }
@@ -641,7 +639,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         >
           <TitleBar
             left="Player"
-            right={source?.type === 'youtube' ? 'YouTube' : 'Audio'}
+            right={sourceLabel(source)}
           />
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
             {hasPlayer ? (
@@ -649,7 +647,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 <div
                   ref={setPlayerArea}
                   className={
-                    source?.type === 'youtube'
+                    isVideoSource(source)
                       ? 'flex min-h-0 flex-1 flex-col justify-center'
                       : 'shrink-0'
                   }

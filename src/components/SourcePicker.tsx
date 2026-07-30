@@ -7,24 +7,25 @@ import { parseClipWindow } from '../lib/youtube'
 import { formatTime } from '../lib/format'
 
 interface Props {
-  onYoutube: (url: string, clip?: { start?: number; end?: number }) => void
-  /** Omit to offer YouTube only — the guest case (see below). */
+  /** A video link — YouTube or Google Drive. App tells them apart. */
+  onVideo: (url: string, clip?: { start?: number; end?: number }) => void
+  /** Omit to offer video links only — the guest case (see below). */
   onAudioUrl?: (url: string) => void
 }
 
 /**
- * The two ways a track gets its sound: a YouTube link, or a direct link to an
- * audio file. Uploading was removed deliberately — nothing here writes to
- * storage, so both options cost the same (nothing).
+ * The two ways a track gets its sound: a video link (YouTube or a Google Drive
+ * file), or a direct link to an audio file. Uploading was removed deliberately
+ * — nothing here writes to storage, so every option costs the same (nothing).
  *
- * Guests get YouTube only, and not for cost: their whole flow starts at the
- * landing page's paste field, which takes a video link and nothing else. An
- * audio-file form reachable only from a sourceless guest row would be a source
- * kind the rest of their journey can't produce — plus it's the one option that
- * needs a paragraph about CORS to be usable, which is a poor first minute for
- * a student with no account. So App passes no `onAudioUrl` for them.
+ * Guests get the video field only, and not for cost: their whole flow starts
+ * at the landing page's paste field, which takes a video link and nothing else.
+ * An audio-file form reachable only from a sourceless guest row would be a
+ * source kind the rest of their journey can't produce — plus it's the one
+ * option that needs a paragraph about CORS to be usable, which is a poor first
+ * minute for a student with no account. So App passes no `onAudioUrl` for them.
  */
-export default function SourcePicker({ onYoutube, onAudioUrl }: Props) {
+export default function SourcePicker({ onVideo, onAudioUrl }: Props) {
   const [url, setUrl] = useState('')
   const [clip, setClip] = useState<ClipDraft>({ start: '', end: '' })
   const [error, setError] = useState<string | null>(null)
@@ -33,8 +34,14 @@ export default function SourcePicker({ onYoutube, onAudioUrl }: Props) {
     <div className="mx-auto max-w-xl space-y-6 rounded border border-line bg-panel p-6">
       <div>
         <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
-          Load from YouTube
+          Load from YouTube or Google Drive
         </h2>
+        <p className="mt-1 text-xs text-muted">
+          A YouTube link, or the share link of a video file in Google Drive.
+          The Drive file has to be shared with{' '}
+          <span className="text-fg">Anyone with the link</span> for it to play
+          here.
+        </p>
         <form
           className="mt-2 space-y-3"
           onSubmit={(e) => {
@@ -46,7 +53,7 @@ export default function SourcePicker({ onYoutube, onAudioUrl }: Props) {
               return
             }
             setError(null)
-            onYoutube(url.trim(), parsed.clip)
+            onVideo(url.trim(), parsed.clip)
           }}
         >
           <div className="flex gap-2">

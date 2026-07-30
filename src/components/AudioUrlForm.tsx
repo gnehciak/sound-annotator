@@ -1,16 +1,22 @@
 import { useState } from 'react'
 import { Play } from 'lucide-react'
+import { looksLikeDriveLink } from '../lib/drive'
 
 /**
  * Point a track at an audio file that already lives somewhere on the web.
  *
  * The caveat in the copy is the whole reason this form needs explaining:
  * wavesurfer fetches and decodes the bytes to draw the waveform (see
- * AudioPlayer), so the host has to allow cross-origin reads. A Google Drive or
- * Dropbox *share page* isn't a file URL and won't work; plenty of servers that
- * do serve the file still refuse the read. When that happens the browser's own
- * error is a CORS message nobody outside this file would connect to the link
- * they pasted — so say it up front, before they paste.
+ * AudioPlayer), so the host has to allow cross-origin reads. A Dropbox *share
+ * page* isn't a file URL and won't work; plenty of servers that do serve the
+ * file still refuse the read. When that happens the browser's own error is a
+ * CORS message nobody outside this file would connect to the link they pasted
+ * — so say it up front, before they paste.
+ *
+ * A Google Drive link gets its own answer rather than the generic one: Drive
+ * videos are a supported source now, just not this one (Drive sends no CORS
+ * header, so wavesurfer can never read one). Point at the video field instead
+ * of saying no — see lib/drive.ts.
  */
 export default function AudioUrlForm({
   onAudioUrl,
@@ -27,6 +33,9 @@ export default function AudioUrlForm({
     /drive\.google\.com|dropbox\.com\/s\/|onedrive\.live\.com|1drv\.ms/i.test(
       trimmed,
     )
+  // A Drive link isn't wrong here so much as in the wrong field — the video
+  // field above takes it directly.
+  const isDrive = looksLikeDriveLink(trimmed)
 
   return (
     <div>
@@ -37,9 +46,9 @@ export default function AudioUrlForm({
           </h2>
           <p className="mt-1 text-xs text-muted">
             A direct link to an MP3, WAV or M4A — one that plays the file
-            itself, not a Drive or Dropbox share page. The host also has to
-            allow other sites to read it, so a link that works in your browser
-            may still not load here.
+            itself, not a Dropbox share page (a Google Drive video goes in the
+            video field above). The host also has to allow other sites to read
+            it, so a link that works in your browser may still not load here.
           </p>
         </>
       )}
@@ -63,11 +72,18 @@ export default function AudioUrlForm({
           <Play size={14} /> Load
         </button>
       </form>
-      {looksLikeSharePage && (
+      {isDrive ? (
         <p className="mt-2 font-mono text-[11px] text-peak">
-          That looks like a share page, not a direct file link — it almost
-          certainly won't play.
+          That’s a Drive link — paste it in the video field to load it as a
+          Drive video.
         </p>
+      ) : (
+        looksLikeSharePage && (
+          <p className="mt-2 font-mono text-[11px] text-peak">
+            That looks like a share page, not a direct file link — it almost
+            certainly won't play.
+          </p>
+        )
       )}
     </div>
   )

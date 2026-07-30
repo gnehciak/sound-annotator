@@ -1,6 +1,7 @@
 import { forwardRef } from 'react'
 import type { PlayerHandle, ProjectSource } from '../types'
 import YouTubePlayer from './YouTubePlayer'
+import DrivePlayer from './DrivePlayer'
 import AudioPlayer, { type RegionSpec } from './AudioPlayer'
 
 interface Props {
@@ -30,6 +31,21 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
       <YouTubePlayer
         ref={ref}
         videoId={source.videoId}
+        clipStart={source.clipStart}
+        clipEnd={source.clipEnd}
+        playbackRate={props.playbackRate}
+        volume={props.volume}
+        onTime={props.onTime}
+        onDuration={props.onDuration}
+        onPlayingChange={props.onPlayingChange}
+      />
+    )
+  }
+  if (source?.type === 'drive' && source.driveFileId) {
+    return (
+      <DrivePlayer
+        ref={ref}
+        fileId={source.driveFileId}
         clipStart={source.clipStart}
         clipEnd={source.clipEnd}
         playbackRate={props.playbackRate}

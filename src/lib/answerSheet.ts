@@ -15,6 +15,7 @@ import { noteLabel } from './format'
 import { colorForId } from './noteColors'
 import { primaryTextHtml } from './noteBlocks'
 import { countAnswered, questionsOf } from './questions'
+import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
 
 /** Escape text for safe interpolation into HTML. */
 function esc(s: string): string {
@@ -52,11 +53,6 @@ function sheetName(project: Project, studentName: string): string {
 function projectUrl(id: string): string {
   const { origin, pathname } = window.location
   return `${origin}${pathname}?view=${id}`
-}
-
-/** The watch URL for a YouTube source. */
-function youtubeUrl(source: NonNullable<Project['source']>): string {
-  return source.youtubeUrl ?? `https://www.youtube.com/watch?v=${source.videoId ?? ''}`
 }
 
 function questionBlock(
@@ -254,11 +250,14 @@ export function buildAnswerSheetHtml(
   const name = input.name.trim()
 
   const source = project.source
+  const videoUrl = sourceLinkUrl(source)
   const sourceRow =
-    source?.type === 'youtube' && (source.videoId || source.youtubeUrl)
-      ? `<div class="meta-row"><span class="meta-k">YouTube</span><a class="meta-v" href="${esc(
-          youtubeUrl(source),
-        )}">${esc(youtubeUrl(source))}</a></div>`
+    isVideoSource(source) && videoUrl
+      ? `<div class="meta-row"><span class="meta-k">${sourceLabel(
+          source,
+        )}</span><a class="meta-v" href="${esc(videoUrl)}">${esc(
+          videoUrl,
+        )}</a></div>`
       : source?.type === 'audio' && source.fileName
         ? `<div class="meta-row"><span class="meta-k">Audio file</span><span class="meta-v">${esc(
             source.fileName,

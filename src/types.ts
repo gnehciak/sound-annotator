@@ -7,7 +7,7 @@
 // imported file silently loses it. Primitive-valued ProjectSettings keys pass
 // through automatically; everything else needs a line in the sanitizer.
 
-export type SourceType = 'youtube' | 'audio'
+export type SourceType = 'youtube' | 'drive' | 'audio'
 
 export interface ProjectSource {
   type: SourceType
@@ -15,15 +15,23 @@ export interface ProjectSource {
   youtubeUrl?: string
   videoId?: string
   /**
+   * Google Drive — the file id, plus the link it was pasted from (kept whole
+   * so "open the original" reaches the same page the teacher shared). The file
+   * has to be link-shared to play; see lib/drive.ts for why a Drive video is
+   * its own source kind rather than an `audio` one with a rewritten URL.
+   */
+  driveFileId?: string
+  driveUrl?: string
+  /**
    * Clip window into the source video, in seconds of that video. When set, the
    * track *is* the excerpt: the player opens at `clipStart`, stops at
    * `clipEnd`, and the rest of the app sees an ordinary 0-based track
-   * `clipEnd - clipStart` long — note times are clip-relative, and
-   * YouTubePlayer is the only place that maps them back to video time. Absent
+   * `clipEnd - clipStart` long — note times are clip-relative, and the video
+   * players are the only places that map them back to video time. Absent
    * means the whole video (`clipStart` 0, `clipEnd` the real duration).
    * Retuning the window later shifts the notes with it (see App's setClip) so
-   * they stay on the same music. YouTube only — an audio track's clip would
-   * have to fight wavesurfer's own waveform extent.
+   * they stay on the same music. Video sources only (YouTube and Drive) — an
+   * audio track's clip would have to fight wavesurfer's own waveform extent.
    */
   clipStart?: number
   clipEnd?: number
@@ -213,8 +221,10 @@ export interface BrowseItem {
   ownerId: string
   title: string
   sourceType: SourceType | null
-  /** YouTube video id when the source is a video — drives the card cover. */
+  /** YouTube video id when the source is a YouTube video — drives the cover. */
   videoId: string | null
+  /** Drive file id when the source is a Drive video — the other cover. */
+  driveFileId: string | null
   noteCount: number
   /** Note positions/colours for the cue line (capped server-side). */
   ticks: { id: string; start: number; end?: number; color?: string }[]

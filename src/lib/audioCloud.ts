@@ -24,12 +24,12 @@ export async function deleteAudioCloud(
   })
 }
 
-// The temporary audio a YouTube project's section detection runs against —
+// The temporary audio a video project's section detection runs against —
 // one object, deleted server-side once the analysis finalizes.
 const analysisPath = (uid: string, projectId: string) =>
   `users/${uid}/analysis/${projectId}`
 
-/** Upload the analysis audio for a YouTube project (client-streamed via the
+/** Upload the analysis audio for a video project (client-streamed via the
  *  /api/blobs/upload token handler) and resolve with its URL. */
 export async function uploadAnalysisAudio(
   uid: string,
