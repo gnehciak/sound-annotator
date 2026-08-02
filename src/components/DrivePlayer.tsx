@@ -35,6 +35,17 @@ const clipLen = (videoLen: number, win: { from: number; to: number }) =>
   Math.max(0, Math.min(win.to, videoLen) - Math.min(win.from, videoLen))
 
 /**
+ * A failed load isn't final until this many tries. The proxy only serves file
+ * ids a live project already points at, and a just-pasted link reaches the
+ * server on the save debounce (~1s) — so the very first load of a new Drive
+ * track races the write that authorizes it, and loses. Retrying quietly is
+ * what makes the pick feel instant; it also absorbs a transient hiccup on the
+ * long way through Drive.
+ */
+const LOAD_ATTEMPTS = 4
+const RETRY_MS = 800
+
+/**
  * The player for a Google Drive video: a plain `<video>` pointed at the file's
  * bytes. Drive's own embed is an iframe with no scriptable clock, which an
  * annotation app can't use — lib/drive.ts has the full reasoning, including
@@ -70,6 +81,9 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
   // Metadata hasn't landed yet, so a seek can't be applied — hold the last one
   // asked for and replay it when the video knows how long it is.
   const pendingSeekRef = useRef<number | null>(null)
+  // Load attempts spent on this file, and the pending retry (see LOAD_ATTEMPTS).
+  const attemptsRef = useRef(0)
+  const retryRef = useRef<number | null>(null)
   const [ready, setReady] = useState(false)
   const [buffering, setBuffering] = useState(false)
   const [playing, setPlaying] = useState(false)
@@ -84,7 +98,18 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
     setFailed(false)
     timeRef.current = 0
     pendingSeekRef.current = null
+    attemptsRef.current = 0
+    if (retryRef.current != null) window.clearTimeout(retryRef.current)
+    retryRef.current = null
   }, [fileId])
+
+  // A retry outliving the player would call load() on a detached element.
+  useEffect(
+    () => () => {
+      if (retryRef.current != null) window.clearTimeout(retryRef.current)
+    },
+    [],
+  )
 
   // Apply live speed / volume changes. Both also run on mount, which is what
   // seeds the element — there's no onReady equivalent to do it once.
@@ -168,9 +193,9 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
       <video
         ref={videoRef}
         key={fileId}
+        // Our own origin, not Drive's — Drive answers a browser's cross-site
+        // media request 403 no matter how the file is shared (see lib/drive).
         src={driveStreamUrl(fileId)}
-        // No `crossOrigin`: Drive sends no CORS header, and asking for one
-        // would turn a working load into a blocked one.
         preload="metadata"
         playsInline
         className="h-full w-full"
@@ -178,6 +203,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
           const v = e.currentTarget
           setReady(true)
           setFailed(false)
+          attemptsRef.current = 0
           v.playbackRate = playbackRate
           v.volume = Math.min(1, Math.max(0, volume))
           v.muted = volume <= 0
@@ -210,6 +236,16 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
           setBuffering(false)
         }}
         onError={() => {
+          // Spend a retry before admitting failure — the spinner stays up, so
+          // the race a fresh pick loses never surfaces as a scary panel.
+          if (attemptsRef.current < LOAD_ATTEMPTS - 1) {
+            attemptsRef.current += 1
+            retryRef.current = window.setTimeout(
+              () => videoRef.current?.load(),
+              RETRY_MS,
+            )
+            return
+          }
           setFailed(true)
           setReady(false)
           setBuffering(false)
@@ -218,19 +254,19 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
         }}
       />
       {failed ? (
-        // Drive answers an unshared file with a sign-in page rather than
-        // video, so the element's error is almost always a sharing problem —
-        // name it, because it's the one thing the person reading this can fix.
+        // By the time this shows, the proxy has been asked several times and
+        // Drive has refused each one — and it refuses an unshared file by
+        // handing back a sign-in page. Sharing is the one cause the person
+        // reading this can fix, so it leads; the rest is honest hedging.
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-inset px-6 text-center">
           <TriangleAlert size={22} className="text-danger" />
           <p className="text-[13px] font-semibold text-fg-strong">
             This Drive video wouldn’t load
           </p>
           <p className="max-w-sm text-xs leading-relaxed text-muted">
-            Drive only streams files shared with{' '}
-            <span className="text-fg">Anyone with the link</span>. Check the
-            file’s sharing, and that the link points at a video file rather
-            than a folder.
+            Drive turned the file down. Check that it’s shared with{' '}
+            <span className="text-fg">Anyone with the link</span>, and that the
+            link points at a video file rather than a folder.
           </p>
           <a
             href={driveViewUrl(fileId)}
