@@ -13,10 +13,16 @@ poster thumbnail, an "open the original" link — so ask `src/lib/source.ts`
 (`isVideoSource` / `videoIdOf` / `sourceLabel` / `sourceLinkUrl` /
 `sourceThumbUrl` / `parseVideoLink`) rather than spreading
 `type === 'youtube' || type === 'drive'` around. Drive has no scriptable embed,
-so `DrivePlayer` streams the file's own bytes into a plain `<video>`: the file
-must be shared **Anyone with the link**, the download URL needs `confirm=t`
-past ~100 MB, and Drive sends no CORS header — which is exactly why a Drive
-video can't be an `audio` source with a rewritten URL. See `src/lib/drive.ts`. Vite + React 19 + TypeScript + Tailwind + TipTap +
+so `DrivePlayer` streams the file's bytes into a plain `<video>` — but **never
+from Drive**: Drive answers any browser subresource (`Sec-Fetch-Site:
+cross-site`) with 403, and any non-Google `Referer` with its virus-scan HTML,
+neither of which page JS can suppress, and both of which reach the element as
+`MEDIA_ELEMENT_ERROR: Format error`. So the bytes come through
+`GET /api/browse?drive=<fileId>`, a server-side Range proxy: the file must
+still be shared **Anyone with the link** (the proxy holds no Drive
+credentials), the upstream URL needs `confirm=t` past ~100 MB, the proxy serves
+~8 MB per request and only for ids a live project points at, and every play
+spends our own bandwidth. See `src/lib/drive.ts`. Vite + React 19 + TypeScript + Tailwind + TipTap +
 wavesurfer.js. Backed by Vercel: sign-in via Clerk's prebuilt card (Google *or*
 email + password, with verification and reset — themed from our tokens in
 `src/lib/clerkAppearance.ts`, which must hand Clerk hex: its JS color parser
@@ -54,8 +60,9 @@ explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
 live rows only.
 
 **The Hobby plan caps a deployment at 12 Serverless Functions, and `/api` is at
-exactly 12.** That's why restore/purge are query verbs on `[id]/index.ts`
-rather than a route of their own. Adding any new `/api/*` file fails the
+exactly 12.** That's why restore/purge are query verbs on `[id]/index.ts`, and
+the Drive byte proxy a query verb on `browse.ts`, rather than routes of their
+own. Adding any new `/api/*` file fails the
 deploy at `patchBuild` (`exceeded_serverless_functions_per_deployment`, and the
 build log looks *successful* — the error is only in the deployment's API
 record); fold new endpoints into an existing function, or upgrade to Pro.

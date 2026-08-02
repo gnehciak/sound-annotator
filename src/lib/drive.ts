@@ -4,21 +4,37 @@
  * Drive has no embeddable player with a JS API the way YouTube does. Its
  * `/preview` iframe plays a file but hands out no clock, and a clock is the
  * whole app: without `currentTime`/`seekTo` a note can't anchor to a moment.
- * So DrivePlayer loads Drive's own file bytes into a plain `<video>` element
- * instead, which gives us the real thing. Three consequences worth carrying
- * in your head:
+ * So DrivePlayer loads the file's bytes into a plain `<video>` element
+ * instead, which gives us the real thing.
  *
- *  • **The file must be shared "Anyone with the link."** Drive answers the
- *    download endpoint for a private file with a sign-in page, not video, and
- *    the `<video>` simply fails to load. DrivePlayer says exactly that rather
- *    than spinning forever, because it's the one thing the teacher can fix.
- *  • **`confirm=t` is load-bearing.** Past roughly 100 MB Drive answers the
- *    plain download URL with its "can't scan this for viruses" interstitial
- *    instead of the file; a lecture recording is always past it.
- *  • **Drive sends no CORS header.** Fine for `<video>` (media elements load
- *    cross-origin without one), fatal for wavesurfer — which is why a Drive
- *    track is its own source kind rather than an `audio` one with a rewritten
- *    URL. See AudioUrlForm for the other side of that rule.
+ * **Those bytes cannot come from Drive directly.** Drive refuses its download
+ * endpoint to browsers on two independent grounds, and page JS can suppress
+ * neither:
+ *
+ *  • Every subresource loaded from another origin carries
+ *    `Sec-Fetch-Site: cross-site`. Drive answers that **403**, whatever the
+ *    file is — size, sharing and `confirm=t` don't enter into it.
+ *  • Any `Referer` from a non-Google page gets Drive's "Virus scan warning"
+ *    HTML instead of the file, `confirm=t` notwithstanding.
+ *
+ * Either way the `<video>` receives HTML and reports `MEDIA_ELEMENT_ERROR:
+ * Format error`, which looks exactly like a corrupt file and is not one.
+ *
+ * A *server* fetch sends neither header, so the bytes come through our own
+ * origin instead: `driveStreamUrl` points at `GET /api/browse?drive=<id>`,
+ * which proxies Drive with Range support. Two things that follow:
+ *
+ *  • **The file must still be shared "Anyone with the link."** The proxy has
+ *    no Drive credentials; a private file comes back as a sign-in page, which
+ *    it turns into a 502 rather than passing HTML off as video.
+ *  • **Every play spends our bandwidth**, unlike YouTube's embed. The proxy
+ *    serves ~8 MB per request and only for file ids a live project points at,
+ *    so it can't be used as a general-purpose CDN for public Drive files.
+ *
+ * One door this opens and we haven't walked through: the proxy is same-origin,
+ * so it *could* feed wavesurfer, which Drive's own no-CORS bytes never could.
+ * A Drive track is still its own source kind rather than an `audio` one — see
+ * AudioUrlForm for the other side of that rule.
  */
 
 /** Drive file ids are long opaque strings; the length floor keeps a stray
@@ -69,12 +85,11 @@ export function parseDriveFileId(input: string): string | null {
   return inQuery && FILE_ID.test(inQuery) ? inQuery : null
 }
 
-/** The URL a `<video>` element streams the file from. See the note up top for
- *  why it's the download endpoint and why `confirm=t` has to be on it. */
+/** The URL a `<video>` element streams the file from — our own proxy, never
+ *  Drive. See the note up top for why pointing the element at Drive can only
+ *  fail; api/browse.ts holds the other half. */
 export function driveStreamUrl(fileId: string): string {
-  return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(
-    fileId,
-  )}&export=download&confirm=t`
+  return `/api/browse?drive=${encodeURIComponent(fileId)}`
 }
 
 /** The human-facing Drive page — the "open the original" link. */
