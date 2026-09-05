@@ -1724,7 +1724,7 @@ export default function App() {
                   }`
             }
             aria-label={isGuest ? 'Sound Annotator — home' : 'Back'}
-            className="press group -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded transition-colors hover:bg-raised"
+            className="btn-icon-lg press group -ml-1"
           >
             <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)] transition-transform duration-150 ease-instr group-hover:scale-110" />
           </button>
@@ -1815,7 +1815,7 @@ export default function App() {
           </>
         )}
         {view === 'track' && viewOnly && !lockBlocked && (
-          <span className="flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+          <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
             <Eye size={11} /> View only
           </span>
         )}
@@ -1827,7 +1827,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Undo and redo"
-            className="flex items-center gap-px rounded-md border border-line bg-inset p-[2px]"
+            className="seg"
           >
             <button
               type="button"
@@ -1835,7 +1835,7 @@ export default function App() {
               disabled={!canUndo}
               title="Undo (⌘Z)"
               aria-label="Undo"
-              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+              className="seg-item press h-[26px] w-[30px] px-0 disabled:pointer-events-none"
             >
               <Undo2 size={15} />
             </button>
@@ -1845,7 +1845,7 @@ export default function App() {
               disabled={!canRedo}
               title="Redo (⌘⇧Z)"
               aria-label="Redo"
-              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+              className="seg-item press h-[26px] w-[30px] px-0 disabled:pointer-events-none"
             >
               <Redo2 size={15} />
             </button>
@@ -1859,7 +1859,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Editing mode"
-            className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+            className="seg"
           >
             <button
               type="button"
@@ -1867,8 +1867,8 @@ export default function App() {
               aria-pressed={!viewOnly}
               title="Edit mode (V)"
               aria-label="Edit mode"
-              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
-                viewOnly ? 'text-muted hover:text-fg' : 'bg-accent text-onaccent'
+              className={`seg-item press h-[26px] w-[34px] px-0 ${
+                viewOnly ? '' : 'bg-accent text-onaccent'
               }`}
             >
               <Pencil size={14} />
@@ -1879,9 +1879,7 @@ export default function App() {
               aria-pressed={viewOnly}
               title="View-only mode (V)"
               aria-label="View-only mode"
-              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
-                viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-              }`}
+              className="seg-item press h-[26px] w-[34px] px-0"
             >
               <Eye size={14} />
             </button>
@@ -1895,11 +1893,11 @@ export default function App() {
           <div
             role="group"
             aria-label="Edit lock"
-            className="flex min-w-0 items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+            className="seg min-w-0"
           >
             <span
               role="status"
-              className="flex h-[26px] min-w-0 items-center gap-1.5 rounded bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink"
+              className="chip chip-signal h-[26px] min-w-0 gap-1.5 font-semibold tracking-[0.14em]"
             >
               <Pencil size={12} className="shrink-0" />
               <span className="truncate">
@@ -1926,7 +1924,7 @@ export default function App() {
             onClick={fitLayout}
             title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
             aria-label="Fit layout to screen"
-            className="press grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon-lg press"
           >
             <Proportions size={16} />
           </button>
@@ -2065,7 +2063,7 @@ export default function App() {
                           title={`Open the original video on ${sourceLabel(
                             current.source,
                           )} (new tab)`}
-                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                          className="btn-ghost btn-sm press shrink-0"
                         >
                           <Play size={12} />
                           {sourceLabel(current.source)}
@@ -2211,7 +2209,7 @@ export default function App() {
                           title={`Open the original video on ${sourceLabel(
                             current.source,
                           )} (new tab)`}
-                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                          className="btn-ghost btn-sm press shrink-0"
                         >
                           <Play size={12} />
                           {sourceLabel(current.source)}
@@ -2547,7 +2545,7 @@ export default function App() {
 
 function ReadOnlyNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded border border-line bg-inset p-6 text-center text-sm text-muted">
+    <div className="empty text-sm text-muted">
       {children}
     </div>
   )
@@ -2566,7 +2564,7 @@ function ReattachAudio({
   onAudioUrl: (url: string) => void
 }) {
   return (
-    <div className="rounded border border-accent/40 bg-accent/5 p-6">
+    <div className="empty items-stretch text-left">
       <p className="text-sm text-fg">
         The audio{fileName ? ` (${fileName})` : ''} for this track isn't
         loading. Paste a link to it to keep annotating — your notes are safe.

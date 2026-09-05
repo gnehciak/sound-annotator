@@ -678,9 +678,7 @@ export default function StructureEditor({
       onClick={() => setTool(t)}
       aria-pressed={tool === t}
       title={title}
-      className={`press flex h-[24px] items-center gap-1.5 rounded px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors duration-150 ${
-        tool === t ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-      }`}
+      className="seg-item press h-[24px] gap-1.5 text-[10px] tracking-[0.12em]"
     >
       {icon}
       <span className="hidden lg:inline">{label}</span>
@@ -694,7 +692,7 @@ export default function StructureEditor({
         <div
           role="group"
           aria-label="Timeline tool"
-          className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+          className="seg"
         >
           {toolBtn(
             'select',
@@ -719,7 +717,7 @@ export default function StructureEditor({
           disabled={zoom <= 1.001}
           title="Zoom out"
           aria-label="Zoom out"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <ZoomOut size={13} />
         </button>
@@ -741,7 +739,7 @@ export default function StructureEditor({
           disabled={zoom >= MAX_ZOOM * 0.999}
           title="Zoom in"
           aria-label="Zoom in"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <ZoomIn size={13} />
         </button>
@@ -751,7 +749,7 @@ export default function StructureEditor({
           disabled={!view}
           title="Fit the whole track"
           aria-label="Zoom to fit"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <Maximize size={12} />
         </button>
@@ -772,7 +770,7 @@ export default function StructureEditor({
 
       {/* Section chips — the song's form at a glance; click to cue. */}
       {ordered.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto border-b border-line px-3.5 py-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto border-b border-line/70 px-3.5 py-2">
           {ordered.map((sec) => {
             const color = sec.color ?? colorForId(sec.id)
             const isNow = nowSection?.id === sec.id
@@ -786,13 +784,12 @@ export default function StructureEditor({
                   if (!readOnly) setSelectedId(sec.id)
                 }}
                 title={`${sectionName(sec)} · ${noteLabel(sec.start, sec.end)}`}
-                className={`press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 py-[3px] text-[11px] font-medium transition-colors ${
-                  isNow
-                    ? 'border-accent/70 bg-accent/10 text-accentink'
-                    : isSel
-                      ? 'border-line-strong bg-raised text-fg'
-                      : 'border-line text-fg hover:border-line-strong'
-                }`}
+                aria-pressed={isSel}
+                className="chip press gap-1.5 text-[11px] normal-case tracking-normal"
+                style={{
+                  ['--hue' as string]: isNow ? 'rgb(var(--accent-ink))' : color,
+                  color: isNow ? 'rgb(var(--accent-ink))' : 'rgb(var(--text))',
+                }}
               >
                 <span
                   aria-hidden
@@ -875,7 +872,7 @@ export default function StructureEditor({
             if (e.button === 0) scrubDrag(e.clientX)
           }}
           title="Click or drag to seek"
-          className="relative h-[20px] cursor-pointer touch-none overflow-hidden rounded-t-sm border border-b-0 border-line bg-panel"
+          className="relative h-[20px] cursor-pointer touch-none overflow-hidden rounded-t-sm border border-b-0 border-line/70 bg-inset"
         >
           {ticks.minor.map((x) => (
             <span
@@ -1060,7 +1057,7 @@ export default function StructureEditor({
             }
             placeholder="Section name"
             aria-label="Section name"
-            className="bevel-inset w-36 rounded border border-line bg-inset px-2 py-[4px] text-[12.5px] text-fg outline-none transition-colors placeholder:text-muted focus:border-accent"
+            className="field w-36 px-2 py-[4px]"
           />
           <div
             role="group"
@@ -1084,12 +1081,12 @@ export default function StructureEditor({
                     })
                   }
                   title={`Name this section “${p.name}”`}
-                  className={`press flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-[2px] font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] transition-colors ${
-                    active
-                      ? 'bg-raised text-fg'
-                      : 'border-line text-muted hover:text-fg'
-                  }`}
-                  style={active ? { borderColor: p.color } : undefined}
+                  aria-pressed={active}
+                  className="chip chip-outline press text-[9.5px] font-semibold"
+                  style={{
+                    ['--hue' as string]: p.color,
+                    color: active ? 'rgb(var(--text))' : 'rgb(var(--text-muted))',
+                  }}
                 >
                   <span
                     aria-hidden
@@ -1135,7 +1132,7 @@ export default function StructureEditor({
             }}
             title="Delete section (⌫)"
             aria-label="Delete section"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+            className="btn-icon press hover:text-danger"
           >
             <Trash2 size={13} />
           </button>

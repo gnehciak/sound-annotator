@@ -166,7 +166,7 @@ export default function NoteInspector({
           onClick={onDelete}
           title="Delete note"
           aria-label="Delete note"
-          className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+          className="btn-icon press hover:text-danger"
         >
           <Trash2 size={14} />
         </button>
@@ -189,12 +189,12 @@ export default function NoteInspector({
               ? 'Give this note an end time first — a section brackets a span, not a single moment'
               : 'Section notes are bracketed along their span in the overview'
           }
-          className={`flex w-full items-center justify-between gap-2.5 rounded border px-[11px] py-2 text-left transition-colors ${
+          className={`flex w-full items-center justify-between gap-2.5 rounded-md border px-[11px] py-2 text-left transition-colors ${
             annotation.end == null
               ? 'cursor-not-allowed border-line/60 opacity-50'
               : annotation.structure
-                ? 'press border-accent/60 bg-accent/10'
-                : 'press border-line hover:border-line-strong'
+                ? 'press border-accent/40 bg-accent/[0.06]'
+                : 'press border-line/70 hover:border-line-strong'
           }`}
         >
           <span
@@ -205,17 +205,7 @@ export default function NoteInspector({
             <Brackets size={14} className="shrink-0" />
             Mark as section note
           </span>
-          <span
-            className={`relative inline-flex h-[17px] w-[30px] shrink-0 rounded-full border transition-colors ${
-              annotation.structure ? 'border-accent bg-accent' : 'border-line bg-inset'
-            }`}
-          >
-            <span
-              className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
-                annotation.structure ? 'left-[14px] bg-onaccent' : 'left-[2px] bg-muted'
-              }`}
-            />
-          </span>
+          <span className="switch" data-on={annotation.structure || undefined} />
         </button>
         {annotation.structure && (
           <input
@@ -223,7 +213,7 @@ export default function NoteInspector({
             onChange={(e) => onUpdate({ sectionName: e.target.value })}
             placeholder="Section name"
             aria-label="Section name"
-            className="bevel-inset w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            className="field"
           />
         )}
 
@@ -236,10 +226,10 @@ export default function NoteInspector({
           aria-checked={annotation.question ?? false}
           onClick={() => onUpdate({ question: !annotation.question })}
           title="Question notes turn the shared view link into a listening task — students type an answer under this note and export their sheet as a PDF"
-          className={`press flex w-full items-center justify-between gap-2.5 rounded border px-[11px] py-2 text-left transition-colors ${
+          className={`press flex w-full items-center justify-between gap-2.5 rounded-md border px-[11px] py-2 text-left transition-colors ${
             annotation.question
-              ? 'border-accent/60 bg-accent/10'
-              : 'border-line hover:border-line-strong'
+              ? 'border-accent/40 bg-accent/[0.06]'
+              : 'border-line/70 hover:border-line-strong'
           }`}
         >
           <span
@@ -250,17 +240,7 @@ export default function NoteInspector({
             <CircleHelp size={14} className="shrink-0" />
             Ask as a question
           </span>
-          <span
-            className={`relative inline-flex h-[17px] w-[30px] shrink-0 rounded-full border transition-colors ${
-              annotation.question ? 'border-accent bg-accent' : 'border-line bg-inset'
-            }`}
-          >
-            <span
-              className={`absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all ${
-                annotation.question ? 'left-[14px] bg-onaccent' : 'left-[2px] bg-muted'
-              }`}
-            />
-          </span>
+          <span className="switch" data-on={annotation.question || undefined} />
         </button>
       </div>
 
@@ -301,7 +281,7 @@ export default function NoteInspector({
             )
           }}
           placeholder="Bar number or rehearsal mark — e.g. 24, reh. B"
-          className="bevel-inset w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          className="field"
         />
       </div>
 
@@ -341,7 +321,7 @@ export default function NoteInspector({
                   onClick={() => removeBlock(block.id)}
                   title={`Remove ${plugin.label}`}
                   aria-label={`Remove ${plugin.label}`}
-                  className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+                  className="btn-icon press hover:text-danger"
                 >
                   <X size={13} />
                 </button>
@@ -488,7 +468,7 @@ function TimeEndpoint({
   }
 
   const nudgeBtn =
-    'press flex h-7 w-7 items-center justify-center rounded border border-line text-muted hover:border-accent hover:text-accentink'
+    'btn-icon press h-7 w-7 border border-line hover:border-accent hover:bg-transparent hover:text-accentink'
 
   return (
     <div className="relative shrink-0">
@@ -498,9 +478,10 @@ function TimeEndpoint({
         onClick={() => setOpen((o) => !o)}
         title={`${label} — click to edit`}
         aria-label={`${label} ${display}`}
-        className={`press rounded-sm border px-2 py-[3px] font-mono text-[12px] tabular-nums text-fg transition-colors hover:border-accent ${
-          open ? 'border-accent' : 'border-line'
-        }`}
+        className="chip chip-outline press text-[12px] normal-case tracking-[0.02em] tabular-nums"
+        style={{
+          ['--hue' as string]: open ? 'rgb(var(--accent-ink))' : 'rgb(var(--text))',
+        }}
       >
         {display}
       </button>
@@ -511,7 +492,7 @@ function TimeEndpoint({
         width={184}
         className={`${
           align === 'right' ? 'origin-top-right' : 'origin-top-left'
-        } rounded border border-line bg-panel p-2.5 shadow-lg`}
+        } p-2.5`}
       >
         <div className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
           {label}
@@ -530,7 +511,7 @@ function TimeEndpoint({
           placeholder="m:ss"
           inputMode="numeric"
           aria-label={`${label} time`}
-          className="bevel-inset mb-2 w-full rounded border border-line bg-inset px-[9px] py-[6px] text-center font-mono text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+          className="field mb-2 text-center font-mono"
         />
         <div className="flex items-center gap-1">
           <button
@@ -546,7 +527,7 @@ function TimeEndpoint({
             type="button"
             onClick={() => onCommit(Math.floor(currentTime))}
             title="Set to the current time"
-            className="press flex h-7 flex-1 items-center justify-center gap-1 rounded border border-line font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-accent hover:text-accentink"
+            className="btn-ghost press h-7 flex-1 hover:border-accent hover:text-accentink"
           >
             <Crosshair size={12} /> Now
           </button>
@@ -567,7 +548,7 @@ function TimeEndpoint({
               onClear()
               close()
             }}
-            className="press mt-2 flex w-full items-center justify-center gap-1 rounded border border-line/60 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-danger/60 hover:text-danger"
+            className="btn-ghost press mt-2 w-full border-line/60 py-1.5 hover:border-danger/60 hover:text-danger"
           >
             <X size={11} /> Remove end
           </button>
@@ -588,7 +569,7 @@ function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="press inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:border-accent hover:text-accentink"
+        className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
       >
         <Plus size={12} /> Property
       </button>
@@ -597,7 +578,7 @@ function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
         anchorRef={btnRef}
         onClose={() => setOpen(false)}
         width={192}
-        className="origin-top-left rounded border border-line bg-panel py-1 shadow-lg"
+        className="origin-top-left py-1"
       >
         {addablePlugins().map((p) => {
           const Icon = p.icon

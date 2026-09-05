@@ -37,7 +37,7 @@ export default function ClipFields({
         placeholder={placeholder}
         inputMode="numeric"
         aria-label={`Clip ${label.toLowerCase()} time`}
-        className="w-[72px] rounded border border-line bg-inset px-2 py-1 text-center font-mono text-[12px] text-fg placeholder:text-muted focus:border-accent"
+        className="field w-[72px] px-2 py-1 text-center font-mono text-[12px]"
       />
     </label>
   )

@@ -191,7 +191,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
     // Same frame as YouTubePlayer: 16:9, centred, height capped by
     // `--player-max-h` so a wide player column doesn't squeeze the overview.
     <div
-      className="relative mx-auto aspect-video w-full overflow-hidden rounded-xl border border-line/70 bg-black shadow-[0_24px_50px_-20px_rgb(0_0_0/0.7)]"
+      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line/70 bg-black"
       style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <video
@@ -276,7 +276,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
             href={driveViewUrl(fileId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="press mt-1 inline-flex items-center gap-1.5 rounded border border-line px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost btn-sm press mt-1"
           >
             Open in Drive
           </a>

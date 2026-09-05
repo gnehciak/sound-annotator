@@ -462,7 +462,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   if (status === 'notfound' || !project) {
     return (
       <div className="flex h-full items-center justify-center bg-ink p-6 text-fg">
-        <div className="w-full max-w-md rounded border border-line bg-panel p-8 text-center">
+        <div className="glass w-full max-w-md p-8 text-center">
           <div className="flex justify-center">
             <HomeDot size={10} />
           </div>
@@ -473,7 +473,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </p>
           <a
             href={homeHref()}
-            className="press bevel-raised mt-6 inline-flex items-center justify-center gap-1.5 rounded bg-accent px-4 py-2 text-sm font-bold text-onaccent hover:brightness-110"
+            className="btn-primary press mt-6 px-4 py-2 text-sm"
           >
             Open Sound Annotator
           </a>
@@ -519,11 +519,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </span>
         </HomeDot>
         {isTask ? (
-          <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+          <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
             <ClipboardList size={11} /> Listening task
           </span>
         ) : (
-          <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+          <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
             <Eye size={11} /> Read only
           </span>
         )}
@@ -537,7 +537,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <a
             href={`${window.location.pathname}?track=${project.id}`}
             title="Edit this track's notes — you'll be asked to sign in with Google"
-            className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+            className="btn-signal press shrink-0"
           >
             <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
           </a>
@@ -552,7 +552,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <a
           href={homeHref()}
           title="Open the full app"
-          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+          className="btn-ghost press shrink-0"
         >
           <ExternalLink size={12} /> <span className="hidden sm:inline">Open app</span>
         </a>
@@ -562,9 +562,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         /* Structure board: player over the read-only section timeline, with
            the Lyrics column beside it when the owner wrote any — the same
            layout the editor uses, minus editing. */
-        <div className="flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 gap-3 px-3 pb-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+          <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden">
             <TitleBar
               left="Player"
               right={sourceLabel(source)}
@@ -610,7 +610,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   />
                 </>
               ) : (
-                <div className="rounded border border-dashed border-line p-6 text-center text-sm text-muted">
+                <div className="empty py-6 text-sm text-muted">
                   The audio for this track isn’t available, but its structure
                   is still mapped below.
                 </div>
@@ -633,7 +633,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           />
         </div>
         {annotations.some((a) => a.lyrics?.trim()) && (
-          <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+          <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
             <LyricsPanel
               sections={annotations}
               currentTime={currentTime}
@@ -695,7 +695,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 <TransportHints readOnly />
               </>
             ) : (
-              <div className="rounded border border-dashed border-line p-6 text-center text-sm text-muted">
+              <div className="empty py-6 text-sm text-muted">
                 The audio for this track isn’t available, but the notes below are
                 still here.
               </div>
@@ -770,7 +770,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               name and answers live in this browser only; Export builds the
               PDF answer sheet the student returns to the teacher. */}
           {isTask && (
-            <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
+            <div className="strip flex items-center gap-2 border-b border-line/70 px-3 py-2">
               <label
                 htmlFor="student-name"
                 className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted"
@@ -782,7 +782,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 value={studentName}
                 onChange={(e) => setStudentName(e.target.value)}
                 placeholder="Your name"
-                className="bevel-inset w-full min-w-0 flex-1 rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+                className="field min-w-0 flex-1"
               />
               <button
                 type="button"
@@ -793,7 +793,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   })
                 }
                 title="Export your answers as a PDF answer sheet to hand in (opens in a new tab)"
-                className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+                className="btn-signal press shrink-0"
               >
                 <FileDown size={12} />
                 Export <span className="hidden sm:inline">PDF</span>
@@ -803,7 +803,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 onClick={resetTask}
                 title="New student — clear the name and answers saved on this device"
                 aria-label="Clear the name and all answers"
-                className="press grid h-[29px] w-[29px] shrink-0 place-items-center rounded border border-line text-muted transition-colors hover:border-danger/60 hover:text-danger"
+                className="btn-icon press hover:border-danger/60 hover:text-danger"
               >
                 <RotateCcw size={13} />
               </button>

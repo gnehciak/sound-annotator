@@ -64,7 +64,7 @@ export default function BrowseGallery() {
 
   if (status === 'error')
     return (
-      <div className="flex flex-col items-center gap-3 rounded border border-dashed border-line py-14 text-center">
+      <div className="empty py-14">
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
           Couldn’t load the gallery
         </p>
@@ -74,7 +74,7 @@ export default function BrowseGallery() {
         <button
           type="button"
           onClick={retry}
-          className="press inline-flex items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg hover:border-line-strong"
+          className="btn-ghost press"
         >
           <RefreshCw size={12} /> Retry
         </button>
@@ -87,7 +87,7 @@ export default function BrowseGallery() {
         {Array.from({ length: 8 }, (_, i) => (
           <div
             key={i}
-            className="animate-pulse overflow-hidden rounded border border-line bg-panel"
+            className="tile animate-pulse"
             style={{ animationDelay: stagger(i) }}
           >
             <div className="aspect-video w-full border-b border-line bg-inset" />
@@ -102,7 +102,7 @@ export default function BrowseGallery() {
 
   if ((items ?? []).length === 0)
     return (
-      <div className="flex flex-col items-center gap-3 rounded border border-dashed border-line py-14 text-center">
+      <div className="empty py-14">
         <Globe size={22} className="text-muted/50" />
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
           Nothing published yet
@@ -127,7 +127,7 @@ export default function BrowseGallery() {
           onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
           placeholder="Search published tracks…"
           aria-label="Search published tracks"
-          className="bevel-inset w-full rounded border border-line bg-inset py-2 pl-9 pr-8 text-sm text-fg outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
+          className="field py-2 pl-9 pr-8 text-sm placeholder:text-muted/70"
         />
         {q !== '' && (
           <button
@@ -177,20 +177,20 @@ export function PublicBrowsePage() {
   }, [])
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
-      <header className="flex h-[54px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="flex h-[54px] shrink-0 items-center gap-3 px-4">
         <HomeDot>
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
             Sound&nbsp;Annotator
           </span>
         </HomeDot>
-        <span className="flex h-[26px] items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+        <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
           <Globe size={11} /> Browse
         </span>
         <span className="flex-1" />
         {!loading && (
           <a
             href={homeHref()}
-            className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost press shrink-0"
           >
             {user ? 'Your library' : 'Sign in'}
           </a>
@@ -253,7 +253,7 @@ function BrowseTile({
       tabIndex={0}
       aria-label={`Open ${it.title} by ${it.publishedByName} (read-only)`}
       style={{ animationDelay: enterDelay }}
-      className="group flex animate-tile-in cursor-pointer flex-col overflow-hidden rounded border border-line bg-panel transition duration-200 ease-instr focus-visible:border-accent focus-visible:outline-none hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10"
+      className="tile group flex animate-tile-in cursor-pointer flex-col transition duration-200 ease-instr focus-visible:border-accent focus-visible:outline-none"
     >
       <div className="relative aspect-video w-full overflow-hidden border-b border-line bg-inset">
         <div className="absolute inset-0 transition-transform duration-700 ease-instr group-hover:scale-[1.04]">
@@ -273,7 +273,7 @@ function BrowseTile({
         {/* Listen affordance — rises with the cover on hover/focus so the
             card reads "opens a player", not "opens an editor". */}
         <div className="absolute inset-x-0 bottom-0 flex justify-end p-2 opacity-0 transition-opacity duration-200 group-focus-visible:opacity-100 group-hover:opacity-100">
-          <span className="flex items-center gap-1 rounded border border-line-strong bg-ink/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg backdrop-blur-sm">
+          <span className="chip bg-black/60 font-semibold tracking-[0.14em] text-white backdrop-blur-sm">
             <Play size={10} /> Listen
           </span>
         </div>
@@ -299,7 +299,7 @@ function BrowseTile({
         <span aria-hidden>·</span>
         <span>{formatRelativeTime(it.publishedAt || it.updatedAt)}</span>
         {mine && (
-          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
+          <span className="chip chip-signal">
             <Globe size={10} /> Yours
           </span>
         )}

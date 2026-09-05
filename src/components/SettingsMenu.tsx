@@ -32,7 +32,7 @@ export default function SettingsMenu({
         aria-label="Open settings menu"
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`press grid h-8 w-8 shrink-0 place-items-center rounded transition-colors ${
+        className={`btn-icon-lg press ${
           open ? 'bg-raised text-fg' : 'text-muted hover:bg-raised hover:text-fg'
         }`}
       >
@@ -44,7 +44,7 @@ export default function SettingsMenu({
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
         width={200}
-        className="glass-pop rounded-xl py-1"
+        className="py-1"
       >
         {canEditTrack && (
           <button

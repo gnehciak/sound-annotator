@@ -174,8 +174,8 @@ export default function StemMixer({
       className={
         bare
           ? 'flex flex-wrap items-center gap-1.5'
-          : `flex shrink-0 flex-wrap items-center gap-1.5 rounded-lg border px-[13px] py-[9px] transition-colors ${
-              anyActive ? 'border-accent/50 bg-accent/5' : 'border-line bg-panel'
+          : `strip flex shrink-0 flex-wrap items-center gap-1.5 rounded-lg border px-[13px] py-[9px] transition-colors ${
+              anyActive ? 'border-accent/40' : 'border-line/70'
             }`
       }
     >
@@ -210,13 +210,14 @@ export default function StemMixer({
                     ? `Mute the ${name} stem`
                     : `Hear the ${name} stem (silences the original mix)`
             }
-            className={`press inline-flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-              isFailed
-                ? 'border-danger/60 text-danger hover:border-danger'
+            className="chip chip-outline press gap-1.5 font-semibold tracking-[0.14em]"
+            style={{
+              ['--hue' as string]: isFailed
+                ? 'rgb(var(--danger))'
                 : on
-                  ? 'border-accent bg-accent text-onaccent'
-                  : 'border-line text-muted hover:border-line-strong hover:text-fg'
-            }`}
+                  ? 'rgb(var(--accent-ink))'
+                  : 'rgb(var(--text-muted))',
+            }}
           >
             {loading && <Loader2 size={11} className="animate-spin" />}
             {name}
@@ -228,7 +229,7 @@ export default function StemMixer({
           type="button"
           onClick={clear}
           title="Back to the original mix"
-          className="press ml-auto inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+          className="btn-ghost btn-sm press ml-auto"
         >
           <X size={11} />
           Original

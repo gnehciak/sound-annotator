@@ -212,8 +212,7 @@ export default function Transport({
   }
 
   if (overlay) {
-    const iconBtn =
-      'press grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white'
+    const iconBtn = 'btn-icon-lg on-video press'
     return (
       <div
         ref={rootRef}
@@ -325,7 +324,7 @@ export default function Transport({
               <div
                 role="listbox"
                 aria-label="Playback speed"
-                className="glass-pop absolute bottom-full right-0 z-30 mb-1.5 w-[4.25rem] animate-panel-in overflow-hidden rounded-md"
+                className="pop absolute bottom-full right-0 z-30 mb-1.5 w-[4.25rem] animate-panel-in py-1"
               >
                 {RATES.map((r) => (
                   <button
@@ -365,7 +364,7 @@ export default function Transport({
 
   return (
     <>
-    <div className="well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]">
+    <div className="well space-y-[11px] px-[13px] pb-[13px] pt-[11px]">
       {/* progress / seek bar, flanked by the (editable) current time and total */}
       <div className="flex items-center gap-2.5">
         <input
@@ -453,11 +452,11 @@ export default function Transport({
             aria-expanded={speedOpen}
             aria-label={`Playback speed: ${playbackRate}×`}
             title="Playback speed"
-            className={`press inline-flex items-center gap-1 rounded-sm border px-[9px] py-[3px] font-mono text-[11px] tabular-nums ${
-              playbackRate !== 1
-                ? 'border-accent/60 bg-accent/10 text-accentink'
-                : 'border-line bg-inset text-muted hover:border-line-strong hover:text-fg'
-            }`}
+            className="chip chip-outline press text-[11px] normal-case tracking-normal tabular-nums"
+            style={{
+              ['--hue' as string]:
+                playbackRate !== 1 ? 'rgb(var(--accent-ink))' : 'rgb(var(--text-muted))',
+            }}
           >
             {playbackRate}×
             <ChevronDown
@@ -470,7 +469,7 @@ export default function Transport({
             <div
               role="listbox"
               aria-label="Playback speed"
-              className="glass-pop absolute left-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in overflow-hidden rounded-md"
+              className="pop absolute left-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in py-1"
             >
               {RATES.map((r) => (
                 <button
@@ -501,7 +500,7 @@ export default function Transport({
             onClick={() => onStep(-5)}
             aria-label="Back 5 seconds"
             title="Jump back 5 seconds (Shift ←)"
-            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost press rounded-full px-3"
           >
             <ChevronsLeft size={13} />
           </button>
@@ -509,14 +508,14 @@ export default function Transport({
             onClick={() => onStep(-1)}
             aria-label="Back 1 second"
             title="Jump back 1 second (←)"
-            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost press rounded-full px-3"
           >
             <ChevronLeft size={13} />
           </button>
           <button
             onClick={onPlayPause}
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-            className="press inline-flex w-[104px] items-center justify-center gap-[7px] rounded-full bg-accent py-[7px] text-[13.5px] font-bold text-onaccent hover:brightness-110"
+            className="btn-primary press w-[104px] gap-[7px] text-[13.5px]"
           >
             {isPlaying ? <Pause size={15} /> : <Play size={15} />}
             {isPlaying ? 'Pause' : 'Play'}
@@ -525,7 +524,7 @@ export default function Transport({
             onClick={() => onStep(1)}
             aria-label="Forward 1 second"
             title="Jump forward 1 second (→)"
-            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost press rounded-full px-3"
           >
             <ChevronRight size={13} />
           </button>
@@ -533,7 +532,7 @@ export default function Transport({
             onClick={() => onStep(5)}
             aria-label="Forward 5 seconds"
             title="Jump forward 5 seconds (Shift →)"
-            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost press rounded-full px-3"
           >
             <ChevronsRight size={13} />
           </button>
@@ -656,12 +655,8 @@ export function VolumeControl({
         title={open ? (muted ? 'Unmute' : 'Mute') : `Volume ${pct}%`}
         className={
           tone === 'overlay'
-            ? `press grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-white/10 ${
-                muted ? 'text-accent' : 'text-white/85 hover:text-white'
-              }`
-            : `press grid h-[30px] w-[30px] place-items-center rounded transition-colors ${
-                muted ? 'text-accentink' : 'text-muted hover:bg-raised hover:text-fg'
-              }`
+            ? `btn-icon-lg on-video press ${muted ? 'text-accent' : ''}`
+            : `btn-icon press ${muted ? 'text-accentink' : ''}`
         }
       >
         <Icon size={15} />
@@ -670,7 +665,7 @@ export function VolumeControl({
       // Static -translate-x-1/2 centering lives on this outer wrapper because
       // panel-in fills `transform: none` and would clobber it on the same node.
       <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
-      <div className="glass-pop animate-panel-in rounded-md px-[7px] py-2.5">
+      <div className="pop animate-panel-in px-[7px] py-2.5">
       <div
         ref={trackRef}
         role="slider"

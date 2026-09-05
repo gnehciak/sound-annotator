@@ -134,8 +134,8 @@ export default function LyricsPanel({
                     className="press flex w-full min-w-0 items-baseline gap-2 text-left"
                   >
                     <span
-                      className="truncate font-mono text-[11px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: ink }}
+                      className="chip max-w-full truncate font-semibold"
+                      style={{ ['--hue' as string]: color, color: ink }}
                     >
                       {sectionName(sec)}
                     </span>

@@ -37,10 +37,10 @@ export default function MiniTransport({
   children,
 }: Props) {
   return (
-    <div className="rounded-lg border border-line bg-panel">
+    <div className="well">
       <div className="flex items-center px-3 py-2">
         <div className="flex flex-1 items-baseline gap-1.5">
-          <span className="led text-[15px] font-medium leading-none">
+          <span className="led text-[14px] font-medium leading-none">
             {formatTime(currentTime)}
           </span>
           <span className="font-mono text-[10.5px] text-muted">
@@ -51,7 +51,7 @@ export default function MiniTransport({
           type="button"
           onClick={onPlayPause}
           title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-          className="press bevel-raised inline-flex w-[112px] items-center justify-center gap-[7px] rounded bg-accent py-[8px] text-[13.5px] font-bold text-onaccent hover:brightness-110"
+          className="btn-primary press w-[104px] gap-[7px] text-[13.5px]"
         >
           {isPlaying ? <Pause size={15} /> : <Play size={15} />}
           {isPlaying ? 'Pause' : 'Play'}
@@ -66,7 +66,7 @@ export default function MiniTransport({
         </div>
       </div>
       {children && (
-        <div className="border-t border-line px-3 py-[9px]">{children}</div>
+        <div className="border-t border-line/70 px-3 py-[9px]">{children}</div>
       )}
     </div>
   )

@@ -83,7 +83,7 @@ export default function SettingsModal({
             onClick={onClose}
             title="Close (Esc)"
             aria-label="Close"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press"
           >
             <X size={15} />
           </button>
@@ -145,7 +145,7 @@ export default function SettingsModal({
                   <div
                     role="group"
                     aria-label="Default notes order"
-                    className="flex shrink-0 items-center gap-[2px] rounded-[7px] border border-line bg-inset p-[2px]"
+                    className="seg"
                   >
                     {ORDERS.map((opt) => {
                       const active = noteOrder === opt.value
@@ -156,11 +156,7 @@ export default function SettingsModal({
                           onClick={() => onNoteOrder(opt.value)}
                           aria-pressed={active}
                           title={opt.title}
-                          className={`press flex h-[22px] items-center rounded-sm px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 ${
-                            active
-                              ? 'bg-raised text-accentink'
-                              : 'text-muted hover:text-fg'
-                          }`}
+                          className="seg-item press"
                         >
                           {opt.label}
                         </button>
@@ -224,17 +220,7 @@ function ToggleRow({
           {hint}
         </span>
       </span>
-      <span
-        className={`mt-[3px] relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border transition-colors ${
-          checked ? 'border-accent bg-accent' : 'border-line bg-inset'
-        }`}
-      >
-        <span
-          className={`absolute top-1/2 h-[12px] w-[12px] -translate-y-1/2 rounded-full transition-all ${
-            checked ? 'left-[16px] bg-onaccent' : 'left-[2px] bg-muted'
-          }`}
-        />
-      </span>
+      <span className="switch mt-[3px]" data-on={checked || undefined} />
     </button>
   )
 }

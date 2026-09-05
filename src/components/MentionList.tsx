@@ -59,7 +59,7 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
   )
 
   return (
-    <div className="max-h-56 w-64 origin-top animate-pop-in overflow-y-auto rounded border border-line bg-panel py-1 shadow-lg">
+    <div className="pop max-h-56 w-64 origin-top animate-pop-in overflow-y-auto py-1">
       {items.length === 0 ? (
         <div className="px-3 py-2.5 text-xs text-muted">No notes to mention</div>
       ) : (
@@ -90,8 +90,11 @@ const MentionList = forwardRef<MentionListRef, Props>(function MentionList(
                       return info ? (
                         <span
                           key={t}
-                          className="font-mono text-[10px] font-medium uppercase tracking-[0.12em]"
-                          style={{ color: hueText(info.color, theme) }}
+                          className="chip"
+                          style={{
+                            ['--hue' as string]: info.color,
+                            color: hueText(info.color, theme),
+                          }}
                         >
                           {info.label}
                         </span>

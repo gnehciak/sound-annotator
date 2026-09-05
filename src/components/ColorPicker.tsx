@@ -29,13 +29,13 @@ export default function ColorPicker({ color, onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
         title="Note colour"
         aria-label="Note colour"
-        className="press mr-[3px] h-[22px] w-[22px] shrink-0 rounded-full shadow-[0_0_0_2px_rgb(var(--bg-panel)),0_0_0_3.5px_rgb(var(--border-strong))] transition-transform hover:scale-110"
+        className="press mr-[3px] h-[22px] w-[22px] shrink-0 rounded-full shadow-[0_0_0_1.5px_rgb(var(--border-strong))] transition-transform hover:scale-110"
         style={{ background: color }}
       />
 
       {pop.mounted && (
         <div
-          className={`absolute left-0 top-full z-20 mt-1 w-44 origin-top-left rounded border border-line bg-panel p-2.5 shadow-lg ${
+          className={`pop absolute left-0 top-full z-20 mt-1 w-44 origin-top-left p-2.5 ${
             pop.closing ? 'animate-pop-out' : 'animate-pop-in'
           }`}
         >

@@ -278,11 +278,8 @@ function ToolbarButton({
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`flex h-[27px] min-w-[27px] items-center justify-center rounded-sm px-[5px] transition-colors ${
-        active
-          ? 'bg-accent/15 text-accentink'
-          : 'text-muted hover:bg-raised hover:text-fg'
-      }`}
+      data-active={active || undefined}
+      className="btn-icon press h-[27px] w-auto min-w-[27px] px-[5px]"
     >
       {icon}
     </button>

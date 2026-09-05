@@ -49,7 +49,7 @@ export default function NotesHeaderControls({
         aria-pressed={searchOpen}
         title={searchActive ? 'Search active — click to change' : 'Search notes'}
         aria-label="Search notes"
-        className={`press grid h-[26px] w-[26px] place-items-center rounded transition-colors ${
+        className={`btn-icon press ${
           searchOpen || searchActive
             ? 'bg-raised text-accentink'
             : 'text-muted hover:bg-raised hover:text-fg'
@@ -114,7 +114,7 @@ function NoteOrderControl({
     <div
       role="group"
       aria-label="Note order"
-      className="flex items-center gap-[2px] rounded-[7px] border border-line bg-inset p-[2px]"
+      className="seg"
     >
       {options.map((opt) => {
         const active = value === opt.value
@@ -125,9 +125,7 @@ function NoteOrderControl({
             onClick={() => onChange(opt.value)}
             aria-pressed={active}
             title={opt.title}
-            className={`press flex h-[22px] items-center rounded-sm px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 ${
-              active ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-            }`}
+            className="seg-item press"
           >
             {opt.label}
           </button>

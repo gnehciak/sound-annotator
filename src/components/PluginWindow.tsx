@@ -80,7 +80,7 @@ export default function PluginWindow({
             onClick={onClose}
             title="Close (Esc)"
             aria-label="Close"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press"
           >
             <X size={15} />
           </button>
@@ -139,7 +139,7 @@ function ModeButton({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`press grid h-[26px] w-[26px] place-items-center rounded transition-colors ${
+      className={`btn-icon press ${
         active ? 'bg-raised text-fg' : 'text-muted hover:bg-raised hover:text-fg'
       }`}
     >

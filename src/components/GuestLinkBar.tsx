@@ -36,14 +36,14 @@ export default function GuestLinkBar() {
 
   return (
     <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2">
-      <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+      <span className="chip chip-signal h-[26px] gap-1.5 font-semibold tracking-[0.14em]">
         <Link2 size={12} />
         Guest
       </span>
 
       <button
         onClick={() => void copy('hand-in')}
-        className="press bevel-raised inline-flex items-center gap-1.5 rounded bg-accent px-2.5 py-1 text-[11px] font-bold text-onaccent hover:brightness-110"
+        className="btn-primary press py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
         title="A read-only link to your work — this is what you hand in"
       >
         {copied === 'hand-in' ? <Check size={12} /> : <Copy size={12} />}
@@ -52,7 +52,7 @@ export default function GuestLinkBar() {
 
       <button
         onClick={() => void copy('private')}
-        className="press inline-flex items-center gap-1.5 rounded border border-line bg-raised px-2.5 py-1 text-[11px] font-semibold text-fg hover:brightness-110"
+        className="btn-ghost press py-1"
         title="Your private link — it lets you edit. Keep it; don't hand it in."
       >
         {copied === 'private' ? <Check size={12} /> : <Copy size={12} />}

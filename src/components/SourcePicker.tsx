@@ -74,11 +74,11 @@ export default function SourcePicker({ onVideo, onAudioUrl }: Props) {
                 })
               }}
               placeholder="https://www.youtube.com/watch?v=…"
-              className="flex-1 rounded border border-line bg-inset px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent"
+              className="field flex-1 px-3 py-2 text-sm"
             />
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded border border-accent/70 bg-accent/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20"
+              className="btn-signal press px-4 py-2 text-[11px]"
             >
               <Play size={14} /> Load
             </button>

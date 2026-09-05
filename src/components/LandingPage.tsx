@@ -85,7 +85,7 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
     <div className="flex h-full flex-col overflow-y-auto bg-ink text-fg">
       {/* The app's own masthead, unchanged — the first thing a visitor sees is
           the thing they'll be looking at all lesson. */}
-      <header className="sticky top-0 z-10 flex h-[54px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="sticky top-0 z-10 flex h-[54px] shrink-0 items-center gap-3 bg-ink/70 px-4 backdrop-blur-md">
         <HomeDot>
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
             Sound&nbsp;Annotator
@@ -102,7 +102,7 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
         <button
           type="button"
           onClick={onSignIn}
-          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+          className="btn-ghost press shrink-0"
         >
           Sign in
         </button>
@@ -113,7 +113,7 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
         <PublishedSection />
       </main>
 
-      <footer className="border-t border-line px-4 py-6 sm:px-6">
+      <footer className="border-t border-line/70 px-4 py-6 sm:px-6">
         <p className="mx-auto max-w-[1180px] font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
           Sound Annotator — time-anchored music annotation
         </p>
@@ -270,10 +270,10 @@ function Hero() {
               in the menu, at the moment of choosing. */}
           <form
             onSubmit={submit}
-            className="mt-8 animate-panel-in overflow-hidden rounded-lg border border-line bg-panel"
+            className="glass mt-8 animate-panel-in overflow-hidden"
             style={{ animationDelay: '120ms' }}
           >
-            <div className="flex h-10 items-center gap-2 border-b border-line bg-raised px-3.5">
+            <div className="strip flex h-10 items-center gap-2 border-b border-line/70 px-3.5">
               <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                 New track
               </span>
@@ -315,7 +315,7 @@ function Hero() {
                     /* Placeholder at full muted, not a fraction of it: this is
                        the page's one field, and DESIGN.md §5 holds placeholders
                        to 4.5:1 — muted/80 on the light inset well misses it. */
-                    className="bevel-inset h-12 w-full rounded border border-line bg-inset pl-9 pr-9 text-[15px] text-fg outline-none transition-colors placeholder:text-muted focus:border-accent disabled:opacity-60"
+                    className="field h-12 pl-9 pr-9 text-[15px] disabled:opacity-60"
                   />
                   {typed && !busy && (
                     <button
@@ -345,7 +345,7 @@ function Hero() {
                   disabled={busy}
                   /* Fixed to the longest label, like the trigger beside it, so
                      the row holds still while the workspace changes. */
-                  className="press bevel-raised inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded bg-accent px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-onaccent hover:brightness-110 disabled:cursor-wait disabled:opacity-70 sm:w-[194px]"
+                  className="btn-primary press h-12 shrink-0 gap-2 px-5 font-mono text-[11px] uppercase tracking-[0.14em] disabled:cursor-wait sm:w-[194px]"
                 >
                   {busy ? (
                     <Loader2 size={15} className="animate-spin" />
@@ -464,7 +464,7 @@ function KindMenu({
         /* Fixed width from the desktop breakpoint up: the two labels differ in
            length, and letting the trigger resize would twitch the input beside
            it every time the workspace changes. */
-        className="press flex h-12 w-full shrink-0 items-center gap-2 rounded border border-line bg-inset px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg transition-colors hover:border-line-strong disabled:opacity-60 sm:w-[178px]"
+        className="field press flex h-12 shrink-0 items-center gap-2 px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors hover:border-line-strong disabled:opacity-60 sm:w-[178px]"
       >
         <PickedIcon size={13} className="shrink-0 text-accentink/80" />
         <span className="flex-1 text-left">{picked.label}</span>
@@ -483,7 +483,7 @@ function KindMenu({
       >
         <div
           role="menu"
-          className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
+          className="py-1"
         >
           {KINDS.map((k) => {
             const Icon = k.Icon
@@ -643,7 +643,7 @@ function DeviceTracks({
             <a
               href={guestTrackUrl(t)}
               title={`Open “${t.title}”`}
-              className="press flex max-w-[280px] items-center gap-1.5 rounded-l border border-r-0 border-line bg-panel py-1.5 pl-2.5 pr-2 text-[12.5px] text-fg transition-colors hover:border-line-strong hover:bg-raised"
+              className="btn-ghost press max-w-[280px] justify-start rounded-r-none border-r-0 py-1.5 pl-2.5 pr-2 font-sans text-[12.5px] font-normal normal-case tracking-normal text-fg hover:bg-raised"
             >
               {/* Which workspace it opens into — the same Blocks/Pencil pair
                   the switch above uses, so a chip says what you'd be going
@@ -661,7 +661,7 @@ function DeviceTracks({
               onClick={() => onForget(t.projectId)}
               title="Forget this track on this device (it isn’t deleted)"
               aria-label={`Forget ${t.title} on this device`}
-              className="press grid w-7 place-items-center rounded-r border border-line text-muted transition-colors hover:border-line-strong hover:bg-raised hover:text-fg"
+              className="btn-ghost press w-7 rounded-l-none px-0 hover:bg-raised"
             >
               <X size={12} />
             </button>
@@ -683,7 +683,7 @@ function PublishedSection() {
     <section
       id={PUBLISHED_ID}
       /* Clears the sticky masthead when the hero scrolls down to here. */
-      className="scroll-mt-[54px] border-t border-line px-4 py-10 sm:px-6"
+      className="scroll-mt-[54px] border-t border-line/70 px-4 py-10 sm:px-6"
     >
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="mb-6">

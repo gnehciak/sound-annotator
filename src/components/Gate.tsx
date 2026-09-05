@@ -122,7 +122,7 @@ function SignIn({ onBack }: { onBack: () => void }) {
 export function SetupNotice() {
   return (
     <div className="flex h-full items-center justify-center bg-ink text-fg">
-      <div className="w-full max-w-md rounded border border-line bg-panel p-8">
+      <div className="glass w-full max-w-md p-8">
         <div className="mb-4 flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)]" />
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">

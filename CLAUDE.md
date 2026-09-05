@@ -133,6 +133,15 @@ modals are translucent blurred panes (`.glass` / `.glass-pop` in
 `note` Tailwind colours are therefore full colour strings (white or black at
 low alpha, `var(--panel)` etc.), **not** channel tokens — they take no
 `/opacity` modifier; use `bg-fg/[0.03]`-style washes for ad-hoc tints.
+**Component vocabulary (2026-09-05):** every button, chip, segmented
+control, field, switch, menu, well, tile and empty state is a class from the
+`@layer components` block in `src/index.css` (`btn-ghost` / `btn-signal` /
+`btn-primary` / `btn-icon(-lg)`, `chip` + `chip-outline` / `chip-neutral` /
+`chip-signal` / `chip-time` with a `--hue` custom property, `seg` / `seg-item`,
+`field`, `switch`, `pop` / `pop-row`, `well`, `tile`, `empty`, `strip`).
+`Popover.tsx` applies `pop` itself. Don't hand-roll a control from Tailwind
+utilities; compose the class with `press` and only the site's own overrides
+(a width, a hover colour). See DESIGN.md §5 "The Vocabulary".
 **Color-as-accent doctrine (2026-07-17):** panes never carry a hue; color
 appears only as the signal, the meter, the note data, the `--row-sel` wash on
 the selected row, and the ambient bloom / transport glow behind and beneath

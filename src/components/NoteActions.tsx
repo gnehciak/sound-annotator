@@ -52,8 +52,7 @@ export default function NoteActions({
     setOpen(false)
   }
 
-  const timeInput =
-    'bevel-inset w-full rounded border border-line bg-inset px-1.5 py-1.5 text-center font-mono text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none'
+  const timeInput = 'field px-1.5 py-1.5 text-center font-mono text-[12px]'
 
   return (
     <div className="border-b border-line/70 px-3 py-2.5">
@@ -63,11 +62,11 @@ export default function NoteActions({
             onClick={onMarkIn}
             title="Mark where a section starts (at the current time). Then mark the end to add a note covering that whole part. (I)"
             aria-label="Mark section start"
-            className={`press inline-flex min-w-0 flex-1 items-center justify-center gap-[5px] border px-2 py-[7px] font-mono text-[10px] font-medium uppercase tracking-[0.08em] ${
+            className={
               pendingIn != null
-                ? 'rounded-l border-accent/70 bg-accent/10 text-accentink'
-                : 'rounded border-line text-muted hover:border-line-strong hover:text-fg'
-            }`}
+                ? 'btn-signal press min-w-0 flex-1 gap-[5px] rounded-r-none px-2 font-medium tracking-[0.08em]'
+                : 'btn-ghost press min-w-0 flex-1 gap-[5px] px-2 font-medium tracking-[0.08em]'
+            }
           >
             <ChevronFirst size={13} className="shrink-0" />
             <span className="truncate">
@@ -79,7 +78,7 @@ export default function NoteActions({
               onClick={onCancelMark}
               aria-label="Cancel the marked start"
               title="Clear the pending start mark"
-              className="press inline-flex shrink-0 items-center justify-center rounded-r border border-l-0 border-accent/70 bg-accent/10 px-1.5 py-[7px] text-accentink hover:bg-accent/20"
+              className="btn-signal press shrink-0 rounded-l-none border-l-0 px-1.5"
             >
               <X size={13} />
             </button>
@@ -90,7 +89,7 @@ export default function NoteActions({
           ref={addRef}
           onClick={() => (open ? setOpen(false) : openMenu())}
           title="Add a note — at the current moment (N) or a custom time"
-          className="press inline-flex min-w-0 items-center justify-center gap-[5px] rounded border border-accent/70 bg-accent/10 px-2 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-accentink hover:bg-accent/20"
+          className="btn-signal press min-w-0 px-2"
         >
           <Plus size={13} className="shrink-0" />
           <span className="truncate">Add note</span>
@@ -104,7 +103,7 @@ export default function NoteActions({
           disabled={pendingIn == null}
           title="Mark where the section ends, and add a note for that whole part (O)"
           aria-label="Mark section end and add the note"
-          className="press inline-flex min-w-0 items-center justify-center gap-[5px] rounded border border-line px-2 py-[7px] font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-muted hover:border-line-strong hover:text-fg disabled:opacity-35 disabled:hover:border-line disabled:hover:text-muted"
+          className="btn-ghost press min-w-0 gap-[5px] px-2 font-medium tracking-[0.08em]"
         >
           Mark end <ChevronLast size={13} />
         </button>
@@ -115,7 +114,7 @@ export default function NoteActions({
         anchorRef={addRef}
         onClose={() => setOpen(false)}
         width={252}
-        className="origin-top rounded border border-line bg-panel p-2.5 shadow-lg"
+        className="origin-top p-2.5"
       >
         <button
           type="button"
@@ -123,7 +122,7 @@ export default function NoteActions({
             onAddNote()
             setOpen(false)
           }}
-          className="press flex w-full items-center justify-center gap-[5px] rounded border border-accent/70 bg-accent/10 px-2 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-accentink hover:bg-accent/20"
+          className="btn-signal press w-full px-2"
         >
           <Plus size={13} /> Add at {formatTime(currentTime)}
           <span className="tabular-nums tracking-[0.02em] opacity-75">(now)</span>
@@ -169,7 +168,7 @@ export default function NoteActions({
           <button
             type="submit"
             disabled={!customValid}
-            className="press shrink-0 rounded border border-line px-2.5 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted hover:border-accent hover:text-accentink disabled:opacity-30 disabled:hover:border-line disabled:hover:text-muted"
+            className="btn-ghost press shrink-0 px-2.5 py-1.5 font-medium tracking-[0.12em] hover:border-accent hover:text-accentink"
           >
             Add
           </button>

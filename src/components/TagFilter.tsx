@@ -65,7 +65,7 @@ export default function TagFilter({ tags, counts, selected, onChange }: Props) {
 
       {pop.mounted && (
         <div
-          className={`absolute right-0 top-full z-30 mt-1 w-44 origin-top-right rounded border border-line bg-panel py-1 shadow-lg ${
+          className={`pop absolute right-0 top-full z-30 mt-1 w-44 origin-top-right py-1 ${
             pop.closing ? 'animate-pop-out' : 'animate-pop-in'
           }`}
         >

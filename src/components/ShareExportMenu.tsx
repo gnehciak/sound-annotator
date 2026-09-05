@@ -101,19 +101,14 @@ export default function ShareExportMenu({
               : 'Share this track by link, publish it, or export it'
             : 'Export this track'
         }
-        className={`press grid h-8 w-8 place-items-center rounded border transition-colors ${
-          shared || published
-            ? 'border-accent/70 bg-accent/10 text-accentink hover:bg-accent/20'
-            : `border-transparent text-muted hover:bg-raised hover:text-fg ${
-                open ? 'bg-raised text-fg' : ''
-              }`
-        }`}
+        data-active={shared || published || open || undefined}
+        className="btn-icon-lg press"
       >
         <Share2 size={15} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in glass-pop rounded-xl p-3.5">
+        <div className="pop absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in p-3.5">
           {canShare && (
             <>
               <div className="flex items-start justify-between gap-3">
@@ -142,16 +137,8 @@ export default function ShareExportMenu({
                     onChange({ shared: !shared, editableByLink: false })
                   }
                   title={shared ? 'Stop sharing' : 'Start sharing'}
-                  className={`press relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors ${
-                    shared ? 'border-accent bg-accent/30' : 'border-line bg-inset'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left] ${
-                      shared ? 'left-[18px] bg-accent' : 'left-0.5 bg-muted'
-                    }`}
-                  />
-                </button>
+                  className="switch press mt-0.5"
+                />
               </div>
 
               {shared && (
@@ -164,7 +151,7 @@ export default function ShareExportMenu({
                     <div
                       role="group"
                       aria-label="Link permission"
-                      className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+                      className="seg"
                     >
                       <button
                         type="button"
@@ -203,12 +190,12 @@ export default function ShareExportMenu({
                       value={url}
                       onFocus={(e) => e.currentTarget.select()}
                       aria-label="Share link"
-                      className="led bevel-inset min-w-0 flex-1 rounded border border-line bg-inset px-[9px] py-[6px] font-mono text-[11px] text-fg outline-none focus:border-accent"
+                      className="field led min-w-0 flex-1 font-mono text-[11px]"
                     />
                     <button
                       onClick={copy}
                       title="Copy link"
-                      className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line bg-raised px-2 py-[6px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fg transition-colors hover:border-accent hover:text-accentink"
+                      className="btn-ghost btn-sm press shrink-0 hover:border-accent hover:text-accentink"
                     >
                       {copied ? <Check size={12} /> : <Copy size={12} />}
                       {copied ? 'Copied' : 'Copy'}
@@ -258,18 +245,8 @@ export default function ShareExportMenu({
                     aria-checked={published}
                     onClick={() => onChange({ published: !published })}
                     title={published ? 'Unpublish' : 'Publish'}
-                    className={`press relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors ${
-                      published
-                        ? 'border-accent bg-accent/30'
-                        : 'border-line bg-inset'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left] ${
-                        published ? 'left-[18px] bg-accent' : 'left-0.5 bg-muted'
-                      }`}
-                    />
-                  </button>
+                    className="switch press mt-0.5"
+                  />
                 </div>
                 {published && (
                   <a

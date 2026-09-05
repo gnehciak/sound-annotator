@@ -64,12 +64,13 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
                 type="button"
                 disabled={readOnly}
                 onClick={() => setLayer(active ? undefined : l.id)}
-                className={`press flex items-center gap-1.5 rounded border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] ${
-                  active ? '' : 'border-line text-muted hover:text-fg'
-                }`}
-                style={active ? { borderColor: l.color, color: l.color } : undefined}
+                aria-pressed={active}
+                className="chip chip-outline press gap-1.5 px-2.5 py-1.5 text-[11px]"
+                style={{
+                  ['--hue' as string]: l.color,
+                  color: active ? l.color : 'rgb(var(--text-muted))',
+                }}
               >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: l.color }} />
                 {l.label}
               </button>
             )
@@ -101,7 +102,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
             ref={addBtnRef}
             type="button"
             onClick={() => setAddOpen((o) => !o)}
-            className="press inline-flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted hover:border-accent hover:text-accentink"
+            className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
           >
             <Plus size={12} /> Add element
           </button>
@@ -110,7 +111,7 @@ export default function ElementsEditor({ data, onChange, readOnly }: PluginEdito
             anchorRef={addBtnRef}
             onClose={() => setAddOpen(false)}
             width={192}
-            className="origin-top-left rounded border border-line bg-panel py-1 shadow-lg"
+            className="origin-top-left py-1"
           >
             {addable.map((c) => (
               <button

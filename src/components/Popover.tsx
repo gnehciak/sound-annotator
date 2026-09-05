@@ -83,7 +83,7 @@ export default function Popover({
     <div
       ref={panelRef}
       style={{ position: 'fixed', ...(typeof width === 'number' ? { width } : null) }}
-      className={`z-50 ${pop.closing ? 'animate-pop-out' : 'animate-pop-in'} ${className}`}
+      className={`pop z-50 ${pop.closing ? 'animate-pop-out' : 'animate-pop-in'} ${className}`}
     >
       {children}
     </div>,

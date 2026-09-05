@@ -74,8 +74,6 @@
   --bevel-raised: inset 0 1px 0 rgb(255 255 255 / 0.25),
     inset 0 -2px 3px rgb(0 0 0 / 0.32);
   --led-glow: 0 0 8px rgb(var(--accent-ink) / 0.5);
-  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05),
-    0 1px 0 rgb(0 0 0 / 0.45);
 
   /* House motion curve — expo-ish decel, no overshoot (see DESIGN.md §motion). */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -131,8 +129,6 @@
     inset 0 -2px 3px rgb(0 0 0 / 0.10), 0 1px 2px rgb(0 0 0 / 0.08),
     0 1px 0 rgb(0 0 0 / 0.04);
   --led-glow: none;
-  --kbd-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8),
-    0 1px 0 rgb(0 0 0 / 0.18);
 
   color-scheme: light;
 }
@@ -225,13 +221,246 @@ body::before {
   background: var(--ambient);
 }
 
+/* ==================================================================
+   COMPONENT VOCABULARY (2026-09 glass refinement).
+   The single source of truth for buttons, chips, segmented controls,
+   fields, switches, menus, wells, tiles, empty states and strips. Lives
+   in @layer components so it is hoisted BEFORE utilities: a call site can
+   still say `btn-ghost rounded-full` or `pop p-2.5` and win. Rules:
+   - `background-color`, never the `background` shorthand, so `bg-*`
+     utilities override cleanly.
+   - Only Tailwind utilities may be @apply'd. `.press`, `.bevel-*`, `.led`
+     are unlayered — compose them in markup.
+   - Every class name here must appear literally in a TSX file or
+     Tailwind tree-shakes it.
+   Chip hue rides a `--hue` custom property (a hex/rgb string); text colour
+   is set inline via lib/noteColors `hueText()` so it stays AA in light.
+   ================================================================== */
+@layer components {
+  /* ---------- buttons ---------- */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded;
+    line-height: 1;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .btn-ghost {
+    @apply btn border border-line px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+  .btn-ghost:not(:disabled):hover {
+    @apply border-line-strong text-fg;
+  }
+  .btn-ghost[aria-pressed='true'],
+  .btn-ghost[data-active] {
+    @apply border-line-strong bg-raised text-fg;
+  }
+  .btn-signal {
+    @apply btn border border-accent/70 bg-accent/10 px-3 py-[7px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink;
+  }
+  .btn-signal:not(:disabled):hover {
+    @apply bg-accent/20;
+  }
+  .btn-primary {
+    @apply btn rounded-full bg-accent px-4 py-[7px] text-[12.5px] font-bold text-onaccent;
+    box-shadow: var(--bevel-raised); /* the one raised bevel in the system */
+  }
+  .btn-primary:not(:disabled):hover {
+    filter: brightness(1.1);
+  }
+  .btn-primary:disabled {
+    opacity: 0.7;
+  }
+  .btn-sm {
+    @apply px-2 py-1;
+  }
+  .btn-icon {
+    @apply grid h-[26px] w-[26px] shrink-0 place-items-center rounded text-muted;
+  }
+  .btn-icon-lg {
+    @apply grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted;
+  }
+  :is(.btn-icon, .btn-icon-lg):not(:disabled):hover {
+    @apply bg-raised text-fg;
+  }
+  :is(.btn-icon, .btn-icon-lg)[aria-pressed='true'],
+  :is(.btn-icon, .btn-icon-lg)[data-active] {
+    @apply bg-accent/10 text-accentink;
+  }
+  :is(.btn-icon, .btn-icon-lg):disabled {
+    opacity: 0.25;
+  }
+  /* Overlay transport only — deliberately white on video, palette-blind. */
+  .on-video {
+    color: rgb(255 255 255 / 0.85);
+  }
+  .on-video:not(:disabled):hover {
+    color: #fff;
+    background-color: rgb(255 255 255 / 0.1);
+  }
+
+  /* ---------- chips ---------- */
+  .chip {
+    --hue: rgb(var(--text-muted));
+    @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-[3px] font-mono text-[10px] font-medium uppercase tracking-[0.1em];
+    line-height: 1.2;
+    background-color: color-mix(in srgb, var(--hue) 14%, transparent);
+    color: var(--hue);
+  }
+  .chip-outline {
+    background-color: transparent;
+    border: 1px solid color-mix(in srgb, var(--hue) 40%, transparent);
+  }
+  .chip-neutral {
+    --hue: rgb(var(--text-muted));
+  }
+  .chip-signal {
+    --hue: rgb(var(--accent-ink));
+  }
+  /* Timecode: a touch larger, tabular, hairline-ringed so a range reads as one
+     device with its fused passage segment. */
+  .chip-time {
+    @apply chip border text-[11.5px] normal-case tracking-[0.04em] tabular-nums;
+    padding: 2.5px 8px;
+    background-color: color-mix(in srgb, var(--hue) 10%, transparent);
+    border-color: color-mix(in srgb, var(--hue) 45%, transparent);
+  }
+  :is(button, a).chip:not(:disabled):hover,
+  :is(button, a).chip-time:not(:disabled):hover {
+    background-color: color-mix(in srgb, var(--hue) 22%, transparent);
+  }
+  .chip[aria-pressed='true'],
+  .chip[data-active] {
+    background-color: color-mix(in srgb, var(--hue) 24%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 45%, transparent);
+  }
+
+  /* ---------- segmented control ---------- */
+  .seg {
+    @apply inline-flex shrink-0 items-center gap-[2px] rounded-md border border-line bg-inset p-[2px];
+  }
+  .seg-item {
+    @apply flex h-[22px] items-center justify-center gap-1 rounded-sm px-2 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-muted;
+  }
+  .seg-item:not(:disabled):hover {
+    @apply text-fg;
+  }
+  .seg-item[aria-pressed='true'],
+  .seg-item[aria-checked='true'],
+  .seg-item[data-active] {
+    @apply bg-raised text-accentink;
+  }
+  .seg-item:disabled {
+    opacity: 0.35;
+  }
+
+  /* ---------- fields ---------- */
+  .field {
+    @apply w-full rounded border border-line bg-inset px-[9px] py-[6px] text-[12.5px] text-fg placeholder:text-muted;
+    box-shadow: var(--bevel-inset);
+    outline: none;
+  }
+  .field:focus {
+    @apply border-accent;
+  }
+  .field:focus-visible {
+    outline: none; /* the signal border is the focus indicator — no double ring */
+  }
+  .field:disabled {
+    opacity: 0.6;
+  }
+  .field-bare {
+    @apply rounded bg-transparent hover:bg-fg/5 focus:bg-fg/5;
+    box-shadow: none;
+    border: 0;
+  }
+
+  /* ---------- switch (one size) ---------- */
+  .switch {
+    @apply relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border border-line bg-inset;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    transform: translateY(-50%);
+    border-radius: 9999px;
+    background-color: rgb(var(--text-muted));
+    transition:
+      left 140ms var(--ease-out),
+      background-color 140ms var(--ease-out);
+  }
+  .switch[aria-checked='true'],
+  .switch[data-on] {
+    @apply border-accent bg-accent/30;
+  }
+  .switch[aria-checked='true']::after,
+  .switch[data-on]::after {
+    left: 16px;
+    background-color: rgb(var(--accent));
+  }
+
+  /* ---------- surfaces ---------- */
+  /* Floating menu: the dense glass material with the menu's own shape. */
+  .pop {
+    @apply overflow-hidden rounded-lg;
+    background-color: var(--pop);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid var(--glass-ring);
+    box-shadow: var(--glass-shadow), var(--glass-hi);
+  }
+  .pop-row {
+    @apply flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg;
+  }
+  /* Dense glass for sheets/modals (radius supplied by the caller). */
+  .glass-pop {
+    background-color: var(--pop);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid var(--glass-ring);
+    box-shadow: var(--glass-shadow), var(--glass-hi);
+  }
+  /* The transport console: a recessed well that throws a faint signal glow
+     beneath it (the lit console under the recorder). */
+  .well {
+    @apply rounded-lg border border-line/70 bg-inset;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 18px 40px -18px rgb(var(--accent) / 0.45);
+  }
+  /* Flat wash card for grids (library, gallery): no shadow, no lift. */
+  .tile {
+    @apply overflow-hidden rounded-lg border bg-panel;
+    border-color: var(--glass-ring);
+  }
+  .tile:is(:hover, :focus-within) {
+    background-color: var(--raised);
+    border-color: rgb(var(--border-strong));
+  }
+  /* Empty state: a quiet inset box — never a dashed outline. */
+  .empty {
+    @apply flex flex-col items-center gap-3 rounded-lg border border-line/60 bg-inset px-6 py-12 text-center;
+  }
+  /* A frosted band inside a pane (title bars, tool strips). */
+  .strip {
+    background-color: rgb(255 255 255 / 0.03);
+  }
+  [data-theme='light'] .strip {
+    background-color: rgb(0 0 0 / 0.03);
+  }
+}
+
 /* ------------------------------------------------------------------
    Frosted glass panes. `.glass` is a floating workspace column (player,
    notes, inspector, a modal card): translucent panel fill, backdrop
    blur, a hairline ring, a top highlight and a deep soft shadow.
-   `.glass-pop` is the denser variant for menus and popovers that float
-   over live content and must stay legible. Both keep their radius
-   here so a pane reads the same wherever it's used.
+   `.glass-pop` (in the component layer above) is the denser material
+   for sheets and modals; `.pop` is the same material shaped as a menu.
    ------------------------------------------------------------------ */
 .glass {
   background: var(--panel);
@@ -269,24 +498,10 @@ body::before {
   height: 56px;
 }
 
-/* The transport well — a recessed dark slab that throws a faint signal-
-   coloured glow beneath it (the "lit console" under the recorder). */
-.well-glow {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.04),
-    0 18px 40px -18px rgb(var(--accent) / 0.45);
-}
-.glass-pop {
-  background: var(--pop);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid var(--glass-ring);
-  box-shadow: var(--glass-shadow), var(--glass-hi);
-}
 
 /* Armed masthead: while the open track is editable, the header chrome
-   takes the signal — an opaque accent-over-panel mix with an accent
-   hairline. Follows the active palette via the tokens. */
+   takes a faint 7% signal wash (no hairline — the header sits bare on the
+   canvas). The one sanctioned signal tint on chrome; follows the palette. */
 .masthead-armed {
   background-color: rgb(var(--accent) / 0.07);
   border-color: transparent;
@@ -477,32 +692,8 @@ body::before {
   box-shadow: var(--bevel-raised);
 }
 
-/* Light mode: hairline-bordered buttons get a whisper-soft outer lift + an
-   inset top highlight, so they read as physical tokens on the bright chrome
-   instead of dissolving into it. Scoped to .press (interactive elements) with
-   visible hairlines (border-style:solid). Dark mode keeps the flat tactile
-   look it already has. Filled accent buttons (which carry their own pop via
-   the amber fill) opt out via `.press[data-no-lift]`. */
-[data-theme='light'] .press[class*='border-line']:not([data-no-lift]),
-[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]) {
-  box-shadow:
-    0 1px 0 rgb(0 0 0 / 0.04),
-    0 1px 2px rgb(0 0 0 / 0.05),
-    inset 0 1px 0 rgb(255 255 255 / 0.55);
-}
-[data-theme='light'] .press[class*='border-line']:not([data-no-lift]):hover,
-[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]):hover {
-  box-shadow:
-    0 1px 0 rgb(0 0 0 / 0.05),
-    0 2px 4px rgb(0 0 0 / 0.06),
-    inset 0 1px 0 rgb(255 255 255 / 0.6);
-}
-[data-theme='light'] .press[class*='border-line']:not([data-no-lift]):active,
-[data-theme='light'] .press[class*='border-accent']:not([data-no-lift]):active {
-  box-shadow:
-    inset 0 1px 2px rgb(0 0 0 / 0.10),
-    0 0 0 rgb(0 0 0 / 0);
-}
+/* No outer shadows on controls in either mode: only a pane, a menu or a
+   modal floats (DESIGN.md §4, the One-Float rule). */
 
 /* Dark scrollbars */
 * {
@@ -534,8 +725,7 @@ body::before {
     .ProseMirror
   ):focus-visible {
   outline: 2px solid rgb(var(--accent-ink));
-  outline-offset: 1px;
-  border-radius: 8px;
+  outline-offset: 1px; /* the ring follows the element's own radius */
 }
 
 /* Reduced motion is not optional: still any and all transitions. */
@@ -597,7 +787,7 @@ body::before {
 }
 .ProseMirror img {
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: 8px;
   margin: 0.5rem 0;
   display: block;
   border: 1px solid rgb(var(--border));
@@ -622,13 +812,13 @@ body::before {
 .ProseMirror .resizable-image__skeleton {
   position: absolute;
   inset: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgb(var(--border));
   background: linear-gradient(
     100deg,
-    rgb(var(--bg-raised)) 30%,
-    rgb(var(--bg-inset)) 50%,
-    rgb(var(--bg-raised)) 70%
+    var(--raised) 30%,
+    var(--inset) 50%,
+    var(--raised) 70%
   );
   background-size: 200% 100%;
   animation: image-skeleton 1.4s ease-in-out infinite;
@@ -649,10 +839,12 @@ body::before {
   display: flex;
   gap: 1px;
   padding: 2px;
-  border-radius: 6px;
-  border: 1px solid rgb(var(--border));
-  background: rgb(var(--bg-ink) / 0.85);
-  backdrop-filter: blur(2px);
+  border-radius: 8px;
+  border: 1px solid var(--glass-ring);
+  background: var(--pop);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: var(--glass-shadow), var(--glass-hi);
   line-height: 0;
   /* Fade in like the resize handle, rather than snapping via display. */
   opacity: 0;
@@ -668,13 +860,13 @@ body::before {
   align-items: center;
   justify-content: center;
   padding: 3px;
-  border-radius: 5px;
+  border-radius: 6px;
   color: rgb(var(--text-muted));
   cursor: pointer;
 }
 .ProseMirror .resizable-image__align button:hover {
   color: rgb(var(--text));
-  background: rgb(var(--bg-raised));
+  background: var(--raised);
 }
 .ProseMirror .resizable-image__align button[data-active] {
   color: rgb(var(--accent-ink));
@@ -734,7 +926,7 @@ body::before {
   bottom: -6px;
   width: 13px;
   height: 13px;
-  border-radius: 4px;
+  border-radius: 5px;
   border: 1.5px solid rgb(var(--bg-ink));
   background: rgb(var(--accent));
   cursor: nwse-resize;
@@ -753,8 +945,8 @@ body::before {
   top: 6px;
   left: 6px;
   padding: 1px 6px;
-  border-radius: 4px;
-  background: rgb(var(--bg-ink) / 0.85);
+  border-radius: 6px;
+  background: var(--pop);
   color: rgb(var(--text));
   font: 600 10px/1.5 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   pointer-events: none;
@@ -768,7 +960,7 @@ body::before {
   margin: 0.5rem 0;
   max-width: 100%;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgb(var(--border));
   line-height: 0;
   user-select: none;
@@ -837,10 +1029,9 @@ body::before {
 /* @-mention chip referencing another note */
 .note-mention {
   color: rgb(var(--accent-ink));
-  background: rgb(var(--accent-ink) / 0.12);
-  border: 1px solid rgb(var(--accent-ink) / 0.35);
-  border-radius: 4px;
-  padding: 0 0.25rem;
+  background: rgb(var(--accent-ink) / 0.14);
+  border-radius: 9999px;
+  padding: 0.05em 0.5em;
   font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.85em;
   white-space: nowrap;

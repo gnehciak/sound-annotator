@@ -346,8 +346,6 @@ export default function TrackOverview({
 
   const hoverNote = hover ? placed.find((p) => p.id === hover.id) : null
 
-  const btn =
-    'press border border-line bg-inset text-muted hover:text-fg disabled:opacity-30 disabled:hover:text-muted'
 
   return (
     <section
@@ -385,18 +383,18 @@ export default function TrackOverview({
               disabled={!scrollable}
               title="Scroll to the playhead"
               aria-label="Scroll to the playhead"
-              className={`${btn} grid h-6 w-[26px] place-items-center rounded-sm hover:text-accentink`}
+              className="btn-icon press h-6 w-[26px] hover:text-accentink"
             >
               <Crosshair size={12} />
             </button>
-            <div className="flex items-center" role="group" aria-label="Timeline zoom">
+            <div className="seg" role="group" aria-label="Timeline zoom">
               <button
                 type="button"
                 onClick={() => stepZoom(-1, null)}
                 disabled={!canZoomOut}
                 title="Zoom out (longer time unit)"
                 aria-label="Zoom out"
-                className={`${btn} grid h-6 w-[26px] place-items-center rounded-l-sm`}
+                className="seg-item press h-5 w-[26px] px-0"
               >
                 <ZoomOut size={12} />
               </button>
@@ -406,7 +404,7 @@ export default function TrackOverview({
                 disabled={!canZoomOut}
                 title="Fit the whole track"
                 aria-label="Reset zoom to fit"
-                className={`${btn} h-6 w-[38px] border-x-0 text-center font-mono text-[9.5px] font-semibold tabular-nums tracking-[0.1em]`}
+                className="seg-item press h-5 w-[38px] px-0 tabular-nums"
               >
                 {zoomLabel(effZoom)}
               </button>
@@ -416,7 +414,7 @@ export default function TrackOverview({
                 disabled={!canZoomIn}
                 title="Zoom in (shorter time unit)"
                 aria-label="Zoom in"
-                className={`${btn} grid h-6 w-[26px] place-items-center rounded-r-sm`}
+                className="seg-item press h-5 w-[26px] px-0"
               >
                 <ZoomIn size={12} />
               </button>
@@ -625,7 +623,7 @@ export default function TrackOverview({
             maxWidth: 248,
           }}
         >
-          <div className="rounded border border-line bg-raised px-2.5 py-2 shadow-lg">
+          <div className="pop px-2.5 py-2">
             <span
               className="font-mono text-[11px] font-semibold tabular-nums"
               style={{ color: hueText(hoverNote.color, theme) }}

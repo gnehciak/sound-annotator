@@ -52,7 +52,7 @@ export default function NotesSearch({ value, onChange, count, total, onClose }: 
         onClick={onClose}
         aria-label="Close search"
         title="Close search (Esc)"
-        className="press grid h-[22px] w-[22px] shrink-0 place-items-center rounded-sm text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="btn-icon press"
       >
         <X size={14} />
       </button>
