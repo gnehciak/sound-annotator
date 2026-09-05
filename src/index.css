@@ -480,8 +480,11 @@ html[data-armed] body::before {
    ------------------------------------------------------------------ */
 .glass {
   background: var(--panel);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  /* No backdrop-filter here on purpose: a pane only ever sits over the
+     smooth ambient canvas, so blurring buys nothing — and in Chrome the
+     blur samples neighbouring GPU layers (the video), smearing the frame's
+     edge down through every pane below it. Menus and modals, which float
+     over real content, keep theirs (.pop / .glass-pop). */
   border: 1px solid var(--glass-ring);
   border-radius: 18px;
   box-shadow: var(--glass-shadow), var(--glass-hi);

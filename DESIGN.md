@@ -137,8 +137,10 @@ metal or glossy bevels — the blur is the only material effect.
 **Key Characteristics:**
 - A deep neutral canvas (near-black dark / pale grey light) with an ambient
   bloom of the signal hue; workspace columns float on it as frosted-glass
-  panes (`.glass`): translucent fill, 28px backdrop blur, hairline ring, top
-  highlight, deep soft shadow, 18px corners, 12px gutters.
+  panes (`.glass`): translucent fill, hairline ring, top highlight, deep soft shadow,
+  18px corners, 12px gutters. Panes carry no backdrop blur — nothing ever
+  sits behind them but the canvas, and Chrome smears a video's GPU layer
+  through a blur; menus and modals, which float over content, keep theirs.
 - Color only as accent: one signal hue meaning "now", a meter hue, and the
   crayon-box note data. Panes never take a tint; only the canvas glows.
 - Monospace tabular numerics for every timecode, count, and micro-label.
