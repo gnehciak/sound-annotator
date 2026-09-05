@@ -27,6 +27,13 @@ interface Props {
   volume: number
   muted: boolean
   readOnly?: boolean
+  /**
+   * Float the bar over the bottom edge of a video frame (rendered inside the
+   * player's 16:9 box via PlayerPane's `overlay` slot) instead of docking it
+   * as a well beneath the player. The keyboard hints are not rendered in
+   * this mode — the host places {@link TransportHints} under the frame.
+   */
+  overlay?: boolean
   onPlayPause: () => void
   onSeek: (t: number) => void
   /** Relative ±seconds nudge (the 1s/5s buttons); accumulates across taps. */
@@ -44,6 +51,7 @@ export default function Transport({
   volume,
   muted,
   readOnly = false,
+  overlay = false,
   onPlayPause,
   onSeek,
   onStep,
@@ -77,20 +85,6 @@ export default function Transport({
 
   const frac = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
 
-  // Quick-reference shortcut hints shown along the bottom of the transport.
-  // Note actions (N / I·O) only apply when editing, so drop them in view-only.
-  const hints: { keys: string[]; label: string }[] = [
-    { keys: ['Space'], label: 'Play' },
-    { keys: ['←', '→'], label: 'Seek' },
-    ...(readOnly
-      ? []
-      : [
-          { keys: ['N'], label: 'Note' },
-          { keys: ['I', 'O'], label: 'Mark' },
-        ]),
-    { keys: ['?'], label: 'All' },
-  ]
-
   const seekFromX = (clientX: number) => {
     const el = barRef.current
     if (!el || duration <= 0) return
@@ -107,7 +101,16 @@ export default function Transport({
 
   return (
     <>
-    <div className="well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]">
+    <div
+      className={
+        overlay
+          ? // Floating over the video: dense glass so the controls stay legible
+            // over any frame, inset from the edges, above the player's own
+            // click-catcher / play-circle layers.
+            'well-glow glass-pop absolute inset-x-2.5 bottom-2.5 z-20 space-y-[9px] rounded-lg px-[13px] pb-[11px] pt-[9px]'
+          : 'well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]'
+      }
+    >
       {/* progress / seek bar, flanked by the (editable) current time and total */}
       <div className="flex items-center gap-2.5">
         <input
@@ -292,7 +295,29 @@ export default function Transport({
       </div>
     </div>
 
-    {/* keyboard shortcuts — beneath the panel, on the bare app background */}
+    {!overlay && <TransportHints readOnly={readOnly} />}
+    </>
+  )
+}
+
+/**
+ * Quick-reference shortcut hints — the row beneath the transport (or, in
+ * overlay mode, beneath the video frame). Note actions (N / I·O) only apply
+ * when editing, so they're dropped in view-only.
+ */
+export function TransportHints({ readOnly = false }: { readOnly?: boolean }) {
+  const hints: { keys: string[]; label: string }[] = [
+    { keys: ['Space'], label: 'Play' },
+    { keys: ['←', '→'], label: 'Seek' },
+    ...(readOnly
+      ? []
+      : [
+          { keys: ['N'], label: 'Note' },
+          { keys: ['I', 'O'], label: 'Mark' },
+        ]),
+    { keys: ['?'], label: 'All' },
+  ]
+  return (
     <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 opacity-70">
       {hints.map((h) => (
         <span key={h.label} className="flex items-center gap-[5px]">
@@ -309,7 +334,6 @@ export default function Transport({
         </span>
       ))}
     </div>
-    </>
   )
 }
 

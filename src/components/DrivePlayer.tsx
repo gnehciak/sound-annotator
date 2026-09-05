@@ -4,12 +4,15 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { Loader2, Play, TriangleAlert } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 import { driveStreamUrl, driveViewUrl } from '../lib/drive'
 
 interface Props {
+  /** Floating chrome rendered inside the 16:9 frame, above the picture (the transport). */
+  overlay?: ReactNode
   /** Google Drive file id (see lib/drive.ts). */
   fileId: string
   /**
@@ -59,6 +62,7 @@ const RETRY_MS = 800
  */
 const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
   {
+    overlay,
     fileId,
     clipStart,
     clipEnd,
@@ -319,6 +323,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
           </span>
         </button>
       )}
+      {overlay}
     </div>
   )
 })

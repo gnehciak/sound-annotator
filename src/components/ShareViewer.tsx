@@ -25,7 +25,7 @@ import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
-import Transport from './Transport'
+import Transport, { TransportHints } from './Transport'
 import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
 import TitleBar from './TitleBar'
@@ -489,6 +489,27 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the same StructureEditor the owner uses, in read-only mode.
   const isStructure = isStructureProject(project)
 
+  // The transport, built once: it floats inside the video frame (PlayerPane's
+  // `overlay` slot) or docks beneath an audio waveform.
+  const transport = (
+    <Transport
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      duration={duration}
+      playbackRate={playbackRate}
+      volume={volume}
+      muted={muted}
+      readOnly
+      overlay={isVideoSource(source)}
+      onPlayPause={() => (isPlaying ? pause() : play())}
+      onSeek={seek}
+      onStep={step}
+      onSetRate={setPlaybackRate}
+      onSetVolume={changeVolume}
+      onToggleMute={toggleMute}
+    />
+  )
+
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
@@ -660,6 +681,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     playbackRate={playbackRate}
                     volume={muted ? 0 : volume}
                     readOnly
+                    overlay={isVideoSource(source) ? transport : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
                     onPlayingChange={handlePlaying}
@@ -669,21 +691,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   />
                 </div>
 
-                <Transport
-                  isPlaying={isPlaying}
-                  currentTime={currentTime}
-                  duration={duration}
-                  playbackRate={playbackRate}
-                  volume={volume}
-                  muted={muted}
-                  readOnly
-                  onPlayPause={() => (isPlaying ? pause() : play())}
-                  onSeek={seek}
-                  onStep={step}
-                  onSetRate={setPlaybackRate}
-                  onSetVolume={changeVolume}
-                  onToggleMute={toggleMute}
-                />
+                {!isVideoSource(source) && transport}
+                <TransportHints readOnly />
               </>
             ) : (
               <div className="rounded border border-dashed border-line p-6 text-center text-sm text-muted">

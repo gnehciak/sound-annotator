@@ -82,7 +82,7 @@ import GuestLinkBar from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import { homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
-import Transport from './components/Transport'
+import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
@@ -1638,6 +1638,27 @@ export default function App() {
   // 660px breakpoint variant is the only one needed (shared with ShareViewer).
   const splitVariant = NOTES_SPLIT_660
 
+  // The transport, built once: it either floats inside the video frame
+  // (PlayerPane's `overlay` slot) or docks beneath an audio waveform.
+  const transport = (
+    <Transport
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      duration={duration}
+      playbackRate={playbackRate}
+      volume={volume}
+      muted={muted}
+      readOnly={effectiveViewOnly}
+      overlay={isVideoSource(current?.source)}
+      onPlayPause={() => (isPlaying ? pause() : play())}
+      onSeek={seek}
+      onStep={step}
+      onSetRate={setPlaybackRate}
+      onSetVolume={changeVolume}
+      onToggleMute={toggleMute}
+    />
+  )
+
   const regionSpecs = current
     ? current.annotations.map((a) => ({
         id: a.id,
@@ -2238,6 +2259,12 @@ export default function App() {
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
+                        // Video: the transport floats over the frame's bottom
+                        // edge. Audio keeps it docked below (the waveform is
+                        // the picture and must stay uncovered).
+                        overlay={
+                          isVideoSource(current.source) ? transport : undefined
+                        }
                         onTime={handleTime}
                         onDuration={handleDuration}
                         onPlayingChange={handlePlaying}
@@ -2248,21 +2275,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <Transport
-                    isPlaying={isPlaying}
-                    currentTime={currentTime}
-                    duration={duration}
-                    playbackRate={playbackRate}
-                    volume={volume}
-                    muted={muted}
-                    readOnly={effectiveViewOnly}
-                    onPlayPause={() => (isPlaying ? pause() : play())}
-                    onSeek={seek}
-                    onStep={step}
-                    onSetRate={setPlaybackRate}
-                    onSetVolume={changeVolume}
-                    onToggleMute={toggleMute}
-                  />
+                  {!isVideoSource(current.source) && transport}
+                  <TransportHints readOnly={effectiveViewOnly} />
 
                   {/* Stem mixer — only on analyzed tracks (section detection
                       saved their separated stems). Playback-only, so it stays

@@ -4,12 +4,15 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { Loader2, Play } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 import { loadYouTubeApi } from '../lib/youtube'
 
 interface Props {
+  /** Floating chrome rendered inside the 16:9 frame, above the picture (the transport). */
+  overlay?: ReactNode
   videoId: string
   /**
    * Clip window in seconds of the source video (see ProjectSource.clipStart).
@@ -39,6 +42,7 @@ const clipLen = (videoLen: number, win: { from: number; to: number }) =>
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   {
+    overlay,
     videoId,
     clipStart,
     clipEnd,
@@ -283,6 +287,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           </span>
         </button>
       )}
+      {overlay}
     </div>
   )
 })
