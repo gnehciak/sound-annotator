@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   Play,
   Pause,
@@ -99,18 +99,267 @@ export default function Transport({
     setEditing(false)
   }
 
+  // ---- Overlay mode: YouTube-style auto-hide + a compact row on narrow frames.
+  // The bar shows on any pointer activity over the video frame (our parent)
+  // and fades ~2.4s after the pointer goes idle while the tape rolls; it never
+  // hides while paused, while a control inside it has focus, or while the
+  // speed menu is open. Leaving the frame hides it at once.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [shown, setShown] = useState(true)
+  const [focusWithin, setFocusWithin] = useState(false)
+  const [compact, setCompact] = useState(false)
+  const hideTimer = useRef<number | null>(null)
+  const armHide = () => {
+    if (hideTimer.current) window.clearTimeout(hideTimer.current)
+    hideTimer.current = window.setTimeout(() => setShown(false), 2400)
+  }
+  useEffect(() => {
+    if (!overlay) return
+    const frame = rootRef.current?.parentElement
+    if (!frame) return
+    const wake = () => {
+      setShown(true)
+      armHide()
+    }
+    const leave = () => {
+      if (hideTimer.current) window.clearTimeout(hideTimer.current)
+      setShown(false)
+    }
+    frame.addEventListener('pointermove', wake)
+    frame.addEventListener('pointerdown', wake)
+    frame.addEventListener('pointerleave', leave)
+    return () => {
+      frame.removeEventListener('pointermove', wake)
+      frame.removeEventListener('pointerdown', wake)
+      frame.removeEventListener('pointerleave', leave)
+      if (hideTimer.current) window.clearTimeout(hideTimer.current)
+    }
+  }, [overlay])
+  // Pressing play with the pointer at rest still lets the bar retire.
+  useEffect(() => {
+    if (!overlay || !isPlaying) return
+    armHide()
+  }, [overlay, isPlaying])
+  // Narrow frames drop the ±5s steps so the row never wraps.
+  useEffect(() => {
+    if (!overlay) return
+    const el = rootRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      setCompact(entry.contentRect.width < 460)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [overlay])
+  const visible = !isPlaying || shown || focusWithin || speedOpen
+
+  // Shared between the two layouts: the editable current-time field and the
+  // seek bar's drag handling.
+  const timeInputProps = {
+    value: editing ? draft : formatTime(currentTime),
+    onFocus: () => {
+      setEditing(true)
+      setDraft(formatTime(currentTime))
+    },
+    onChange: (e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
+    onKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        e.currentTarget.blur() // blur commits
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        skipCommitRef.current = true
+        e.currentTarget.blur()
+      }
+    },
+    onBlur: () => {
+      // Defocusing confirms the typed time, same as Enter; Escape cancels.
+      if (skipCommitRef.current) {
+        skipCommitRef.current = false
+        setEditing(false)
+      } else {
+        commitTime()
+      }
+    },
+    title: 'Type a time (m:ss or seconds) and press Enter to jump',
+    'aria-label': 'Current time — type to jump',
+  }
+  const barHandlers = {
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => {
+      draggingRef.current = true
+      seekFromX(e.clientX)
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (draggingRef.current) seekFromX(e.clientX)
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => {
+      draggingRef.current = false
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    },
+  }
+
+  if (overlay) {
+    const iconBtn =
+      'press grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/85 transition-colors hover:bg-white/10 hover:text-white'
+    return (
+      <div
+        ref={rootRef}
+        onFocus={() => setFocusWithin(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+            setFocusWithin(false)
+        }}
+        aria-hidden={!visible || undefined}
+        className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-1.5 pt-12 transition-opacity duration-200 ease-instr ${
+          visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        {/* seek bar — the full frame width; thin at rest, thicker under the pointer */}
+        <div
+          ref={barRef}
+          {...barHandlers}
+          className="group/bar relative cursor-pointer touch-none py-1.5"
+          title="Click or drag to jump"
+        >
+          <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/25 transition-[height] duration-100 group-hover/bar:h-[5px]">
+            <div className="h-full bg-accent" style={{ width: `${frac * 100}%` }} />
+          </div>
+          <div
+            className="absolute top-1/2 h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-0 transition-opacity duration-100 group-hover/bar:opacity-100"
+            style={{ left: `${frac * 100}%` }}
+          />
+        </div>
+
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={onPlayPause}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+            className={iconBtn}
+          >
+            {isPlaying ? (
+              <Pause size={17} className="fill-current" />
+            ) : (
+              <Play size={17} className="translate-x-px fill-current" />
+            )}
+          </button>
+          {!compact && (
+            <button
+              onClick={() => onStep(-5)}
+              aria-label="Back 5 seconds"
+              title="Jump back 5 seconds (Shift ←)"
+              className={iconBtn}
+            >
+              <ChevronsLeft size={15} />
+            </button>
+          )}
+          <button
+            onClick={() => onStep(-1)}
+            aria-label="Back 1 second"
+            title="Jump back 1 second (←)"
+            className={iconBtn}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <button
+            onClick={() => onStep(1)}
+            aria-label="Forward 1 second"
+            title="Jump forward 1 second (→)"
+            className={iconBtn}
+          >
+            <ChevronRight size={15} />
+          </button>
+          {!compact && (
+            <button
+              onClick={() => onStep(5)}
+              aria-label="Forward 5 seconds"
+              title="Jump forward 5 seconds (Shift →)"
+              className={iconBtn}
+            >
+              <ChevronsRight size={15} />
+            </button>
+          )}
+
+          <span className="ml-1 flex min-w-0 items-center gap-1 font-mono text-[12px] tabular-nums text-white/90">
+            <input
+              {...timeInputProps}
+              className="w-[50px] rounded bg-transparent px-1 py-0.5 text-center outline-none transition-colors hover:bg-white/10 focus:bg-white/15"
+            />
+            <span className="text-white/45">/</span>
+            <span className="text-white/60">{formatTime(duration)}</span>
+          </span>
+
+          <div className="flex-1" />
+
+          {/* playback speed — opens upward so the frame's overflow never clips it */}
+          <div ref={speedRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setSpeedOpen((o) => !o)}
+              aria-haspopup="listbox"
+              aria-expanded={speedOpen}
+              aria-label={`Playback speed: ${playbackRate}×`}
+              title="Playback speed"
+              className={`press flex h-8 items-center rounded-full px-2.5 font-mono text-[11px] tabular-nums transition-colors hover:bg-white/10 ${
+                playbackRate !== 1 ? 'text-accent' : 'text-white/85 hover:text-white'
+              }`}
+            >
+              {playbackRate}×
+            </button>
+            {speedOpen && (
+              <div
+                role="listbox"
+                aria-label="Playback speed"
+                className="glass-pop absolute bottom-full right-0 z-30 mb-1.5 w-[4.25rem] animate-panel-in overflow-hidden rounded-md"
+              >
+                {RATES.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    role="option"
+                    aria-selected={playbackRate === r}
+                    onClick={() => {
+                      onSetRate(r)
+                      setSpeedOpen(false)
+                    }}
+                    className={`flex w-full items-center justify-between px-2 py-1 font-mono text-[11px] tabular-nums ${
+                      playbackRate === r
+                        ? 'bg-raised text-accentink'
+                        : 'text-muted hover:bg-fg/5 hover:text-fg'
+                    }`}
+                  >
+                    {r}×
+                    {playbackRate === r && <Check size={11} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <VolumeControl
+            tone="overlay"
+            volume={volume}
+            muted={muted}
+            onSetVolume={onSetVolume}
+            onToggleMute={onToggleMute}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
-    <div
-      className={
-        overlay
-          ? // Floating over the video: dense glass so the controls stay legible
-            // over any frame, inset from the edges, above the player's own
-            // click-catcher / play-circle layers.
-            'well-glow glass-pop absolute inset-x-2.5 bottom-2.5 z-20 space-y-[9px] rounded-lg px-[13px] pb-[11px] pt-[9px]'
-          : 'well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]'
-      }
-    >
+    <div className="well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]">
       {/* progress / seek bar, flanked by the (editable) current time and total */}
       <div className="flex items-center gap-2.5">
         <input
@@ -295,7 +544,7 @@ export default function Transport({
       </div>
     </div>
 
-    {!overlay && <TransportHints readOnly={readOnly} />}
+    <TransportHints readOnly={readOnly} />
     </>
   )
 }
@@ -351,11 +600,14 @@ export function VolumeControl({
   muted,
   onSetVolume,
   onToggleMute,
+  tone = 'panel',
 }: {
   volume: number
   muted: boolean
   onSetVolume: (v: number) => void
   onToggleMute: () => void
+  /** 'overlay': white glyph for the floating video bar (see Transport). */
+  tone?: 'panel' | 'overlay'
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -396,9 +648,15 @@ export function VolumeControl({
         aria-label={open ? (muted ? 'Unmute' : 'Mute') : 'Volume'}
         aria-expanded={open}
         title={open ? (muted ? 'Unmute' : 'Mute') : `Volume ${pct}%`}
-        className={`press grid h-[30px] w-[30px] place-items-center rounded transition-colors ${
-          muted ? 'text-accentink' : 'text-muted hover:bg-raised hover:text-fg'
-        }`}
+        className={
+          tone === 'overlay'
+            ? `press grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-white/10 ${
+                muted ? 'text-accent' : 'text-white/85 hover:text-white'
+              }`
+            : `press grid h-[30px] w-[30px] place-items-center rounded transition-colors ${
+                muted ? 'text-accentink' : 'text-muted hover:bg-raised hover:text-fg'
+              }`
+        }
       >
         <Icon size={15} />
       </button>
@@ -406,7 +664,7 @@ export function VolumeControl({
       // Static -translate-x-1/2 centering lives on this outer wrapper because
       // panel-in fills `transform: none` and would clobber it on the same node.
       <div className="absolute bottom-full left-1/2 z-30 mb-1 -translate-x-1/2">
-      <div className="animate-panel-in rounded border border-line bg-panel px-[7px] py-2.5 shadow-lg shadow-black/40">
+      <div className="glass-pop animate-panel-in rounded-md px-[7px] py-2.5">
       <div
         ref={trackRef}
         role="slider"
