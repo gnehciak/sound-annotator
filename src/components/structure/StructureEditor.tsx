@@ -15,7 +15,8 @@ import {
 } from 'lucide-react'
 import type { Annotation } from '../../types'
 import { formatTime, noteLabel, parseTime } from '../../lib/format'
-import { colorForId } from '../../lib/noteColors'
+import { colorForId, hueText } from '../../lib/noteColors'
+import { useResolvedTheme } from '../../lib/theme'
 import {
   SECTION_PRESETS,
   dedupedName,
@@ -153,6 +154,7 @@ export default function StructureEditor({
   onUpdate,
   onDelete,
 }: Props) {
+  const theme = useResolvedTheme()
   const [tool, setTool] = useState<Tool>('select')
   // Selection is derived defensively: an id that no longer exists (deleted,
   // undone) simply matches nothing, and read-only mode masks it entirely.
@@ -190,7 +192,6 @@ export default function StructureEditor({
   const selected = selectedId
     ? sections.find((a) => a.id === selectedId) ?? null
     : null
-  const nowSection = sectionAt(ordered, currentTime)
 
   // Timeline geometry: one rect for the ruler + lane column.
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -768,41 +769,6 @@ export default function StructureEditor({
         actions={headerActions}
       />
 
-      {/* Section chips — the song's form at a glance; click to cue. */}
-      {ordered.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto border-b border-line/70 px-3.5 py-2">
-          {ordered.map((sec) => {
-            const color = sec.color ?? colorForId(sec.id)
-            const isNow = nowSection?.id === sec.id
-            const isSel = sec.id === selectedId
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => {
-                  onSeek(sec.start)
-                  if (!readOnly) setSelectedId(sec.id)
-                }}
-                title={`${sectionName(sec)} · ${noteLabel(sec.start, sec.end)}`}
-                aria-pressed={isSel}
-                className="chip press gap-1.5 text-[11px] normal-case tracking-normal"
-                style={{
-                  ['--hue' as string]: isNow ? 'rgb(var(--accent-ink))' : color,
-                  color: isNow ? 'rgb(var(--accent-ink))' : 'rgb(var(--text))',
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: color }}
-                />
-                {sectionName(sec)}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
       {/* Minimap — the whole song; drag the window to pan, its edges to zoom. */}
       <div className="px-3.5 pb-1 pt-2">
         <div
@@ -958,8 +924,11 @@ export default function StructureEditor({
               >
                 {w > 34 && (
                   <span
-                    className="pointer-events-none absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate rounded-sm px-1.5 py-[2px] font-mono text-[10px] font-semibold leading-none text-onbright"
-                    style={{ background: color }}
+                    className="chip pointer-events-none absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate bg-ink/70 font-semibold"
+                    style={{
+                      ['--hue' as string]: color,
+                      color: hueText(color, theme),
+                    }}
                   >
                     {sectionName(sec)}
                   </span>

@@ -588,6 +588,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       playbackRate={playbackRate}
                       volume={muted ? 0 : volume}
                       readOnly
+                      overlay={isVideoSource(source) ? transport : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
                       onPlayingChange={handlePlaying}
@@ -596,18 +597,20 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       onUpdateRegion={() => {}}
                     />
                   </div>
-                  {/* Folded transport: Play + clock + volume. Seeking lives in
-                      the board (ruler / minimap / chips / lyric headings). */}
-                  <MiniTransport
-                    isPlaying={isPlaying}
-                    currentTime={currentTime}
-                    duration={duration}
-                    volume={volume}
-                    muted={muted}
-                    onPlayPause={() => (isPlaying ? pause() : play())}
-                    onSetVolume={changeVolume}
-                    onToggleMute={toggleMute}
-                  />
+                  {/* Audio only: the folded transport. Video carries the
+                      floating one inside the frame. */}
+                  {!isVideoSource(source) && (
+                    <MiniTransport
+                      isPlaying={isPlaying}
+                      currentTime={currentTime}
+                      duration={duration}
+                      volume={volume}
+                      muted={muted}
+                      onPlayPause={() => (isPlaying ? pause() : play())}
+                      onSetVolume={changeVolume}
+                      onToggleMute={toggleMute}
+                    />
+                  )}
                 </>
               ) : (
                 <div className="empty py-6 text-sm text-muted">

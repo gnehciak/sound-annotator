@@ -2128,6 +2128,11 @@ export default function App() {
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
+                        // Video: the same floating transport as the notes
+                        // workspace. Audio keeps the folded well below.
+                        overlay={
+                          isVideoSource(current.source) ? transport : undefined
+                        }
                         onTime={handleTime}
                         onDuration={handleDuration}
                         onPlayingChange={handlePlaying}
@@ -2138,9 +2143,22 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Folded transport: Play + clock + volume, with the stem
-                      mixer folded in below. Seeking lives in the board (ruler /
-                      minimap / chips / lyric headings). */}
+                  {/* Video: the stem mixer stands on its own strip under the
+                      frame. Audio: the folded transport (Play + clock +
+                      volume) with the mixer folded in below. */}
+                  {isVideoSource(current.source) ? (
+                    current.stems && (
+                      <StemMixer
+                        key={current.id}
+                        stems={current.stems}
+                        playerRef={playerRef}
+                        isPlaying={isPlaying}
+                        volume={muted ? 0 : volume}
+                        playbackRate={playbackRate}
+                        onActiveChange={setStemActive}
+                      />
+                    )
+                  ) : (
                   <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
@@ -2165,6 +2183,7 @@ export default function App() {
                       />
                     )}
                   </MiniTransport>
+                  )}
                 </div>
               </div>
 
