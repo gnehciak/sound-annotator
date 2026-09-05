@@ -511,7 +511,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   )
 
   return (
-    <div className="flex h-full flex-col bg-ink text-fg">
+    <div className="flex h-full flex-col text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
         <HomeDot>
           <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">

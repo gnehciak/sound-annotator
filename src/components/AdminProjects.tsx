@@ -117,7 +117,7 @@ export default function AdminProjects() {
     return <Centered>Couldn’t load projects. Check the console.</Centered>
 
   return (
-    <div className="h-full overflow-y-auto bg-ink text-fg">
+    <div className="h-full overflow-y-auto text-fg">
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">
           {/* No wordmark inside the link here — the heading beside it names

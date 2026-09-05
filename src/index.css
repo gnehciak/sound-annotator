@@ -56,6 +56,11 @@
   --ambient: radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
     radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.13), transparent 65%),
     radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.045), transparent 60%);
+  /* Armed (edit mode): the whole canvas takes the signal — a flat wash under
+     stronger blooms — so the glass panes float on the "recording" light. */
+  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.09), rgb(var(--accent) / 0.09)),
+    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.3), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.2), transparent 65%);
   --text: 236 236 240; /* #ececf0 */
   --text-strong: 255 255 255; /* #fff — h1 / emphasis */
   --text-muted: 164 164 174; /* #a4a4ae — AA on raised + projector legibility */
@@ -111,6 +116,9 @@
   --ambient: radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
     radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.12), transparent 65%),
     radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.6), transparent 60%);
+  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.08), rgb(var(--accent) / 0.08)),
+    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.28), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.18), transparent 65%);
   --text: 29 29 33; /* #1d1d21 near-black */
   --text-strong: 14 14 17; /* #0e0e11 h1 / emphasis */
   --text-muted: 98 98 107; /* #62626b labels/placeholder — AA on white, raised, and inset */
@@ -219,6 +227,12 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background: var(--ambient);
+  transition: opacity 240ms var(--ease-out);
+}
+/* Edit mode (App sets data-armed on <html>): the canvas takes the signal.
+   Page roots are transparent so this shows through under every pane. */
+html[data-armed] body::before {
+  background: var(--ambient-armed);
 }
 
 /* ==================================================================
@@ -433,6 +447,11 @@ body::before {
       inset 0 1px 0 rgb(255 255 255 / 0.04),
       0 18px 40px -18px rgb(var(--accent) / 0.45);
   }
+  /* The video frame throws the faint signal glow the transport well used
+     to (the transport now floats inside the frame). */
+  .video-glow {
+    box-shadow: 0 22px 44px -18px rgb(var(--accent) / 0.5);
+  }
   /* Flat wash card for grids (library, gallery): no shadow, no lift. */
   .tile {
     @apply overflow-hidden rounded-lg border bg-panel;
@@ -487,23 +506,27 @@ body::before {
   transform: translate(-50%, -50%);
   border-radius: 9999px;
   background: rgb(var(--border-strong));
-  transition: background-color 140ms var(--ease-out), height 140ms var(--ease-out);
+  transition:
+    background-color 140ms var(--ease-out),
+    height 180ms var(--ease-out),
+    width 140ms var(--ease-out);
 }
 .split-grip:hover::before {
-  background: rgb(var(--text-muted));
-  height: 56px;
+  background: rgb(var(--text));
+  height: 64px;
+  width: 4px;
 }
 .split-grip[data-dragging]::before {
   background: rgb(var(--accent));
-  height: 56px;
+  height: 64px;
+  width: 4px;
 }
 
 
-/* Armed masthead: while the open track is editable, the header chrome
-   takes a faint 7% signal wash (no hairline — the header sits bare on the
-   canvas). The one sanctioned signal tint on chrome; follows the palette. */
+/* Armed masthead: the whole canvas is tinted while the track is editable
+   (see html[data-armed] above), so the header itself stays bare. */
 .masthead-armed {
-  background-color: rgb(var(--accent) / 0.07);
+  background-color: transparent;
   border-color: transparent;
 }
 

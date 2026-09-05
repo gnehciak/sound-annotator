@@ -82,7 +82,7 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
   const { pref, setPref, resolved, palette, setPalette } = useTheme()
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-ink text-fg">
+    <div className="flex h-full flex-col overflow-y-auto text-fg">
       {/* The app's own masthead, unchanged — the first thing a visitor sees is
           the thing they'll be looking at all lesson. */}
       <header className="sticky top-0 z-10 flex h-[54px] shrink-0 items-center gap-3 bg-ink/70 px-4 backdrop-blur-md">

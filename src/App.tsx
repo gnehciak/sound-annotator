@@ -78,7 +78,7 @@ import {
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
-import GuestLinkBar from './components/GuestLinkBar'
+import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import { homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
@@ -410,6 +410,19 @@ export default function App() {
     editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
   // Read-only for any reason: the user's own View toggle, or the lock.
   const effectiveViewOnly = viewOnly || lockBlocked
+
+  // Edit mode tints the whole canvas (html[data-armed] in index.css) — the
+  // panes float on the signal while the track is editable, and the masthead
+  // stays bare rather than carrying the wash alone.
+  const armed = view === 'track' && !effectiveViewOnly
+  useEffect(() => {
+    const root = document.documentElement
+    if (armed) root.dataset.armed = ''
+    else delete root.dataset.armed
+    return () => {
+      delete root.dataset.armed
+    }
+  }, [armed])
 
   // Settings live on the project; user-local values are the fallback when a
   // project has none. On opening a project that *has* settings, we sync the
@@ -1682,10 +1695,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-ink text-fg">
+    <div className="flex h-full flex-col text-fg">
       {/* Guests have no account to hold their work — their links are the only
           way back to it, so the bar sits above everything, not in a menu. */}
-      {isGuest && <GuestLinkBar />}
       {/* ---- Global header — the one bar (2026-07-17 unified nav) ----
           On the home page: wordmark, theme, account. With a track open it
           carries the whole track chrome too: dot-as-back, editable title,
@@ -1819,6 +1831,10 @@ export default function App() {
             <Eye size={11} /> View only
           </span>
         )}
+        {/* Guests: their two links live in the masthead — the hand-in link
+            (read-only, what they submit) and the private edit link (their
+            only way back in; the title carries the no-account warning). */}
+        {view === 'track' && isGuest && <GuestLinks />}
         <div className="min-w-0 flex-1" />
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
@@ -2409,9 +2425,7 @@ export default function App() {
                   onPointerDown={startInspectorDrag}
                   title="Drag to resize"
                   data-dragging={draggingInspector || undefined}
-                  className={`split-grip w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${
-                    draggingInspector ? 'bg-accent/15' : 'bg-transparent hover:bg-fg/[0.06]'
-                  }`}
+                  className="split-grip w-3 shrink-0 cursor-col-resize touch-none bg-transparent"
                 />
               )}
 

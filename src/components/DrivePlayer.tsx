@@ -191,7 +191,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
     // Same frame as YouTubePlayer: 16:9, centred, height capped by
     // `--player-max-h` so a wide player column doesn't squeeze the overview.
     <div
-      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line/70 bg-black"
+      className="video-glow relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line/70 bg-black"
       style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <video
