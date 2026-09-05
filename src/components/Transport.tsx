@@ -101,17 +101,20 @@ export default function Transport({
 
   // ---- Overlay mode: YouTube-style auto-hide + a compact row on narrow frames.
   // The bar shows on any pointer activity over the video frame (our parent)
-  // and fades ~2.4s after the pointer goes idle while the tape rolls; it never
-  // hides while paused, while a control inside it has focus, or while the
-  // speed menu is open. Leaving the frame hides it at once.
+  // and fades ~3s after the pointer goes idle while the tape rolls; it never
+  // hides while paused, while the pointer is over the bar itself (aiming at
+  // the seek bar must not make it vanish underfoot), while a control inside
+  // it has focus, or while the speed menu is open. Leaving the frame hides
+  // it at once.
   const rootRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(true)
+  const [hoverBar, setHoverBar] = useState(false)
   const [focusWithin, setFocusWithin] = useState(false)
   const [compact, setCompact] = useState(false)
   const hideTimer = useRef<number | null>(null)
   const armHide = () => {
     if (hideTimer.current) window.clearTimeout(hideTimer.current)
-    hideTimer.current = window.setTimeout(() => setShown(false), 2400)
+    hideTimer.current = window.setTimeout(() => setShown(false), 3000)
   }
   useEffect(() => {
     if (!overlay) return
@@ -124,6 +127,7 @@ export default function Transport({
     const leave = () => {
       if (hideTimer.current) window.clearTimeout(hideTimer.current)
       setShown(false)
+      setHoverBar(false)
     }
     frame.addEventListener('pointermove', wake)
     frame.addEventListener('pointerdown', wake)
@@ -151,7 +155,7 @@ export default function Transport({
     ro.observe(el)
     return () => ro.disconnect()
   }, [overlay])
-  const visible = !isPlaying || shown || focusWithin || speedOpen
+  const visible = !isPlaying || shown || hoverBar || focusWithin || speedOpen
 
   // Shared between the two layouts: the editable current-time field and the
   // seek bar's drag handling.
@@ -213,6 +217,8 @@ export default function Transport({
     return (
       <div
         ref={rootRef}
+        onPointerEnter={() => setHoverBar(true)}
+        onPointerLeave={() => setHoverBar(false)}
         onFocus={() => setFocusWithin(true)}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null))

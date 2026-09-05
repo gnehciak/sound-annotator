@@ -24,8 +24,9 @@ export default function SplitHandle({
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
       title="Drag to resize · double-click to reset"
-      className={`hidden w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${variantClass} ${
-        dragging ? 'bg-accent/40' : 'bg-transparent hover:bg-fg/10'
+      data-dragging={dragging || undefined}
+      className={`split-grip hidden w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${variantClass} ${
+        dragging ? 'bg-accent/15' : 'bg-transparent hover:bg-fg/[0.06]'
       }`}
     />
   )

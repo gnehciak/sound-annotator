@@ -2410,8 +2410,9 @@ export default function App() {
                   aria-label="Resize notes and inspector"
                   onPointerDown={startInspectorDrag}
                   title="Drag to resize"
-                  className={`w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${
-                    draggingInspector ? 'bg-accent/40' : 'bg-transparent hover:bg-fg/10'
+                  data-dragging={draggingInspector || undefined}
+                  className={`split-grip w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${
+                    draggingInspector ? 'bg-accent/15' : 'bg-transparent hover:bg-fg/[0.06]'
                   }`}
                 />
               )}

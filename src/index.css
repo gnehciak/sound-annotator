@@ -241,6 +241,34 @@ body::before {
   border-radius: 18px;
   box-shadow: var(--glass-shadow), var(--glass-hi);
 }
+/* Column resize handles sit in the 12px gutter between glass panes. The
+   strip is transparent, so a small grip pill marks the grab point at rest
+   (a hairline-strong bar), brightening on hover and taking the signal while
+   dragging. The pill is a pseudo-element so the handle stays one div. */
+.split-grip {
+  position: relative;
+}
+.split-grip::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: rgb(var(--border-strong));
+  transition: background-color 140ms var(--ease-out), height 140ms var(--ease-out);
+}
+.split-grip:hover::before {
+  background: rgb(var(--text-muted));
+  height: 56px;
+}
+.split-grip[data-dragging]::before {
+  background: rgb(var(--accent));
+  height: 56px;
+}
+
 /* The transport well — a recessed dark slab that throws a faint signal-
    coloured glow beneath it (the "lit console" under the recorder). */
 .well-glow {
