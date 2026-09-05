@@ -42,6 +42,7 @@
      is the pane itself (see .glass), `--raised` the lifted strip/hover,
      `--inset` a recessed dark well, `--pop` the denser glass a floating
      menu needs to stay legible over content. */
+  --pane: 16 16 19; /* #101013 — a pane's solid fill, one step above the canvas */
   --panel: rgb(255 255 255 / 0.045);
   --raised: rgb(255 255 255 / 0.07);
   --inset: rgb(0 0 0 / 0.32);
@@ -104,6 +105,7 @@
   --border: 208 208 214; /* #d0d0d6 hairlines */
   --border-strong: 156 156 166; /* #9c9ca6 hover/active edges */
 
+  --pane: 255 255 255; /* #ffffff — panes are white sheets on the pale canvas */
   --panel: rgb(255 255 255 / 0.62);
   --raised: rgb(0 0 0 / 0.04);
   --inset: rgb(0 0 0 / 0.05);
@@ -479,12 +481,11 @@ html[data-armed] body::before {
    for sheets and modals; `.pop` is the same material shaped as a menu.
    ------------------------------------------------------------------ */
 .glass {
-  background: var(--panel);
-  /* No backdrop-filter here on purpose: a pane only ever sits over the
-     smooth ambient canvas, so blurring buys nothing — and in Chrome the
-     blur samples neighbouring GPU layers (the video), smearing the frame's
-     edge down through every pane below it. Menus and modals, which float
-     over real content, keep theirs (.pop / .glass-pop). */
+  /* Solid, not translucent: the pane is the neutral stage (near-black dark,
+     white light) and the canvas — the bloom, and the edit-mode signal wash —
+     shows only in the gutters around it. Menus and modals (.pop /
+     .glass-pop) are the translucent, blurred surfaces. */
+  background: rgb(var(--pane));
   border: 1px solid var(--glass-ring);
   border-radius: 18px;
   box-shadow: var(--glass-shadow), var(--glass-hi);
