@@ -59,9 +59,9 @@
     radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.045), transparent 60%);
   /* Armed (edit mode): the whole canvas takes the signal — a flat wash under
      stronger blooms — so the glass panes float on the "recording" light. */
-  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.09), rgb(var(--accent) / 0.09)),
-    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.3), transparent 65%),
-    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.2), transparent 65%);
+  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.045), rgb(var(--accent) / 0.045)),
+    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.22), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.14), transparent 65%);
   --text: 236 236 240; /* #ececf0 */
   --text-strong: 255 255 255; /* #fff — h1 / emphasis */
   --text-muted: 164 164 174; /* #a4a4ae — AA on raised + projector legibility */
@@ -118,9 +118,9 @@
   --ambient: radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
     radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.12), transparent 65%),
     radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.6), transparent 60%);
-  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.08), rgb(var(--accent) / 0.08)),
-    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.28), transparent 65%),
-    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.18), transparent 65%);
+  --ambient-armed: linear-gradient(rgb(var(--accent) / 0.04), rgb(var(--accent) / 0.04)),
+    radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.13), transparent 65%);
   --text: 29 29 33; /* #1d1d21 near-black */
   --text-strong: 14 14 17; /* #0e0e11 h1 / emphasis */
   --text-muted: 98 98 107; /* #62626b labels/placeholder — AA on white, raised, and inset */
@@ -481,11 +481,12 @@ html[data-armed] body::before {
    for sheets and modals; `.pop` is the same material shaped as a menu.
    ------------------------------------------------------------------ */
 .glass {
-  /* Solid, not translucent: the pane is the neutral stage (near-black dark,
-     white light) and the canvas — the bloom, and the edit-mode signal wash —
-     shows only in the gutters around it. Menus and modals (.pop /
-     .glass-pop) are the translucent, blurred surfaces. */
-  background: rgb(var(--pane));
+  /* Translucent, but not blurred: a pane only ever sits over the smooth
+     ambient canvas, so a backdrop-filter buys nothing — and in Chrome it
+     samples neighbouring GPU layers (the video) and smears the frame's edge
+     down through the panes below. Menus and modals (.pop / .glass-pop),
+     which float over real content, keep their blur. */
+  background: var(--panel);
   border: 1px solid var(--glass-ring);
   border-radius: 18px;
   box-shadow: var(--glass-shadow), var(--glass-hi);

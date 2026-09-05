@@ -137,11 +137,12 @@ metal or glossy bevels — the blur is the only material effect.
 **Key Characteristics:**
 - A deep neutral canvas (near-black dark / pale grey light) with an ambient
   bloom of the signal hue; workspace columns float on it as frosted-glass
-  panes (`.glass`): a solid near-black (dark) / white (light) sheet with a
-  hairline ring, top highlight and deep soft shadow, 18px corners, 12px
-  gutters. The canvas — its bloom, and the edit-mode signal wash — shows
-  only in the gutters. Menus and modals (`.pop` / `.glass-pop`) are the
-  translucent, blurred surfaces.
+  panes (`.glass`): a translucent wash with a hairline ring, top highlight
+  and deep soft shadow, 18px corners, 12px gutters, so the canvas — its
+  bloom, and the faint edit-mode signal wash — reads through them. No
+  backdrop blur on panes (Chrome smears a video's GPU layer through it);
+  menus and modals (`.pop` / `.glass-pop`) blur because they float over
+  content.
 - Color only as accent: one signal hue meaning "now", a meter hue, and the
   crayon-box note data. Panes never take a tint; only the canvas glows.
 - Monospace tabular numerics for every timecode, count, and micro-label.
@@ -188,9 +189,7 @@ black at low alpha) rather than opaque greys, so every pane stays translucent
 wherever it sits:
 - **Ink** (#0a0a0c): The canvas, with the `--ambient` bloom painted over it
   (`body::before`).
-- **Pane** (#101013): The solid fill of a workspace column (`.glass` adds the
-  ring, highlight and shadow). **Panel** (white 4.5%): the wash a `bg-panel`
-  surface takes inside a pane (`.glass` adds the ring,
+- **Panel** (white 4.5%): A pane of glass (`.glass` adds the ring,
   highlight and shadow). Also the fill of any `bg-panel` surface.
 - **Raised** (white 7%): Lifted strips and hover states; title bars use a
   3% wash so they read as a frosted band, not a slab.
