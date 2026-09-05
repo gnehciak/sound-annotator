@@ -61,7 +61,7 @@ export function ThemeMenuContent({
       <div className="px-2.5 pb-1 pt-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
         Mode
       </div>
-      <div role="radiogroup" aria-label="Theme mode" className="flex gap-1 px-2.5 pb-2">
+      <div role="radiogroup" aria-label="Theme mode" className="seg mx-2.5 mb-2 flex w-[calc(100%-1.25rem)]">
         {MODES.map(({ value, name, Icon: MIcon }) => (
           <button
             key={value}
@@ -70,11 +70,7 @@ export function ThemeMenuContent({
             aria-checked={pref === value}
             title={name}
             onClick={() => onChange(value)}
-            className={`flex flex-1 items-center justify-center rounded border py-2 ${
-              pref === value
-                ? 'border-line-strong bg-raised text-fg'
-                : 'border-line text-muted hover:bg-raised hover:text-fg'
-            }`}
+            className="seg-item press h-7 flex-1"
           >
             <MIcon size={13} />
           </button>
@@ -149,7 +145,7 @@ export default function ThemeToggle({
         aria-label={`Theme: ${label}, palette ${PALETTE_NAME[palette]}. Open theme menu.`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="press grid h-8 w-8 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="btn-icon-lg press"
       >
         <Icon size={16} />
       </button>
@@ -159,7 +155,7 @@ export default function ThemeToggle({
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
         width={184}
-        className="rounded border border-line bg-panel py-1 shadow-lg"
+        className="py-1"
       >
         <ThemeMenuContent
           pref={pref}

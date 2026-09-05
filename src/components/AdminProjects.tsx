@@ -117,7 +117,7 @@ export default function AdminProjects() {
     return <Centered>Couldn’t load projects. Check the console.</Centered>
 
   return (
-    <div className="h-full overflow-y-auto bg-ink text-fg">
+    <div className="h-full overflow-y-auto text-fg">
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-5 flex flex-wrap items-center gap-3">
           {/* No wordmark inside the link here — the heading beside it names
@@ -131,11 +131,12 @@ export default function AdminProjects() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`press rounded border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] ${
-                  filter === f
-                    ? 'border-accent/70 bg-accent/15 text-accentink'
-                    : 'border-line bg-raised text-muted hover:text-fg'
-                }`}
+                aria-pressed={filter === f}
+                className="chip chip-outline press px-2.5 py-1 text-[11px] tracking-[0.12em]"
+                style={{
+                  ['--hue' as string]:
+                    filter === f ? 'rgb(var(--accent-ink))' : 'rgb(var(--text-muted))',
+                }}
               >
                 {f} ({counts[f]})
               </button>
@@ -143,21 +144,21 @@ export default function AdminProjects() {
           </div>
           <button
             onClick={() => void load()}
-            className="press ml-auto inline-flex items-center gap-1.5 rounded border border-line bg-raised px-2.5 py-1 font-mono text-[11px] text-fg hover:brightness-110"
+            className="btn-ghost btn-sm press ml-auto"
           >
             <RefreshCw size={12} /> Refresh
           </button>
         </div>
 
         {shown.length === 0 ? (
-          <p className="rounded border border-line bg-panel p-8 text-center text-sm text-muted">
+          <p className="empty text-sm text-muted">
             Nothing here.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-line">
+          <div className="overflow-x-auto rounded-lg border border-line/70">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-panel text-left font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+                <tr className="strip text-left font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
                   <th className="px-3 py-2 font-semibold">Title</th>
                   <th className="px-3 py-2 font-semibold">Owner</th>
                   <th className="px-3 py-2 font-semibold">Notes</th>
@@ -168,17 +169,13 @@ export default function AdminProjects() {
               </thead>
               <tbody>
                 {shown.map((p) => (
-                  <tr key={p.id} className="border-t border-line bg-note/40">
+                  <tr key={p.id} className="border-t border-line bg-fg/[0.02]">
                     <td className="max-w-[20rem] truncate px-3 py-2" title={p.title}>
                       {p.title}
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] ${
-                          p.kind === 'guest'
-                            ? 'bg-accent/15 text-accentink'
-                            : 'bg-raised text-muted'
-                        }`}
+                        className={`chip ${p.kind === 'guest' ? 'chip-signal' : 'chip-neutral'}`}
                         title={p.ownerId ?? ''}
                       >
                         {p.kind === 'guest' ? 'guest' : p.mine ? 'you' : 'account'}
@@ -197,14 +194,14 @@ export default function AdminProjects() {
                       <div className="flex items-center gap-1.5">
                         <a
                           href={`/?view=${p.id}`}
-                          className="press inline-flex items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[11px] text-fg hover:brightness-110"
+                          className="btn-ghost btn-sm press"
                           title="Open read-only"
                         >
                           <Eye size={12} /> View
                         </a>
                         <a
                           href={`/?track=${p.id}&admin=1`}
-                          className="press inline-flex items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[11px] text-fg hover:brightness-110"
+                          className="btn-ghost btn-sm press"
                           title="Open in the editor — changes write to this project"
                         >
                           <Pencil size={12} /> Edit
@@ -212,14 +209,14 @@ export default function AdminProjects() {
                         <button
                           onClick={() => void rename(p)}
                           disabled={busyId === p.id}
-                          className="press inline-flex items-center gap-1 rounded border border-line bg-raised px-2 py-1 font-mono text-[11px] text-fg hover:brightness-110 disabled:opacity-50"
+                          className="btn-ghost btn-sm press"
                         >
                           Rename
                         </button>
                         <button
                           onClick={() => void remove(p)}
                           disabled={busyId === p.id}
-                          className="press inline-flex items-center gap-1 rounded border border-danger/50 bg-danger/10 px-2 py-1 font-mono text-[11px] text-danger hover:bg-danger/20 disabled:opacity-50"
+                          className="btn-ghost btn-sm press border-danger/50 text-danger hover:border-danger hover:text-danger"
                         >
                           {busyId === p.id ? (
                             <Loader2 size={12} className="animate-spin" />

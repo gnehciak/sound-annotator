@@ -72,26 +72,19 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
         return (
           <span
             key={t}
-            className="flex items-center gap-1.5 rounded-sm border px-2 py-[3px] font-mono text-[10px] font-semibold uppercase tracking-[0.12em]"
+            className="chip pr-1"
             style={{
-              // 45%-mix ring (the prototype's .tagchip): softer than full-strength
-              // hueText while keeping the AA-adjusted base for theme safety.
-              borderColor: `color-mix(in srgb, ${hueText(c.color, theme)} 45%, transparent)`,
+              ['--hue' as string]: c.color,
               color: hueText(c.color, theme),
-              background: `color-mix(in srgb, ${c.color} 10%, transparent)`,
             }}
           >
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: c.color }}
-            />
             {c.label}
             <button
               type="button"
               onClick={() => remove(t)}
               title={`Remove ${c.label}`}
               aria-label={`Remove ${c.label}`}
-              className="press -mr-0.5 rounded opacity-60 hover:opacity-100"
+              className="press grid h-4 w-4 place-items-center rounded-full opacity-60 hover:bg-fg/10 hover:opacity-100"
             >
               <X size={11} />
             </button>
@@ -104,7 +97,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
         title="Add a tag"
         aria-label="Add a tag"
-        className="press flex items-center gap-1 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+        className="btn-ghost btn-sm press"
       >
         {tags.length === 0 ? (
           <>
@@ -119,7 +112,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
 
       {pop.mounted && (
         <div
-          className={`absolute left-0 top-full z-20 mt-1 w-44 origin-top-left rounded border border-line bg-panel py-1 shadow-lg ${
+          className={`pop absolute left-0 top-full z-20 mt-1 w-44 origin-top-left py-1 ${
             pop.closing ? 'animate-pop-out' : 'animate-pop-in'
           }`}
         >
@@ -136,7 +129,7 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
               onChange={(e) => setText(e.target.value)}
               placeholder="Custom tag…"
               aria-label="Custom tag"
-              className="bevel-inset w-full rounded border border-line bg-inset px-2 py-1.5 text-[11px] text-fg placeholder:text-muted focus:border-accent"
+              className="field px-2 py-1.5 text-[11px]"
             />
           </form>
 

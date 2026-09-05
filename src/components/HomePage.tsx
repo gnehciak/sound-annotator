@@ -267,9 +267,8 @@ export default function HomePage({
       role="tab"
       aria-selected={view === v}
       onClick={() => switchView(v)}
-      className={`press flex h-[26px] items-center gap-1.5 rounded px-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors duration-150 ${
-        view === v ? 'bg-raised text-fg' : 'text-muted hover:text-fg'
-      }`}
+      data-active={view === v || undefined}
+      className="seg-item press h-[26px] gap-1.5 px-2.5 text-[10px] tracking-[0.14em]"
     >
       {icon}
       {label}
@@ -284,7 +283,7 @@ export default function HomePage({
           <div
             role="tablist"
             aria-label="Home view"
-            className="inline-flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+            className="seg"
           >
             {viewTab('library', 'Library', <FolderIcon size={11} />)}
             {viewTab('browse', 'Browse', <Globe size={11} />)}
@@ -349,7 +348,7 @@ export default function HomePage({
                       type="button"
                       onClick={leaveTrash}
                       title="Back to the library"
-                      className="press rounded border border-transparent px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted transition-colors hover:text-fg"
+                      className="btn-ghost btn-sm press border-transparent text-[11px] font-normal tracking-[0.2em] hover:border-transparent"
                     >
                       Library
                     </button>
@@ -388,10 +387,10 @@ export default function HomePage({
                         onMoveTrack(e.dataTransfer.getData(TRACK_MIME), null)
                       }}
                       title="Back to the library (drop a track here to move it out)"
-                      className={`press rounded border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors ${
+                      className={`btn-ghost btn-sm press text-[11px] font-normal tracking-[0.2em] ${
                         crumbOver
                           ? 'border-accent bg-accent/10 text-accentink'
-                          : 'border-transparent text-muted hover:text-fg'
+                          : 'border-transparent hover:border-transparent'
                       }`}
                     >
                       Library
@@ -437,7 +436,7 @@ export default function HomePage({
                       )
                         onEmptyTrash()
                     }}
-                    className="press flex h-8 items-center gap-1.5 rounded border border-line px-2.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:border-danger hover:text-danger disabled:pointer-events-none disabled:opacity-40"
+                    className="btn-ghost press h-8 px-2.5 text-[11px] font-normal tracking-[0.1em] hover:border-danger hover:text-danger disabled:pointer-events-none"
                   >
                     <Trash2 size={13} /> Empty trash
                   </button>
@@ -471,7 +470,7 @@ export default function HomePage({
                 onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
                 placeholder="Search your tracks…"
                 aria-label="Search all tracks"
-                className="bevel-inset w-full rounded border border-line bg-inset py-2 pl-9 pr-8 text-sm text-fg outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
+                className="field py-2 pl-9 pr-8 text-sm placeholder:text-muted/70"
               />
               {searching && (
                 <button
@@ -535,7 +534,7 @@ export default function HomePage({
                         ? stagger(140, folders.length + 1)
                         : '0ms',
                     }}
-                    className="press flex min-h-[58px] animate-tile-in items-center justify-center gap-2 rounded border border-dashed border-line font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                    className="tile press flex min-h-[58px] animate-tile-in items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-muted transition-colors hover:text-fg"
                   >
                     <FolderPlus size={13} /> New folder
                   </button>
@@ -582,7 +581,7 @@ export default function HomePage({
                       </p>
                     ) : openFolder ? (
                       <div
-                        className="flex animate-tile-in flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center"
+                        className="empty animate-tile-in"
                         style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
                       >
                         <FolderIcon size={22} className="text-muted/50" />
@@ -701,10 +700,8 @@ function ImportTrackButton({
         disabled={busy}
         onClick={() => inputRef.current?.click()}
         title="Import a track from an exported JSON file"
-        className={`press inline-flex shrink-0 items-center gap-1.5 rounded border font-mono font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg disabled:cursor-wait disabled:opacity-70 ${
-          variant === 'hero'
-            ? 'border-line px-4 py-2 text-[11px]'
-            : 'border-line px-3 py-[7px] text-[10px]'
+        className={`btn-ghost press shrink-0 disabled:cursor-wait ${
+          variant === 'hero' ? 'px-4 py-2 text-[11px]' : ''
         }`}
       >
         {busy ? (
@@ -772,9 +769,7 @@ function NewTrackButton({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`press inline-flex shrink-0 items-center gap-1.5 rounded border border-accent/70 bg-accent/10 font-mono font-semibold uppercase tracking-[0.14em] text-accentink hover:bg-accent/20 ${
-          hero ? 'px-4 py-2 text-[11px]' : 'px-3 py-[7px] text-[10px]'
-        }`}
+        className={`btn-signal press shrink-0 ${hero ? 'px-4 py-2 text-[11px]' : ''}`}
       >
         <Plus size={hero ? 14 : 13} />
         <span className={hero ? '' : 'hidden sm:inline'}>New track</span>
@@ -784,7 +779,7 @@ function NewTrackButton({
         />
       </button>
       <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={252}>
-        <div className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40">
+        <div className="py-1">
           {row(
             <Pencil size={14} />,
             'Annotated track',
@@ -864,10 +859,8 @@ function FolderTile({
       /* `transition` (not just transition-colors) so the rest-frame hover lift
          eases instead of snapping. Lift suppressed while a track is dragging
          over — the accent fill is the affordance there, no need to also float. */
-      className={`group flex animate-tile-in cursor-pointer items-center gap-3 rounded border p-3.5 transition duration-200 ease-instr ${
-        over
-          ? 'border-accent bg-accent/10'
-          : 'border-line bg-panel hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
+      className={`tile group flex animate-tile-in cursor-pointer items-center gap-3 p-3.5 transition duration-200 ease-instr ${
+        over ? 'border-accent bg-accent/10' : ''
       }`}
     >
       <div
@@ -931,7 +924,7 @@ function FolderTile({
             }}
             title="Rename folder"
             aria-label={`Rename folder ${folder.name}`}
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press"
           >
             <Pencil size={13} />
           </button>
@@ -952,7 +945,7 @@ function FolderTile({
             }}
             title="Delete folder (its tracks move back to the library)"
             aria-label={`Delete folder ${folder.name}`}
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+            className="btn-icon press hover:text-danger"
           >
             <Trash2 size={13} />
           </button>
@@ -1006,10 +999,8 @@ function TrashTile({
       title="Deleted tracks, kept for 30 days (drop a track here to delete it)"
       /* Danger, not accent, on drag-over: this is the one tile in the row where
          the drop takes the track away from you. */
-      className={`group flex animate-tile-in cursor-pointer items-center gap-3 rounded border p-3.5 transition duration-200 ease-instr ${
-        over
-          ? 'border-danger bg-danger/10'
-          : 'border-line bg-panel hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
+      className={`tile group flex animate-tile-in cursor-pointer items-center gap-3 p-3.5 transition duration-200 ease-instr ${
+        over ? 'border-danger bg-danger/10' : ''
       }`}
     >
       <div
@@ -1074,7 +1065,7 @@ function TrashView({
       </h2>
       {trashed.length === 0 ? (
         <div
-          className="flex animate-tile-in flex-col items-center gap-3 rounded border border-dashed border-line py-12 text-center"
+          className="empty animate-tile-in"
           style={{ animationDelay: stagger(tilesBaseDelay, 0) }}
         >
           <Trash2 size={22} className="text-muted/50" />
@@ -1181,10 +1172,8 @@ function TrackTile({
          duration here matches FolderTile's so a mixed row of cards floats
          together. A trashed tile stays put — nothing about it is clickable, so
          nothing about it should invite a click. */
-      className={`group flex animate-tile-in flex-col overflow-hidden rounded border border-line bg-panel transition duration-200 ease-instr ${
-        trashed
-          ? ''
-          : 'cursor-pointer hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg hover:shadow-black/10'
+      className={`tile group flex animate-tile-in flex-col transition duration-200 ease-instr ${
+        trashed ? '' : 'cursor-pointer'
       }`}
     >
       {/* Cover — the tile's "viewer screen": an inset well under a hairline.
@@ -1248,7 +1237,7 @@ function TrackTile({
               onClick={onRestore}
               title="Put this track back in your library"
               aria-label={`Restore ${p.title}`}
-              className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-accentink"
+              className="btn-icon press hover:text-accentink"
             >
               <Undo2 size={14} />
             </button>
@@ -1257,7 +1246,7 @@ function TrackTile({
               onClick={onDelete}
               title="Delete this track forever"
               aria-label={`Delete ${p.title} forever`}
-              className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+              className="btn-icon press hover:text-danger"
             >
               <Trash2 size={14} />
             </button>
@@ -1289,11 +1278,12 @@ function TrackTile({
                 per track rather than left to the header's "30 days". Danger
                 only in the last week — before that it's a fact, not a warning. */}
             <span
-              className={`flex items-center gap-1 rounded border px-1 py-px ${
+              className="chip chip-outline chip-neutral"
+              style={
                 daysLeft(p.deletedAt ?? 0) <= 7
-                  ? 'border-danger/60 text-danger'
-                  : 'border-line'
-              }`}
+                  ? { ['--hue' as string]: 'rgb(var(--danger))' }
+                  : undefined
+              }
             >
               <Clock size={10} />
               {daysLeft(p.deletedAt ?? 0) === 0
@@ -1305,7 +1295,7 @@ function TrackTile({
           <span>{formatRelativeTime(p.updatedAt)}</span>
         )}
         {isStructureProject(p) && (
-          <span className="flex items-center gap-1 rounded border border-line px-1 py-px">
+          <span className="chip chip-outline chip-neutral">
             <Blocks size={10} /> Structure
           </span>
         )}
@@ -1314,17 +1304,17 @@ function TrackTile({
             the gallery card is gone. So the chips go quiet too, rather than
             promise a live link for a track nobody can reach. */}
         {!trashed && p.published && (
-          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
+          <span className="chip chip-signal">
             <Globe size={10} /> Published
           </span>
         )}
         {!trashed && p.shared && (
-          <span className="flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-1 py-px text-accentink">
+          <span className="chip chip-signal">
             <Eye size={10} /> Shared
           </span>
         )}
         {folderName && (
-          <span className="flex min-w-0 items-center gap-1 rounded border border-line px-1 py-px">
+          <span className="chip chip-outline chip-neutral min-w-0">
             <FolderIcon size={10} className="shrink-0" />
             <span className="truncate">{folderName}</span>
           </span>
@@ -1470,7 +1460,7 @@ function TrackActionsMenu({
         aria-expanded={open}
         title="More actions"
         aria-label={`More actions for ${p.title}`}
-        className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="btn-icon press"
       >
         <MoreHorizontal size={15} />
       </button>
@@ -1484,7 +1474,7 @@ function TrackActionsMenu({
             click can't also open the tile's track. */}
         <div
           onClick={(e) => e.stopPropagation()}
-          className="overflow-hidden rounded border border-line bg-panel py-1 shadow-lg shadow-black/40"
+          className="py-1"
         >
           {sourceUrl && (
             <button type="button" onClick={openSource} className={actionCls}>

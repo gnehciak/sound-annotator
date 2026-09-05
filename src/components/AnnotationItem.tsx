@@ -179,12 +179,10 @@ export default function AnnotationItem({
         // active). Dark theme: keep the single-step lift where active = row-sel
         // and resting = page.
         active
-          ? `z-20 ${theme === 'light' ? 'bg-note' : 'bg-rowsel'}`
+          ? `z-20 ${theme === 'light' ? 'bg-note' : 'bg-fg/[0.07]'}`
           : selected
-            ? `${theme === 'light' ? 'bg-note' : 'bg-rowsel'} shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]`
-            : theme === 'light'
-              ? 'bg-rowsel hover:bg-[color-mix(in_srgb,rgb(var(--row-sel)),rgb(var(--surface-note))_35%)]'
-              : 'hover:bg-rowsel/25'
+            ? `${theme === 'light' ? 'bg-note' : 'bg-fg/[0.05]'} shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]`
+            : 'hover:bg-fg/[0.035]'
       } ${isPlaying && !focused ? 'opacity-50' : ''}`}
     >
       {/* progress bar along the top border — only while this note is the one
@@ -243,7 +241,7 @@ export default function AnnotationItem({
       {/* header */}
       <div className={`flex items-center gap-1.5 pl-3 pr-2 pt-3 ${hasBody ? 'pb-1' : 'pb-3'}`}>
         {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
-        <span className="inline-flex items-stretch">
+        <span className="press inline-flex items-stretch">
           <button
             type="button"
             // Don't take focus on click: a focused button inside the list gets
@@ -265,12 +263,11 @@ export default function AnnotationItem({
                 : `Seek to ${label}`
             }
             // Rounded as a unit with the fused passage segment (when present).
-            className={`press inline-flex items-center gap-[5px] border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-2 py-[2.5px] font-mono text-[11.5px] font-medium tabular-nums tracking-[0.04em] hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)] ${
-              isRange && onPlayPassage ? 'rounded-l-sm border-r-0' : 'rounded-sm'
+            className={`chip-time gap-[5px] ${
+              isRange && onPlayPassage ? 'rounded-r-none border-r-0' : ''
             }`}
             style={{
               ['--hue' as string]: color,
-              borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
               color: hueText(color, theme),
             }}
           >
@@ -300,13 +297,8 @@ export default function AnnotationItem({
                   : 'Play just this passage — pauses at the end'
               }
               aria-label={`Play ${label} and stop at the end`}
-              className="press flex items-center rounded-r-sm border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-1.5 hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)]"
-              style={{
-                ['--hue' as string]: color,
-                borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
-                borderLeftColor: `color-mix(in srgb, ${color} 35%, transparent)`,
-                color: hueText(color, theme),
-              }}
+              className="chip-time rounded-l-none pl-1.5 pr-2"
+              style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
             >
               <RotateCw
                 size={11}
@@ -326,11 +318,8 @@ export default function AnnotationItem({
         {annotation.question && (
           <span
             title="Question — students answer this in the shared listening task"
-            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
-            style={{
-              borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
-              color: hueText(color, theme),
-            }}
+            className="chip chip-outline font-semibold"
+            style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
           >
             <CircleHelp size={9} strokeWidth={2.4} className="shrink-0" />
             {questionNumber != null ? `Q${questionNumber}` : 'Q'}
@@ -341,11 +330,8 @@ export default function AnnotationItem({
         {annotation.structure && annotation.sectionName && (
           <span
             title="Section note"
-            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
-            style={{
-              borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
-              color: hueText(color, theme),
-            }}
+            className="chip chip-outline"
+            style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
           >
             <Brackets size={9} strokeWidth={2.4} className="shrink-0" />
             <span className="max-w-[16ch] truncate">
@@ -358,7 +344,7 @@ export default function AnnotationItem({
         {annotation.bar?.trim() && (
           <span
             title="Bar / rehearsal mark"
-            className="rounded-sm border border-line px-[7px] py-[2.5px] font-mono text-[10px] font-medium tracking-[0.1em] text-muted"
+            className="chip chip-outline chip-neutral normal-case"
           >
             {annotation.bar.trim()}
           </span>
@@ -377,7 +363,7 @@ export default function AnnotationItem({
               }}
               title="Move above the note at the same time"
               aria-label="Move note up"
-              className="press grid h-[27px] w-[27px] place-items-center rounded border border-line bg-panel text-muted hover:border-line-strong hover:bg-raised hover:text-fg disabled:opacity-25 disabled:hover:border-line disabled:hover:bg-panel disabled:hover:text-muted"
+              className="btn-icon press"
             >
               <ArrowUp size={13} />
             </button>
@@ -391,7 +377,7 @@ export default function AnnotationItem({
               }}
               title="Move below the note at the same time"
               aria-label="Move note down"
-              className="press grid h-[27px] w-[27px] place-items-center rounded border border-line bg-panel text-muted hover:border-line-strong hover:bg-raised hover:text-fg disabled:opacity-25 disabled:hover:border-line disabled:hover:bg-panel disabled:hover:text-muted"
+              className="btn-icon press"
             >
               <ArrowDown size={13} />
             </button>
@@ -403,13 +389,12 @@ export default function AnnotationItem({
           return (
             <span
               key={t}
-              className="flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
-              style={{ borderColor: hueText(info.color, theme), color: hueText(info.color, theme) }}
+              className="chip"
+              style={{
+                ['--hue' as string]: info.color,
+                color: hueText(info.color, theme),
+              }}
             >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: info.color }}
-              />
               {info.label}
             </span>
           )
@@ -478,7 +463,7 @@ export default function AnnotationItem({
             onChange={(e) => onAnswer(e.target.value)}
             placeholder="Type your answer…"
             rows={2}
-            className="bevel-inset block w-full resize-none overflow-hidden rounded border border-line bg-inset px-[9px] py-[7px] text-[13px] leading-relaxed text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+            className="field block resize-none overflow-hidden py-[7px] text-[13px] leading-relaxed"
           />
         </div>
       )}

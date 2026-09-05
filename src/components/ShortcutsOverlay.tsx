@@ -65,7 +65,7 @@ export default function ShortcutsOverlay({
     : [TRANSPORT, NOTES_EDIT, NAV_EDIT, EDITING]
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm ${
         closing ? 'animate-fade-out' : 'animate-fade-in'
       }`}
       onClick={onClose}
@@ -75,18 +75,18 @@ export default function ShortcutsOverlay({
         aria-modal="true"
         aria-label="Keyboard shortcuts"
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg overflow-hidden rounded-lg border border-line bg-panel shadow-2xl ${
+        className={`w-full max-w-lg glass-pop overflow-hidden rounded-2xl ${
           closing ? 'animate-panel-out' : 'animate-panel-in'
         }`}
       >
-        <div className="flex h-10 items-center justify-between border-b border-line bg-raised px-3.5">
+        <div className="strip flex h-10 items-center justify-between border-b border-line/70 px-3.5">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Keyboard Shortcuts
           </span>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press"
           >
             <X size={15} />
           </button>
@@ -122,13 +122,13 @@ export default function ShortcutsOverlay({
           ))}
         </div>
 
-        <div className="border-t border-line px-4 py-2.5 text-center font-mono text-[10px] text-muted">
+        <div className="border-t border-line/70 px-4 py-2.5 text-center font-mono text-[10px] text-muted">
           Press{' '}
-          <kbd className="rounded border border-line bg-inset px-1 leading-none">
+          <kbd className="kbd-cap">
             ?
           </kbd>{' '}
           or{' '}
-          <kbd className="rounded border border-line bg-inset px-1 leading-none">
+          <kbd className="kbd-cap">
             Esc
           </kbd>{' '}
           to close

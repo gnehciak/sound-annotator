@@ -7,10 +7,14 @@ export default {
       // Retune the whole app from one place. <alpha-value> lets `/opacity` work.
       colors: {
         ink: 'rgb(var(--bg-ink) / <alpha-value>)',
-        panel: 'rgb(var(--bg-panel) / <alpha-value>)',
-        raised: 'rgb(var(--bg-raised) / <alpha-value>)',
-        inset: 'rgb(var(--bg-inset) / <alpha-value>)',
-        note: 'rgb(var(--surface-note) / <alpha-value>)',
+        // Glass surfaces: full colour strings (translucent white/black over
+        // the ink) rather than channel tokens, so `bg-panel` is a pane of
+        // frosted glass, not an opaque slab. No `/opacity` modifier on these
+        // four — use `bg-fg/[0.03]`-style washes for ad-hoc tints instead.
+        panel: 'var(--panel)',
+        raised: 'var(--raised)',
+        inset: 'var(--inset)',
+        note: 'var(--note)',
         line: 'rgb(var(--border) / <alpha-value>)',
         'line-strong': 'rgb(var(--border-strong) / <alpha-value>)',
         fg: 'rgb(var(--text) / <alpha-value>)',
@@ -114,14 +118,16 @@ export default {
       // Softly squared ("station, warmed"): chips 5px, controls 6px, grouped
       // containers 8px, panels 10px. Still far from pill/card territory — the
       // instrument keeps its edges, they just stop being knife-sharp.
+      // Glass restyle: one step softer across the board — chips 6px,
+      // controls 8px, grouped containers 10px, wells 14px, panes 18px.
       borderRadius: {
         none: '0px',
-        sm: '5px',
-        DEFAULT: '6px',
-        md: '8px',
-        lg: '10px',
-        xl: '12px',
-        '2xl': '14px',
+        sm: '6px',
+        DEFAULT: '8px',
+        md: '10px',
+        lg: '14px',
+        xl: '18px',
+        '2xl': '24px',
         full: '9999px',
       },
     },

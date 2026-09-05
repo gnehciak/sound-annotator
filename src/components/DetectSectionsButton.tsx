@@ -175,12 +175,12 @@ export default function DetectSectionsButton({
         disabled={busy}
         title={title}
         aria-label="Detect song sections with AI"
-        className={`press inline-flex shrink-0 items-center gap-1.5 rounded border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:pointer-events-none ${
+        className={`btn-ghost btn-sm press shrink-0 disabled:pointer-events-none ${
           phase.kind === 'error'
-            ? 'border-danger/60 text-danger hover:border-danger'
+            ? 'border-danger/60 text-danger hover:border-danger hover:text-danger'
             : busy
               ? 'border-accent/60 text-accentink'
-              : 'border-line text-muted hover:border-line-strong hover:text-fg'
+              : ''
         }`}
       >
         {busy ? (
@@ -234,11 +234,11 @@ function AnalysisAudioPrompt({
       role="dialog"
       aria-modal="true"
       aria-label="Provide audio for section detection"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm p-6"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-line bg-panel p-5 shadow-xl"
+        className="glass-pop w-full max-w-md rounded-2xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -249,7 +249,7 @@ function AnalysisAudioPrompt({
             type="button"
             onClick={onCancel}
             aria-label="Cancel"
-            className="press -mr-1 -mt-1 grid h-7 w-7 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press -mr-1 -mt-1 h-7 w-7"
           >
             <X size={14} />
           </button>
@@ -272,8 +272,8 @@ function AnalysisAudioPrompt({
             setOver(false)
             take(e.dataTransfer.files?.[0])
           }}
-          className={`flex cursor-pointer flex-col items-center gap-2 rounded border border-dashed p-6 text-center transition-colors ${
-            over ? 'border-accent bg-accent/10' : 'border-line-strong bg-inset hover:border-accent/60'
+          className={`empty cursor-pointer gap-2 p-6 transition-colors ${
+            over ? 'border-accent bg-accent/10' : 'hover:border-accent/60'
           }`}
         >
           <FileAudio size={20} className="text-muted" />

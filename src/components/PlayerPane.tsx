@@ -1,4 +1,4 @@
-import { forwardRef } from 'react'
+import { forwardRef, type ReactNode } from 'react'
 import type { PlayerHandle, ProjectSource } from '../types'
 import YouTubePlayer from './YouTubePlayer'
 import DrivePlayer from './DrivePlayer'
@@ -12,6 +12,12 @@ interface Props {
   /** 0–1 playback volume, applied to whichever player loads. */
   volume: number
   readOnly?: boolean
+  /**
+   * Rendered inside the video frame (YouTube / Drive), above the picture —
+   * the floating transport. Ignored for audio, whose waveform is the picture
+   * and must stay uncovered; the host docks the transport beneath it instead.
+   */
+  overlay?: ReactNode
   onTime: (t: number) => void
   onDuration: (d: number) => void
   onPlayingChange: (playing: boolean) => void
@@ -35,6 +41,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         clipEnd={source.clipEnd}
         playbackRate={props.playbackRate}
         volume={props.volume}
+        overlay={props.overlay}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}
@@ -50,6 +57,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         clipEnd={source.clipEnd}
         playbackRate={props.playbackRate}
         volume={props.volume}
+        overlay={props.overlay}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}

@@ -4,12 +4,15 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { Loader2, Play, TriangleAlert } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 import { driveStreamUrl, driveViewUrl } from '../lib/drive'
 
 interface Props {
+  /** Floating chrome rendered inside the 16:9 frame, above the picture (the transport). */
+  overlay?: ReactNode
   /** Google Drive file id (see lib/drive.ts). */
   fileId: string
   /**
@@ -59,6 +62,7 @@ const RETRY_MS = 800
  */
 const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
   {
+    overlay,
     fileId,
     clipStart,
     clipEnd,
@@ -187,7 +191,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
     // Same frame as YouTubePlayer: 16:9, centred, height capped by
     // `--player-max-h` so a wide player column doesn't squeeze the overview.
     <div
-      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line bg-black"
+      className="video-glow relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line/70 bg-black"
       style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <video
@@ -272,7 +276,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
             href={driveViewUrl(fileId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="press mt-1 inline-flex items-center gap-1.5 rounded border border-line px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="btn-ghost btn-sm press mt-1"
           >
             Open in Drive
           </a>
@@ -319,6 +323,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
           </span>
         </button>
       )}
+      {overlay}
     </div>
   )
 })

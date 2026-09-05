@@ -62,7 +62,7 @@ export default function FieldSelect({
         ref={triggerRef}
         type="button"
         onClick={() => (open ? setOpen(false) : openMenu())}
-        className={`bevel-inset flex w-full items-center gap-1 rounded border border-line bg-inset px-[9px] py-[6px] text-left text-[12.5px] transition-colors focus:border-accent focus:outline-none ${
+        className={`field flex items-center gap-1 text-left ${
           value ? 'text-fg' : 'text-muted'
         }`}
       >
@@ -75,7 +75,7 @@ export default function FieldSelect({
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
         width="anchor"
-        className="max-h-60 min-w-[10rem] origin-top overflow-y-auto rounded border border-line bg-panel py-1 shadow-lg"
+        className="max-h-60 min-w-[10rem] origin-top overflow-y-auto py-1"
       >
         {options.map((opt) => (
           <button
@@ -107,7 +107,7 @@ export default function FieldSelect({
               onChange={(e) => setCustom(e.target.value)}
               placeholder="Other…"
               aria-label={`Custom ${label}`}
-              className="w-full rounded border border-line bg-inset px-2 py-1.5 text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+              className="field px-2 py-1.5 text-[12px]"
             />
           </form>
         )}

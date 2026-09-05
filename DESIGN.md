@@ -2,12 +2,12 @@
 name: Sound Annotator
 description: A time-anchored music annotation tool for the classroom, built like an audio analysis bench.
 colors:
-  ink: "#161618"
-  panel: "#1e1e22"
-  raised: "#28282d"
-  inset: "#0f0f12"
-  border: "#36363d"
-  border-strong: "#4e4e57"
+  ink: "#0a0a0c"
+  panel: "rgba(255,255,255,0.045)"
+  raised: "rgba(255,255,255,0.07)"
+  inset: "rgba(0,0,0,0.32)"
+  border: "#28282d"
+  border-strong: "#44444c"
   text: "#ececf0"
   muted: "#a4a4ae"
   accent: "#ff6a3d"
@@ -47,35 +47,39 @@ typography:
     letterSpacing: "0.08em"
 rounded:
   none: "0px"
-  sm: "5px"
-  DEFAULT: "6px"
-  md: "8px"
-  lg: "10px"
+  sm: "6px"
+  DEFAULT: "8px"
+  md: "10px"
+  lg: "14px"
+  xl: "18px"
 spacing:
   xs: "4px"
   sm: "8px"
   md: "12px"
   lg: "16px"
 components:
-  button-play:
+  button-primary:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.DEFAULT}"
-    padding: "6px 12px"
+    rounded: "9999px"
+    padding: "7px 16px"
     typography: "{typography.body}"
-  button-transport:
-    backgroundColor: "{colors.panel}"
+  button-ghost:
     textColor: "{colors.muted}"
     rounded: "{rounded.DEFAULT}"
-    padding: "6px 8px"
-    typography: "{typography.mono}"
-  button-capture:
+    padding: "7px 12px"
+    typography: "{typography.label}"
+  button-signal:
     textColor: "{colors.accent}"
     rounded: "{rounded.DEFAULT}"
-    padding: "6px 10px"
+    padding: "7px 12px"
+    typography: "{typography.label}"
+  chip:
+    rounded: "9999px"
+    padding: "3px 8px"
     typography: "{typography.label}"
   title-bar:
-    backgroundColor: "{colors.raised}"
+    backgroundColor: "rgba(255,255,255,0.03)"
     textColor: "{colors.muted}"
     rounded: "{rounded.none}"
     padding: "0 14px"
@@ -85,7 +89,7 @@ components:
     backgroundColor: "{colors.inset}"
     textColor: "{colors.text}"
     rounded: "{rounded.DEFAULT}"
-    padding: "8px 12px"
+    padding: "6px 9px"
     typography: "{typography.body}"
   readout-led:
     backgroundColor: "{colors.inset}"
@@ -100,39 +104,51 @@ components:
 ## 1. Overview
 
 **Creative North Star: "The Listening Station"** — restaged 2026-07-17 under
-the **Color-As-Accent doctrine**: *color as accent, never as canvas*.
+the **Color-As-Accent doctrine** (*color as accent, never as canvas*), and
+re-surfaced 2026-09-05 as **frosted glass**: every workspace column is a
+floating pane of translucent, blurred glass over a near-black canvas that
+carries a soft bloom of the signal hue (the "Flask look", after flask.do).
 
 Sound Annotator is built like an audio analysis bench, not a web app. The
-stage is one untinted neutral — quiet graphite in dark, pure white end to end
-in light — so the eye rests on the recording and the notes, not the chrome.
-Everything reads like instrument output: timecodes and counts are monospace,
-the transport carries an LED clock and a level meter, panels are flush with
-softly squared corners. It is dense by intent, optimized for a teacher who
-returns to it daily and knows it cold.
+stage is a deep neutral — near-black in dark, a pale grey in light — with the
+panes floating on it, so the eye rests on the recording and the notes, not the
+chrome. Everything still reads like instrument output: timecodes and counts
+are monospace, the transport is a recessed well with an LED clock, panels are
+glass with hairline rings and generous corners. It is dense by intent,
+optimized for a teacher who returns to it daily and knows it cold.
 
 Color is treated as data and signal, not decoration — and it is *playful*
 where it appears: a juicy selectable signal hue (Tangerine by default), a
-sunshine meter, and a full crayon-box note palette. The surfaces themselves
-never take a tint; the one exception is the selected note row, which wears a
-faint wash of the signal. The signal means *now*: the playhead, the active
+sunshine meter, and a full crayon-box note palette. The panes themselves are
+neutral glass; the only hue on a surface is the ambient bloom on the canvas
+behind them (the light the glass catches), the faint glow beneath the
+transport well, and the selected note row's wash. The signal means *now*: the playhead, the active
 note, the primary action. The note hues encode *identity* (which note is
 which), never mood, and they are always paired with a monospace timecode so
 meaning survives a projector or a colorblind viewer.
 
-This system explicitly rejects the generic. No rounded cards floating on soft
-drop shadows. No indigo "friendly SaaS" accent. No gray-on-gray enterprise
-clutter where fourteen controls compete in every corner. And no retro
-skeuomorphism: the instrument feel comes from layout, type, and restraint, never
-from fake metal or glossy bevels.
+This system still rejects the generic. Glass is not a card: a pane is a
+whole workspace column, never a grid of tiles, and there are at most four on
+screen. No indigo "friendly SaaS" accent. No gray-on-gray enterprise clutter
+where fourteen controls compete in every corner. And no retro skeuomorphism:
+the instrument feel comes from layout, type, and restraint, never from fake
+metal or glossy bevels — the blur is the only material effect.
 
 **Key Characteristics:**
-- One untinted neutral stage (graphite dark / pure-white light), four-step
-  tonal ramp; depth from tone and hairlines, not shadow.
+- A deep neutral canvas (near-black dark / pale grey light) with an ambient
+  bloom of the signal hue; workspace columns float on it as frosted-glass
+  panes (`.glass`): a translucent wash with a hairline ring, top highlight
+  and deep soft shadow, 18px corners, 12px gutters, so the canvas — its
+  bloom, and the faint edit-mode signal wash — reads through them. No
+  backdrop blur on panes (Chrome smears a video's GPU layer through it);
+  menus and modals (`.pop` / `.glass-pop`) blur because they float over
+  content.
 - Color only as accent: one signal hue meaning "now", a meter hue, and the
-  crayon-box note data. Surfaces never take a tint.
+  crayon-box note data. Panes never take a tint; only the canvas glows.
 - Monospace tabular numerics for every timecode, count, and micro-label.
-- Softly squared corners (chips 5px · controls 6px · grouped containers 8px ·
-  panels 10px), flush panels, hairline dividers; zero card-gaps.
+- Soft corners (chips 6px · controls 8px · grouped 10px · wells 14px · panes
+  18px); timecode and tag chips are pills; Play and the transport steps are
+  round.
 - Secondary controls hidden at rest, revealed on hover or focus.
 
 ## 2. Colors
@@ -168,21 +184,31 @@ playfulness:
   serve the tag and element palettes.
 
 ### Neutral (shared by every palette)
-Dark — untinted graphite:
-- **Ink** (#161618): App background, the deepest surface.
-- **Panel** (#1e1e22): Standard panel fill (sidebar, transport strip).
-- **Raised** (#28282d): Lifted controls and panel title bars.
-- **Inset** (#0f0f12): Recessed "screens": LED readouts, the level meter well,
-  text inputs, the waveform/editor canvas.
-- **Border** (#36363d) / **Border Strong** (#4e4e57): Hairline dividers and
-  hover/active edges. Borders carry structure here, not shadows.
+Dark — near-black canvas, glass on top. The surfaces are *washes* (white or
+black at low alpha) rather than opaque greys, so every pane stays translucent
+wherever it sits:
+- **Ink** (#0a0a0c): The canvas, with the `--ambient` bloom painted over it
+  (`body::before`).
+- **Panel** (white 4.5%): A pane of glass (`.glass` adds the ring,
+  highlight and shadow). Also the fill of any `bg-panel` surface.
+- **Raised** (white 7%): Lifted strips and hover states; title bars use a
+  3% wash so they read as a frosted band, not a slab.
+- **Inset** (black 32%): Recessed wells: the transport, LED readouts, the
+  level meter, text inputs, the video frame's surround.
+- **Pop** (#1a1a1e at 78%): The denser glass a floating menu or modal needs
+  to stay legible over live content (`.glass-pop`).
+- **Border** (#28282d) / **Border Strong** (#44444c): Hairline dividers and
+  hover/active edges; the pane ring itself is white 8% (`--glass-ring`).
 - **Text** (#ececf0). **Muted** (#a4a4ae): labels, secondary text, inactive.
 
 ### Named Rules
-**The Accent-Not-Canvas Rule.** Surfaces are neutral in both modes — untinted
-graphite in dark, pure white in light. Color arrives only as the signal, the
-meter, the note data, and the faint signal wash on the selected row
-(`--row-sel`). If a background is carrying a hue anywhere else, it's wrong.
+**The Accent-Not-Canvas Rule (glass edition).** Panes are neutral glass in
+both modes. Color arrives only as the signal, the meter, the note data, the
+faint signal wash on the selected row (`--row-sel`), and — the one addition
+the glass restyle made — the ambient bloom *behind* the panes and the glow
+beneath the transport well (`--ambient`, `.well-glow`, both read the signal
+hue so they follow the palette). If a pane's own fill is carrying a hue,
+it's wrong.
 
 **The Signal-Is-Now Rule.** The active palette's signal color means the
 present moment or the primary action, nothing else. It is forbidden as a
@@ -231,13 +257,13 @@ changes. (Known softness: an orange note spine sits near the Tangerine signal,
 pink notes near Bubblegum, green near Limeade, sky near Crayon — the playing
 state never relies on hue alone, the dot + row wash + chip carry it.)
 
-Light is **pure white end to end** — the page, panels, chrome, and masthead
-are all `#ffffff`; structure comes from hairlines and two shallow neutral
-wells. Light surface ramp (all palettes; see `src/index.css`):
-**ink / panel / note** `#ffffff` · **raised** `#f2f2f5` (title bars, hover,
-lifted controls) · **inset** `#e8e8ec` (readouts, inputs, the player screen) ·
-**border** `#d4d4d9` · **border-strong** `#a0a0a8` · **text** `#1d1d21` ·
-**muted** `#62626b`.
+Light is **white glass on a pale canvas** — the page is `#e9eaee` with the
+same ambient bloom, and the panes are white at 62% with the blur, so they
+read as frosted rather than flat white. Light surface ramp (all palettes; see
+`src/index.css`): **ink** `#e9eaee` · **panel** white 62% · **note** white
+55% · **raised** black 4% · **inset** black 5% · **pop** white 86% ·
+**border** `#d0d0d6` · **border-strong** `#9c9ca6` · **text** `#1d1d21` ·
+**muted** `#62626b`. The masthead is bare canvas in both modes.
 
 Three light-specific rules, all WCAG-AA verified:
 
@@ -295,12 +321,15 @@ from size.
 
 ## 4. Elevation
 
-Flat by doctrine. Depth is built from the four-step tonal ramp
-(ink → panel → raised → inset), not from drop shadows. A panel is "above" the
-background because it is lighter, and a readout is "below" the panel because it is
-darker. The only shadows in the system are 1px bevels used to make a handful of
-*controls* feel physical: an inset shadow on recessed screens (LED readout, meter
-well, inputs) and a subtle raised highlight on the primary Play button.
+Two layers, and only two. The **canvas** (ink + ambient bloom) is the
+ground; the **panes** float on it, and everything else lives *inside* a pane
+where depth is again tonal: a raised strip is a lighter wash, a well is a
+darker one, a hairline separates. The pane is the only thing that casts a
+shadow (`--glass-shadow`, deep and soft, plus a 1px top highlight
+`--glass-hi`); menus and modals reuse it via `.glass-pop`. Inside a pane the
+old rules hold: 1px bevels on a handful of *controls* (inset on recessed
+screens, raised on Play), and the transport well throws a faint signal glow
+downward (`.well-glow`) — the lit console under the recorder.
 
 ### Shadow Vocabulary
 Both bevels are **theme-tuned tokens** (`--bevel-inset` / `--bevel-raised`):
@@ -312,9 +341,9 @@ surface. Values below are the dark theme.
   The primary Play button only. A hint of a physical key, not a gel button.
 
 ### Named Rules
-**The Tonal-Depth Rule.** Reach for the surface ramp before any shadow. If two
-surfaces need separating, change their tone or draw a hairline; do not float one
-on a shadow.
+**The One-Float Rule.** Only a pane (or a popover/modal) floats. Inside a
+pane, reach for the wash ramp or a hairline to separate two surfaces; never
+nest a shadowed card inside a pane. A screen has at most four panes.
 
 **The Bevel-Restraint Rule.** Bevels are 1px lighting hints on interactive
 controls only. Textures, gradients on surfaces, gloss, and faux-material finishes
@@ -322,31 +351,89 @@ are forbidden. The moment a bevel looks like brushed metal, it has failed.
 
 ## 5. Components
 
-### Buttons
-- **Shape:** Softly squared (6px radius; tiny chips 5px, segmented/grouped
-  containers 8px). No pills beyond dots, toggle knobs, and scrubber handles;
-  no fully-rounded buttons.
-- **Primary (Play):** Solid signal fill (`--accent`), `--on-accent` text, the
-  raised bevel, padding 6px 12px. Brightens slightly on hover. The one filled
-  button in the transport.
-- **Transport (±5s):** Ghost. Transparent fill, 1px Border, Muted text,
-  monospace. Hover lifts text to Text and border to Border Strong.
-- **Capture (Note @):** Signal outline. Translucent signal fill
-  (`--accent` at 0.1), 1px signal border at 70%, signal uppercase mono label.
-  Fill deepens to 0.2 on hover. Signals the primary creative action without a
-  second solid-signal element competing with Play.
+### The Vocabulary (one source of truth)
+Every control is built from a small set of component classes in
+`src/index.css` (`@layer components`, so a call site can still override with
+a Tailwind utility). Never hand-roll a button, chip, field, switch, menu or
+tile — reach for the class, then add only what the site needs (a width, a
+hover colour, `press`). Chip hue rides a `--hue` custom property; chip text
+goes through `hueText()` (`src/lib/noteColors.ts`) so it stays AA in light.
 
-### Inputs / Fields
-- **Style:** Inset. Inset (#0f0f12 dark / #e8e8ec light) fill, 1px Border, Text
-  color, 6px radius.
-- **Focus:** Border shifts to the signal. No glow ring, no box-shadow halo.
-- **Placeholder:** Muted; never lighter (keep ≥4.5:1).
+### Buttons
+- **`btn-ghost`** — the workhorse: hairline (`border-line`), Muted uppercase
+  mono label (10px, +0.14em), 8px corners; hover lifts text to Text and the
+  border to Border Strong. `btn-sm` tightens it to 8×4px padding.
+- **`btn-signal`** — signal outline: `--accent` at 10% fill, 70% signal border,
+  signal uppercase mono label; fill deepens to 20% on hover. The primary
+  *creative* action (Add note, New track, Make a copy) — never two of these
+  beside a primary.
+- **`btn-primary`** — the one filled key: signal **pill**, `--on-accent` bold
+  sans, the raised bevel, brightens on hover. Play (docked and mini
+  transports), Start mapping, Copy hand-in link. Everything else keeps a
+  corner; pills are otherwise reserved for data chips and the transport row.
+- **`btn-icon` / `btn-icon-lg`** — ghost icon buttons at exactly two sizes:
+  26px (inside panes: toolbars, title-bar actions) and 32px round (the
+  masthead, the video overlay). Hover is the Raised wash; `[data-active]` /
+  `aria-pressed` takes a 10% signal wash with signal ink. `on-video` makes
+  the overlay's white variant.
+- **Transport row** (docked): `btn-ghost rounded-full` step keys around the
+  `btn-primary` Play — the row where everything is round.
+
+### Chips
+- **`chip`** — a pill on a 14% tint of its hue, uppercase mono 10px. Tags,
+  section names, status badges (`chip-signal`: View only, Read only, Listening
+  task, Browse, Guest, Published, Shared), tile meta (`chip-neutral`).
+- **`chip-outline`** — the same pill with a 40% hue ring and no fill, for
+  chips that are *controls* (presets, layer pickers, filters, the inspector's
+  time endpoints, the speed readout) or that mark a note's kind (Q, section,
+  bar). `aria-pressed` / `[data-active]` fills it to 24% with an inset ring.
+- **`chip-time`** — the timecode: 11.5px tabular, 10% tint, 45% ring. A range
+  fuses its passage segment on with `rounded-r-none border-r-0` /
+  `rounded-l-none`.
+- One tag, one shape: the same tag must look identical in the note row, the
+  inspector, the picker, the mention list and the filter.
+
+### Segmented controls
+- **`seg`** — a 10px Inset well with a 2px gutter; **`seg-item`** — 22px,
+  6px corners, Muted mono caps; the active item (`aria-pressed`,
+  `aria-checked` or `[data-active]`) sits on the Raised wash in signal ink.
+  Undo/redo, the mode toggle, note order, timeline zoom, the theme mode
+  radios, the board's tool picker.
+
+### Fields
+- **`field`** — Inset fill, hairline border, 8px corners, the inset bevel,
+  12.5px Text; focus swaps the border to the signal. Every input, textarea,
+  select and select-like trigger. `field-bare` is the lyrics sheet's
+  borderless variant.
+- **`switch`** — one size (18×32), Inset track, Muted knob; on = 30% signal
+  track and a signal knob. Drive it with `aria-checked` (a button) or
+  `data-on` (a decorative span inside a labelled row).
+- **Placeholder:** Muted; never lighter (keep ≥4.5:1). Focus is the global
+  2px signal outline (it follows the element's own radius).
+
+### Popovers, menus, modals
+- **`pop`** — a floating menu: the dense glass (`--pop`, 22px blur, hairline
+  ring, the pane shadow) shaped with 14px corners. `Popover.tsx` applies it,
+  so callers pass only origin and padding. Rows are `pop-row`.
+- **`glass-pop`** + `rounded-2xl` — sheets and modals (Settings, Shortcuts,
+  the note inspector as a modal, Detect sections), over a blurred
+  `bg-ink/60` scrim.
+
+### Wells, strips, tiles, empties
+- **`well`** — the transport console: Inset fill, 14px corners, a faint signal
+  glow beneath. Docked and mini transports.
+- **`strip`** — a 3% band inside a pane: title bars (`TitleBar`), tool strips,
+  the worksheet name row, table heads.
+- **`tile`** — a flat wash card for grids (library folders, tracks, trash, the
+  gallery): `panel` fill, the glass ring, 14px corners; hover is the Raised
+  wash and a stronger ring. **No shadow, no lift** — a tile never floats.
+- **`empty`** — an empty state: Inset box, 14px corners, centred Muted copy.
+  Never a dashed outline.
 
 ### Title Bars
-- Filled panel headers (40px tall): Raised fill, 1px bottom Border, Muted
-  uppercase mono label (+0.25em), optional right-aligned mono stat. Every panel
-  (Tracks, Viewer, Annotations) wears one. This is the load-bearing "instrument
-  panel" device of the whole UI.
+- Frosted strips (40px tall): `strip` fill, 1px bottom hairline at 70%,
+  Muted uppercase mono label (+0.2em), optional right-aligned mono stat and an
+  actions slot. Every pane wears one (`src/components/TitleBar.tsx`).
 
 ### Readouts (LED) & Level Meter
 - **LED readout:** Inset well, signal-colored monospace with a soft
@@ -356,21 +443,23 @@ are forbidden. The moment a bevel looks like brushed metal, it has failed.
   low, signal mid, red (`--peak`) peak. Animates while playing, dim at rest.
 
 ### Note Rows (Signature Component)
-The note list is a flush cue list, not a stack of cards. Each note is a
-full-width row separated by hairline dividers, with a full-height colored spine
-(3px) on the left edge encoding its identity. The header line carries a colored
-monospace timecode tag (click to seek); a ranged note shows `start–end` plus its
-length. The active note takes the `--row-sel` signal wash and shows a signal
-"playing" dot. Secondary
+The note list is a flush cue list inside the notes pane, not a stack of
+cards. Each note is a full-width row separated by hairline dividers, with a
+full-height colored spine (3px) on the left edge encoding its identity. The
+header line carries a colored monospace timecode *pill* (click to seek); a
+ranged note shows `start–end` plus its length; tag chips are pills on a 14%
+tint of their hue with no outline. The active note takes a 7% white wash in
+dark (`--row-sel` in light) and shows a signal "playing" dot. Secondary
 controls (Set start / Set end / Clear end, delete, and the formatting toolbar)
 are hidden at rest and revealed on hover or focus, keeping the resting state
 quiet.
 
-### Navigation (Library) — "Station Cards"
-The signed-in landing view. Still flat Panel tiles (hairline border, softly
-squared corners — no soft cards), grouped into folders with Drive semantics (folder
-cards at the root, drill in to see a folder's tracks), but the surface warmed
-for a wider audience (2026-06-08) without leaving the system:
+### Navigation (Library)
+The signed-in landing view: a grid of `tile`s (flat wash cards — hairline
+ring, 14px corners, no shadow, no lift), grouped into folders with Drive
+semantics (folder tiles at the root, drill in to see a folder's tracks). The
+grid sits directly on the canvas; the tiles are the only thing between it
+and the content:
 
 - **Cover-led tiles.** Every track leads with its cover in an inset "viewer
   screen" well (hairline below): the YouTube thumbnail, or — for audio files,
@@ -380,17 +469,18 @@ for a wider audience (2026-06-08) without leaving the system:
   at its real position in the track, in the note's own colour (positions
   normalise against the last note; hues `hueText`-mixed in light). Colour
   stays data — the line is the track's annotation fingerprint at a glance.
-- **Hue-coded folder cards** (id-derived hue icon, track + note tallies) plus
-  a dashed New-folder card; a time-of-day greeting and a prominent inset
+- **Hue-coded folder tiles** (id-derived hue icon, track + note tallies) plus
+  a quiet New-folder tile; a time-of-day greeting and a prominent `field`
   search well sit above. Inside a folder the greeting yields to the Library
   crumb (also the unfile drop target).
-- Meta lines stay monospace Label style; a glyph (▶ / ♪) still marks the
-  source; per-tile controls (move to folder, delete) stay hidden at rest and
-  revealed on hover/focus. The signal appears only on the primary New-track
-  action, the Shared chip, and the drag-and-drop drop highlight. The wordmark
+- Meta lines are `chip-neutral` / `chip-signal` pills; a glyph (▶ / ♪) still
+  marks the source; per-tile controls (move to folder, delete) stay hidden at
+  rest and revealed on hover/focus. The signal appears only on the primary
+  New-track action, the Published/Shared chips, and the drag-and-drop drop
+  highlight. The wordmark
   and a Home button return here from the editor.
 
-### Landing (Signed-Out) — "The Input Jack"
+### Landing (Signed-Out)
 The front door, and the only page in the system whose job is to explain the
 tool rather than operate it (`src/components/LandingPage.tsx`). A signed-out
 visitor is a student holding a link or a teacher sizing the app up, so the page
@@ -398,10 +488,12 @@ leads with the one input that starts the work and follows it with the published
 gallery as the proof. Sign-in is a ghost button in the masthead; a deep link
 that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
 
-- **The panel is the hero, not the type.** The YouTube paste field is staged as
-  a real Title Bar panel — silkscreen `NEW TRACK` label, right-aligned LED
-  readout (`Awaiting link` → `Ready` → `Starting`, danger on a bad link), inset
-  input, one solid-signal key. It is the largest object on the page.
+- **The pane is the hero, not the type.** The paste field is staged as a real
+  `glass` pane with a `strip` title bar — silkscreen `NEW TRACK` label,
+  right-aligned LED readout (`Awaiting link` → `Ready` → `Starting`, danger on
+  a bad link), a `field` input, one `btn-primary` key. It is the largest
+  object on the page, and the only pane on it; the masthead is bare canvas
+  (blurred when sticky) like every other masthead.
 - **One row, no standfirst.** The panel body is a single control group: link
   field, workspace menu, key. Nothing explains it in advance — no paragraph
   under the headline, no caption under the menu, no warning under the panel.
@@ -425,11 +517,11 @@ that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
   `clamp(1.75rem, 5.5vw, 2.75rem)`, above §3's in-app 1.25rem ceiling. It
   applies here and nowhere else; the rule still governs all app chrome.
 - Hero, gallery, and footer share one 1180px container and one left edge — the
-  page reads as a single column, not two stacked pages. The gallery section
-  stays on Ink so its Panel tiles keep their tonal step.
-- Guest tracks this browser holds keys to appear as a quiet chip row under the
-  hero ("On this device"), each carrying the workspace glyph its track opens
-  into. A guest key exists only in its URL, so this is the local record that
+  page reads as a single column, not two stacked pages; sections are divided
+  by hairlines, never bands.
+- Guest tracks this browser holds keys to appear as a quiet row of fused
+  `btn-ghost` pairs under the hero ("On this device"), each carrying the
+  workspace glyph its track opens into. A guest key exists only in its URL, so this is the local record that
   keeps a second visit from stranding the first track. The "keep your private
   link" warning is **not** on this page — GuestLinkBar states it across the top
   of the editor, where the work that could be lost actually exists.
@@ -452,19 +544,21 @@ to send them to.
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** build depth from the tonal ramp (ink → panel → raised → inset) and
-  hairline dividers. Flush panels, softly squared corners (5–10px).
+- **Do** float the workspace columns as `.glass` panes and build every depth
+  *inside* a pane from the wash ramp (panel → raised / inset) and hairline
+  dividers. Soft corners (6–18px). Build every control from the vocabulary
+  (`btn-*`, `chip*`, `seg`, `field`, `switch`, `pop`, `well`, `tile`, `empty`).
 - **Do** keep numerics monospace and tabular: timecodes, counts, durations.
-- **Do** keep the canvas neutral (untinted graphite / pure white) and reserve
-  the signal for "now" and the primary action; keep it under ~10% of any screen.
+- **Do** keep the panes neutral glass and reserve the signal for "now", the
+  primary action, and the ambient bloom; keep it under ~10% of any screen.
 - **Do** pair every color-coded note with its timecode label, so identity never
   depends on hue alone (projector + colorblind safe).
 - **Do** hide secondary controls until hover/focus; let the resting UI stay calm.
 
 ### Don't:
-- **Don't** ship the **generic AI / shadcn dashboard** look: rounded cards, soft
-  drop shadows, indigo accent, evenly padded "friendly SaaS" whitespace. This is
-  the primary anti-reference.
+- **Don't** ship the **generic AI / shadcn dashboard** look: a grid of small
+  shadowed cards, indigo accent, evenly padded "friendly SaaS" whitespace. This
+  is the primary anti-reference. Glass panes are columns, not cards.
 - **Don't** drift into **heavy enterprise SaaS clutter**: gray-on-gray toolbars,
   competing controls, data-grid busyness. Density is welcome; clutter is not.
 - **Don't** use **retro skeuomorphism**: fake wood or metal textures, glossy
@@ -472,5 +566,6 @@ to send them to.
 - **Don't** let color carry meaning alone, and **don't** add a second face to the
   type system. Two voices (sans + mono) only.
 - **Don't** introduce a second solid-signal control next to Play, tint a
-  surface with the signal (beyond `--row-sel`), or round a corner past the
-  lg=10px panel radius. If it looks like a card with a shadow, it's wrong.
+  pane's own fill with the signal (beyond `--row-sel`), or nest a shadowed
+  card inside a pane. **Don't** hand-roll a control: a bespoke
+  `rounded border border-line px-3 …` string is a bug, not a style.

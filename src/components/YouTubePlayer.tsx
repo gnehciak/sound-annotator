@@ -4,12 +4,15 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { Loader2, Play } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 import { loadYouTubeApi } from '../lib/youtube'
 
 interface Props {
+  /** Floating chrome rendered inside the 16:9 frame, above the picture (the transport). */
+  overlay?: ReactNode
   videoId: string
   /**
    * Clip window in seconds of the source video (see ProjectSource.clipStart).
@@ -39,6 +42,7 @@ const clipLen = (videoLen: number, win: { from: number; to: number }) =>
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   {
+    overlay,
     videoId,
     clipStart,
     clipEnd,
@@ -232,7 +236,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
     // min(100%, cap·16/9) ⇒ height ≤ cap. The cap is `--player-max-h`, which the
     // app drives from the resize handle under the transport; it defaults to 50vh.
     <div
-      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line bg-black"
+      className="video-glow relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line/70 bg-black"
       style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <div ref={containerRef} className="h-full w-full" />
@@ -283,6 +287,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
           </span>
         </button>
       )}
+      {overlay}
     </div>
   )
 })

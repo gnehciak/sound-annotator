@@ -63,7 +63,7 @@ export default function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/70 p-6"
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -71,9 +71,9 @@ export default function SettingsModal({
       <div
         role="dialog"
         aria-label="Settings"
-        className="flex w-full max-w-lg flex-col overflow-hidden rounded-lg border border-line-strong bg-panel"
+        className="glass-pop flex w-full max-w-lg flex-col overflow-hidden rounded-2xl"
       >
-        <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line bg-raised px-3.5">
+        <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Settings
           </span>
@@ -83,7 +83,7 @@ export default function SettingsModal({
             onClick={onClose}
             title="Close (Esc)"
             aria-label="Close"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon press"
           >
             <X size={15} />
           </button>
@@ -145,7 +145,7 @@ export default function SettingsModal({
                   <div
                     role="group"
                     aria-label="Default notes order"
-                    className="flex shrink-0 items-center gap-[2px] rounded-[7px] border border-line bg-inset p-[2px]"
+                    className="seg"
                   >
                     {ORDERS.map((opt) => {
                       const active = noteOrder === opt.value
@@ -156,11 +156,7 @@ export default function SettingsModal({
                           onClick={() => onNoteOrder(opt.value)}
                           aria-pressed={active}
                           title={opt.title}
-                          className={`press flex h-[22px] items-center rounded-sm px-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 ${
-                            active
-                              ? 'bg-raised text-accentink'
-                              : 'text-muted hover:text-fg'
-                          }`}
+                          className="seg-item press"
                         >
                           {opt.label}
                         </button>
@@ -213,7 +209,7 @@ function ToggleRow({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="press flex items-start gap-3 rounded text-left transition-colors hover:bg-raised/40"
+      className="press flex items-start gap-3 rounded text-left transition-colors hover:bg-fg/[0.03]"
     >
       <span className="mt-[6px] grid h-[18px] w-[18px] shrink-0 place-items-center text-muted">
         {icon}
@@ -224,17 +220,7 @@ function ToggleRow({
           {hint}
         </span>
       </span>
-      <span
-        className={`mt-[3px] relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border transition-colors ${
-          checked ? 'border-accent bg-accent' : 'border-line bg-inset'
-        }`}
-      >
-        <span
-          className={`absolute top-1/2 h-[12px] w-[12px] -translate-y-1/2 rounded-full transition-all ${
-            checked ? 'left-[16px] bg-onaccent' : 'left-[2px] bg-muted'
-          }`}
-        />
-      </span>
+      <span className="switch mt-[3px]" data-on={checked || undefined} />
     </button>
   )
 }

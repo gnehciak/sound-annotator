@@ -15,7 +15,8 @@ import {
 } from 'lucide-react'
 import type { Annotation } from '../../types'
 import { formatTime, noteLabel, parseTime } from '../../lib/format'
-import { colorForId } from '../../lib/noteColors'
+import { colorForId, hueText } from '../../lib/noteColors'
+import { useResolvedTheme } from '../../lib/theme'
 import {
   SECTION_PRESETS,
   dedupedName,
@@ -153,6 +154,7 @@ export default function StructureEditor({
   onUpdate,
   onDelete,
 }: Props) {
+  const theme = useResolvedTheme()
   const [tool, setTool] = useState<Tool>('select')
   // Selection is derived defensively: an id that no longer exists (deleted,
   // undone) simply matches nothing, and read-only mode masks it entirely.
@@ -190,7 +192,6 @@ export default function StructureEditor({
   const selected = selectedId
     ? sections.find((a) => a.id === selectedId) ?? null
     : null
-  const nowSection = sectionAt(ordered, currentTime)
 
   // Timeline geometry: one rect for the ruler + lane column.
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -678,9 +679,7 @@ export default function StructureEditor({
       onClick={() => setTool(t)}
       aria-pressed={tool === t}
       title={title}
-      className={`press flex h-[24px] items-center gap-1.5 rounded px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors duration-150 ${
-        tool === t ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-      }`}
+      className="seg-item press h-[24px] gap-1.5 text-[10px] tracking-[0.12em]"
     >
       {icon}
       <span className="hidden lg:inline">{label}</span>
@@ -694,7 +693,7 @@ export default function StructureEditor({
         <div
           role="group"
           aria-label="Timeline tool"
-          className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+          className="seg"
         >
           {toolBtn(
             'select',
@@ -719,7 +718,7 @@ export default function StructureEditor({
           disabled={zoom <= 1.001}
           title="Zoom out"
           aria-label="Zoom out"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <ZoomOut size={13} />
         </button>
@@ -741,7 +740,7 @@ export default function StructureEditor({
           disabled={zoom >= MAX_ZOOM * 0.999}
           title="Zoom in"
           aria-label="Zoom in"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <ZoomIn size={13} />
         </button>
@@ -751,7 +750,7 @@ export default function StructureEditor({
           disabled={!view}
           title="Fit the whole track"
           aria-label="Zoom to fit"
-          className="press grid h-[24px] w-[24px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+          className="btn-icon press disabled:pointer-events-none disabled:opacity-35"
         >
           <Maximize size={12} />
         </button>
@@ -762,49 +761,13 @@ export default function StructureEditor({
   return (
     <section
       aria-label="Song structure timeline"
-      className="flex shrink-0 flex-col border-t border-line bg-panel"
+      className="glass flex shrink-0 flex-col overflow-hidden"
     >
       <TitleBar
         left="Song structure"
         right={`${sections.length} ${sections.length === 1 ? 'section' : 'sections'}`}
         actions={headerActions}
       />
-
-      {/* Section chips — the song's form at a glance; click to cue. */}
-      {ordered.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto border-b border-line px-3.5 py-2">
-          {ordered.map((sec) => {
-            const color = sec.color ?? colorForId(sec.id)
-            const isNow = nowSection?.id === sec.id
-            const isSel = sec.id === selectedId
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => {
-                  onSeek(sec.start)
-                  if (!readOnly) setSelectedId(sec.id)
-                }}
-                title={`${sectionName(sec)} · ${noteLabel(sec.start, sec.end)}`}
-                className={`press flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 py-[3px] text-[11px] font-medium transition-colors ${
-                  isNow
-                    ? 'border-accent/70 bg-accent/10 text-accentink'
-                    : isSel
-                      ? 'border-line-strong bg-raised text-fg'
-                      : 'border-line text-fg hover:border-line-strong'
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: color }}
-                />
-                {sectionName(sec)}
-              </button>
-            )
-          })}
-        </div>
-      )}
 
       {/* Minimap — the whole song; drag the window to pan, its edges to zoom. */}
       <div className="px-3.5 pb-1 pt-2">
@@ -875,7 +838,7 @@ export default function StructureEditor({
             if (e.button === 0) scrubDrag(e.clientX)
           }}
           title="Click or drag to seek"
-          className="relative h-[20px] cursor-pointer touch-none overflow-hidden rounded-t-sm border border-b-0 border-line bg-panel"
+          className="relative h-[20px] cursor-pointer touch-none overflow-hidden rounded-t-sm border border-b-0 border-line/70 bg-inset"
         >
           {ticks.minor.map((x) => (
             <span
@@ -961,8 +924,11 @@ export default function StructureEditor({
               >
                 {w > 34 && (
                   <span
-                    className="pointer-events-none absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate rounded-sm px-1.5 py-[2px] font-mono text-[10px] font-semibold leading-none text-onbright"
-                    style={{ background: color }}
+                    className="chip pointer-events-none absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate bg-ink/70 font-semibold"
+                    style={{
+                      ['--hue' as string]: color,
+                      color: hueText(color, theme),
+                    }}
                   >
                     {sectionName(sec)}
                   </span>
@@ -1040,7 +1006,7 @@ export default function StructureEditor({
       {/* Footer — a FIXED slot so selecting a section never reflows the
           board: the selected section's controls, or a one-line hint. */}
       {!readOnly && (
-      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line bg-panel px-3.5">
+      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line/70 px-3.5">
       {selected ? (
         <>
           <span
@@ -1060,7 +1026,7 @@ export default function StructureEditor({
             }
             placeholder="Section name"
             aria-label="Section name"
-            className="bevel-inset w-36 rounded border border-line bg-inset px-2 py-[4px] text-[12.5px] text-fg outline-none transition-colors placeholder:text-muted focus:border-accent"
+            className="field w-36 px-2 py-[4px]"
           />
           <div
             role="group"
@@ -1084,12 +1050,12 @@ export default function StructureEditor({
                     })
                   }
                   title={`Name this section “${p.name}”`}
-                  className={`press flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-[2px] font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] transition-colors ${
-                    active
-                      ? 'bg-raised text-fg'
-                      : 'border-line text-muted hover:text-fg'
-                  }`}
-                  style={active ? { borderColor: p.color } : undefined}
+                  aria-pressed={active}
+                  className="chip chip-outline press text-[9.5px] font-semibold"
+                  style={{
+                    ['--hue' as string]: p.color,
+                    color: active ? 'rgb(var(--text))' : 'rgb(var(--text-muted))',
+                  }}
                 >
                   <span
                     aria-hidden
@@ -1135,7 +1101,7 @@ export default function StructureEditor({
             }}
             title="Delete section (⌫)"
             aria-label="Delete section"
-            className="press grid h-[26px] w-[26px] place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-danger"
+            className="btn-icon press hover:text-danger"
           >
             <Trash2 size={13} />
           </button>

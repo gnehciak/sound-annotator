@@ -78,11 +78,11 @@ import {
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
-import GuestLinkBar from './components/GuestLinkBar'
+import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import { homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
-import Transport from './components/Transport'
+import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
@@ -410,6 +410,19 @@ export default function App() {
     editLock.state === 'other' || editLock.state === 'revoked' || foreignRevoked
   // Read-only for any reason: the user's own View toggle, or the lock.
   const effectiveViewOnly = viewOnly || lockBlocked
+
+  // Edit mode tints the whole canvas (html[data-armed] in index.css) — the
+  // panes float on the signal while the track is editable, and the masthead
+  // stays bare rather than carrying the wash alone.
+  const armed = view === 'track' && !effectiveViewOnly
+  useEffect(() => {
+    const root = document.documentElement
+    if (armed) root.dataset.armed = ''
+    else delete root.dataset.armed
+    return () => {
+      delete root.dataset.armed
+    }
+  }, [armed])
 
   // Settings live on the project; user-local values are the fallback when a
   // project has none. On opening a project that *has* settings, we sync the
@@ -1638,6 +1651,27 @@ export default function App() {
   // 660px breakpoint variant is the only one needed (shared with ShareViewer).
   const splitVariant = NOTES_SPLIT_660
 
+  // The transport, built once: it either floats inside the video frame
+  // (PlayerPane's `overlay` slot) or docks beneath an audio waveform.
+  const transport = (
+    <Transport
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      duration={duration}
+      playbackRate={playbackRate}
+      volume={volume}
+      muted={muted}
+      readOnly={effectiveViewOnly}
+      overlay={isVideoSource(current?.source)}
+      onPlayPause={() => (isPlaying ? pause() : play())}
+      onSeek={seek}
+      onStep={step}
+      onSetRate={setPlaybackRate}
+      onSetVolume={changeVolume}
+      onToggleMute={toggleMute}
+    />
+  )
+
   const regionSpecs = current
     ? current.annotations.map((a) => ({
         id: a.id,
@@ -1661,10 +1695,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-ink text-fg">
+    <div className="flex h-full flex-col text-fg">
       {/* Guests have no account to hold their work — their links are the only
           way back to it, so the bar sits above everything, not in a menu. */}
-      {isGuest && <GuestLinkBar />}
       {/* ---- Global header — the one bar (2026-07-17 unified nav) ----
           On the home page: wordmark, theme, account. With a track open it
           carries the whole track chrome too: dot-as-back, editable title,
@@ -1676,7 +1709,7 @@ export default function App() {
         className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
-            : 'border-line bg-panel'
+            : 'border-transparent bg-transparent'
         }`}
       >
         {/* While a track is open the chrome slims to the signal dot alone —
@@ -1703,7 +1736,7 @@ export default function App() {
                   }`
             }
             aria-label={isGuest ? 'Sound Annotator — home' : 'Back'}
-            className="press group -ml-1 grid h-8 w-8 shrink-0 place-items-center rounded transition-colors hover:bg-raised"
+            className="btn-icon-lg press group -ml-1"
           >
             <span className="h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_9px_rgb(var(--accent)/0.55)] transition-transform duration-150 ease-instr group-hover:scale-110" />
           </button>
@@ -1794,10 +1827,14 @@ export default function App() {
           </>
         )}
         {view === 'track' && viewOnly && !lockBlocked && (
-          <span className="flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-accent/60 bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink">
+          <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
             <Eye size={11} /> View only
           </span>
         )}
+        {/* Guests: their two links live in the masthead — the hand-in link
+            (read-only, what they submit) and the private edit link (their
+            only way back in; the title carries the no-account warning). */}
+        {view === 'track' && isGuest && <GuestLinks />}
         <div className="min-w-0 flex-1" />
         {/* Undo / redo of structural changes (note add/delete/move/retime,
             tags, colours, ranges, sections, rename). Editing-only; the rich-text
@@ -1806,7 +1843,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Undo and redo"
-            className="flex items-center gap-px rounded-md border border-line bg-inset p-[2px]"
+            className="seg"
           >
             <button
               type="button"
@@ -1814,7 +1851,7 @@ export default function App() {
               disabled={!canUndo}
               title="Undo (⌘Z)"
               aria-label="Undo"
-              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+              className="seg-item press h-[26px] w-[30px] px-0 disabled:pointer-events-none"
             >
               <Undo2 size={15} />
             </button>
@@ -1824,7 +1861,7 @@ export default function App() {
               disabled={!canRedo}
               title="Redo (⌘⇧Z)"
               aria-label="Redo"
-              className="press flex h-[26px] w-[30px] items-center justify-center rounded text-muted transition-colors hover:bg-raised hover:text-fg disabled:pointer-events-none disabled:opacity-35"
+              className="seg-item press h-[26px] w-[30px] px-0 disabled:pointer-events-none"
             >
               <Redo2 size={15} />
             </button>
@@ -1838,7 +1875,7 @@ export default function App() {
           <div
             role="group"
             aria-label="Editing mode"
-            className="flex items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+            className="seg"
           >
             <button
               type="button"
@@ -1846,8 +1883,8 @@ export default function App() {
               aria-pressed={!viewOnly}
               title="Edit mode (V)"
               aria-label="Edit mode"
-              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
-                viewOnly ? 'text-muted hover:text-fg' : 'bg-accent text-onaccent'
+              className={`seg-item press h-[26px] w-[34px] px-0 ${
+                viewOnly ? '' : 'bg-accent text-onaccent'
               }`}
             >
               <Pencil size={14} />
@@ -1858,9 +1895,7 @@ export default function App() {
               aria-pressed={viewOnly}
               title="View-only mode (V)"
               aria-label="View-only mode"
-              className={`press flex h-[26px] w-[34px] items-center justify-center rounded transition-colors duration-150 ${
-                viewOnly ? 'bg-raised text-accentink' : 'text-muted hover:text-fg'
-              }`}
+              className="seg-item press h-[26px] w-[34px] px-0"
             >
               <Eye size={14} />
             </button>
@@ -1874,11 +1909,11 @@ export default function App() {
           <div
             role="group"
             aria-label="Edit lock"
-            className="flex min-w-0 items-center gap-[2px] rounded-md border border-line bg-inset p-[2px]"
+            className="seg min-w-0"
           >
             <span
               role="status"
-              className="flex h-[26px] min-w-0 items-center gap-1.5 rounded bg-accent/10 px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink"
+              className="chip chip-signal h-[26px] min-w-0 gap-1.5 font-semibold tracking-[0.14em]"
             >
               <Pencil size={12} className="shrink-0" />
               <span className="truncate">
@@ -1905,7 +1940,7 @@ export default function App() {
             onClick={fitLayout}
             title="Auto-fit the layout to this screen (player, overview, notes, inspector)"
             aria-label="Fit layout to screen"
-            className="press grid h-8 w-8 shrink-0 place-items-center rounded text-muted transition-colors hover:bg-raised hover:text-fg"
+            className="btn-icon-lg press"
           >
             <Proportions size={16} />
           </button>
@@ -2028,9 +2063,9 @@ export default function App() {
             /* Song-structure board: player over the section timeline, with
                the per-section Lyrics column on the right. No notes column,
                overview strip, or inspector — the timeline IS the workspace. */
-            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in gap-3 px-3 pb-3">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+              <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TitleBar
                   left="Player"
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
@@ -2044,7 +2079,7 @@ export default function App() {
                           title={`Open the original video on ${sourceLabel(
                             current.source,
                           )} (new tab)`}
-                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                          className="btn-ghost btn-sm press shrink-0"
                         >
                           <Play size={12} />
                           {sourceLabel(current.source)}
@@ -2093,6 +2128,11 @@ export default function App() {
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
+                        // Video: the same floating transport as the notes
+                        // workspace. Audio keeps the folded well below.
+                        overlay={
+                          isVideoSource(current.source) ? transport : undefined
+                        }
                         onTime={handleTime}
                         onDuration={handleDuration}
                         onPlayingChange={handlePlaying}
@@ -2103,9 +2143,22 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Folded transport: Play + clock + volume, with the stem
-                      mixer folded in below. Seeking lives in the board (ruler /
-                      minimap / chips / lyric headings). */}
+                  {/* Video: the stem mixer stands on its own strip under the
+                      frame. Audio: the folded transport (Play + clock +
+                      volume) with the mixer folded in below. */}
+                  {isVideoSource(current.source) ? (
+                    current.stems && (
+                      <StemMixer
+                        key={current.id}
+                        stems={current.stems}
+                        playerRef={playerRef}
+                        isPlaying={isPlaying}
+                        volume={muted ? 0 : volume}
+                        playbackRate={playbackRate}
+                        onActiveChange={setStemActive}
+                      />
+                    )
+                  ) : (
                   <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
@@ -2130,6 +2183,7 @@ export default function App() {
                       />
                     )}
                   </MiniTransport>
+                  )}
                 </div>
               </div>
 
@@ -2151,7 +2205,7 @@ export default function App() {
 
             {/* Lyrics — whole-section lyrics beside the board (wide screens).
                 Typing coalesces into one undo step per section. */}
-            <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+            <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
               <LyricsPanel
                 sections={current.annotations}
                 currentTime={currentTime}
@@ -2168,14 +2222,14 @@ export default function App() {
             /* Two columns: resizable player on the left, notes scroll on the right */
             <div
               ref={splitRef}
-              className={`flex min-h-0 flex-1 animate-fade-in flex-col ${splitVariant.row}`}
+              className={`flex min-h-0 flex-1 animate-fade-in flex-col gap-3 px-3 pb-3 min-[660px]:gap-0 ${splitVariant.row}`}
               style={splitStyle}
             >
               {/* Viewer panel — the flex column: absorbs window resize so the
                   notes column keeps its width. The video fills the room the short
                   overview strip leaves (--player-max-h tracks the player area). */}
               <div
-                className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${splitVariant.player}`}
+                className={`glass flex shrink-0 flex-col overflow-hidden ${splitVariant.player}`}
               >
                 <TitleBar
                   left="Player"
@@ -2190,7 +2244,7 @@ export default function App() {
                           title={`Open the original video on ${sourceLabel(
                             current.source,
                           )} (new tab)`}
-                          className="press inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors hover:border-line-strong hover:text-fg"
+                          className="btn-ghost btn-sm press shrink-0"
                         >
                           <Play size={12} />
                           {sourceLabel(current.source)}
@@ -2238,6 +2292,12 @@ export default function App() {
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}
                         readOnly={effectiveViewOnly}
+                        // Video: the transport floats over the frame's bottom
+                        // edge. Audio keeps it docked below (the waveform is
+                        // the picture and must stay uncovered).
+                        overlay={
+                          isVideoSource(current.source) ? transport : undefined
+                        }
                         onTime={handleTime}
                         onDuration={handleDuration}
                         onPlayingChange={handlePlaying}
@@ -2248,21 +2308,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <Transport
-                    isPlaying={isPlaying}
-                    currentTime={currentTime}
-                    duration={duration}
-                    playbackRate={playbackRate}
-                    volume={volume}
-                    muted={muted}
-                    readOnly={effectiveViewOnly}
-                    onPlayPause={() => (isPlaying ? pause() : play())}
-                    onSeek={seek}
-                    onStep={step}
-                    onSetRate={setPlaybackRate}
-                    onSetVolume={changeVolume}
-                    onToggleMute={toggleMute}
-                  />
+                  {!isVideoSource(current.source) && transport}
+                  <TransportHints readOnly={effectiveViewOnly} />
 
                   {/* Stem mixer — only on analyzed tracks (section detection
                       saved their separated stems). Playback-only, so it stays
@@ -2313,7 +2360,7 @@ export default function App() {
               {/* Notes panel — the fixed-width column (pinned to --notes-w on
                   wide screens; fills height when stacked). */}
               <div
-                className={`flex min-w-0 flex-1 flex-col ${splitVariant.notes}`}
+                className={`glass flex min-w-0 flex-1 flex-col overflow-hidden ${splitVariant.notes}`}
               >
                 <TitleBar
                   left={`Notes (${
@@ -2358,9 +2405,7 @@ export default function App() {
                 )}
                 <div
                   ref={setNotesScroll}
-                  className={`relative flex-1 overflow-y-auto ${
-                    resolvedTheme === 'light' ? 'bg-rowsel' : 'bg-note'
-                  }`}
+                  className="relative flex-1 overflow-y-auto"
                 >
                   <AnnotationList
                     annotations={visibleAnnotations}
@@ -2398,9 +2443,8 @@ export default function App() {
                   aria-label="Resize notes and inspector"
                   onPointerDown={startInspectorDrag}
                   title="Drag to resize"
-                  className={`w-1 shrink-0 cursor-col-resize touch-none transition-colors ${
-                    draggingInspector ? 'bg-accent' : 'bg-line hover:bg-accent/60'
-                  }`}
+                  data-dragging={draggingInspector || undefined}
+                  className="split-grip w-3 shrink-0 cursor-col-resize touch-none bg-transparent"
                 />
               )}
 
@@ -2409,7 +2453,7 @@ export default function App() {
                   when nothing's selected. Slides in once on mount, then stays. */}
               {showDock && (
                 <div
-                  className="dock-slide-in min-w-0 shrink-0 overflow-hidden"
+                  className="glass dock-slide-in min-w-0 shrink-0 overflow-hidden"
                   style={{
                     // Cap against the viewport so a wide inspector + a shrunk
                     // window can never starve the player+notes (they keep ≥700px).
@@ -2534,7 +2578,7 @@ export default function App() {
 
 function ReadOnlyNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded border border-line bg-inset p-6 text-center text-sm text-muted">
+    <div className="empty text-sm text-muted">
       {children}
     </div>
   )
@@ -2553,7 +2597,7 @@ function ReattachAudio({
   onAudioUrl: (url: string) => void
 }) {
   return (
-    <div className="rounded border border-accent/40 bg-accent/5 p-6">
+    <div className="empty items-stretch text-left">
       <p className="text-sm text-fg">
         The audio{fileName ? ` (${fileName})` : ''} for this track isn't
         loading. Paste a link to it to keep annotating — your notes are safe.
