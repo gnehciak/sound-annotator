@@ -93,7 +93,7 @@ export default function BrowseGallery() {
             <div className="aspect-video w-full border-b border-line bg-inset" />
             <div className="space-y-2 p-3.5">
               <div className="h-3 w-3/4 rounded-sm bg-raised" />
-              <div className="h-2.5 w-1/2 rounded-sm bg-raised/70" />
+              <div className="h-2.5 w-1/2 rounded-sm bg-fg/[0.06]" />
             </div>
           </div>
         ))}

@@ -26,7 +26,7 @@ export default function NotesSearch({ value, onChange, count, total, onClose }: 
   }, [])
 
   return (
-    <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
+    <div className="flex items-center gap-2 border-b border-line/70 px-3 py-2">
       <Search size={14} className="shrink-0 text-muted" />
       <input
         ref={inputRef}

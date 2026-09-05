@@ -56,7 +56,7 @@ export default function NoteActions({
     'bevel-inset w-full rounded border border-line bg-inset px-1.5 py-1.5 text-center font-mono text-[12px] text-fg placeholder:text-muted focus:border-accent focus:outline-none'
 
   return (
-    <div className="border-b border-line bg-panel px-3 py-2.5">
+    <div className="border-b border-line/70 px-3 py-2.5">
       <div className="grid grid-cols-3 items-stretch gap-[7px]">
         <div className="flex min-w-0 items-stretch">
           <button

@@ -107,7 +107,7 @@ export default function Transport({
 
   return (
     <>
-    <div className="space-y-[11px] rounded-lg border border-line bg-panel px-[13px] pb-[13px] pt-[11px]">
+    <div className="well-glow space-y-[11px] rounded-lg border border-line/70 bg-inset px-[13px] pb-[13px] pt-[11px]">
       {/* progress / seek bar, flanked by the (editable) current time and total */}
       <div className="flex items-center gap-2.5">
         <input
@@ -212,7 +212,7 @@ export default function Transport({
             <div
               role="listbox"
               aria-label="Playback speed"
-              className="absolute left-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in overflow-hidden rounded border border-line bg-panel shadow-lg shadow-black/40"
+              className="glass-pop absolute left-0 top-full z-30 mt-1 w-[4.25rem] animate-panel-in overflow-hidden rounded-md"
             >
               {RATES.map((r) => (
                 <button
@@ -227,7 +227,7 @@ export default function Transport({
                   className={`flex w-full items-center justify-between px-2 py-1 font-mono text-[11px] tabular-nums ${
                     playbackRate === r
                       ? 'bg-raised text-accentink'
-                      : 'text-muted hover:bg-raised/50 hover:text-fg'
+                      : 'text-muted hover:bg-fg/5 hover:text-fg'
                   }`}
                 >
                   {r}×
@@ -243,7 +243,7 @@ export default function Transport({
             onClick={() => onStep(-5)}
             aria-label="Back 5 seconds"
             title="Jump back 5 seconds (Shift ←)"
-            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronsLeft size={13} />
           </button>
@@ -251,14 +251,14 @@ export default function Transport({
             onClick={() => onStep(-1)}
             aria-label="Back 1 second"
             title="Jump back 1 second (←)"
-            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronLeft size={13} />
           </button>
           <button
             onClick={onPlayPause}
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-            className="press inline-flex w-[104px] items-center justify-center gap-[7px] rounded bg-accent py-[7px] text-[13.5px] font-bold text-onaccent hover:brightness-110"
+            className="press inline-flex w-[104px] items-center justify-center gap-[7px] rounded-full bg-accent py-[7px] text-[13.5px] font-bold text-onaccent hover:brightness-110"
           >
             {isPlaying ? <Pause size={15} /> : <Play size={15} />}
             {isPlaying ? 'Pause' : 'Play'}
@@ -267,7 +267,7 @@ export default function Transport({
             onClick={() => onStep(1)}
             aria-label="Forward 1 second"
             title="Jump forward 1 second (→)"
-            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronRight size={13} />
           </button>
@@ -275,7 +275,7 @@ export default function Transport({
             onClick={() => onStep(5)}
             aria-label="Forward 5 seconds"
             title="Jump forward 5 seconds (Shift →)"
-            className="press inline-flex items-center rounded border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
+            className="press inline-flex items-center rounded-full border border-line px-3 py-[7px] text-muted transition-colors hover:border-line-strong hover:text-fg"
           >
             <ChevronsRight size={13} />
           </button>

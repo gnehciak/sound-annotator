@@ -12,9 +12,9 @@
       },
       "ink": {
         "role": "neutral",
-        "displayName": "Graphite Ink",
-        "canonical": "#161618",
-        "tonalRamp": ["#0f0f12", "#161618", "#1e1e22", "#28282d", "#4e4e57", "#a4a4ae", "#cfcfd6", "#ececf0"]
+        "displayName": "Near-Black Ink",
+        "canonical": "#0a0a0c",
+        "tonalRamp": ["#060608", "#0a0a0c", "#18181b", "#242428", "#44444c", "#a4a4ae", "#cfcfd6", "#ececf0"]
       },
       "meter": {
         "role": "secondary",
@@ -41,15 +41,16 @@
         "crayon": { "accent": { "dark": "#4f8bff", "light": "#335df0" }, "feel": "cobalt signal, green meter (#3ddc74 / #1e9e4e); quietest chrome, the crayon-box note data carries the playfulness. The one palette where --on-accent diverges from --on-bright: the light cobalt fill carries white text" }
       },
       "dark": {
-        "displayName": "The Listening Station (untinted graphite; color as accent)",
-        "tokens": { "ink": "#161618", "panel": "#1e1e22", "raised": "#28282d", "inset": "#0f0f12", "note": "#161618", "border": "#36363d", "border-strong": "#4e4e57", "text": "#ececf0", "text-strong": "#ffffff", "muted": "#a4a4ae", "accent": "#ff6a3d", "accent-ink": "#ff6a3d", "meter": "#ffce33", "peak": "#ff5252", "danger": "#fb7185", "on-bright": "#161618", "row-sel": "#3d2926" }
+        "displayName": "The Listening Station, frosted (near-black canvas with an ambient signal bloom; workspace columns float as translucent blurred glass panes; color as accent)",
+        "tokens": { "ink": "#0a0a0c", "panel": "rgba(255,255,255,0.045)", "raised": "rgba(255,255,255,0.07)", "inset": "rgba(0,0,0,0.32)", "note": "transparent", "pop": "rgba(26,26,30,0.78)", "glass-ring": "rgba(255,255,255,0.08)", "border": "#28282d", "border-strong": "#44444c", "text": "#ececf0", "text-strong": "#ffffff", "muted": "#a4a4ae", "accent": "#ff6a3d", "accent-ink": "#ff6a3d", "meter": "#ffce33", "peak": "#ff5252", "danger": "#fb7185", "on-bright": "#161618", "row-sel": "#3d2926" }
       },
       "light": {
-        "displayName": "The White Sheet (pure white end to end — page, panels, and masthead; hairlines carry structure; color only as accent)",
-        "tokens": { "ink": "#ffffff", "panel": "#ffffff", "raised": "#f2f2f5", "inset": "#e8e8ec", "note": "#ffffff", "border": "#d4d4d9", "border-strong": "#a0a0a8", "text": "#1d1d21", "text-strong": "#0e0e11", "muted": "#62626b", "accent": "#e04e1a", "accent-ink": "#a63a10", "meter": "#b98600", "peak": "#d5362f", "danger": "#be123c", "on-bright": "#161618", "row-sel": "#fcf1ed" }
+        "displayName": "White Glass (pale grey canvas with the ambient bloom; white 62% blurred panes; color only as accent)",
+        "tokens": { "ink": "#e9eaee", "panel": "rgba(255,255,255,0.62)", "raised": "rgba(0,0,0,0.04)", "inset": "rgba(0,0,0,0.05)", "note": "rgba(255,255,255,0.55)", "pop": "rgba(255,255,255,0.86)", "glass-ring": "rgba(0,0,0,0.07)", "border": "#d0d0d6", "border-strong": "#9c9ca6", "text": "#1d1d21", "text-strong": "#0e0e11", "muted": "#62626b", "accent": "#e04e1a", "accent-ink": "#a63a10", "meter": "#b98600", "peak": "#d5362f", "danger": "#be123c", "on-bright": "#161618", "row-sel": "#fcf1ed" }
       },
       "rules": [
-        "Accent-not-canvas: surfaces are neutral in both modes (untinted graphite dark, pure white light). Color arrives only as the signal, the meter, the note data, and the faint --row-sel signal wash on the selected row (12-14% over panel in dark, 7-8% over white in light). No other background may carry a hue.",
+        "Accent-not-canvas (glass edition, 2026-09-05): panes are neutral glass in both modes. Color arrives only as the signal, the meter, the note data, the --row-sel wash on the selected row, and the ambient bloom behind the panes / the glow beneath the transport well (--ambient, .well-glow — both read the signal hue). A pane's own fill never carries a hue.",
+        "Frosted glass (2026-09-05): .glass = translucent panel fill + 28px backdrop blur + hairline ring (--glass-ring) + top highlight (--glass-hi) + deep soft shadow (--glass-shadow), 18px radius, 12px gutters. .glass-pop is the denser variant for menus/modals. panel/raised/inset/note are alpha washes (full colour strings), so nested surfaces stay translucent. Only a pane, menu or modal floats — never a card inside a pane; at most four panes on screen.",
         "Two signals: `--accent` is the bright signal for FILLS/graphics (Play, spines, dots, progress); `--accent-ink` is the AA-safe variant for TEXT/LED/links/focus. Identical in dark, divergent in light (a fill-strength signal fails AA as text on white).",
         "`--on-bright` is the text that sits ON a data-hue fill (timecode labels): dark in both themes. `--on-accent` is the text on the SIGNAL fill (Play, sign-in, copy): = on-bright everywhere except Crayon light, where the cobalt fill carries white text.",
         "Note/tag/element hues stay raw as FILLS; used as TEXT or a 1px border on the white page they are mixed toward ink for AA (src/lib/noteColors.ts `hueText`).",
@@ -65,7 +66,9 @@
     },
     "shadows": [
       { "name": "inset-bevel", "value": "inset 0 1px 3px rgb(0 0 0 / 0.6)", "purpose": "Recessed screens only: LED readouts, the meter well, inputs, the editor canvas." },
-      { "name": "raised-bevel", "value": "inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 3px rgb(0 0 0 / 0.32)", "purpose": "The primary Play button only. A hint of a physical key, never a gel button." }
+      { "name": "raised-bevel", "value": "inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 3px rgb(0 0 0 / 0.32)", "purpose": "The primary Play button only. A hint of a physical key, never a gel button." },
+      { "name": "glass-shadow", "value": "0 30px 70px -18px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.35)", "purpose": "The pane (.glass) and floating menus/modals (.glass-pop) — the only outer shadow in the system." },
+      { "name": "well-glow", "value": "inset 0 1px 0 rgb(255 255 255 / 0.04), 0 18px 40px -18px rgb(var(--accent) / 0.45)", "purpose": "The transport well throws a faint signal-coloured glow downward — the lit console under the recorder." }
     ],
     "motion": [
       { "name": "state-transition", "value": "color/background 150ms ease", "purpose": "Default hover/active feedback on controls. Quiet and immediate." },

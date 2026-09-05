@@ -159,7 +159,7 @@ export default function ThemeToggle({
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
         width={184}
-        className="rounded border border-line bg-panel py-1 shadow-lg"
+        className="glass-pop rounded-xl py-1"
       >
         <ThemeMenuContent
           pref={pref}

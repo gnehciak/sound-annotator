@@ -50,7 +50,7 @@ export default function PluginWindow({
   }, [onClose])
 
   const header = (
-    <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line bg-raised px-3.5">
+    <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
       <span className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {title}
       </span>
@@ -92,7 +92,7 @@ export default function PluginWindow({
   if (mode === 'modal') {
     return (
       <div
-        className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-ink/70 p-6"
+        className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose?.()
         }}
@@ -100,7 +100,7 @@ export default function PluginWindow({
         <div
           role="dialog"
           aria-label={title}
-          className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-line-strong bg-panel"
+          className="glass-pop flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl"
         >
           {header}
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
@@ -114,7 +114,7 @@ export default function PluginWindow({
     <div
       role="dialog"
       aria-label={title}
-      className="flex h-full min-h-0 flex-col border-l border-line bg-panel"
+      className="flex h-full min-h-0 flex-col"
     >
       {header}
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

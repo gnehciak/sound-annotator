@@ -31,7 +31,7 @@ export default function SourcePicker({ onVideo, onAudioUrl }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <div className="mx-auto max-w-xl space-y-6 rounded border border-line bg-panel p-6">
+    <div className="glass mx-auto max-w-xl space-y-6 p-6">
       <div>
         <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
           Load from YouTube or Google Drive

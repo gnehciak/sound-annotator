@@ -762,7 +762,7 @@ export default function StructureEditor({
   return (
     <section
       aria-label="Song structure timeline"
-      className="flex shrink-0 flex-col border-t border-line bg-panel"
+      className="glass flex shrink-0 flex-col overflow-hidden"
     >
       <TitleBar
         left="Song structure"
@@ -1040,7 +1040,7 @@ export default function StructureEditor({
       {/* Footer — a FIXED slot so selecting a section never reflows the
           board: the selected section's controls, or a one-line hint. */}
       {!readOnly && (
-      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line bg-panel px-3.5">
+      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line/70 px-3.5">
       {selected ? (
         <>
           <span

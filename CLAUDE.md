@@ -124,13 +124,19 @@ peak / danger / onbright / rowsel`). Per-note colors live in
 `src/lib/noteColors.ts`. Retune the whole theme from those files.
 
 **Themes** flow off that one token set, on two axes: `data-theme` (mode:
-dark, the default — untinted graphite; or light — pure white end to end,
-hairlines carry structure, no dark masthead) and `data-palette` (signal hue:
-tangerine default / bubblegum / limeade / crayon), both on `<html>`.
-**Color-as-accent doctrine (2026-07-17):** the neutral canvas is shared by
-every palette and never tinted; color appears only as the signal, the meter,
-the note data, and the faint `--row-sel` signal wash on the selected row. A
-boot script in `index.html` paints both axes flash-free before render;
+dark, the default — near-black canvas; or light — pale grey canvas) and
+`data-palette` (signal hue: tangerine default / bubblegum / limeade / crayon),
+both on `<html>`. **Frosted glass (2026-09-05):** workspace columns, menus and
+modals are translucent blurred panes (`.glass` / `.glass-pop` in
+`src/index.css`) floating over an ambient bloom of the signal hue
+(`--ambient`, painted by `body::before`). The `panel` / `raised` / `inset` /
+`note` Tailwind colours are therefore full colour strings (white or black at
+low alpha, `var(--panel)` etc.), **not** channel tokens — they take no
+`/opacity` modifier; use `bg-fg/[0.03]`-style washes for ad-hoc tints.
+**Color-as-accent doctrine (2026-07-17):** panes never carry a hue; color
+appears only as the signal, the meter, the note data, the `--row-sel` wash on
+the selected row, and the ambient bloom / transport glow behind and beneath
+the glass. A boot script in `index.html` paints both axes flash-free before render;
 `src/lib/theme.ts` is the runtime (`useTheme` controller, `useResolvedTheme`
 mode subscriber, `useThemeKey` mode+palette key for canvas painters, `cssRgb`
 reader). The signal splits into `--accent` (fills) and `--accent-ink` (AA text)

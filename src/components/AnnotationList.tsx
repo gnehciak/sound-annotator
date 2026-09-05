@@ -367,7 +367,7 @@ export default function AnnotationList({
   }
 
   return (
-    <div className="divide-y divide-line border-b border-line">
+    <div className="divide-y divide-line/70 border-b border-line/70">
       {sorted.map((a, idx) => (
         <AnnotationItem
           key={a.id}

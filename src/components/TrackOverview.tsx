@@ -351,7 +351,7 @@ export default function TrackOverview({
 
   return (
     <section
-      className={`relative flex flex-col border-t border-line bg-panel ${className}`}
+      className={`relative flex flex-col border-t border-line/70 ${className}`}
     >
       {/* Map panel header — the whole bar toggles the strip open/closed (the zoom
           controls stop propagation). Always shown so it can be reopened after
@@ -369,7 +369,7 @@ export default function TrackOverview({
         }}
         aria-expanded={open}
         title={open ? 'Hide overview' : 'Show overview'}
-        className="flex h-[38px] shrink-0 cursor-pointer items-center justify-between border-b border-line bg-raised/60 px-3 text-muted transition-colors hover:bg-raised hover:text-fg"
+        className="flex h-[38px] shrink-0 cursor-pointer items-center justify-between border-b border-line/70 bg-fg/[0.03] px-3 text-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <span className="flex items-center gap-[7px]">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}

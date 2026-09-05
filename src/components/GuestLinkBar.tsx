@@ -35,7 +35,7 @@ export default function GuestLinkBar() {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
+    <div className="flex items-center gap-2 border-b border-line/60 px-3 py-2">
       <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
         <Link2 size={12} />
         Guest

@@ -234,7 +234,7 @@ function AnalysisAudioPrompt({
       role="dialog"
       aria-modal="true"
       aria-label="Provide audio for section detection"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm p-6"
       onClick={onCancel}
     >
       <div

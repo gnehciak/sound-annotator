@@ -65,7 +65,7 @@ export default function ShortcutsOverlay({
     : [TRANSPORT, NOTES_EDIT, NAV_EDIT, EDITING]
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm ${
         closing ? 'animate-fade-out' : 'animate-fade-in'
       }`}
       onClick={onClose}
@@ -75,7 +75,7 @@ export default function ShortcutsOverlay({
         aria-modal="true"
         aria-label="Keyboard shortcuts"
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg overflow-hidden rounded-lg border border-line bg-panel shadow-2xl ${
+        className={`w-full max-w-lg glass-pop overflow-hidden rounded-2xl ${
           closing ? 'animate-panel-out' : 'animate-panel-in'
         }`}
       >

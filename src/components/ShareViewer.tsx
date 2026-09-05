@@ -491,7 +491,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex h-full flex-col bg-ink text-fg">
-      <header className="flex h-[54px] items-center gap-3 border-b border-line bg-panel px-4">
+      <header className="flex h-[54px] items-center gap-3 px-4">
         <HomeDot>
           <span className="hidden font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg sm:inline">
             Sound&nbsp;Annotator
@@ -629,13 +629,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           the fixed column, the player flexes (and stacks above on narrow). */
       <div
         ref={splitRef}
-        className={`flex min-h-0 flex-1 flex-col ${NOTES_SPLIT_660.row}`}
+        className={`flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 min-[660px]:gap-0 ${NOTES_SPLIT_660.row}`}
         style={splitStyle}
       >
         {/* Player column — the flex column. The video fills the room the short
             overview strip leaves; the transport pins below. */}
         <div
-          className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${NOTES_SPLIT_660.player}`}
+          className={`glass flex shrink-0 flex-col overflow-hidden ${NOTES_SPLIT_660.player}`}
         >
           <TitleBar
             left="Player"
@@ -722,7 +722,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         {/* Notes column — the fixed-width column. On a listening task the
             panel is the worksheet: answered progress in the title, the name
             strip below, and an answer box under each question note. */}
-        <div className={`flex min-w-0 flex-1 flex-col ${NOTES_SPLIT_660.notes}`}>
+        <div className={`glass flex min-w-0 flex-1 flex-col overflow-hidden ${NOTES_SPLIT_660.notes}`}>
           <TitleBar
             left={
               isTask

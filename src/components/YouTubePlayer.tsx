@@ -232,7 +232,7 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
     // min(100%, cap·16/9) ⇒ height ≤ cap. The cap is `--player-max-h`, which the
     // app drives from the resize handle under the transport; it defaults to 50vh.
     <div
-      className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-line bg-black"
+      className="relative mx-auto aspect-video w-full overflow-hidden rounded-xl border border-line/70 bg-black shadow-[0_24px_50px_-20px_rgb(0_0_0/0.7)]"
       style={{ maxWidth: 'calc(var(--player-max-h, 50vh) * 16 / 9)' }}
     >
       <div ref={containerRef} className="h-full w-full" />

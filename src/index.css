@@ -28,13 +28,34 @@
    ============================================================ */
 :root,
 [data-theme='dark'] {
-  --bg-ink: 22 22 24; /* #161618 base */
-  --bg-panel: 30 30 34; /* #1e1e22 panel */
-  --bg-raised: 40 40 45; /* #28282d raised control */
-  --bg-inset: 15 15 18; /* #0f0f12 inset readouts/editor */
-  --surface-note: 22 22 24; /* notes page — = ink in dark */
-  --border: 54 54 61; /* #36363d hairlines */
-  --border-strong: 78 78 87; /* #4e4e57 */
+  --bg-ink: 10 10 12; /* #0a0a0c base — near-black so the glass has depth to float over */
+  --bg-panel: 24 24 27; /* #18181b opaque panel equivalent (legacy channel token) */
+  --bg-raised: 36 36 40; /* #242428 raised control (legacy channel token) */
+  --bg-inset: 6 6 8; /* #060608 inset readouts/editor (legacy channel token) */
+  --surface-note: 10 10 12; /* notes page — = ink in dark (legacy channel token) */
+  --border: 40 40 45; /* #28282d hairlines */
+  --border-strong: 68 68 76; /* #44444c */
+
+  /* GLASS surfaces (2026-09 "frosted" restyle). Panels are translucent
+     white over the ink — the canvas glow shows through, and every panel
+     stacks as a pane of frosted glass rather than a flush slab. `--panel`
+     is the pane itself (see .glass), `--raised` the lifted strip/hover,
+     `--inset` a recessed dark well, `--pop` the denser glass a floating
+     menu needs to stay legible over content. */
+  --panel: rgb(255 255 255 / 0.045);
+  --raised: rgb(255 255 255 / 0.07);
+  --inset: rgb(0 0 0 / 0.32);
+  --note: transparent;
+  --pop: rgb(26 26 30 / 0.78);
+  --glass-ring: rgb(255 255 255 / 0.08);
+  --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --glass-shadow: 0 30px 70px -18px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.35);
+  --glass-blur: 28px;
+  /* The ambient canvas: two soft blooms of the signal hue and one cool
+     lift, so the frosted panes have light to catch. Follows the palette. */
+  --ambient: radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.13), transparent 65%),
+    radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.045), transparent 60%);
   --text: 236 236 240; /* #ececf0 */
   --text-strong: 255 255 255; /* #fff — h1 / emphasis */
   --text-muted: 164 164 174; /* #a4a4ae — AA on raised + projector legibility */
@@ -72,13 +93,26 @@
    Body, muted, placeholder, and accent-ink are AA on every surface.
    ============================================================ */
 [data-theme='light'] {
-  --bg-ink: 255 255 255; /* #ffffff the page — pure white */
-  --bg-panel: 255 255 255; /* #ffffff chrome (sidebar/right dock/transport) — white too; hairlines carry the structure */
-  --bg-raised: 242 242 245; /* #f2f2f5 title bars / hover states / lifted controls — the one visible step below white */
-  --bg-inset: 232 232 236; /* #e8e8ec recessed screens — wells, inputs, LED readouts, the player screen */
-  --surface-note: 255 255 255; /* #ffffff note paper = the page; one clean sheet */
-  --border: 212 212 217; /* #d4d4d9 hairlines — quiet but present on white */
-  --border-strong: 160 160 168; /* #a0a0a8 hover/active edges */
+  --bg-ink: 233 234 238; /* #e9eaee the canvas — a pale neutral so white glass reads as glass */
+  --bg-panel: 255 255 255; /* legacy channel token */
+  --bg-raised: 242 242 245; /* legacy channel token */
+  --bg-inset: 228 228 233; /* legacy channel token */
+  --surface-note: 255 255 255; /* legacy channel token */
+  --border: 208 208 214; /* #d0d0d6 hairlines */
+  --border-strong: 156 156 166; /* #9c9ca6 hover/active edges */
+
+  --panel: rgb(255 255 255 / 0.62);
+  --raised: rgb(0 0 0 / 0.04);
+  --inset: rgb(0 0 0 / 0.05);
+  --note: rgb(255 255 255 / 0.55);
+  --pop: rgb(255 255 255 / 0.86);
+  --glass-ring: rgb(0 0 0 / 0.07);
+  --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --glass-shadow: 0 24px 60px -18px rgb(0 0 0 / 0.22), 0 1px 3px rgb(0 0 0 / 0.06);
+  --glass-blur: 28px;
+  --ambient: radial-gradient(70% 55% at 12% -5%, rgb(var(--accent) / 0.2), transparent 65%),
+    radial-gradient(55% 50% at 92% 105%, rgb(var(--accent) / 0.12), transparent 65%),
+    radial-gradient(45% 45% at 70% 25%, rgb(255 255 255 / 0.6), transparent 60%);
   --text: 29 29 33; /* #1d1d21 near-black */
   --text-strong: 14 14 17; /* #0e0e11 h1 / emphasis */
   --text-muted: 98 98 107; /* #62626b labels/placeholder — AA on white, raised, and inset */
@@ -180,17 +214,54 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* The ambient glow behind every pane — fixed so it never scrolls, painted
+   under the app root. See --ambient in the theme blocks. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--ambient);
+}
+
+/* ------------------------------------------------------------------
+   Frosted glass panes. `.glass` is a floating workspace column (player,
+   notes, inspector, a modal card): translucent panel fill, backdrop
+   blur, a hairline ring, a top highlight and a deep soft shadow.
+   `.glass-pop` is the denser variant for menus and popovers that float
+   over live content and must stay legible. Both keep their radius
+   here so a pane reads the same wherever it's used.
+   ------------------------------------------------------------------ */
+.glass {
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--glass-ring);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow), var(--glass-hi);
+}
+/* The transport well — a recessed dark slab that throws a faint signal-
+   coloured glow beneath it (the "lit console" under the recorder). */
+.well-glow {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 18px 40px -18px rgb(var(--accent) / 0.45);
+}
+.glass-pop {
+  background: var(--pop);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--glass-ring);
+  box-shadow: var(--glass-shadow), var(--glass-hi);
+}
 
 /* Armed masthead: while the open track is editable, the header chrome
    takes the signal — an opaque accent-over-panel mix with an accent
    hairline. Follows the active palette via the tokens. */
 .masthead-armed {
-  background-color: color-mix(
-    in srgb,
-    rgb(var(--accent)) 18%,
-    rgb(var(--bg-panel))
-  );
-  border-color: rgb(var(--accent) / 0.6);
+  background-color: rgb(var(--accent) / 0.07);
+  border-color: transparent;
 }
 
 /* LED-style readout (the transport/header clock) */
@@ -359,8 +430,8 @@ body {
   padding: 1px 6px;
   border: 1px solid rgb(var(--border));
   border-bottom-width: 2px;
-  border-radius: 5px;
-  background: rgb(var(--bg-panel));
+  border-radius: 6px;
+  background: var(--raised);
   color: rgb(var(--text-muted));
   font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 10px;
@@ -416,8 +487,9 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: rgb(var(--border-strong));
-  border: 2px solid rgb(var(--bg-ink));
-  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--text-muted));
@@ -435,7 +507,7 @@ body {
   ):focus-visible {
   outline: 2px solid rgb(var(--accent-ink));
   outline-offset: 1px;
-  border-radius: 5px;
+  border-radius: 8px;
 }
 
 /* Reduced motion is not optional: still any and all transitions. */
@@ -723,7 +795,7 @@ body {
   }
 }
 .ProseMirror code {
-  background: rgb(var(--bg-raised));
+  background: var(--raised);
   border-radius: 6px;
   padding: 0.1rem 0.3rem;
   font-size: 0.85em;

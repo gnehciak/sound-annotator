@@ -1676,7 +1676,7 @@ export default function App() {
         className={`flex h-[54px] items-center gap-3 border-b px-4 transition-colors duration-150 ${
           view === 'track' && !effectiveViewOnly
             ? 'masthead-armed'
-            : 'border-line bg-panel'
+            : 'border-transparent bg-transparent'
         }`}
       >
         {/* While a track is open the chrome slims to the signal dot alone —
@@ -2028,9 +2028,9 @@ export default function App() {
             /* Song-structure board: player over the section timeline, with
                the per-section Lyrics column on the right. No notes column,
                overview strip, or inspector — the timeline IS the workspace. */
-            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 animate-fade-in gap-3 px-3 pb-3">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+              <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TitleBar
                   left="Player"
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
@@ -2151,7 +2151,7 @@ export default function App() {
 
             {/* Lyrics — whole-section lyrics beside the board (wide screens).
                 Typing coalesces into one undo step per section. */}
-            <div className="hidden w-[340px] shrink-0 border-l border-line min-[980px]:flex">
+            <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
               <LyricsPanel
                 sections={current.annotations}
                 currentTime={currentTime}
@@ -2168,14 +2168,14 @@ export default function App() {
             /* Two columns: resizable player on the left, notes scroll on the right */
             <div
               ref={splitRef}
-              className={`flex min-h-0 flex-1 animate-fade-in flex-col ${splitVariant.row}`}
+              className={`flex min-h-0 flex-1 animate-fade-in flex-col gap-3 px-3 pb-3 min-[660px]:gap-0 ${splitVariant.row}`}
               style={splitStyle}
             >
               {/* Viewer panel — the flex column: absorbs window resize so the
                   notes column keeps its width. The video fills the room the short
                   overview strip leaves (--player-max-h tracks the player area). */}
               <div
-                className={`flex shrink-0 flex-col overflow-hidden border-b border-line ${splitVariant.player}`}
+                className={`glass flex shrink-0 flex-col overflow-hidden ${splitVariant.player}`}
               >
                 <TitleBar
                   left="Player"
@@ -2313,7 +2313,7 @@ export default function App() {
               {/* Notes panel — the fixed-width column (pinned to --notes-w on
                   wide screens; fills height when stacked). */}
               <div
-                className={`flex min-w-0 flex-1 flex-col ${splitVariant.notes}`}
+                className={`glass flex min-w-0 flex-1 flex-col overflow-hidden ${splitVariant.notes}`}
               >
                 <TitleBar
                   left={`Notes (${
@@ -2358,9 +2358,7 @@ export default function App() {
                 )}
                 <div
                   ref={setNotesScroll}
-                  className={`relative flex-1 overflow-y-auto ${
-                    resolvedTheme === 'light' ? 'bg-rowsel' : 'bg-note'
-                  }`}
+                  className="relative flex-1 overflow-y-auto"
                 >
                   <AnnotationList
                     annotations={visibleAnnotations}
@@ -2398,8 +2396,8 @@ export default function App() {
                   aria-label="Resize notes and inspector"
                   onPointerDown={startInspectorDrag}
                   title="Drag to resize"
-                  className={`w-1 shrink-0 cursor-col-resize touch-none transition-colors ${
-                    draggingInspector ? 'bg-accent' : 'bg-line hover:bg-accent/60'
+                  className={`w-3 shrink-0 cursor-col-resize touch-none rounded-full transition-colors ${
+                    draggingInspector ? 'bg-accent/40' : 'bg-transparent hover:bg-fg/10'
                   }`}
                 />
               )}
@@ -2409,7 +2407,7 @@ export default function App() {
                   when nothing's selected. Slides in once on mount, then stays. */}
               {showDock && (
                 <div
-                  className="dock-slide-in min-w-0 shrink-0 overflow-hidden"
+                  className="glass dock-slide-in min-w-0 shrink-0 overflow-hidden"
                   style={{
                     // Cap against the viewport so a wide inspector + a shrunk
                     // window can never starve the player+notes (they keep ≥700px).

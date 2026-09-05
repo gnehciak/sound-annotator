@@ -113,7 +113,7 @@ export default function ShareExportMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in rounded border border-line bg-panel p-3.5 shadow-lg shadow-black/40">
+        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 animate-panel-in glass-pop rounded-xl p-3.5">
           {canShare && (
             <>
               <div className="flex items-start justify-between gap-3">

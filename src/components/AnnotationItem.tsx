@@ -179,12 +179,10 @@ export default function AnnotationItem({
         // active). Dark theme: keep the single-step lift where active = row-sel
         // and resting = page.
         active
-          ? `z-20 ${theme === 'light' ? 'bg-note' : 'bg-rowsel'}`
+          ? `z-20 ${theme === 'light' ? 'bg-note' : 'bg-fg/[0.07]'}`
           : selected
-            ? `${theme === 'light' ? 'bg-note' : 'bg-rowsel'} shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]`
-            : theme === 'light'
-              ? 'bg-rowsel hover:bg-[color-mix(in_srgb,rgb(var(--row-sel)),rgb(var(--surface-note))_35%)]'
-              : 'hover:bg-rowsel/25'
+            ? `${theme === 'light' ? 'bg-note' : 'bg-fg/[0.05]'} shadow-[inset_0_0_0_1px_rgb(var(--border-strong))]`
+            : 'hover:bg-fg/[0.035]'
       } ${isPlaying && !focused ? 'opacity-50' : ''}`}
     >
       {/* progress bar along the top border — only while this note is the one
@@ -266,7 +264,7 @@ export default function AnnotationItem({
             }
             // Rounded as a unit with the fused passage segment (when present).
             className={`press inline-flex items-center gap-[5px] border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-2 py-[2.5px] font-mono text-[11.5px] font-medium tabular-nums tracking-[0.04em] hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)] ${
-              isRange && onPlayPassage ? 'rounded-l-sm border-r-0' : 'rounded-sm'
+              isRange && onPlayPassage ? 'rounded-l-full border-r-0 pl-2.5' : 'rounded-full px-2.5'
             }`}
             style={{
               ['--hue' as string]: color,
@@ -300,7 +298,7 @@ export default function AnnotationItem({
                   : 'Play just this passage — pauses at the end'
               }
               aria-label={`Play ${label} and stop at the end`}
-              className="press flex items-center rounded-r-sm border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] px-1.5 hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)]"
+              className="press flex items-center rounded-r-full border bg-[color-mix(in_srgb,var(--hue)_10%,transparent)] pl-1.5 pr-2 hover:bg-[color-mix(in_srgb,var(--hue)_20%,transparent)]"
               style={{
                 ['--hue' as string]: color,
                 borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
@@ -326,7 +324,7 @@ export default function AnnotationItem({
         {annotation.question && (
           <span
             title="Question — students answer this in the shared listening task"
-            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+            className="inline-flex items-center gap-1 rounded-full border px-[8px] py-[2.5px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
             style={{
               borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
               color: hueText(color, theme),
@@ -341,7 +339,7 @@ export default function AnnotationItem({
         {annotation.structure && annotation.sectionName && (
           <span
             title="Section note"
-            className="inline-flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
+            className="inline-flex items-center gap-1 rounded-full border px-[8px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
             style={{
               borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
               color: hueText(color, theme),
@@ -358,7 +356,7 @@ export default function AnnotationItem({
         {annotation.bar?.trim() && (
           <span
             title="Bar / rehearsal mark"
-            className="rounded-sm border border-line px-[7px] py-[2.5px] font-mono text-[10px] font-medium tracking-[0.1em] text-muted"
+            className="rounded-full border border-line px-[8px] py-[2.5px] font-mono text-[10px] font-medium tracking-[0.1em] text-muted"
           >
             {annotation.bar.trim()}
           </span>
@@ -403,13 +401,12 @@ export default function AnnotationItem({
           return (
             <span
               key={t}
-              className="flex items-center gap-1 rounded-sm border px-[7px] py-[2.5px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
-              style={{ borderColor: hueText(info.color, theme), color: hueText(info.color, theme) }}
+              className="flex items-center gap-1 rounded-full px-[8px] py-[3px] font-mono text-[10px] font-medium uppercase tracking-[0.1em]"
+              style={{
+                background: `color-mix(in srgb, ${info.color} 14%, transparent)`,
+                color: hueText(info.color, theme),
+              }}
             >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: info.color }}
-              />
               {info.label}
             </span>
           )

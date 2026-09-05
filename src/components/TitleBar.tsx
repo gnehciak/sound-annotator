@@ -17,7 +17,7 @@ export default function TitleBar({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between gap-2.5 border-b border-line bg-raised px-3.5">
+    <div className="flex h-10 shrink-0 items-center justify-between gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
       <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {left}
       </span>

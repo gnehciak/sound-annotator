@@ -168,7 +168,7 @@ export default function AdminProjects() {
               </thead>
               <tbody>
                 {shown.map((p) => (
-                  <tr key={p.id} className="border-t border-line bg-note/40">
+                  <tr key={p.id} className="border-t border-line bg-fg/[0.02]">
                     <td className="max-w-[20rem] truncate px-3 py-2" title={p.title}>
                       {p.title}
                     </td>

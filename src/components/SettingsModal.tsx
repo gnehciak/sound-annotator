@@ -63,7 +63,7 @@ export default function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/70 p-6"
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -71,9 +71,9 @@ export default function SettingsModal({
       <div
         role="dialog"
         aria-label="Settings"
-        className="flex w-full max-w-lg flex-col overflow-hidden rounded-lg border border-line-strong bg-panel"
+        className="glass-pop flex w-full max-w-lg flex-col overflow-hidden rounded-2xl"
       >
-        <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line bg-raised px-3.5">
+        <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
             Settings
           </span>
@@ -213,7 +213,7 @@ function ToggleRow({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="press flex items-start gap-3 rounded text-left transition-colors hover:bg-raised/40"
+      className="press flex items-start gap-3 rounded text-left transition-colors hover:bg-fg/[0.03]"
     >
       <span className="mt-[6px] grid h-[18px] w-[18px] shrink-0 place-items-center text-muted">
         {icon}

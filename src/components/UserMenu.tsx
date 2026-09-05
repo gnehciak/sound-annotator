@@ -55,7 +55,7 @@ export default function UserMenu({
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
         width={208}
-        className="rounded border border-line bg-panel py-1 shadow-lg"
+        className="glass-pop rounded-xl py-1"
       >
         <div className="border-b border-line px-2.5 pb-2 pt-1.5">
           <p className="truncate text-[12px] font-semibold text-fg">
