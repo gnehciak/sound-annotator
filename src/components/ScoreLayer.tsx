@@ -20,6 +20,7 @@ import {
 import type { Annotation, ProjectScore, ScoreTurn } from '../types'
 import PinLayer from './PinLayer'
 import { isScorePin, pinPageOf, visibleLayer } from '../lib/overlays'
+import { usePinTarget } from '../lib/pinTargets'
 import { openPdf, type LoadedPdf, type PageSize } from '../lib/pdf'
 import {
   DEFAULT_TURN_LEAD,
@@ -341,6 +342,7 @@ function ScoreSurface({
   /** Drawn inside the page box, so it moves and scales with the page. */
   pins?: ReactNode
 }) {
+  const pageTarget = usePinTarget('score', page)
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [box, setBox] = useState<PageSize | null>(null)
@@ -407,6 +409,9 @@ function ScoreSurface({
           // when the fit changes or the window moves, and the pin's numbers
           // never do.
           <div
+            // Also the drop box for a pin dragged out of the inspector: the
+            // page is what you aim at, and the page is what this element is.
+            ref={pageTarget}
             className="relative shrink-0"
             style={
               drawn

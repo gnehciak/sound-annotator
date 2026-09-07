@@ -210,6 +210,19 @@ slides under the window to choose which part survives the crop
 the note open in the inspector is draggable, and only then does the layer take
 the pointer at all.
 
+**A pin is placed by dragging it out of the inspector** onto the picture — and
+where it lands decides what it is anchored to, because the thing you dropped it
+on *is* the answer. `src/lib/pinTargets.ts` is a tiny registry the two drop
+boxes register themselves with (VideoOverlays the frame, ScoreLayer the drawn
+page), so the drag can ask what it is over without refs being threaded up
+through App and back down. Hit-testing is by rectangle rather than
+`elementFromPoint`, deliberately: both layers are `pointer-events: none` so
+they don't eat the player's clicks, and `elementFromPoint` skips exactly those.
+The score is tested first because its page sits *inside* the frame, so over the
+page both boxes contain the point and the page is the more specific answer.
+VideoOverlays therefore renders its (empty, inert) root even with nothing on
+it — the moment you most want to drop a pin is when the note has none.
+
 **A pin can be aimed at the score instead of the picture** (`pinAnchor:
 'score'` + `pinPage`). Its fractions are then of the *drawn page* of the PDF
 score, not of the frame, so it marks a place in the music and keeps it through
