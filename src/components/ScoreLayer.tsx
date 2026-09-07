@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -16,7 +17,9 @@ import {
   Minimize2,
   TriangleAlert,
 } from 'lucide-react'
-import type { ProjectScore, ScoreTurn } from '../types'
+import type { Annotation, ProjectScore, ScoreTurn } from '../types'
+import PinLayer from './PinLayer'
+import { isScorePin, pinPageOf, visibleLayer } from '../lib/overlays'
 import { openPdf, type LoadedPdf, type PageSize } from '../lib/pdf'
 import {
   DEFAULT_TURN_LEAD,
@@ -57,6 +60,11 @@ export default function ScoreLayer({
   transport,
   syncing = false,
   onSyncing,
+  annotations,
+  selectedId,
+  readOnly,
+  onMovePin,
+  onPageChange,
 }: {
   score: ProjectScore
   view: ScoreView
@@ -73,6 +81,19 @@ export default function ScoreLayer({
    *  score menu). Syncing implies expanded — there is no room otherwise. */
   syncing?: boolean
   onSyncing?: (on: boolean) => void
+  /**
+   * Every note, so the layer can draw the pins aimed at the *page* rather than
+   * at the frame (see NoteOverlay.pinAnchor). They live inside the page box,
+   * which is what makes them hold their place in the music through a rescale,
+   * a refit, an expand or a scroll.
+   */
+  annotations?: Annotation[]
+  /** The note open in the inspector — the only pin that can be dragged. */
+  selectedId?: string | null
+  readOnly?: boolean
+  onMovePin?: (id: string, x: number, y: number) => void
+  /** Reports the page on screen, so the host can stamp a new pin onto it. */
+  onPageChange?: (page: number) => void
 }) {
   const pdf = useScorePdf(score, reloadKey)
   const [rawPage, setPage] = useState(1)
@@ -149,6 +170,22 @@ export default function ScoreLayer({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [expanded, step, syncing, onSyncing])
 
+  // The pins aimed at this page, under the same time-and-selection rule the
+  // frame's pins follow. A score pin on another page simply isn't drawn: it is
+  // a fraction of a page box that isn't on screen, and floating it over the
+  // video at those coordinates would put it somewhere that means nothing.
+  const scorePins = useMemo(() => {
+    if (!annotations?.length || currentTime == null) return []
+    return visibleLayer(annotations, currentTime, selectedId).pins.filter(
+      (a) => isScorePin(a) && pinPageOf(a) === page,
+    )
+  }, [annotations, currentTime, selectedId, page])
+
+  // Tell the host which page is up, so a pin dropped now lands on it.
+  useEffect(() => {
+    onPageChange?.(page)
+  }, [page, onPageChange])
+
   // Room the page must not be drawn into. In the frame that's the page-nav band
   // above and the floating transport below — a page fitted edge to edge would
   // hide its title and its last system under them, which on a score is exactly
@@ -176,7 +213,21 @@ export default function ScoreLayer({
         {pdf.message}
       </ScoreMessage>
     ) : pdf.doc ? (
-      <ScoreSurface pdf={pdf.doc} page={page} fit={view.fit} pad={pad} />
+      <ScoreSurface
+        pdf={pdf.doc}
+        page={page}
+        fit={view.fit}
+        pad={pad}
+        pins={
+          <PinLayer
+            pins={scorePins}
+            selectedId={selectedId}
+            readOnly={readOnly}
+            onMovePin={onMovePin}
+            spill
+          />
+        }
+      />
     ) : (
       <ScoreMessage tone="quiet" icon={<Loader2 size={18} className="animate-spin" />}>
         Loading the score…
@@ -280,12 +331,15 @@ function ScoreSurface({
   page,
   fit,
   pad,
+  pins,
 }: {
   pdf: LoadedPdf
   page: number
   fit: ScoreView['fit']
   /** Padding classes reserving room for the chrome over this surface. */
   pad: string
+  /** Drawn inside the page box, so it moves and scales with the page. */
+  pins?: ReactNode
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -347,17 +401,27 @@ function ScoreSurface({
             {failed}
           </ScoreMessage>
         ) : (
-          <canvas
-            ref={canvasRef}
-            // White, always: a score is ink on paper, and the surrounding
-            // theme has no say in how printed music reads.
-            className="bg-white shadow-[0_2px_24px_rgb(0_0_0/0.45)]"
+          // The page box: exactly the drawn page, and positioned, so anything
+          // inside it can be placed as a percentage *of the page*. That is the
+          // whole trick behind a score-anchored pin — the box is what resizes
+          // when the fit changes or the window moves, and the pin's numbers
+          // never do.
+          <div
+            className="relative shrink-0"
             style={
               drawn
                 ? { width: `${drawn.width}px`, height: `${drawn.height}px` }
                 : { width: 0, height: 0 }
             }
-          />
+          >
+            <canvas
+              ref={canvasRef}
+              // White, always: a score is ink on paper, and the surrounding
+              // theme has no say in how printed music reads.
+              className="block h-full w-full bg-white shadow-[0_2px_24px_rgb(0_0_0/0.45)]"
+            />
+            {drawn && pins}
+          </div>
         )}
       </div>
     </div>

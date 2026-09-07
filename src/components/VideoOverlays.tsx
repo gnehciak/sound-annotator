@@ -1,15 +1,13 @@
 import {
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Move } from 'lucide-react'
 import type { Annotation } from '../types'
-import { noteLabel } from '../lib/format'
-import { colorForId, hueOnDark } from '../lib/noteColors'
-import { coverPosition, isFilled, pinCaption, visibleLayer } from '../lib/overlays'
+import PinLayer from './PinLayer'
+import { coverPosition, isFilled, isScorePin, visibleLayer } from '../lib/overlays'
 
 interface Props {
   annotations: Annotation[]
@@ -61,12 +59,6 @@ export default function VideoOverlays({
   onMoveCover,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
-  // Live position while a pin is under the pointer. Held locally rather than
-  // written through on every move: a drag would otherwise push a project save
-  // (and an undo entry) per pointer event. Committed once, on release.
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(
-    null,
-  )
   // Same idea for the cover's crop, which needs the grab point too: the image
   // follows the pointer from wherever it was picked up, rather than jumping.
   const [coverDrag, setCoverDrag] = useState<{
@@ -86,7 +78,7 @@ export default function VideoOverlays({
   const layer = visibleLayer(annotations, currentTime, selectedId)
   const coverUrl = layer.cover?.overlay?.coverUrl
   const cover = coverUrl && !broken.has(coverUrl) ? layer.cover : null
-  const pins = layer.pins
+  const pins = layer.pins.filter((a) => !isScorePin(a))
   const editable = !readOnly
 
   // A filled cover on the open note can be aimed; a contained one has no
@@ -94,46 +86,8 @@ export default function VideoOverlays({
   const coverArmed =
     !!cover && editable && !!onMoveCover && cover.id === selectedId && isFilled(cover)
 
-  const posOf = (a: Annotation) =>
-    drag?.id === a.id
-      ? { x: drag.x, y: drag.y }
-      : { x: a.overlay?.pinX ?? 0.5, y: a.overlay?.pinY ?? 0.5 }
-
   const cropOf = (a: Annotation) =>
     coverDrag?.id === a.id ? { x: coverDrag.x, y: coverDrag.y } : coverPosition(a)
-
-  const fractionAt = (clientX: number, clientY: number) => {
-    const box = frameRef.current?.getBoundingClientRect()
-    if (!box || box.width === 0 || box.height === 0) return null
-    return {
-      x: clamp01((clientX - box.left) / box.width),
-      y: clamp01((clientY - box.top) / box.height),
-    }
-  }
-
-  // ---- pin drag: the dot goes wherever the pointer is ----------------------
-
-  const startPinDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
-    if (!editable || !onMovePin || a.id !== selectedId) return
-    e.preventDefault()
-    e.stopPropagation()
-    capture(e)
-    const at = fractionAt(e.clientX, e.clientY)
-    setDrag({ id: a.id, ...(at ?? posOf(a)) })
-  }
-
-  const movePinDrag = (e: ReactPointerEvent<HTMLElement>) => {
-    if (!drag) return
-    const at = fractionAt(e.clientX, e.clientY)
-    if (at) setDrag({ id: drag.id, ...at })
-  }
-
-  const endPinDrag = (e: ReactPointerEvent<HTMLElement>) => {
-    if (!drag) return
-    release(e)
-    onMovePin?.(drag.id, drag.x, drag.y)
-    setDrag(null)
-  }
 
   // ---- cover drag: the picture slides under a fixed window -----------------
   // Inverted, because `object-position` names the part of the *image* pinned to
@@ -249,104 +203,15 @@ export default function VideoOverlays({
         </>
       )}
 
-      {pins.map((a) => {
-        const { x, y } = posOf(a)
-        const hue = a.color ?? colorForId(a.id)
-        // The layer is dark whatever the theme, so the hue takes the
-        // dark-surface treatment even on the light page.
-        const ink = hueOnDark(hue)
-        const caption = pinCaption(a)
-        const armed = editable && !!onMovePin && a.id === selectedId
-        // The box opens away from the nearer edge and is capped at the distance
-        // to the far one, so a long note wraps inside the frame instead of
-        // running off the picture — then capped again at a readable measure,
-        // because a caption spanning half a lecture-hall screen is a wall of
-        // text, not an annotation. Both caps are percentages of the frame,
-        // which is why the box is a sibling of the dot rather than its child:
-        // a percentage needs the frame as its containing block.
-        const flipX = x > 0.55
-        const flipY = y > 0.72
-        const pct = (n: number) => `${n * 100}%`
-        // Level the label row with the dot, so the leader runs straight into it.
-        const near = (v: string) => `calc(${v} - 11px)`
-        const cardStyle: CSSProperties = {
-          left: flipX ? undefined : `calc(${pct(x)} + 20px)`,
-          right: flipX ? `calc(${pct(1 - x)} + 20px)` : undefined,
-          top: flipY ? undefined : near(pct(y)),
-          bottom: flipY ? near(pct(1 - y)) : undefined,
-          maxWidth: `min(calc(${pct(flipX ? x : 1 - x)} - 28px), 21rem)`,
-          ['--hue' as string]: ink,
-        }
-        return (
-          <div key={a.id} className="contents">
-            <div
-              role={armed ? 'button' : undefined}
-              tabIndex={armed ? 0 : undefined}
-              aria-label={
-                armed ? 'Drag to move this pin, or nudge it with the arrow keys' : undefined
-              }
-              title={armed ? 'Drag to move — arrow keys nudge, Shift for bigger steps' : undefined}
-              onPointerDown={startPinDrag(a)}
-              onPointerMove={movePinDrag}
-              onPointerUp={endPinDrag}
-              onPointerCancel={endPinDrag}
-              onKeyDown={nudge(a, armed, { x, y }, onMovePin, 1)}
-              style={{ left: pct(x), top: pct(y) }}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 animate-fade-in rounded-full p-2 ${
-                armed ? 'pointer-events-auto cursor-grab touch-none active:cursor-grabbing' : ''
-              }`}
-            >
-              {/* The dot: a solid core in the note's hue, ringed in white so it
-                  reads against any frame, over a breathing halo of the same
-                  hue. The halo is two elements, not one — `animate-now-pulse`
-                  drives opacity to 1 at rest, so its dimming has to live on a
-                  wrapper the animation doesn't touch. */}
-              <span className="absolute inset-0 rounded-full opacity-30">
-                <span
-                  className="block h-full w-full animate-now-pulse rounded-full"
-                  style={{ backgroundColor: hue }}
-                />
-              </span>
-              <span
-                className="relative block h-2.5 w-2.5 rounded-full ring-2 ring-white/90"
-                style={{ backgroundColor: hue, boxShadow: '0 2px 10px rgb(0 0 0 / 0.6)' }}
-              />
-            </div>
-
-            {(caption || armed) && (
-              <>
-                <span
-                  aria-hidden
-                  className="on-video-leader animate-fade-in"
-                  style={{
-                    left: flipX ? undefined : `calc(${pct(x)} + 6px)`,
-                    right: flipX ? `calc(${pct(1 - x)} + 6px)` : undefined,
-                    top: pct(y),
-                    ['--hue' as string]: ink,
-                  }}
-                />
-                <div
-                  style={cardStyle}
-                  className="on-video-pop absolute w-max animate-fade-in"
-                >
-                  <span className="on-video-pop__label">
-                    {noteLabel(a.start, a.end)}
-                  </span>
-                  <div className="on-video-pop__body">
-                    {caption ? (
-                      <p className="on-video-pop__text">{caption}</p>
-                    ) : (
-                      <p className="on-video-pop__text text-white/45">
-                        Type the note&rsquo;s text to caption this pin
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )
-      })}
+      {/* Frame-anchored pins only. A pin aimed at the score's page is drawn
+          by ScoreLayer instead, inside the page box, so that it scales and
+          scrolls with the page rather than sitting still on the picture. */}
+      <PinLayer
+        pins={pins}
+        selectedId={selectedId}
+        readOnly={readOnly}
+        onMovePin={onMovePin}
+      />
     </div>
   )
 }

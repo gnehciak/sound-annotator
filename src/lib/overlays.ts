@@ -37,6 +37,19 @@ export function coverPosition(a: Annotation): { x: number; y: number } {
 export const hasPin = (a: Annotation): boolean =>
   a.overlay?.pinX != null && a.overlay?.pinY != null
 
+/**
+ * Whether the pin is aimed at the score's page rather than the video frame.
+ * The two are drawn by different components — the frame's by VideoOverlays,
+ * the score's by ScoreLayer, inside the page box so it scales with the page —
+ * so every consumer of a pin list has to pick a side.
+ */
+export const isScorePin = (a: Annotation): boolean =>
+  hasPin(a) && a.overlay?.pinAnchor === 'score'
+
+/** The score page a pin lives on, 1-based; page 1 unless it says otherwise. */
+export const pinPageOf = (a: Annotation): number =>
+  Math.max(1, Math.round(a.overlay?.pinPage ?? 1))
+
 /** True when the note puts anything at all on the picture. */
 export const hasOverlay = (a: Annotation): boolean => hasCover(a) || hasPin(a)
 

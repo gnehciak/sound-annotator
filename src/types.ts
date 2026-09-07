@@ -100,13 +100,33 @@ export interface NoteOverlay {
   coverX?: number
   coverY?: number
   /**
-   * Pin position as fractions of the frame, 0–1 from the top-left. Both are
-   * set together or not at all — their absence is what "this note has no pin"
-   * means. Fractions rather than pixels so a pin holds its spot on the picture
-   * at every player size.
+   * Pin position as fractions of whatever it is anchored to, 0–1 from the
+   * top-left. Both are set together or not at all — their absence is what
+   * "this note has no pin" means. Fractions rather than pixels so a pin holds
+   * its spot at every player size.
    */
   pinX?: number
   pinY?: number
+  /**
+   * What `pinX`/`pinY` are fractions *of*. Absent — the default — means the
+   * video frame, so the pin sits at a fixed place on the picture whatever is
+   * playing behind it. `'score'` means the drawn page of the PDF score
+   * instead (see lib/score.ts): the pin then belongs to a place in the music
+   * rather than a place on screen, and it holds that place through every
+   * rescale, refit, expand and scroll of the page, because the fractions are
+   * of the page box and the page box is what moves.
+   *
+   * A score-anchored pin draws only while the score is showing `pinPage` —
+   * with the score turned off, or on another page, there is nothing for it to
+   * be a fraction of, and a pin floating over the video at a spot that means
+   * nothing there would be worse than no pin.
+   */
+  pinAnchor?: 'score'
+  /**
+   * Which page of the score the pin lives on, 1-based. Only meaningful with
+   * `pinAnchor: 'score'`; absent there means page 1.
+   */
+  pinPage?: number
   /**
    * Seconds the layer stays up for a note with no `end`. Ignored on a note that
    * has a span — that span is the window. Defaults to OVERLAY_HOLD.

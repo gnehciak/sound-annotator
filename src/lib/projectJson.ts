@@ -183,6 +183,14 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
   if (pinX != null && pinY != null) {
     overlay.pinX = Math.min(1, Math.max(0, pinX))
     overlay.pinY = Math.min(1, Math.max(0, pinY))
+    // What those fractions are *of*. Only meaningful alongside a pin, so it
+    // lives in here: an anchor on a note with no pin would be a setting for
+    // something that isn't there.
+    if (o.pinAnchor === 'score') {
+      overlay.pinAnchor = 'score'
+      const pinPage = num(o.pinPage)
+      if (pinPage != null && pinPage >= 1) overlay.pinPage = Math.round(pinPage)
+    }
   }
   const hold = num(o.hold)
   if (hold != null && hold > 0) overlay.hold = hold

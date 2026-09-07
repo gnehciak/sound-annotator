@@ -12,7 +12,9 @@ import {
   hasPin,
   hasOverlay,
   isFilled,
+  isScorePin,
   patchOverlay,
+  pinPageOf,
 } from '../lib/overlays'
 
 interface Props {
@@ -26,6 +28,13 @@ interface Props {
     blob: Blob,
     onProgress?: (fraction: number) => void,
   ) => Promise<string>
+  /**
+   * The score page currently on screen, when the track has a score at all.
+   * Absent means there is nothing to anchor a pin to but the frame.
+   */
+  scorePage?: number
+  /** The track has a score, but it's switched off — so a score pin won't show. */
+  scoreHidden?: boolean
 }
 
 /**
@@ -49,6 +58,8 @@ export default function NoteOverlayControls({
   annotation,
   onUpdate,
   uploadImage,
+  scorePage,
+  scoreHidden,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<number | null>(null)
@@ -115,10 +126,27 @@ export default function NoteOverlayControls({
     // where it gets aimed (drag the dot).
     patch(
       hasPin(annotation)
-        ? { pinX: undefined, pinY: undefined }
+        ? { pinX: undefined, pinY: undefined, pinAnchor: undefined, pinPage: undefined }
         : { pinX: 0.5, pinY: 0.5 },
     )
   }
+
+  const pinnedToScore = isScorePin(annotation)
+  const pinPage = pinPageOf(annotation)
+
+  /**
+   * Move the pin between the two things it can be a fraction of. The
+   * fractions themselves are kept: the frame and a page are different shapes,
+   * so nothing could carry the position across faithfully, and a pin that
+   * stays where its numbers say is easier to reason about than one that jumps
+   * somewhere computed. Dead centre stays dead centre.
+   */
+  const anchorTo = (score: boolean) =>
+    patch(
+      score
+        ? { pinAnchor: 'score', pinPage: scorePage ?? 1 }
+        : { pinAnchor: undefined, pinPage: undefined },
+    )
 
   return (
     <div
@@ -272,14 +300,66 @@ export default function NoteOverlayControls({
           }`}
         >
           <MapPin size={14} className="shrink-0" />
-          Pin a caption on the frame
+          Pin a caption
         </span>
         <span className="switch" data-on={hasPin(annotation) || undefined} />
       </button>
       {hasPin(annotation) && (
-        <p className="text-[11.5px] leading-relaxed text-muted/80">
-          Drag the dot on the video to aim it. This note’s text is its caption.
-        </p>
+        <>
+          {/* What the pin's position is a fraction *of*. On the frame it holds
+              a place on the picture; on the score it holds a place in the
+              music, and rides every rescale, refit and scroll of the page. */}
+          <div className="seg grid grid-cols-2">
+            <button
+              type="button"
+              onClick={() => anchorTo(false)}
+              aria-pressed={!pinnedToScore}
+              title="The pin holds its place on the picture"
+              className="seg-item"
+            >
+              On the frame
+            </button>
+            <button
+              type="button"
+              onClick={() => anchorTo(true)}
+              aria-pressed={pinnedToScore}
+              disabled={scorePage == null}
+              title={
+                scorePage == null
+                  ? 'Attach a PDF score to this track first'
+                  : 'The pin holds its place on the page, however the score is sized or moved'
+              }
+              className="seg-item"
+            >
+              On the score
+            </button>
+          </div>
+          <p className="text-[11.5px] leading-relaxed text-muted/80">
+            {!pinnedToScore ? (
+              <>Drag the dot on the video to aim it. This note’s text is its caption.</>
+            ) : (
+              <>
+                Anchored to <strong className="font-semibold">page {pinPage}</strong> of
+                the score — drag it on the page to aim it.{' '}
+                {scoreHidden
+                  ? 'The score is switched off, so it isn’t showing.'
+                  : scorePage != null && scorePage !== pinPage
+                    ? `The score is on page ${scorePage}.`
+                    : ''}
+              </>
+            )}
+          </p>
+          {pinnedToScore && scorePage != null && scorePage !== pinPage && (
+            <button
+              type="button"
+              onClick={() => patch({ pinPage: scorePage })}
+              className="btn-ghost btn-sm press w-full justify-center"
+            >
+              <Crosshair size={12} />
+              Move it to page {scorePage}
+            </button>
+          )}
+        </>
       )}
 
       {/* ---- how long it stays up ----
