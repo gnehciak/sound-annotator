@@ -158,6 +158,21 @@ imported files silently lose it. Primitive-valued `settings` keys (including
 the project `kind`, e.g. song-structure boards) pass through automatically.
 Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
 
+**The schema is published, so it can't be allowed to go stale.**
+`public/track-schema.md` is the human- and LLM-readable spec of that envelope,
+served raw at `/track-schema.md` (a `vercel.json` header — and a small dev
+plugin in `vite.config.ts` — force `text/plain; charset=utf-8`, or the em
+dashes come back as mojibake). The Import menu on the home page links it and
+copies its URL, because the point of it is that a teacher with a listening
+guide and no export to copy hands the link to an AI assistant and gets a
+valid track file back. `scripts/check-schema-doc.mjs` runs as the first step
+of `npm run build`, so a field added to `Project` / `ProjectSource` /
+`Annotation` / `NoteBlock` / `ProjectSettings` without a row in that doc
+fails the deploy. It also checks the reverse (a documented field that no
+longer exists) and that every documented, exported field is actually named in
+`projectJson.ts` — the maintenance contract, enforced rather than trusted.
+The doc's `<!-- fields: X -->` markers are what the check reads.
+
 ## Design Context
 
 This project uses **impeccable** for design work. Two root docs hold the

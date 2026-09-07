@@ -1,7 +1,9 @@
 // NOTE — JSON import/export contract: a track's persisted *content* (title,
 // source, annotations, settings) round-trips through the portable JSON file in
-// lib/projectJson.ts. When you add or change a persisted field on Project,
-// ProjectSource, Annotation, or ProjectSettings, update projectJson.ts too:
+// lib/projectJson.ts, and is described for the outside world in
+// public/track-schema.md. When you add or change a persisted field on Project,
+// ProjectSource, Annotation, or ProjectSettings, update projectJson.ts *and*
+// that doc — scripts/check-schema-doc.mjs fails `npm run build` otherwise:
 // the export envelope carries content fields only (never account/sharing
 // state), and the import sanitizer must explicitly accept the new field or an
 // imported file silently loses it. Primitive-valued ProjectSettings keys pass
