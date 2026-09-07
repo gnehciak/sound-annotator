@@ -59,13 +59,16 @@ silently opt them out of their own trash. Permanence is always asked for
 explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
 live rows only.
 
-**The Hobby plan caps a deployment at 12 Serverless Functions, and `/api` is at
-exactly 12.** That's why restore/purge are query verbs on `[id]/index.ts`, and
-the Drive byte proxy a query verb on `browse.ts`, rather than routes of their
-own. Adding any new `/api/*` file fails the
-deploy at `patchBuild` (`exceeded_serverless_functions_per_deployment`, and the
-build log looks *successful* — the error is only in the deployment's API
-record); fold new endpoints into an existing function, or upgrade to Pro.
+**The 12-function ceiling is gone — the team is on Pro (verified 2026-09-07),
+where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
+which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
+proxy a query verb on `browse.ts` rather than routes of their own — and `/api`
+still sits at exactly 12 files. Keep that shape where it reads well (the verbs
+are genuinely about the same resource), but a new endpoint no longer *has* to be
+folded into an existing function. If this ever drops back to Hobby, the symptom
+returns as a `patchBuild` failure
+(`exceeded_serverless_functions_per_deployment`) whose build log looks
+*successful* — the error lives only in the deployment's API record.
 
 **Guests** (students, who have no accounts) are the third kind of caller: the
 landing page's paste field (`src/components/LandingPage.tsx`) mints one project
