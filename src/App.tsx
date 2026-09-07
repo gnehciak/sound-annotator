@@ -2399,8 +2399,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  {!isVideoSource(current.source) && transport}
-                  <TransportHints readOnly={effectiveViewOnly} />
+                  {/* Video: the transport floats inside the frame, so the
+                      hints belong out here. Audio docks the transport, which
+                      renders its own hints — don't double them up. */}
+                  {isVideoSource(current.source) ? (
+                    <TransportHints readOnly={effectiveViewOnly} />
+                  ) : (
+                    transport
+                  )}
 
                   {/* Stem mixer — only on analyzed tracks (section detection
                       saved their separated stems). Playback-only, so it stays
