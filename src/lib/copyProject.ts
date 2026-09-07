@@ -27,12 +27,29 @@ import { newId } from './ids'
 const IMAGE_URL_RE =
   /https:\/\/[^\s"'<>]*\.public\.blob\.vercel-storage\.com\/users\/[^\s"'<>]*\/images\/[^\s"'<>]+/g
 
+/**
+ * An image carried *inside* the HTML as a base64 payload rather than as a link
+ * to bytes we already host. Nothing in the app writes these — the editor
+ * uploads what you paste — but a hand-authored track file has nowhere else to
+ * put an image, so a `data:` URI is the only way one can arrive self-contained.
+ * They're re-hosted exactly like a blob URL below, which is the point: the
+ * inline copy exists only until the import turns it into a real note image.
+ */
+const DATA_IMAGE_RE = /data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+/g
+
 /** TipTap escapes `&` in attribute values — the form a URL takes inside HTML. */
 const escAmp = (url: string) => url.replaceAll('&', '&amp;')
 
-/** Every image download URL referenced in the HTML, decoded back to raw form. */
+/**
+ * Every image source referenced in the HTML, decoded back to raw form: blob
+ * URLs we host, and inline `data:` payloads a hand-authored file brought with
+ * it. Both are fetchable with `fetch()`, which is all the copy below needs.
+ */
 function imageUrlsIn(html: string): string[] {
-  return (html.match(IMAGE_URL_RE) ?? []).map((u) => u.replaceAll('&amp;', '&'))
+  return [
+    ...(html.match(IMAGE_URL_RE) ?? []).map((u) => u.replaceAll('&amp;', '&')),
+    ...(html.match(DATA_IMAGE_RE) ?? []),
+  ]
 }
 
 /** Swap old image URLs for the re-uploaded ones (both escaped and raw forms). */

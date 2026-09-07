@@ -710,29 +710,48 @@ function ImportTrackButton({
   onImport: (file: File) => Promise<void>
   variant: 'header' | 'hero'
 }) {
-  const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  // null when idle; otherwise how far through a run of files we are. A single
+  // file is just a run of one, so there's no second code path for the common
+  // case — the label only mentions counts when there's more than one.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const busy = progress !== null
 
-  async function handleFile(file: File) {
-    setBusy(true)
+  /**
+   * Import every chosen file, one at a time. Sequential on purpose: each
+   * import re-uploads its images, and a whole folder of kits fired at once
+   * would open dozens of parallel uploads. One bad file doesn't stop the run
+   * — the failures are collected and reported together at the end, so
+   * importing 30 tracks never becomes 30 dialogs.
+   */
+  async function handleFiles(files: File[]) {
+    const failed: string[] = []
+    setProgress({ done: 0, total: files.length })
     try {
-      await onImport(file)
-    } catch (err) {
-      console.error('Import failed:', err)
-      const detail = err instanceof Error && err.message ? err.message : ''
-      alert(
-        detail
-          ? `Import failed — ${detail}`
-          : 'Import failed — check the file and try again.',
-      )
+      for (const [i, file] of files.entries()) {
+        try {
+          await onImport(file)
+        } catch (err) {
+          console.error('Import failed:', file.name, err)
+          const detail = err instanceof Error && err.message ? err.message : ''
+          failed.push(detail ? `${file.name} — ${detail}` : file.name)
+        }
+        setProgress({ done: i + 1, total: files.length })
+      }
     } finally {
-      setBusy(false)
+      setProgress(null)
       // Re-arm the picker so re-choosing the same file fires change again.
       if (inputRef.current) inputRef.current.value = ''
     }
+    if (failed.length > 0)
+      alert(
+        `${failed.length} of ${files.length} ${
+          files.length === 1 ? 'file' : 'files'
+        } couldn’t be imported:\n\n${failed.join('\n')}`,
+      )
   }
 
   // Handlers live in the component body, not inline in the rows below: a
@@ -759,12 +778,13 @@ function ImportTrackButton({
         ref={inputRef}
         type="file"
         accept=".json,application/json"
+        multiple
         className="hidden"
         aria-hidden
         tabIndex={-1}
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void handleFile(f)
+          const files = [...(e.target.files ?? [])]
+          if (files.length > 0) void handleFiles(files)
         }}
       />
       <button
@@ -774,7 +794,7 @@ function ImportTrackButton({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Import a track from a JSON file, or read the file schema"
+        title="Import tracks from JSON files, or read the file schema"
         className={`btn-ghost press shrink-0 disabled:cursor-wait ${
           variant === 'hero' ? 'px-4 py-2 text-[11px]' : ''
         }`}
@@ -785,7 +805,11 @@ function ImportTrackButton({
           <FileUp size={13} />
         )}
         <span className={variant === 'hero' ? '' : 'hidden sm:inline'}>
-          {busy ? 'Importing…' : 'Import'}
+          {!progress
+            ? 'Import'
+            : progress.total > 1
+              ? `Importing ${progress.done + 1}/${progress.total}…`
+              : 'Importing…'}
         </span>
         <ChevronDown
           size={11}
@@ -801,8 +825,8 @@ function ImportTrackButton({
         <div className="py-1">
           <MenuRow
             icon={<FileUp size={14} />}
-            title="Choose a file…"
-            detail="Bring in a track exported as JSON."
+            title="Choose files…"
+            detail="Bring in tracks exported as JSON — one file or many."
             onClick={chooseFile}
           />
           <div className="my-1 border-t border-line/60" />

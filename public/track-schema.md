@@ -25,7 +25,9 @@ imported it.
 > ...
 > ```
 
-Then save the file and use **Import** on the Sound Annotator home page.
+Then save the file and use **Import** on the Sound Annotator home page. The
+picker takes several files at once, so a whole set of tracks imports in one
+go.
 
 ---
 
@@ -210,9 +212,23 @@ is stripped when the note is opened for editing.
 Escape `&`, `<`, `>` in text as `&amp;`, `&lt;`, `&gt;`. Curly quotes, dashes
 and accented characters are fine as literal UTF-8.
 
-**Images:** don't write `<img>` tags. Note images are hosted by the app under
-the importer's own storage; a file can't bring its own bytes. Add images in the
-editor after importing.
+**Images:** a track file can carry its own pictures — score excerpts, diagrams,
+a photo of a page — as a base64 `data:` URI:
+
+```html
+<p>The second subject, in the relative major:</p>
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg…">
+```
+
+`png`, `jpeg`, `gif` and `webp` are accepted. On import each one is uploaded
+into the importer's own image storage and the tag is rewritten to point there,
+so the inline copy exists only in transit — the imported track holds ordinary
+note images, and a later export writes them back out as links, not base64.
+
+Keep them lean: base64 inflates bytes by about a third, and the whole file
+passes through the browser in one piece. Downscale to roughly the width a note
+displays (~1000px is generous) before encoding. A handful of images per note
+is fine; a hundred full-page scans in one file is not.
 
 ---
 
@@ -397,8 +413,9 @@ read, which is why authoring `contentHtml` is enough.
 - No `clipStart` unless the timestamps were written relative to it.
 - `videoId` (YouTube) or `driveFileId` (Drive) is present.
 - Note text is HTML wrapped in `<p>`, not raw prose or Markdown.
-- No `id` fields, no `<img>` tags, no `overlay.coverUrl`, no `score.url`, no
-  ownership or sharing fields.
+- Any images are `data:` URIs on an `<img>` tag, downscaled first.
+- No `id` fields, no `overlay.coverUrl`, no `score.url`, no ownership or
+  sharing fields.
 - A `score`, if any, is `kind: "drive"` with a `driveFileId`, and its `turns`
   are in track seconds with 1-based pages.
 
