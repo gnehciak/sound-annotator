@@ -114,6 +114,7 @@ import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
 import { newId } from './lib/ids'
+import { useIsAdmin } from './lib/admin'
 
 const uid = () => newId()
 const now = () => Date.now()
@@ -141,6 +142,9 @@ const STEP_WINDOW = 1200
 
 export default function App() {
   const { user, isGuest, signOut } = useAuth()
+  // Display gate for admin-only affordances (Detect sections); the server
+  // re-checks on every call — see lib/admin.ts.
+  const isAdmin = useIsAdmin()
   // Color theme controller (System / Light / Dark mode + signal palette).
   // Owns <html data-theme> and <html data-palette>.
   const {
@@ -2089,12 +2093,13 @@ export default function App() {
                         </a>
                       )}
                       {/* AI section detection — it fills this very board.
-                          Not for guests: /analyze is Clerk-only (it spends an
-                          account's Replicate credit and writes stems under
-                          users/{uid}/), so a guest's press could only 401.
-                          Guests reach a structure board from the landing
-                          page's workspace switch. */}
+                          Admin-only: /analyze spends a Replicate run and
+                          writes ~130 MB of stems per track, so it answers 404
+                          to everyone else — a guest (no account at all) and an
+                          ordinary owner alike. Guests still reach a structure
+                          board from the landing page's workspace switch. */}
                       {user &&
+                        isAdmin &&
                         !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&
@@ -2253,12 +2258,13 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
-                      {/* Detection is the owner's call (it spends their
-                          Replicate credit): audio tracks need their cloud
-                          URL; YouTube tracks prompt for a one-shot analysis
-                          upload inside the button. A guest has no account to
-                          spend from, and /analyze is Clerk-only. */}
+                      {/* Detection is admin-only (each press is a paid
+                          Replicate run plus ~130 MB of stems): audio tracks
+                          need their cloud URL; YouTube tracks prompt for a
+                          one-shot analysis upload inside the button. Hiding it
+                          is courtesy — the endpoint 404s regardless. */}
                       {user &&
+                        isAdmin &&
                         !isGuest &&
                         !effectiveViewOnly &&
                         !isForeign &&

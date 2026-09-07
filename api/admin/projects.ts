@@ -20,6 +20,15 @@ export async function GET(request: Request): Promise<Response> {
   const uid = await getUid(request)
   if (!uid || !(await isAdmin(uid))) return err(404, 'Not found')
 
+  // ?whoami=1 — "may I see the console?", asked by the UI so it knows whether
+  // to offer the button at all (src/lib/admin.ts). Same allowlist, same 404,
+  // but it skips the full listing: this is asked on every page load, and the
+  // answer is one boolean. It is a *display* hint only — every admin-gated
+  // route re-checks server-side, so a client that lies to itself gains
+  // nothing.
+  if (new URL(request.url).searchParams.get('whoami') === '1')
+    return json({ admin: true })
+
   // Trashed projects are left out: this console moderates what's live, and a
   // trashed row is already dark everywhere a student could reach it. Listing
   // one beside live projects would say it's still out there when it isn't —
