@@ -208,7 +208,23 @@ itself**, by dragging: a pin goes where the pointer goes, and a `Fill` cover
 slides under the window to choose which part survives the crop
 (`coverX`/`coverY`, CSS `object-position`, absent meaning dead centre). Only
 the note open in the inspector is draggable, and only then does the layer take
-the pointer at all. Cover images arrive by picker *or* by dropping a file on
+the pointer at all.
+
+**A pin can be aimed at the score instead of the picture** (`pinAnchor:
+'score'` + `pinPage`). Its fractions are then of the *drawn page* of the PDF
+score, not of the frame, so it marks a place in the music and keeps it through
+every rescale, refit, expand and scroll — which is not arithmetic anyone
+maintains: the pin is a percentage inside the page box, and the page box is
+what resizes. That is why `ScoreLayer` wraps its canvas in a sized `relative`
+div, and why both kinds of pin are drawn by one `PinLayer` — every position in
+it is a percentage, so the same component serves two boxes. VideoOverlays
+draws `!isScorePin` and ScoreLayer draws the rest, filtered to the page on
+screen: a score pin whose page isn't up, or whose score is off, isn't drawn at
+all, because there is no page box for it to be a fraction of and a dot
+floating over the video at those coordinates would mean nothing there. The one
+thing `PinLayer` needs told is `spill`, since a caption's width cap is a
+percentage of its box — right for a wide frame, and a column of one-word lines
+on a portrait page. Cover images arrive by picker *or* by dropping a file on
 the inspector's "On the video" section, and every one is downscaled to 1600px
 and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
 carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a

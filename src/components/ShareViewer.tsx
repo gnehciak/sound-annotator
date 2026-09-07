@@ -517,6 +517,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         reloadKey={scoreReload}
         currentTime={currentTime}
         onSeek={seek}
+        // A reader sees the score's pins where the owner put them, and moves
+        // nothing — no onMovePin, same as the frame's pins.
+        annotations={annotations}
+        readOnly
       />
     ) : null
   const scoreButton = (

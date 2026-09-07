@@ -10,9 +10,9 @@
 // have to remember to update:
 //
 //   1. Every property on Project / ProjectSource / Annotation / NoteBlock /
-//      ProjectSettings in src/types.ts is documented in the doc, either in its
-//      interface's field table or (for Project's row state) in the explicit
-//      "deliberately not in the file" table.
+//      NoteOverlay / ProjectSettings in src/types.ts is documented in the doc,
+//      either in its interface's field table or (for Project's row state) in
+//      the explicit "deliberately not in the file" table.
 //   2. Nothing is documented that no longer exists — catches renames.
 //   3. Every documented, *exported* field is actually named in
 //      src/lib/projectJson.ts, so the maintenance contract at the top of that
@@ -32,7 +32,14 @@ const TYPES = 'src/types.ts'
 const JSON_LIB = 'src/lib/projectJson.ts'
 
 /** Interfaces whose shape the doc must cover, in the order they're reported. */
-const COVERED = ['Project', 'ProjectSource', 'Annotation', 'NoteBlock', 'ProjectSettings']
+const COVERED = [
+  'Project',
+  'ProjectSource',
+  'Annotation',
+  'NoteBlock',
+  'NoteOverlay',
+  'ProjectSettings',
+]
 /** Interfaces whose fields need no line in the sanitizer (see note 3 above). */
 const SANITIZER_EXEMPT = new Set(['ProjectSettings'])
 

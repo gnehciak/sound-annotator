@@ -259,18 +259,33 @@ single exception, and it is validated field by field.
 A note can take over the picture while it is on screen. Two independent pieces,
 either or both, on the note's `overlay` object:
 
+<!-- fields: NoteOverlay -->
+
 | field | type | notes |
 | --- | --- | --- |
-| `pinX` | number | Where the pin's dot sits across the frame, `0`–`1` from the left. |
-| `pinY` | number | And down the frame, `0`–`1` from the top. |
+| `pinX` | number | Where the pin's dot sits across its anchor, `0`–`1` from the left. |
+| `pinY` | number | And down it, `0`–`1` from the top. |
+| `pinAnchor` | string | What those fractions are *of*. Omit for the video frame; `"score"` anchors the pin to the PDF score's page instead — see below. |
+| `pinPage` | number | Which score page the pin lives on, 1-based. Only with `pinAnchor: "score"`; defaults to page 1. |
 | `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
 | `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
 | `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
 | `coverX` | number | Which part of a *filled* cover survives the crop, `0`–`1` across. Omit for centred. |
 | `coverY` | number | And down. Omit for centred. |
 
+<!-- /fields -->
+
 `pinX` and `pinY` only mean anything **together** — a pin with one of them is
-dropped rather than pinned to a corner. The dot is captioned with the note's own
+dropped rather than pinned to a corner.
+
+**A pin can be aimed at the score instead of the picture.** With
+`pinAnchor: "score"` the fractions are of the *drawn page* of the track's PDF
+score (§9), not of the frame, so the pin holds its place in the music however
+the score is sized, refitted, expanded or scrolled. It draws only while the
+score is showing its `pinPage`: with the score off, or on another page, there
+is no page box for it to be a fraction of, and a dot floating over the video
+at those coordinates would mean nothing there. A pin with `pinAnchor: "score"`
+on a track that has no `settings.score` simply never appears. The dot is captioned with the note's own
 text, clamped to three lines on the frame, so a note that is also a pin wants a
 first sentence that reads on its own.
 

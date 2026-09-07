@@ -72,6 +72,11 @@ interface Props {
    * waveform is the picture and must stay uncovered.
    */
   allowOverlays?: boolean
+  /** The score page on screen, when the track has a score (see the pin anchor
+   *  in NoteOverlayControls). Absent means there is no score to pin to. */
+  scorePage?: number
+  /** The track has a score, but it's switched off. */
+  scoreHidden?: boolean
 }
 
 /**
@@ -97,6 +102,8 @@ export default function NoteInspector({
   uploadImage,
   allowImages = true,
   allowOverlays = false,
+  scorePage,
+  scoreHidden,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
@@ -300,6 +307,8 @@ export default function NoteInspector({
           annotation={annotation}
           onUpdate={onUpdate}
           uploadImage={uploadImage}
+          scorePage={scorePage}
+          scoreHidden={scoreHidden}
         />
       )}
 

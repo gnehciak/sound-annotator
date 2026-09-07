@@ -539,6 +539,9 @@ export default function App() {
   const [scoreReload, setScoreReload] = useState(0)
   // The sync workspace (timing the page turns) — open on one track at a time.
   const [syncingScore, setSyncingScore] = useState(false)
+  // The score page on screen, reported up by the layer. A pin anchored to the
+  // score has to land on a page, and this is which one.
+  const [scorePage, setScorePage] = useState(1)
   const score = current?.settings?.score
   // A session override belongs to the track it was made on — drop it when the
   // track changes. Adjusted during render (React's documented shape for state
@@ -1941,6 +1944,13 @@ export default function App() {
         }
         syncing={syncingScore}
         onSyncing={setSyncingScore}
+        // Pins aimed at the page rather than the frame ride inside the score,
+        // so it needs the notes and the same edit rights VideoOverlays has.
+        annotations={current?.annotations}
+        selectedId={selectedNoteId}
+        readOnly={effectiveViewOnly}
+        onMovePin={movePin}
+        onPageChange={setScorePage}
       />
     ) : null
 
@@ -2846,6 +2856,8 @@ export default function App() {
                           uploadImage={handleUploadImage}
                           allowImages
                           allowOverlays={isVideoSource(current.source)}
+                          scorePage={score ? scorePage : undefined}
+                          scoreHidden={!!score && scoreView.mode === 'off'}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2895,6 +2907,8 @@ export default function App() {
             uploadImage={handleUploadImage}
             allowImages
             allowOverlays={isVideoSource(current?.source)}
+            scorePage={score ? scorePage : undefined}
+            scoreHidden={!!score && scoreView.mode === 'off'}
           />
         </PluginWindow>
       )}
