@@ -16,7 +16,14 @@
 //
 // Guests can link a Drive score but never upload one — their Blob token is
 // images-only by design (api/blobs/upload.ts).
-import type { Project, ProjectScore, ProjectSettings, ScoreFit, ScoreMode } from '../types'
+import type {
+  Project,
+  ProjectScore,
+  ProjectSettings,
+  ScoreFit,
+  ScoreMode,
+  ScoreTurn,
+} from '../types'
 import { driveViewUrl, looksLikeDriveLink, parseDriveFileId } from './drive'
 
 /**
@@ -83,6 +90,93 @@ export function scoreFromLink(
       ? "That's a Drive link, but not to a file — open the PDF itself and copy its link."
       : 'That doesn’t look like a Google Drive link.',
   }
+}
+
+
+// ---- page turns -----------------------------------------------------------
+// The list is kept sorted by time and holds one entry per *turn*, never one
+// per page: a repeat brings a page back later, and a page nobody turns away
+// from needs no second entry.
+
+/**
+ * How far ahead of the press a stamped turn is placed, in seconds. You press
+ * after you register the moment, never before it, so every stamp of a live
+ * pass lands late by roughly the same amount — one constant subtracted at
+ * stamp time is what makes a recorded sync feel right instead of a beat
+ * behind. Adjustable in the sync panel; this is the starting guess.
+ */
+export const DEFAULT_TURN_LEAD = 0.3
+
+/** The page showing at clip time `t` — the last turn at or before it. */
+export function pageAt(turns: ScoreTurn[] | undefined, t: number): number | null {
+  if (!turns || turns.length === 0) return null
+  // Binary search for the rightmost turn with turn.t <= t.
+  let lo = 0
+  let hi = turns.length - 1
+  let found = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (turns[mid].t <= t) {
+      found = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  // Before the first turn the score sits on the page that turn leaves from,
+  // which is the page before it — a first turn to page 2 at 0:45 means page 1
+  // is what you read until then.
+  return found === -1 ? Math.max(1, turns[0].page - 1) : turns[found].page
+}
+
+/** Turns in time order — the shape every reader assumes. */
+export function sortTurns(turns: ScoreTurn[]): ScoreTurn[] {
+  return [...turns].sort((a, b) => a.t - b.t || a.page - b.page)
+}
+
+/**
+ * Add a turn to `page` at time `t`, replacing any turn already within
+ * `EPSILON` of it. Stamping twice at the same moment is a correction, not two
+ * turns a hair apart that no reader could tell from one.
+ */
+export function addTurn(
+  turns: ScoreTurn[] | undefined,
+  t: number,
+  page: number,
+): ScoreTurn[] {
+  const at = Math.max(0, t)
+  const kept = (turns ?? []).filter((x) => Math.abs(x.t - at) > TURN_EPSILON)
+  return sortTurns([...kept, { t: at, page }])
+}
+
+/** Two turns closer than this are the same turn — see addTurn. */
+export const TURN_EPSILON = 0.25
+
+/** Drop the turn at `index`. */
+export function removeTurn(turns: ScoreTurn[], index: number): ScoreTurn[] {
+  return turns.filter((_, i) => i !== index)
+}
+
+/** Move one turn by `by` seconds, keeping the list sorted and non-negative. */
+export function nudgeTurn(turns: ScoreTurn[], index: number, by: number): ScoreTurn[] {
+  return sortTurns(
+    turns.map((x, i) => (i === index ? { ...x, t: Math.max(0, x.t + by) } : x)),
+  )
+}
+
+/**
+ * Re-anchor turns to a moved clip window, exactly as App's setClip does to
+ * note times: `slide` is that same mapping. A turn pushed onto the window's
+ * start is dropped rather than kept, since a pile of turns all at 0 would
+ * flip the score through several pages in one frame.
+ */
+export function shiftTurns(
+  turns: ScoreTurn[] | undefined,
+  slide: (t: number) => number,
+): ScoreTurn[] | undefined {
+  if (!turns || turns.length === 0) return turns
+  const moved = sortTurns(turns.map((x) => ({ ...x, t: slide(x.t) })))
+  return moved.filter((x, i) => i === 0 || x.t - moved[i - 1].t > TURN_EPSILON)
 }
 
 // ---- display knobs --------------------------------------------------------

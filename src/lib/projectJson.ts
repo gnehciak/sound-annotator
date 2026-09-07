@@ -22,10 +22,12 @@ import type {
   ProjectScore,
   ProjectSettings,
   ProjectSource,
+  ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
+import { sortTurns } from './score'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -231,7 +233,28 @@ function sanitizeScore(v: unknown): ProjectScore | undefined {
   if (fit && SCORE_FITS.has(fit)) score.fit = fit as ProjectScore['fit']
   const opacity = num(raw.opacity)
   if (opacity != null) score.opacity = Math.min(1, Math.max(0.2, opacity))
+  const turns = sanitizeTurns(raw.turns)
+  if (turns) score.turns = turns
   return score
+}
+
+/**
+ * Page turns, re-sorted on the way in: every reader of the list assumes time
+ * order (the page lookup binary-searches it), and a hand-edited export is
+ * exactly where that would stop being true. Entries missing a usable time or
+ * page are dropped individually — one bad turn shouldn't cost the rest.
+ */
+function sanitizeTurns(v: unknown): ScoreTurn[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const turns: ScoreTurn[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const t = num((raw as Record<string, unknown>).t)
+    const page = num((raw as Record<string, unknown>).page)
+    if (t == null || t < 0 || page == null || page < 1) continue
+    turns.push({ t, page: Math.round(page) })
+  }
+  return turns.length > 0 ? sortTurns(turns) : undefined
 }
 
 /**

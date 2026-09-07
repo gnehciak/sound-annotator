@@ -190,10 +190,30 @@ drawn to the whole viewport through a **portal**, which is required rather
 than stylistic — `.glass` uses `backdrop-filter`, and that makes an ancestor
 the containing block for `position: fixed`.
 
-Phase 2 is the extension point named in `types.ts`: a `turns: { t, page }[]`
-list that flips the page on the clock, recorded by playing through and
-pressing next. It needs a line in `projectJson.ts`'s sanitizer and a shift in
-App's `setClip`, which retimes everything anchored to the clip window.
+**Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
+clip time — the same clock the notes use, so App's `setClip` shifts it along
+with them. A *list of turns*, not a time per page, because music repeats: a da
+capo brings a page back at a later moment, which a page→time map can't say.
+`pageAt` binary-searches it; before the first turn the score sits on the page
+that turn leaves from.
+
+A synced score turns its own pages, with one rule worth knowing: **a reader
+who looks ahead is peeking**, and the peek remembers which followed page it
+was taken from, so it expires by itself the moment the music reaches the next
+turn. Nothing to time out, nothing to press to resume — though the chrome
+offers a Follow chip for going back at once. The sync workspace suspends
+following entirely: the page on screen is the one being timed and must not
+move under the person timing it.
+
+Timing them is one button. Press play and hit **Turn here** at each turn and
+you've made a live pass; pause, scrub, and hit it and you've placed one turn
+by hand — which is also how a wrong one is fixed, since nobody should replay
+eight minutes to move page 12. The **lead offset** (default 0.3 s) is what
+makes the live pass usable: the press always lands after the moment it marks,
+by roughly a constant, so the stamp goes in that much earlier. Note a live
+pass can't be run much faster than 2× on YouTube — the iframe API caps there
+(`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
+Chrome mutes them, and you need the audio to know where you are.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's

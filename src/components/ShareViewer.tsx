@@ -508,7 +508,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
   const scoreLayer =
     score && scoreView.mode !== 'off' ? (
-      <ScoreLayer score={score} view={scoreView} reloadKey={scoreReload} />
+      // A reader gets the following, never the timing of it: the turns are
+      // the owner's, like the notes.
+      <ScoreLayer
+        score={score}
+        view={scoreView}
+        reloadKey={scoreReload}
+        currentTime={currentTime}
+        onSeek={seek}
+      />
     ) : null
   const scoreButton = (
     <ScoreButton

@@ -54,7 +54,12 @@ import {
   deleteProjectScores,
   deleteScoreBlob,
 } from './lib/scoreCloud'
-import { scoreView as scoreViewOf, type ScoreView } from './lib/score'
+import {
+  scoreView as scoreViewOf,
+  shiftTurns,
+  type ScoreView,
+} from './lib/score'
+import type { ScoreTurn } from './types'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -498,6 +503,8 @@ export default function App() {
   // cache key, which is the only reliable way past a freshly annotated file's
   // stale copies.
   const [scoreReload, setScoreReload] = useState(0)
+  // The sync workspace (timing the page turns) — open on one track at a time.
+  const [syncingScore, setSyncingScore] = useState(false)
   const score = current?.settings?.score
   // A session override belongs to the track it was made on — drop it when the
   // track changes. Adjusted during render (React's documented shape for state
@@ -508,6 +515,7 @@ export default function App() {
     setOverrideFor(currentId)
     setScoreOverride({})
     setScoreReload(0)
+    setSyncingScore(false)
   }
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
 
@@ -515,6 +523,15 @@ export default function App() {
     (patch: Partial<ScoreView>) => {
       setScoreOverride((o) => ({ ...o, ...patch }))
       if (score) patchProjectSettings({ score: { ...score, ...patch } })
+    },
+    [patchProjectSettings, score],
+  )
+
+  /** Retime the page turns (the sync workspace's only write). */
+  const changeTurns = useCallback(
+    (turns: ScoreTurn[]) => {
+      if (!score) return
+      patchProjectSettings({ score: { ...score, turns } })
     },
     [patchProjectSettings, score],
   )
@@ -530,6 +547,7 @@ export default function App() {
       patchProjectSettings({ score: next ?? undefined })
       setScoreOverride({})
       setScoreReload(0)
+      setSyncingScore(false)
       if (previous?.kind === 'blob' && previous.url && previous.url !== next?.url)
         void deleteScoreBlob(previous.url).catch((err) =>
           console.error('Failed to delete the old score:', err),
@@ -1211,6 +1229,9 @@ export default function App() {
    * same delta to hold them in place. Notes the new window excludes are pinned
    * to its edges rather than dropped; the whole thing rides one undo step, so
    * a clip typed wrong is one ⌘Z away.
+   *
+   * The score's page turns are anchored to the same clock and move with them,
+   * or a retuned clip would leave the score flipping at the wrong bars.
    */
   const setClip = useCallback(
     (next: { start?: number; end?: number }) => {
@@ -1220,12 +1241,21 @@ export default function App() {
       const delta = before - after
       const len = next.end != null ? next.end - after : Infinity
       const slide = (t: number) => Math.min(Math.max(t + delta, 0), len)
+      const score = current.settings?.score
       commitProject(current.id, {
         source: {
           ...current.source,
           clipStart: next.start,
           clipEnd: next.end,
         },
+        ...(score?.turns?.length
+          ? {
+              settings: {
+                ...current.settings,
+                score: { ...score, turns: shiftTurns(score.turns, slide) },
+              },
+            }
+          : {}),
         annotations:
           delta === 0 && len === Infinity
             ? current.annotations
@@ -1754,7 +1784,38 @@ export default function App() {
   // uncovered — the same rule the transport follows.
   const scoreLayer =
     score && scoreView.mode !== 'off' ? (
-      <ScoreLayer score={score} view={scoreView} reloadKey={scoreReload} />
+      <ScoreLayer
+        score={score}
+        view={scoreView}
+        reloadKey={scoreReload}
+        currentTime={currentTime}
+        onSeek={seek}
+        onTurns={canEditSettings ? changeTurns : undefined}
+        // Syncing needs the clock and the seek bar beside the page being
+        // timed. The overlay variant pins itself to the foot of whatever box
+        // it's in, so it's the right one even on an audio track, whose own
+        // transport is the docked well below the waveform.
+        transport={
+          <Transport
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            playbackRate={playbackRate}
+            volume={volume}
+            muted={muted}
+            readOnly={effectiveViewOnly}
+            overlay
+            onPlayPause={() => (isPlaying ? pause() : play())}
+            onSeek={seek}
+            onStep={step}
+            onSetRate={setPlaybackRate}
+            onSetVolume={changeVolume}
+            onToggleMute={toggleMute}
+          />
+        }
+        syncing={syncingScore}
+        onSyncing={setSyncingScore}
+      />
     ) : null
 
   // Attaching is the track's business, so it follows the same rights as the
@@ -1772,6 +1833,16 @@ export default function App() {
         canEditSettings && user && !isGuest
           ? (file, onProgress) =>
               uploadScorePdf(user.uid, current.id, file, onProgress)
+          : undefined
+      }
+      onSync={
+        canEditSettings && score
+          ? () => {
+              // The workspace *is* the score at full screen, so a score that's
+              // currently hidden has to come back on to be timed.
+              if (scoreView.mode === 'off') changeScoreView({ mode: 'score' })
+              setSyncingScore(true)
+            }
           : undefined
       }
     />

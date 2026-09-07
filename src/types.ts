@@ -210,6 +210,23 @@ export type ScoreMode = 'off' | 'score' | 'overlay'
 export type ScoreFit = 'height' | 'width'
 
 /**
+ * One page turn: at clip time `t`, the score shows page `page`.
+ *
+ * A list of these, not one time per page, because music repeats. A da capo, a
+ * repeated exposition or a second verse brings the same page back at a later
+ * moment, which a page→time map cannot express and a sorted list of turns
+ * can. The page shown at any moment is the last turn at or before it (see
+ * `pageAt` in lib/score.ts), so the list also needs no entry for "still on
+ * this page".
+ */
+export interface ScoreTurn {
+  /** Clip time in seconds — the same clock notes use (0 = `clipStart`). */
+  t: number
+  /** 1-based page number. */
+  page: number
+}
+
+/**
  * A PDF score attached to a track — the printed music the recording is of,
  * shown over the video so the notes on the page and the sound arrive together.
  *
@@ -228,10 +245,8 @@ export type ScoreFit = 'height' | 'width'
  * a guest may link a Drive score, and the upload half is gated in the UI and
  * by the upload token, not here.
  *
- * The phase-2 extension point is a `turns: { t, page }[]` list — a sorted set
- * of (clip time → page) marks that flips the page as the music plays. When it
- * lands it needs a line in lib/projectJson.ts's sanitizer and a shift in App's
- * setClip, which retimes everything anchored to the clip window.
+ * `turns` is anchored to the clip window like every note time, so App's
+ * setClip shifts it alongside the notes when the window is retuned.
  */
 export interface ProjectScore {
   /** Where the bytes live: a Drive file we proxy, or a PDF we host. */
@@ -253,6 +268,12 @@ export interface ProjectScore {
   opacity?: number
   /** Page fit. Defaults to 'height' — the whole page, letterboxed. */
   fit?: ScoreFit
+  /**
+   * When the page turns, in clip seconds, ascending. Absent or empty means the
+   * reader turns the pages by hand. Written by the Sync pages panel; shifted
+   * with the notes when the clip window moves.
+   */
+  turns?: ScoreTurn[]
 }
 
 export interface ProjectSettings {

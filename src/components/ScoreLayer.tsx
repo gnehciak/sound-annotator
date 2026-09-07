@@ -4,19 +4,27 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft,
   ChevronRight,
+  ListMusic,
   Loader2,
   Maximize2,
   Minimize2,
   TriangleAlert,
 } from 'lucide-react'
-import type { ProjectScore } from '../types'
+import type { ProjectScore, ScoreTurn } from '../types'
 import { openPdf, type LoadedPdf, type PageSize } from '../lib/pdf'
-import { scoreBytesUrl, type ScoreView } from '../lib/score'
+import {
+  DEFAULT_TURN_LEAD,
+  pageAt,
+  scoreBytesUrl,
+  type ScoreView,
+} from '../lib/score'
+import ScoreSync from './ScoreSync'
 
 /**
  * The score, drawn over the picture.
@@ -34,29 +42,84 @@ import { scoreBytesUrl, type ScoreView } from '../lib/score'
  *
  * The document is loaded once here and kept across that move, so expanding
  * costs a re-render, never a re-fetch.
+ *
+ * Once the score carries page turns it follows the clock instead of the
+ * reader — see the peek rule below.
  */
 export default function ScoreLayer({
   score,
   view,
   reloadKey = 0,
+  currentTime,
+  onSeek,
+  onTurns,
+  transport,
+  syncing = false,
+  onSyncing,
 }: {
   score: ProjectScore
   view: ScoreView
   /** Bump to re-fetch the bytes — how "Reload score" beats the caches. */
   reloadKey?: number
+  /** Clip time, so the page can follow the music. Omitted: no following. */
+  currentTime?: number
+  onSeek?: (t: number) => void
+  /** Present when the reader may retime the turns — the sync workspace. */
+  onTurns?: (turns: ScoreTurn[]) => void
+  /** The transport, shown under the page while syncing. */
+  transport?: ReactNode
+  /** Whether the sync workspace is open (owned by the host, opened from the
+   *  score menu). Syncing implies expanded — there is no room otherwise. */
+  syncing?: boolean
+  onSyncing?: (on: boolean) => void
 }) {
   const pdf = useScorePdf(score, reloadKey)
   const [rawPage, setPage] = useState(1)
-  const [expanded, setExpanded] = useState(false)
+  const [rawExpanded, setExpanded] = useState(false)
+  const [lead, setLead] = useState(DEFAULT_TURN_LEAD)
+  const expanded = rawExpanded || syncing
 
   // A shorter replacement (or a different score) must never leave the reader
   // parked on a page that no longer exists. Clamped as it is read rather than
   // corrected in an effect, so no frame ever renders the stale number.
   const pageCount = pdf.doc?.pageCount ?? 1
-  const page = Math.min(rawPage, pageCount)
 
+  // Following the music. A synced score turns its own pages — except while the
+  // sync workspace is open, where the page on screen is the one being timed
+  // and must not move under the person timing it.
+  const followed =
+    !syncing && score.turns?.length && currentTime != null
+      ? pageAt(score.turns, currentTime)
+      : null
+  // ...and except when the reader has looked ahead. A peek remembers which
+  // followed page it was taken from, so it survives exactly until the music
+  // reaches the next turn and then hands control back on its own — no timer,
+  // no "resume following" the reader has to remember to press.
+  const [peek, setPeek] = useState<{ page: number; from: number } | null>(null)
+  const peeking = followed != null && peek != null && peek.from === followed
+  const page = Math.min(
+    followed != null ? (peeking ? peek.page : followed) : rawPage,
+    pageCount,
+  )
+
+  // Both updates are functional, deliberately: two clicks land in one render,
+  // and reading the page out of this closure would make the second one repeat
+  // the first instead of continuing it.
   const step = useCallback(
-    (by: number) => setPage((p) => Math.min(Math.max(1, Math.min(p, pageCount) + by), pageCount)),
+    (by: number) => {
+      const clamp = (n: number) => Math.min(Math.max(1, n), pageCount)
+      if (followed != null)
+        setPeek((prev) => ({
+          page: clamp((prev?.from === followed ? prev.page : followed) + by),
+          from: followed,
+        }))
+      else setPage((p) => clamp(Math.min(p, pageCount) + by))
+    },
+    [pageCount, followed],
+  )
+  // Used by the sync workspace, where the page is always the reader's own.
+  const showPage = useCallback(
+    (to: number) => setPage(Math.min(Math.max(1, to), pageCount)),
     [pageCount],
   )
 
@@ -67,7 +130,10 @@ export default function ScoreLayer({
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') setExpanded(false)
+      if (e.key === 'Escape') {
+        if (syncing) onSyncing?.(false)
+        else setExpanded(false)
+      }
       else if (e.key === 'ArrowRight' || e.key === 'PageDown') step(1)
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') step(-1)
       else return
@@ -76,13 +142,14 @@ export default function ScoreLayer({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [expanded, step])
+  }, [expanded, step, syncing, onSyncing])
 
   // Room the page must not be drawn into. In the frame that's the page-nav band
   // above and the floating transport below — a page fitted edge to edge would
   // hide its title and its last system under them, which on a score is exactly
-  // the part you were reading. Expanded, only the band is in the way.
-  const pad = expanded ? 'pt-12 pb-4' : 'pt-9 pb-12'
+  // the part you were reading. Expanded, only the band is in the way, unless
+  // the transport has joined it at the foot for a sync pass.
+  const pad = !expanded ? 'pt-9 pb-12' : syncing ? 'pt-12 pb-14' : 'pt-12 pb-4'
 
   const chrome = (
     <ScoreChrome
@@ -90,8 +157,11 @@ export default function ScoreLayer({
       pageCount={pageCount}
       expanded={expanded}
       busy={pdf.status === 'loading'}
+      peeking={peeking}
+      following={followed != null}
       onStep={step}
-      onExpanded={setExpanded}
+      onFollow={() => setPeek(null)}
+      onExpanded={syncing ? undefined : setExpanded}
     />
   )
 
@@ -114,7 +184,25 @@ export default function ScoreLayer({
         <div className="relative min-h-0 flex-1">
           {surface}
           {chrome}
+          {/* Syncing needs the clock and the seek bar in reach of the page
+              being timed; the overlay transport pins itself to the foot of
+              this box, which is exactly where it's wanted. */}
+          {syncing && transport}
         </div>
+        {syncing && onTurns && currentTime != null && onSeek && (
+          <ScoreSync
+            turns={score.turns ?? []}
+            page={page}
+            pageCount={pageCount}
+            currentTime={currentTime}
+            lead={lead}
+            onLead={setLead}
+            onTurns={onTurns}
+            onSeek={onSeek}
+            onPage={showPage}
+            onClose={() => onSyncing?.(false)}
+          />
+        )}
       </div>,
       document.body,
     )
@@ -264,15 +352,24 @@ function ScoreChrome({
   pageCount,
   expanded,
   busy,
+  peeking,
+  following,
   onStep,
+  onFollow,
   onExpanded,
 }: {
   page: number
   pageCount: number
   expanded: boolean
   busy: boolean
+  /** The reader has turned away from the page the music is on. */
+  peeking: boolean
+  /** This score turns its own pages. */
+  following: boolean
   onStep: (by: number) => void
-  onExpanded: (v: boolean) => void
+  onFollow: () => void
+  /** Absent while syncing — the workspace has its own way out. */
+  onExpanded?: (v: boolean) => void
 }) {
   const btn = 'btn-icon on-video press disabled:opacity-30'
   return (
@@ -300,19 +397,44 @@ function ScoreChrome({
       >
         <ChevronRight size={16} />
       </button>
-      <button
-        type="button"
-        onClick={() => onExpanded(!expanded)}
-        aria-label={expanded ? 'Shrink the score' : 'Fill the screen with the score'}
-        title={
-          expanded
-            ? 'Back to the player (Esc)'
-            : 'Fill the screen — a 16:9 frame is a small window on a portrait page'
-        }
-        className={`${btn} ml-1`}
-      >
-        {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-      </button>
+      {/* Only shown once the reader has looked away from the music's page. It
+          isn't required — the peek expires at the next turn on its own — but
+          without it a reader who looked ahead has no way to say "never mind"
+          except waiting. */}
+      {peeking && (
+        <button
+          type="button"
+          onClick={onFollow}
+          title="Back to the page the music is on"
+          className="chip chip-signal press ml-1 shrink-0 font-mono text-[10px]"
+        >
+          <ListMusic size={11} />
+          Follow
+        </button>
+      )}
+      {!peeking && following && (
+        <span
+          title="This score turns its own pages — use ‹ › to look ahead"
+          className="ml-1 shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-white/45"
+        >
+          Following
+        </span>
+      )}
+      {onExpanded && (
+        <button
+          type="button"
+          onClick={() => onExpanded(!expanded)}
+          aria-label={expanded ? 'Shrink the score' : 'Fill the screen with the score'}
+          title={
+            expanded
+              ? 'Back to the player (Esc)'
+              : 'Fill the screen — a 16:9 frame is a small window on a portrait page'
+          }
+          className={`${btn} ml-1`}
+        >
+          {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+      )}
     </div>
   )
 }

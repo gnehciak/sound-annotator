@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   ExternalLink,
+  ListMusic,
   Loader2,
   RotateCw,
   ScrollText,
@@ -35,6 +36,7 @@ export default function ScoreButton({
   onReload,
   onScore,
   onUpload,
+  onSync,
 }: {
   score?: ProjectScore
   view: ScoreView
@@ -45,6 +47,8 @@ export default function ScoreButton({
   onScore?: (next: ProjectScore | null) => void
   /** Absent when the caller has no account to host bytes under. */
   onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
+  /** Open the sync workspace. Absent when the caller may not retime the score. */
+  onSync?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -89,6 +93,13 @@ export default function ScoreButton({
             }}
             onScore={onScore}
             onUpload={onUpload}
+            onSync={
+              onSync &&
+              (() => {
+                setOpen(false)
+                onSync()
+              })
+            }
           />
         ) : (
           <ScoreAttach
@@ -246,6 +257,7 @@ function ScoreSettings({
   onReload,
   onScore,
   onUpload,
+  onSync,
 }: {
   score: ProjectScore
   view: ScoreView
@@ -253,9 +265,11 @@ function ScoreSettings({
   onReload: () => void
   onScore?: (next: ProjectScore | null) => void
   onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
+  onSync?: () => void
 }) {
   const [replacing, setReplacing] = useState(false)
   const link = scoreLinkUrl(score)
+  const turns = score.turns?.length ?? 0
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -334,6 +348,20 @@ function ScoreSettings({
       )}
 
       <div className="flex flex-col gap-1 border-t border-line pt-2">
+        {onSync ? (
+          <button type="button" onClick={onSync} className="pop-row rounded">
+            <ListMusic size={13} />
+            {turns > 0
+              ? `Page turns — ${turns} set…`
+              : 'Sync the page turns…'}
+          </button>
+        ) : (
+          turns > 0 && (
+            <p className="px-2.5 py-1.5 text-[11px] text-muted">
+              This score turns its own pages.
+            </p>
+          )
+        )}
         {score.kind === 'drive' && (
           <button type="button" onClick={onReload} className="pop-row rounded">
             <RotateCw size={13} />
