@@ -65,6 +65,7 @@ import {
 import { useMediaQuery } from './lib/useMediaQuery'
 import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
+import { coverUrls, patchOverlay } from './lib/overlays'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Eye,
@@ -82,6 +83,7 @@ import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
 import { canonicalizeProjectParam, homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
+import VideoOverlays from './components/VideoOverlays'
 import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
@@ -833,8 +835,14 @@ export default function App() {
     if (current.ownerId && current.ownerId !== user.uid) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
-    const html = current.annotations.map((a) => a.contentHtml)
-    reconcileProjectImages(user.uid, current.id, html)
+    // Cover images are note images too, but they hang off the note's `overlay`
+    // rather than its HTML — hand them over as well or the sweep would read a
+    // live cover as an orphan and delete it out from under the note.
+    const referenced = [
+      ...current.annotations.map((a) => a.contentHtml),
+      ...coverUrls(current.annotations),
+    ]
+    reconcileProjectImages(user.uid, current.id, referenced)
       .then((n) => {
         if (n) console.info(`Swept ${n} orphaned image(s) from this project.`)
       })
@@ -1263,6 +1271,19 @@ export default function App() {
     }
   }
 
+  /**
+   * Land a pin dragged across the video frame. The drag itself is local to
+   * VideoOverlays (one save per release, not per pointer move); a run of drags
+   * on the same pin collapses into one undo step.
+   */
+  function movePin(annId: string, x: number, y: number) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    updateAnnotation(annId, patchOverlay(a, { pinX: x, pinY: y }), {
+      coalesceKey: `pin:${annId}`,
+    })
+  }
+
   // Persist a manual order for a group of same-time notes: `orderedIds` is the
   // group in its new top-to-bottom order, and each gets `order` = its position.
   // Other notes are untouched (the order field only breaks same-`start` ties).
@@ -1673,6 +1694,25 @@ export default function App() {
       onSetVolume={changeVolume}
       onToggleMute={toggleMute}
     />
+  )
+
+  /**
+   * What floats inside the video frame: the note stage layer (covers + pins)
+   * with the transport on top of it. Composed in that order deliberately —
+   * PlayerPane paints the slot's children last-on-top, so the transport stays
+   * clickable over a full-frame cover.
+   */
+  const videoOverlay = (
+    <>
+      <VideoOverlays
+        annotations={current?.annotations ?? []}
+        currentTime={currentTime}
+        selectedId={selectedNoteId}
+        readOnly={effectiveViewOnly}
+        onMovePin={movePin}
+      />
+      {transport}
+    </>
   )
 
   const regionSpecs = current
@@ -2134,7 +2174,7 @@ export default function App() {
                         // Video: the same floating transport as the notes
                         // workspace. Audio keeps the folded well below.
                         overlay={
-                          isVideoSource(current.source) ? transport : undefined
+                          isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2299,7 +2339,7 @@ export default function App() {
                         // edge. Audio keeps it docked below (the waveform is
                         // the picture and must stay uncovered).
                         overlay={
-                          isVideoSource(current.source) ? transport : undefined
+                          isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2495,6 +2535,7 @@ export default function App() {
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
                           allowImages
+                          allowOverlays={isVideoSource(current.source)}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2543,6 +2584,7 @@ export default function App() {
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
             allowImages
+            allowOverlays={isVideoSource(current?.source)}
           />
         </PluginWindow>
       )}

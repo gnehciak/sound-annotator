@@ -25,6 +25,7 @@ import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
+import VideoOverlays from './VideoOverlays'
 import Transport, { TransportHints } from './Transport'
 import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
@@ -515,6 +516,22 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     />
   )
 
+  /**
+   * The video frame's floating chrome: the notes' stage layer (cover images and
+   * pinned captions) with the transport painted on top. Read-only here — a
+   * viewer sees every pin exactly where the author aimed it, and moves none.
+   */
+  const videoOverlay = (
+    <>
+      <VideoOverlays
+        annotations={project.annotations}
+        currentTime={currentTime}
+        readOnly
+      />
+      {transport}
+    </>
+  )
+
   return (
     <div className="flex h-full flex-col text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
@@ -593,7 +610,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       playbackRate={playbackRate}
                       volume={muted ? 0 : volume}
                       readOnly
-                      overlay={isVideoSource(source) ? transport : undefined}
+                      overlay={isVideoSource(source) ? videoOverlay : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
                       onPlayingChange={handlePlaying}
@@ -689,7 +706,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     playbackRate={playbackRate}
                     volume={muted ? 0 : volume}
                     readOnly
-                    overlay={isVideoSource(source) ? transport : undefined}
+                    overlay={isVideoSource(source) ? videoOverlay : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
                     onPlayingChange={handlePlaying}

@@ -442,6 +442,22 @@ goes through `hueText()` (`src/lib/noteColors.ts`) so it stays AA in light.
 - **Level meter:** 16 thin segments in an inset well; the palette's meter hue
   low, signal mid, red (`--peak`) peak. Animates while playing, dim at rest.
 
+### The Stage Layer (on-video overlays)
+A note can take over the picture for its moment: a full-frame **cover image**
+standing in for the video (audio keeps playing), and/or a **pin** — a dot on
+the frame captioned with the note's own text. Both are drawn inside the 16:9
+frame beneath the transport (`src/components/VideoOverlays.tsx`).
+
+Chrome over video is **palette-blind**, the same rule the overlay transport
+follows: the caption bubble is black at 70% with white text and a 2px edge in
+the note's own hue, never a themed pane — panes carry no hue, and a translucent
+`panel` would fight whatever frame is behind it. The pin is a 10px dot in the
+note's hue, ringed white so it reads on any picture, over a breathing halo of
+the same hue at 30%. The bubble opens away from the nearer frame edge and is
+capped at the distance to the far one, so it always wraps inside the picture.
+In the notes list a note that owns the frame wears an `ON VIDEO` outline chip
+in its own hue.
+
 ### Note Rows (Signature Component)
 The note list is a flush cue list inside the notes pane, not a stack of
 cards. Each note is a full-width row separated by hairline dividers, with a

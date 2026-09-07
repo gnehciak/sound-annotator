@@ -6,6 +6,8 @@ import {
   RotateCw,
   Brackets,
   CircleHelp,
+  Image as ImageIcon,
+  MapPin,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
@@ -13,6 +15,7 @@ import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
 import { hueText } from '../lib/noteColors'
+import { hasCover, hasOverlay, hasPin } from '../lib/overlays'
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
@@ -337,6 +340,30 @@ export default function AnnotationItem({
             <span className="max-w-[16ch] truncate">
               {annotation.sectionName}
             </span>
+          </span>
+        )}
+
+        {/* Stage chip — this note takes over the video for its moment. One
+            chip for both pieces: it answers "does this note touch the
+            picture?", which is what you're scanning the list for. */}
+        {hasOverlay(annotation) && (
+          <span
+            title={
+              hasCover(annotation) && hasPin(annotation)
+                ? 'Shows a cover image and a pinned caption on the video'
+                : hasCover(annotation)
+                  ? 'Shows a cover image over the video'
+                  : 'Shows a pinned caption on the video'
+            }
+            className="chip chip-outline"
+            style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
+          >
+            {hasCover(annotation) ? (
+              <ImageIcon size={9} strokeWidth={2.4} className="shrink-0" />
+            ) : (
+              <MapPin size={9} strokeWidth={2.4} className="shrink-0" />
+            )}
+            On video
           </span>
         )}
 

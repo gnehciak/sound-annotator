@@ -10,6 +10,7 @@
 import { uploadNoteImage } from './imageCloud'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
+import { coverUrls } from './overlays'
 import type { Annotation, Project } from '../types'
 import { newId } from './ids'
 
@@ -53,8 +54,13 @@ function htmlOf(a: Annotation): string[] {
 
 function rewriteAnnotation(a: Annotation, urlMap: Map<string, string>): Annotation {
   if (urlMap.size === 0) return a
+  // The note's cover image is referenced by URL, not embedded in HTML, so it
+  // gets swapped by lookup rather than by string replacement.
+  const coverUrl = a.overlay?.coverUrl
+  const nextCover = coverUrl ? urlMap.get(coverUrl) ?? coverUrl : undefined
   return {
     ...a,
+    ...(a.overlay ? { overlay: { ...a.overlay, ...(nextCover ? { coverUrl: nextCover } : {}) } } : {}),
     contentHtml: rewriteHtml(a.contentHtml ?? '', urlMap),
     blocks: a.blocks?.map((b) =>
       b.type === TEXT_BLOCK
@@ -128,8 +134,15 @@ export async function copySharedProject(
   // is what the old `onMissingAudio: 'detach'` existed to arrange.
   const source = src.source
 
-  // Note images: re-upload each referenced image and map old URL → new.
-  const urls = [...new Set(src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)))]
+  // Note images: re-upload each referenced image and map old URL → new. Both
+  // the ones embedded in note HTML and the notes' video cover images, which
+  // live in the same Blob folder but are referenced from `overlay.coverUrl`.
+  const urls = [
+    ...new Set([
+      ...src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)),
+      ...coverUrls(src.annotations),
+    ]),
+  ]
   const urlMap = new Map<string, string>()
   if (urls.length > 0) {
     onStatus?.('Copying images…')
