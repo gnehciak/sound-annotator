@@ -25,6 +25,7 @@ import {
   type ScoreView,
 } from '../lib/score'
 import ScoreSync from './ScoreSync'
+import { isTypingTarget } from '../lib/useHotkeys'
 
 /**
  * The score, drawn over the picture.
@@ -130,6 +131,10 @@ export default function ScoreLayer({
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // The same exemption useHotkeys makes, and for the same reason: the sync
+      // panel has a text field in it, where ← and → move the caret and Escape
+      // is not a way out of the workspace.
+      if (isTypingTarget(e.target)) return
       if (e.key === 'Escape') {
         if (syncing) onSyncing?.(false)
         else setExpanded(false)
@@ -485,10 +490,14 @@ function useScorePdf(score: ProjectScore, reloadKey: number): PdfState {
     doc: null,
     message: '',
   })
+  // `undefined` is the "nothing decided yet" seed, distinct from the `null` a
+  // score with no usable file resolves to — seeding this with `url` itself
+  // would make that case match on the first render and sit on the spinner
+  // forever, with the error below unreachable.
   // Reset as the URL changes, during render: an effect would paint one frame
   // of the *previous* score before the new one started loading. Everything
   // after this point sets state from an async callback, which is fine.
-  const [loadingFor, setLoadingFor] = useState(url)
+  const [loadingFor, setLoadingFor] = useState<string | null | undefined>(undefined)
   if (loadingFor !== url) {
     setLoadingFor(url)
     setState(

@@ -17,7 +17,6 @@
 // Guests can link a Drive score but never upload one — their Blob token is
 // images-only by design (api/blobs/upload.ts).
 import type {
-  Project,
   ProjectScore,
   ProjectSettings,
   ScoreFit,
@@ -35,17 +34,6 @@ export const MAX_SCORE_BYTES = 30 * 1024 * 1024
 
 /** Default overlay opacity — readable, but the picture still shows through. */
 export const DEFAULT_SCORE_OPACITY = 0.85
-
-/** The track's score, or undefined when it has none. */
-export function scoreOf(p?: Pick<Project, 'settings'> | null): ProjectScore | undefined {
-  return p?.settings?.score
-}
-
-/** Whether a score is complete enough to load (a half-written one isn't). */
-export function scoreIsLoadable(score?: ProjectScore): boolean {
-  if (!score) return false
-  return score.kind === 'drive' ? Boolean(score.driveFileId) : Boolean(score.url)
-}
 
 /**
  * Where the score's bytes are fetched from. `bust` changes the URL — and so
@@ -166,9 +154,14 @@ export function nudgeTurn(turns: ScoreTurn[], index: number, by: number): ScoreT
 
 /**
  * Re-anchor turns to a moved clip window, exactly as App's setClip does to
- * note times: `slide` is that same mapping. A turn pushed onto the window's
- * start is dropped rather than kept, since a pile of turns all at 0 would
- * flip the score through several pages in one frame.
+ * note times: `slide` is that same mapping.
+ *
+ * Narrowing the window clamps every turn outside it onto an edge, so a group
+ * of them can land on one moment — and only one can survive, or the score
+ * would flip through several pages in a frame. The survivor is the **last**
+ * of the group, because the page showing at a moment is the last turn at or
+ * before it: clipping past pages 1–2 into page 3's music has to leave the
+ * reader on page 3, not on the first page of the pile.
  */
 export function shiftTurns(
   turns: ScoreTurn[] | undefined,
@@ -176,7 +169,9 @@ export function shiftTurns(
 ): ScoreTurn[] | undefined {
   if (!turns || turns.length === 0) return turns
   const moved = sortTurns(turns.map((x) => ({ ...x, t: slide(x.t) })))
-  return moved.filter((x, i) => i === 0 || x.t - moved[i - 1].t > TURN_EPSILON)
+  return moved.filter(
+    (x, i) => i === moved.length - 1 || moved[i + 1].t - x.t > TURN_EPSILON,
+  )
 }
 
 // ---- display knobs --------------------------------------------------------

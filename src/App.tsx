@@ -1785,6 +1785,10 @@ export default function App() {
   const scoreLayer =
     score && scoreView.mode !== 'off' ? (
       <ScoreLayer
+        // Keyed to the track: the layer's own page, peek and expanded state
+        // belong to the score being read, and would otherwise open the next
+        // track's score on the last one's page.
+        key={currentId}
         score={score}
         view={scoreView}
         reloadKey={scoreReload}
