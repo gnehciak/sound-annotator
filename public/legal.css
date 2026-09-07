@@ -1,0 +1,52 @@
+/* Standalone styling for the two legal pages. They are plain static HTML
+   rather than app routes: Google's OAuth consent screen has to be able to
+   fetch the privacy policy without running our JavaScript, and a page the
+   reviewer can't load is a rejected verification. Deliberately not sharing
+   the app's stylesheet — these must keep working if the SPA build changes. */
+:root {
+  color-scheme: dark light;
+  --ink: #0b0b0c;
+  --fg: #d8d6d2;
+  --fg-strong: #f4f2ef;
+  --muted: #8d8a85;
+  --line: #2a2a2c;
+  --accent: #e8703a;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --ink: #ececeb;
+    --fg: #2f2e2c;
+    --fg-strong: #131312;
+    --muted: #6a6863;
+    --line: #d3d2cf;
+    --accent: #b84a17;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 3rem 1.25rem 6rem;
+  background: var(--ink);
+  color: var(--fg);
+  font: 400 15px/1.65 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+main { max-width: 41rem; margin: 0 auto; }
+.masthead {
+  display: flex; align-items: center; gap: 0.55rem;
+  margin-bottom: 2.75rem;
+  font: 600 11px/1 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--fg);
+  text-decoration: none;
+}
+.dot { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); }
+h1 { margin: 0 0 0.4rem; font-size: 1.6rem; line-height: 1.2; color: var(--fg-strong); letter-spacing: -0.01em; }
+h2 { margin: 2.4rem 0 0.6rem; font-size: 1.05rem; color: var(--fg-strong); }
+.updated { margin: 0 0 2.5rem; color: var(--muted); font-size: 13px; }
+p, li { color: var(--fg); }
+ul { padding-left: 1.15rem; }
+li { margin: 0.35rem 0; }
+a { color: var(--accent); }
+strong { color: var(--fg-strong); }
+code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.9em; color: var(--fg-strong); }
+footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+footer a { color: var(--muted); }

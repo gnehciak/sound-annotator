@@ -8,7 +8,6 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
-import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
   loadVolume,
@@ -81,10 +80,7 @@ const STEP_WINDOW = 1200
  * itself stays read-only.
  */
 export default function ShareViewer({ projectId }: { projectId: string }) {
-  // Without the backend configured there's nothing to fetch — start at 'notfound'.
-  const [status, setStatus] = useState<Status>(() =>
-    backendReady ? 'loading' : 'notfound',
-  )
+  const [status, setStatus] = useState<Status>('loading')
   const [project, setProject] = useState<Project | null>(null)
   // Listening task: this shared track asks questions (and isn't a structure
   // board). Drives the worksheet chrome below.
@@ -204,7 +200,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // Fetch once. The API only returns the doc when it's `shared`, so a
   // private or missing id resolves to null → "not available".
   useEffect(() => {
-    if (!backendReady) return
     let cancelled = false
     fetchSharedProject(projectId).then((p) => {
       if (cancelled) return

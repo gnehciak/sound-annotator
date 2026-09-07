@@ -1,27 +1,18 @@
-// Fetch helper for the /api Vercel Functions. Attaches the Clerk session
-// token when one is available; ApiTokenBridge (main.tsx) registers the getter
-// once Clerk loads, so every caller — signed-in app and share viewer alike —
-// goes through the same door.
-
-/** False until the Clerk publishable key is configured (see .env.local). */
-export const backendReady = Boolean(
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined,
-)
-
-type TokenGetter = () => Promise<string | null>
-
-let getToken: TokenGetter | null = null
-
-/** The most recent token, kept for fire-and-forget calls (pagehide release)
- *  that can't await — best-effort by nature, the lock TTL covers failure. */
-export let lastToken: string | null = null
-
-export function registerTokenGetter(fn: TokenGetter | null): void {
-  getToken = fn
-}
+// Fetch helper for the /api Vercel Functions.
+//
+// There is no token to attach anymore. The session is an httpOnly cookie the
+// server signed (api/_lib/session.ts), so it rides along with every same-origin
+// request the browser makes — including the ones this module can't reach, like
+// @vercel/blob/client's own fetch and the keepalive lock release fired from
+// `pagehide`. That deleted a whole layer here: no token getter to register, no
+// last-token cache to keep warm, no bridge component under a provider.
+//
+// The cookie is httpOnly, so JS can't read it: "am I signed in?" is answered by
+// GET /api/auth/me (see lib/auth.tsx), never by inspecting document.cookie.
 
 /** The guest project key, when a signed-out student is editing (lib/guest.ts).
- *  Never sent alongside a Clerk token — a real session always wins. */
+ *  Sent as a header; the server ignores it whenever a real session cookie is
+ *  present, so a signed-in teacher opening a guest link stays themselves. */
 let guestKey: string | null = null
 
 export function registerGuestKey(key: string | null): void {
@@ -56,13 +47,7 @@ export async function api<T>(
   init?: Omit<RequestInit, 'body'> & { json?: unknown },
 ): Promise<T> {
   const headers = new Headers(init?.headers)
-  const token = (await getToken?.()) ?? null
-  if (token) {
-    lastToken = token
-    headers.set('Authorization', `Bearer ${token}`)
-  } else if (guestKey) {
-    headers.set('X-Guest-Key', guestKey)
-  }
+  if (guestKey) headers.set('X-Guest-Key', guestKey)
   let body: BodyInit | undefined
   if (init?.json !== undefined) {
     headers.set('Content-Type', 'application/json')

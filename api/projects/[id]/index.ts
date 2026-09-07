@@ -85,7 +85,7 @@ interface Claim {
 }
 
 function claimFrom(body: Record<string, unknown>, uid: string): LockValue | null {
-  // `uid` is the caller's principal: a Clerk uid, or a guest project's
+  // `uid` is the caller's principal: an account uid, or a guest project's
   // synthetic `guest:<uuid>` owner. Either way it's server-supplied.
   const c = body.lock as Claim | null | undefined
   if (!c || typeof c.sessionId !== 'string') return null
@@ -154,7 +154,7 @@ export async function PUT(request: Request): Promise<Response> {
     return json({ ok: true })
   }
 
-  // Update. Resolve the caller to a principal: a Clerk uid, or the guest who
+  // Update. Resolve the caller to a principal: an account uid, or the guest who
   // holds this row's key. Anyone else is a stranger.
   const guestKey = uid ? null : guestKeyFrom(request)
   const isGuest =

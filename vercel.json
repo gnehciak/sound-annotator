@@ -1,8 +1,5 @@
 {
   "regions": ["syd1"],
-  "rewrites": [
-    { "source": "/sso-callback", "destination": "/index.html" }
-  ],
   "headers": [
     {
       "source": "/track-schema.md",

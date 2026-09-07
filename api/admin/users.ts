@@ -4,12 +4,13 @@
 // server-side, and 404 rather than 403 for everyone else, so a stranger learns
 // nothing about whether the page exists.
 //
-// Accounts live in Clerk and projects live in Postgres, and nothing joins them
-// but `owner_id`. So this reads both and stitches them here: for each account,
-// how many live projects it owns and when it last touched one. Guests have no
-// account at all — their rows are owned by a synthetic `guest:<uuid>` — so they
-// can't appear as users; they're reported once as a tally instead, which is
-// what stops the numbers here from silently disagreeing with the projects tab.
+// Accounts and projects now live in the same Postgres (the `users` table
+// replaced Clerk's directory), so this is one read of each rather than a
+// reconciliation across two systems: for each account, how many live projects
+// it owns and when it last touched one. Guests have no account at all — their
+// rows are owned by a synthetic `guest:<uuid>` — so they can't appear as
+// users; they're reported once as a tally instead, which is what stops the
+// numbers here from silently disagreeing with the projects tab.
 import { getUid, isAdmin, listUsers } from '../_lib/auth.js'
 import { sql } from '../_lib/db.js'
 import { isGuestOwner } from '../_lib/guest.js'
@@ -41,7 +42,7 @@ export async function GET(request: Request): Promise<Response> {
       guestOwners += 1
     }
 
-  // An owner_id with no Clerk account left — a deleted account whose projects
+  // An owner_id with no account row left — a deleted account whose projects
   // outlived it. Worth surfacing: nothing else would ever mention them.
   const known = new Set(users.map((u) => u.uid))
   const orphaned = rows.filter((r) => !isGuestOwner(r.owner_id) && !known.has(r.owner_id))

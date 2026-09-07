@@ -1,60 +1,56 @@
-// Clerk authentication for the API. Resolves the caller's user id from either
-// the Authorization: Bearer header (what src/lib/api.ts sends) or Clerk's
-// same-origin session cookie (what @vercel/blob/client's token request rides
-// on, since it doesn't carry custom headers).
-import { createClerkClient, type ClerkClient } from '@clerk/backend'
+// Authentication for the API: who is calling, and what may they do.
+//
+// The identity provider is us. A caller is signed in because they carry a
+// session cookie this server signed (api/_lib/session.ts) after completing a
+// Google OAuth round trip (api/auth/[action].ts), and the account directory is
+// the `users` table in the same Postgres the projects live in.
+//
+// That last part is why api/admin/users.ts is now a plain SQL join: accounts
+// and projects used to sit in two different stores with nothing but owner_id
+// between them, and reconciling the two was the endpoint's whole job.
+import { newId } from './ids.js'
+import { sql } from './db.js'
+import { readSession } from './session.js'
 
-let clerk: ClerkClient | null = null
-
-function client(): ClerkClient {
-  clerk ??= createClerkClient({
-    secretKey: process.env.CLERK_SECRET_KEY,
-    // The Vercel marketplace integration provisions the publishable key under
-    // its Next.js name; accept either.
-    publishableKey:
-      process.env.CLERK_PUBLISHABLE_KEY ??
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-  })
-  return clerk
-}
-
-/** The caller's Clerk user id, or null when signed out / not configured. */
+/** The caller's user id, or null when signed out / not configured. */
 export async function getUid(request: Request): Promise<string | null> {
-  if (!process.env.CLERK_SECRET_KEY) return null
-  try {
-    const state = await client().authenticateRequest(request)
-    return state.toAuth()?.userId ?? null
-  } catch {
-    return null
-  }
+  return (await readSession(request))?.sub ?? null
 }
 
 /**
- * Is this caller a teacher-admin — allowed to see and manage every guest
- * project (see api/admin/guests.ts)?
+ * Is this caller a teacher-admin — allowed to see and manage every project
+ * (see api/admin/projects.ts)?
  *
  * Allowlisted by email in `ADMIN_EMAILS` (comma-separated). Email rather than
- * uid so it survives the dev→production instance move, which mints new uids
- * and would otherwise silently lock the admin out of their own page. The env
- * var is deliberately server-only: it never reaches the client bundle, and the
- * client's opinion of who is an admin is never trusted here.
+ * uid because a uid is an implementation detail that has already changed once:
+ * it survived the Clerk→first-party move for exactly the same reason it was
+ * meant to survive Clerk's dev→production move. The env var is server-only —
+ * it never reaches the client bundle, and the client's opinion of who is an
+ * admin is never trusted here.
  *
- * Unset ADMIN_EMAILS means nobody is an admin — the page 404s for everyone,
- * which is the right default for a feature that can delete other people's work.
+ * Unset ADMIN_EMAILS means nobody is an admin — every admin route 404s for
+ * everyone, which is the right default for a feature that can hard-delete
+ * other people's work.
  */
 export async function isAdmin(uid: string): Promise<boolean> {
-  const allowed = (process.env.ADMIN_EMAILS ?? '')
+  const allowed = adminEmails()
+  if (allowed.length === 0) return false
+  const email = await emailOf(uid)
+  return email != null && allowed.includes(email)
+}
+
+function adminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS ?? '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
-  if (allowed.length === 0) return false
-  try {
-    const u = await client().users.getUser(uid)
-    const email = u.primaryEmailAddress?.emailAddress?.toLowerCase()
-    return email != null && allowed.includes(email)
-  } catch {
-    return false
-  }
+}
+
+async function emailOf(uid: string): Promise<string | null> {
+  const rows = (await sql`
+    SELECT email FROM users WHERE id = ${uid} LIMIT 1
+  `) as unknown as { email: string }[]
+  return rows[0]?.email?.toLowerCase() ?? null
 }
 
 /** A user's display name, for the byline stamped when a project is published.
@@ -62,9 +58,12 @@ export async function isAdmin(uid: string): Promise<boolean> {
  *  the save. */
 export async function getUserName(uid: string): Promise<string> {
   try {
-    const u = await client().users.getUser(uid)
-    const full = [u.firstName, u.lastName].filter(Boolean).join(' ')
-    return full || u.username || 'A teacher'
+    const rows = (await sql`
+      SELECT name, email FROM users WHERE id = ${uid} LIMIT 1
+    `) as unknown as { name: string | null; email: string }[]
+    const row = rows[0]
+    if (!row) return 'A teacher'
+    return row.name?.trim() || row.email.split('@')[0] || 'A teacher'
   } catch {
     return 'A teacher'
   }
@@ -83,36 +82,122 @@ export interface AdminUser {
 /**
  * Every account, newest first — the admin console's user list.
  *
- * Clerk paginates, so this walks pages rather than trusting one call to return
- * everyone: a silently truncated list would tell an admin an account doesn't
- * exist. Capped so a runaway signup never turns this into an unbounded scan.
+ * No pagination walk anymore: this used to page through Clerk's API because a
+ * silently truncated page would tell an admin an account doesn't exist. It's
+ * one query now. The cap survives so a runaway signup can't turn the console
+ * into an unbounded scan.
  */
 export async function listUsers(cap = 500): Promise<AdminUser[]> {
-  if (!process.env.CLERK_SECRET_KEY) return []
-  const out: AdminUser[] = []
-  const pageSize = 100
-  for (let offset = 0; offset < cap; offset += pageSize) {
-    const page = await client().users.getUserList({
-      limit: Math.min(pageSize, cap - offset),
-      offset,
-      orderBy: '-created_at',
-    })
-    // The SDK moved from returning a bare array to { data, totalCount };
-    // accept either so a minor bump can't empty this page.
-    const users = Array.isArray(page) ? page : page.data
-    if (!users || users.length === 0) break
-    for (const u of users) {
-      const full = [u.firstName, u.lastName].filter(Boolean).join(' ')
-      out.push({
-        uid: u.id,
-        email: u.primaryEmailAddress?.emailAddress ?? null,
-        name: full || u.username || null,
-        imageUrl: u.imageUrl ?? null,
-        createdAt: u.createdAt ?? null,
-        lastSignInAt: u.lastSignInAt ?? null,
-      })
-    }
-    if (users.length < pageSize) break
+  const rows = (await sql`
+    SELECT id, email, name, image_url, created_at, last_sign_in_at
+    FROM users
+    ORDER BY created_at DESC
+    LIMIT ${cap}
+  `) as unknown as {
+    id: string
+    email: string
+    name: string | null
+    image_url: string | null
+    created_at: string | number | null
+    last_sign_in_at: string | number | null
+  }[]
+  return rows.map((r) => ({
+    uid: r.id,
+    email: r.email,
+    name: r.name,
+    imageUrl: r.image_url,
+    createdAt: r.created_at == null ? null : Number(r.created_at) || null,
+    lastSignInAt:
+      r.last_sign_in_at == null ? null : Number(r.last_sign_in_at) || null,
+  }))
+}
+
+/** A Google identity, as the id_token describes it. */
+export interface GoogleIdentity {
+  sub: string
+  email: string
+  name: string | null
+  picture: string | null
+}
+
+/**
+ * Resolve a Google identity to an account, creating one on first sign-in.
+ *
+ * The lookup order is the migration: `google_sub` is the real key, but the
+ * accounts seeded from Clerk are matched by verified email too, so the first
+ * person to sign in after the cutover lands back on their original uid — and
+ * therefore back on their own projects and Blob prefix — rather than getting a
+ * fresh, empty account. Email is only ever trusted here because the caller has
+ * already proved `email_verified` on a token exchanged with our client secret.
+ */
+export async function resolveUser(identity: GoogleIdentity): Promise<string> {
+  const now = Date.now()
+  const { sub, email, name, picture } = identity
+
+  const bySub = (await sql`
+    SELECT id FROM users WHERE google_sub = ${sub} LIMIT 1
+  `) as unknown as { id: string }[]
+  if (bySub[0]) {
+    await sql`
+      UPDATE users
+         SET email = ${email}, name = ${name}, image_url = ${picture},
+             last_sign_in_at = ${now}
+       WHERE id = ${bySub[0].id}
+    `
+    return bySub[0].id
   }
-  return out
+
+  const byEmail = (await sql`
+    SELECT id FROM users WHERE lower(email) = ${email.toLowerCase()} LIMIT 1
+  `) as unknown as { id: string }[]
+  if (byEmail[0]) {
+    await sql`
+      UPDATE users
+         SET google_sub = ${sub}, email = ${email}, name = ${name},
+             image_url = ${picture}, last_sign_in_at = ${now}
+       WHERE id = ${byEmail[0].id}
+    `
+    return byEmail[0].id
+  }
+
+  const id = newId()
+  await sql`
+    INSERT INTO users (id, google_sub, email, name, image_url, created_at, last_sign_in_at)
+    VALUES (${id}, ${sub}, ${email}, ${name}, ${picture}, ${now}, ${now})
+    ON CONFLICT (google_sub) DO UPDATE SET last_sign_in_at = ${now}
+  `
+  const created = (await sql`
+    SELECT id FROM users WHERE google_sub = ${sub} LIMIT 1
+  `) as unknown as { id: string }[]
+  return created[0]?.id ?? id
+}
+
+/** The signed-in user as the client's /api/auth/me sees them. */
+export interface MeUser {
+  uid: string
+  email: string
+  displayName: string | null
+  photoURL: string | null
+  isAdmin: boolean
+}
+
+export async function meFor(uid: string): Promise<MeUser | null> {
+  const rows = (await sql`
+    SELECT id, email, name, image_url FROM users WHERE id = ${uid} LIMIT 1
+  `) as unknown as {
+    id: string
+    email: string
+    name: string | null
+    image_url: string | null
+  }[]
+  const row = rows[0]
+  if (!row) return null
+  const allowed = adminEmails()
+  return {
+    uid: row.id,
+    email: row.email,
+    displayName: row.name,
+    photoURL: row.image_url,
+    isAdmin: allowed.includes(row.email.toLowerCase()),
+  }
 }

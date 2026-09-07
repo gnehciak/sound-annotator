@@ -486,7 +486,7 @@ tool rather than operate it (`src/components/LandingPage.tsx`). A signed-out
 visitor is a student holding a link or a teacher sizing the app up, so the page
 leads with the one input that starts the work and follows it with the published
 gallery as the proof. Sign-in is a ghost button in the masthead; a deep link
-that needs an account (`?track=`, `?admin=`) skips this page for Clerk's card.
+that needs an account (`?track=`, `?admin=`) skips this page for the sign-in card.
 
 - **The pane is the hero, not the type.** The paste field is staged as a real
   `glass` pane with a `strip` title bar — silkscreen `NEW TRACK` label,
