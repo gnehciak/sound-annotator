@@ -185,8 +185,14 @@ export default function ScoreSync({
                 }}
                 aria-pressed={i === selected}
                 title={`Page ${turn.page} from ${formatTime(turn.t)} — click to hear it`}
-                className={`chip press shrink-0 font-mono text-[10px] ${
-                  i === selected ? 'chip-signal' : 'chip-outline'
+                // `chip-outline` on both states, deliberately: it is the only
+                // one of the two that carries a border, so swapping it out for
+                // the selected chip would shrink that chip by 2px and shove
+                // the rest of the rail sideways. Selection is the hue (all
+                // `chip-signal` sets) plus the fill and inset ring
+                // `aria-pressed` already paints — none of which take space.
+                className={`chip chip-outline press shrink-0 font-mono text-[10px] ${
+                  i === selected ? 'chip-signal' : ''
                 }`}
               >
                 p{turn.page} · {formatTime(turn.t)}
