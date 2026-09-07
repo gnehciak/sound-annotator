@@ -1,0 +1,412 @@
+# Sound Annotator — track file schema (v1)
+
+This document is the complete, self-contained specification of the JSON file
+that Sound Annotator's **Import** button reads and its **Export** button
+writes. Hand this whole page to an AI assistant along with a listening guide
+and a video link, and it has everything it needs to produce a valid track.
+
+A track file is a **document, not a database row**: it carries a title, a
+source, notes, and display settings. It carries no identity, ownership, or
+sharing state — importing always mints a brand-new track owned by whoever
+imported it.
+
+---
+
+## 1. Prompt to give an assistant
+
+> Read <https://annotated.lkcs.app/track-schema.md>. Using that schema,
+> turn the listening guide below into a Sound Annotator track file. The video is
+> `<paste the YouTube or Google Drive link>`. Give me the finished `.json` as a
+> downloadable file.
+>
+> ```
+> 0:00  Intro — solo piano, sparse pedal
+> 0:42  Verse 1 — bass enters, drums half-time
+> ...
+> ```
+
+Then save the file and use **Import** on the Sound Annotator home page.
+
+---
+
+## 2. The envelope
+
+Every field below is required. `format` is checked exactly; a file whose
+`format` differs is rejected outright.
+
+```json
+{
+  "format": "sound-annotator-project",
+  "version": 1,
+  "exportedAt": 1757203200000,
+  "project": { "...": "see §3" }
+}
+```
+
+| field | type | notes |
+| --- | --- | --- |
+| `format` | string | Must be the literal `"sound-annotator-project"`. |
+| `version` | number | Currently `1`. A file with a *higher* version than the app knows is refused; lower versions keep importing forever. |
+| `exportedAt` | number | Epoch milliseconds. Informational only — use `Date.now()`, or any plausible timestamp. |
+| `project` | object | The track itself. |
+
+---
+
+## 3. `project`
+
+<!-- fields: Project -->
+
+| field | type | required | notes |
+| --- | --- | --- | --- |
+| `title` | string | yes | Shown on the track tile and in the editor. Blank or missing becomes `"Untitled track"`. |
+| `source` | object | no | The audio/video the notes are pinned to — see §4. A file with no source imports fine; the track just opens on the source picker. |
+| `annotations` | array | yes | The notes, in any order — see §5. Use `[]` for an empty track. |
+| `settings` | object | no | Presentation preferences that travel with the track — see §7. |
+
+<!-- /fields -->
+
+### Fields that are deliberately **not** in the file
+
+These are properties of the row in the database, not of the document. Writing
+them into a file has no effect: the importer ignores every one.
+
+<!-- fields: Project.excluded -->
+
+| field | why it's excluded |
+| --- | --- |
+| `id` | The import mints a fresh id. Inheriting one would point two tracks at a single share link. |
+| `alias` | Server-assigned short id for tracks that predate short ids. Never travels. |
+| `ownerId` | The importer owns the imported track. |
+| `updatedAt` | Stamped on save. |
+| `shared` | Sharing is a decision made per copy, in the Share panel. |
+| `editableByLink` | Same — never inherited from a file. |
+| `published` | Publishing to the public gallery is never implied by an import. |
+| `publishedByName` | Server-stamped byline. |
+| `folderId` | The import lands in whichever folder is open. |
+| `stems` | Separated audio written only by AI section detection; bytes, not document content. |
+| `deletedAt` | Trash state. Server-set only. |
+
+<!-- /fields -->
+
+---
+
+## 4. `project.source`
+
+<!-- fields: ProjectSource -->
+
+| field | type | applies to | notes |
+| --- | --- | --- | --- |
+| `type` | string | all | One of `"youtube"`, `"drive"`, `"audio"`. Anything else drops the whole source. |
+| `youtubeUrl` | string | youtube | The link as pasted. Powers "open the original". |
+| `videoId` | string | youtube | The 11-character id (`dQw4w9WgXcQ`). **Set this** — the player loads the id, not the URL. A source with neither `videoId` nor `youtubeUrl` is dropped. |
+| `driveUrl` | string | drive | The Google Drive share link as pasted. |
+| `driveFileId` | string | drive | The Drive file id. If you omit it but supply `driveUrl`, the importer extracts it; if it can't, the source is dropped. The file must be shared **Anyone with the link** to play. |
+| `clipStart` | number | youtube, drive | Seconds into the video where this track begins. See the warning below. Dropped unless > 0. |
+| `clipEnd` | number | youtube, drive | Seconds into the video where it ends. Dropped unless > `clipStart`. |
+| `fileName` | string | audio | Display name for a linked audio file. |
+| `audioUrl` | string | audio | Direct URL to an audio file. Audio is never uploaded — it streams from wherever it lives, so the host's CORS policy decides whether it loads. |
+
+<!-- /fields -->
+
+```json
+{ "type": "youtube", "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "videoId": "dQw4w9WgXcQ" }
+```
+
+```json
+{ "type": "drive", "driveUrl": "https://drive.google.com/file/d/1AbC.../view", "driveFileId": "1AbC..." }
+```
+
+> ### ⚠ Clip windows shift every timestamp
+>
+> When `clipStart` is set, the track **is** the excerpt: the rest of the app
+> sees an ordinary track that starts at zero and runs `clipEnd - clipStart`
+> seconds. Note times are therefore **clip-relative**.
+>
+> If your listening guide's timecodes are read off the full video and you also
+> set `clipStart: 90`, every note must be written as `videoSeconds - 90`.
+>
+> When in doubt, omit `clipStart` / `clipEnd` entirely and write note times as
+> plain seconds into the video. That is always correct.
+
+---
+
+## 5. `project.annotations` — the notes
+
+Order in the array doesn't matter; the app sorts by `start`.
+
+**`start` is the only required field.** A note without a valid, non-negative
+`start` is dropped; every other malformed field is dropped on its own, leaving
+the note intact. So a minimal note is:
+
+```json
+{ "start": 42, "contentHtml": "<p>Harp enters under the strings.</p>" }
+```
+
+<!-- fields: Annotation -->
+
+| field | type | notes |
+| --- | --- | --- |
+| `start` | number | **Required.** Seconds from the start of the track (see the clip warning in §4). Fractions are fine: `92.5`. |
+| `end` | number | Makes the note cover a span rather than a moment. Ignored unless > `start`. |
+| `contentHtml` | string | The note's rich text as HTML — see §6. Defaults to `""`. |
+| `blocks` | array | Typed content blocks (§9). **Omit this**: the importer builds a text block from `contentHtml` automatically. |
+| `id` | string | Omit it. The importer mints one, and duplicates are re-minted. Note colours are derived from the id, so a hand-written id changes nothing but the hue. |
+| `createdAt` | number | Epoch ms. Defaults to import time. Only used as the tiebreaker between notes sharing a `start`. |
+| `tags` | string[] | Category chips. Preset ids: `pitch`, `rhythm`, `duration`, `dynamics`, `harmony`, `form`, `timbre`, `comment`. Any other string is a custom tag and is shown verbatim, so keep custom tags short and consistent. |
+| `tag` | string | Legacy single tag. Don't write it — use `tags`. Read only for notes that predate the array. |
+| `color` | string | Hex colour override for the note's spine and timecode, e.g. `"#5aa8ff"`. Without it the colour is derived from the id, which is fine and looks deliberate. |
+| `bar` | string | Free text for a bar number or rehearsal mark — `"24"`, `"bb. 12–16"`, `"reh. B"`. Rendered as a chip beside the timecode. |
+| `order` | number | Manual sort position **among notes that share the same `start`** only. Not a global ordering — leave it out. |
+| `question` | boolean | `true` turns the note into a listening-task question: its text is the prompt, and a shared `?view=` link opens as a worksheet with an answer box under each question and a PDF answer sheet at the end. |
+| `structure` | boolean | `true` marks the note as a structural section, drawing a bracket down the overview timeline beside its span. Give it an `end`. |
+| `sectionName` | string | The label on that bracket. Only meaningful with `structure: true`, or on a song-structure board (§7). |
+| `lyrics` | string | Plain-text lyrics for a section, shown in the structure board's Lyrics panel. Whole-section granularity — not line-synced. Structure sections only. |
+| `overlay` | object | Puts the note **on the video** for its moment — a pinned caption, and/or a cover image. Video tracks only. See §9; you can hand-write the pin, but not the cover. |
+
+<!-- /fields -->
+
+### Worked example — a listening-guide note
+
+```json
+{
+  "start": 128,
+  "end": 164,
+  "contentHtml": "<p>The <strong>second subject</strong> arrives in the relative major.</p><ul><li>Clarinet carries the tune</li><li>Strings drop to pizzicato</li></ul>",
+  "bar": "bb. 44–58",
+  "tags": ["harmony", "timbre"],
+  "color": "#2dd4bf"
+}
+```
+
+### Worked example — a worksheet question
+
+```json
+{
+  "start": 71,
+  "contentHtml": "<p>What happens to the tempo here, and how does it change the mood?</p>",
+  "question": true,
+  "tags": ["comment"]
+}
+```
+
+---
+
+## 6. `contentHtml` — what HTML survives
+
+The editor is TipTap with StarterKit. Stick to this subset; anything outside it
+is stripped when the note is opened for editing.
+
+| use | markup |
+| --- | --- |
+| paragraph | `<p>…</p>` — wrap every note's text in at least one |
+| bold / italic | `<strong>`, `<em>` |
+| strikethrough / inline code | `<s>`, `<code>` |
+| headings | `<h1>`–`<h6>` (rarely worth it inside a note) |
+| bullet / numbered list | `<ul><li>…</li></ul>`, `<ol><li>…</li></ol>` |
+| quote | `<blockquote><p>…</p></blockquote>` |
+| line break | `<br>` |
+| rule | `<hr>` |
+
+Escape `&`, `<`, `>` in text as `&amp;`, `&lt;`, `&gt;`. Curly quotes, dashes
+and accented characters are fine as literal UTF-8.
+
+**Images:** don't write `<img>` tags. Note images are hosted by the app under
+the importer's own storage; a file can't bring its own bytes. Add images in the
+editor after importing.
+
+---
+
+## 7. `project.settings`
+
+<!-- fields: ProjectSettings -->
+
+| field | type | notes |
+| --- | --- | --- |
+| `kind` | string | Omit for a normal annotated track. `"structure"` opens the track as a **song-structure board** — a visual section timeline where every annotation is a section, so each one should carry `start`, `end`, `sectionName`, and usually `color`. |
+| `noteOrder` | string | Default ordering of the notes list: `"timeline"`, `"auto"`, or `"live"`. Any other value is dropped. |
+| `overviewOpen` | boolean | Whether the overview timeline strip opens by default. |
+| `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
+| `score` | object | A PDF score laid over the video — see [§9](#9-score--the-printed-music-over-the-video). The one nested object settings accept. |
+
+<!-- /fields -->
+
+Settings are lenient by design: **any** key holding a string, finite number, or
+boolean passes through, so a knob added to the app later still round-trips
+through older files. Nested objects and arrays are dropped — `score` is the
+single exception, and it is validated field by field.
+
+---
+
+## 8. `overlay` — putting a note on the video
+
+A note can take over the picture while it is on screen. Two independent pieces,
+either or both, on the note's `overlay` object:
+
+| field | type | notes |
+| --- | --- | --- |
+| `pinX` | number | Where the pin's dot sits across the frame, `0`–`1` from the left. |
+| `pinY` | number | And down the frame, `0`–`1` from the top. |
+| `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
+| `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
+| `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
+| `coverX` | number | Which part of a *filled* cover survives the crop, `0`–`1` across. Omit for centred. |
+| `coverY` | number | And down. Omit for centred. |
+
+`pinX` and `pinY` only mean anything **together** — a pin with one of them is
+dropped rather than pinned to a corner. The dot is captioned with the note's own
+text, clamped to three lines on the frame, so a note that is also a pin wants a
+first sentence that reads on its own.
+
+**The cover is the `<img>` rule again.** A cover image is a note image: the app
+hosts the bytes, and a file can't bring its own. `coverUrl` is a link, so a URL
+pointing somewhere else will render — but nothing about it is yours: it breaks
+the day that host changes it, it is fetched from the classroom on every play,
+and importing the track again won't rescue it. Attach covers in the editor after
+importing, which uploads them properly. A hand-written `overlay` is a pin.
+
+```json
+{
+  "start": 92,
+  "end": 118,
+  "contentHtml": "<p>The timpanist changes the timbre by striking nearer the edge.</p>",
+  "overlay": { "pinX": 0.62, "pinY": 0.44 }
+}
+```
+
+---
+
+## 9. `score` — the printed music over the video
+
+A track can carry the score it is about: a PDF drawn over the picture, turning
+its own pages as the music plays. It lives on `settings.score`.
+
+| field | type | notes |
+| --- | --- | --- |
+| `kind` | string | `"drive"` for a Google Drive link, `"blob"` for a PDF the app hosts. |
+| `driveFileId` | string | Drive only — the file id. Re-derived from `driveUrl` if absent. |
+| `driveUrl` | string | Drive only — the link it was pasted from. |
+| `url` | string | Hosted PDFs only. **You can't write this** — same rule as cover images. |
+| `fileName` | string | Hosted PDFs only; what the score menu calls it. |
+| `mode` | string | `"score"` (default) shows the page opaque, `"overlay"` dims it over the video, `"off"` hides it. |
+| `opacity` | number | `0.2`–`1`, overlay mode only. Defaults to `0.85`. |
+| `fit` | string | `"height"` (default) fits the whole page; `"width"` fills the frame width and scrolls. |
+| `onTop` | boolean | Paint the score in front of note covers and pins instead of behind them. Off by default. |
+| `turns` | array | When the page turns — see below. |
+
+A score that names neither a `driveFileId` nor a `url` is dropped whole rather
+than imported as an attachment that can never load.
+
+**Write a Drive link, not a hosted file.** `kind: "drive"` is the one you can
+author: point it at a PDF shared **Anyone with the link** and the track will
+load it. `kind: "blob"` describes bytes this installation hosts, and a `url`
+copied from an export belongs to the account that uploaded it — it may go dark
+without warning. Attach those in the editor, which uploads them properly.
+
+### `turns` — the page changes
+
+Each entry says that from second `t`, the score shows page `page`:
+
+```json
+"turns": [
+  { "t": 57, "page": 2 },
+  { "t": 89, "page": 3 },
+  { "t": 125, "page": 4 }
+]
+```
+
+Times are **track seconds**, on the same clock as the notes (so a `clipStart`
+shifts them with everything else), and pages are 1-based. The list holds one
+entry per *turn*, not one per page: the score shows the last turn at or before
+the playhead, so a page nobody turns away from needs no second entry, and a
+repeat can bring an earlier page back simply by naming it again later. Before
+the first entry the score sits on the page that entry turns away from — a first
+turn to page 2 means page 1 is what's read until then.
+
+Entries missing a usable `t` or `page` are dropped individually, and the list
+is re-sorted on import, so order in the file is a convenience rather than a
+requirement.
+
+---
+
+## 10. `blocks` (advanced — you almost certainly want to skip this)
+
+A note's content is really a list of typed blocks, each rendered by a plugin.
+Notes that carry only `contentHtml` are migrated to a single `text` block on
+read, which is why authoring `contentHtml` is enough.
+
+<!-- fields: NoteBlock -->
+
+| field | type | notes |
+| --- | --- | --- |
+| `type` | string | Plugin key. `"text"` is the built-in rich-text block; its payload is `{ "html": "…" }`. |
+| `data` | any | Plugin-specific payload. Not validated here — a block whose plugin isn't installed renders as unknown. |
+| `id` | string | Minted if absent. |
+
+<!-- /fields -->
+
+---
+
+## 11. A complete, valid file
+
+```json
+{
+  "format": "sound-annotator-project",
+  "version": 1,
+  "exportedAt": 1757203200000,
+  "project": {
+    "title": "Debussy — Prélude à l'après-midi d'un faune",
+    "source": {
+      "type": "youtube",
+      "youtubeUrl": "https://www.youtube.com/watch?v=EPGuCPUcezE",
+      "videoId": "EPGuCPUcezE"
+    },
+    "settings": { "overviewOpen": true, "noteOrder": "timeline" },
+    "annotations": [
+      {
+        "start": 0,
+        "end": 21,
+        "contentHtml": "<p>Solo flute, unaccompanied. A chromatic descent from C♯ to G and back — a tritone, deliberately unstable.</p>",
+        "bar": "bb. 1–4",
+        "tags": ["pitch", "timbre"],
+        "structure": true,
+        "sectionName": "Opening"
+      },
+      {
+        "start": 21,
+        "contentHtml": "<p>Harp glissando and horn answer. Listen for how little the texture weighs.</p>",
+        "tags": ["timbre"]
+      },
+      {
+        "start": 55,
+        "contentHtml": "<p>What has happened to the pulse by this point? Can you still count a beat?</p>",
+        "question": true
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 12. Checklist before importing
+
+- `format` is exactly `"sound-annotator-project"` and `version` is `1`.
+- Every note has a numeric `start` in **seconds** — `2:14` must become `134`,
+  `1:03:20` must become `3800`.
+- `end`, where present, is greater than `start`.
+- No `clipStart` unless the timestamps were written relative to it.
+- `videoId` (YouTube) or `driveFileId` (Drive) is present.
+- Note text is HTML wrapped in `<p>`, not raw prose or Markdown.
+- No `id` fields, no `<img>` tags, no `overlay.coverUrl`, no `score.url`, no
+  ownership or sharing fields.
+- A `score`, if any, is `kind: "drive"` with a `driveFileId`, and its `turns`
+  are in track seconds with 1-based pages.
+
+---
+
+*This file is generated-adjacent: `scripts/check-schema-doc.mjs` runs during
+`npm run build` and fails the build if any field on `Project`,
+`ProjectSource`, `Annotation`, `NoteBlock`, or `ProjectSettings` in
+`src/types.ts` is missing from the tables above, so the schema and this
+document cannot drift apart. The tables' `<!-- fields: … -->` markers are what
+that check reads — keep them.*

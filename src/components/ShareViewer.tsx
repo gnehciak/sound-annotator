@@ -28,6 +28,7 @@ import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
+import VideoOverlays from './VideoOverlays'
 import Transport, { TransportHints } from './Transport'
 import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
@@ -548,6 +549,22 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     />
   )
 
+  /**
+   * The video frame's floating chrome: the notes' stage layer (cover images and
+   * pinned captions) with the transport painted on top. Read-only here — a
+   * viewer sees every pin exactly where the author aimed it, and moves none.
+   */
+  const videoOverlay = (
+    <>
+      <VideoOverlays
+        annotations={project.annotations}
+        currentTime={currentTime}
+        readOnly
+      />
+      {transport}
+    </>
+  )
+
   return (
     <div className="flex h-full flex-col text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
@@ -630,7 +647,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       playbackRate={playbackRate}
                       volume={muted ? 0 : volume}
                       readOnly
-                      overlay={isVideoSource(source) ? transport : undefined}
+                      overlay={isVideoSource(source) ? videoOverlay : undefined}
                       score={isVideoSource(source) ? scoreLayer : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
@@ -731,7 +748,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     playbackRate={playbackRate}
                     volume={muted ? 0 : volume}
                     readOnly
-                    overlay={isVideoSource(source) ? transport : undefined}
+                    overlay={isVideoSource(source) ? videoOverlay : undefined}
                     score={isVideoSource(source) ? scoreLayer : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
@@ -742,8 +759,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   />
                 </div>
 
-                {!isVideoSource(source) && transport}
-                <TransportHints readOnly />
+                {/* Video: transport floats in the frame, hints go here.
+                    Audio docks the transport, which draws its own hints. */}
+                {isVideoSource(source) ? <TransportHints readOnly /> : transport}
               </>
             ) : (
               <div className="empty py-6 text-sm text-muted">

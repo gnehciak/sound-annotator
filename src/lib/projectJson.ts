@@ -15,9 +15,15 @@
 // settings keys holding primitives already pass through automatically. Bump
 // PROJECT_JSON_VERSION only for breaking shape changes (old files must keep
 // importing). See the note atop src/types.ts.
+//
+// The same change must add a row to public/track-schema.md, the published
+// spec people hand to an AI assistant to author a track file. That isn't a
+// courtesy: scripts/check-schema-doc.mjs runs first in `npm run build` and
+// fails the deploy when the doc and src/types.ts disagree.
 import type {
   Annotation,
   NoteBlock,
+  NoteOverlay,
   Project,
   ProjectScore,
   ProjectSettings,
@@ -152,6 +158,37 @@ function sanitizeBlocks(v: unknown): NoteBlock[] | undefined {
 }
 
 /** One note from the file, or null when it's beyond salvage (no valid start). */
+/**
+ * The note's on-video layer. `coverUrl` is kept as an ordinary string: an
+ * import lands through copySharedProject, which re-uploads the image under the
+ * importer's own storage (see lib/copyProject.ts) — so a file exported from
+ * another account arrives pointing at bytes that still exist, and stops doing
+ * so only if the original is deleted, exactly like an inline note image.
+ * A pin only means anything with both coordinates, so a half-written one is
+ * dropped rather than pinned to a frame corner.
+ */
+function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const o = v as Record<string, unknown>
+  const overlay: NoteOverlay = {}
+  const coverUrl = str(o.coverUrl)
+  if (coverUrl) overlay.coverUrl = coverUrl
+  if (o.coverFit === 'cover') overlay.coverFit = 'cover'
+  const coverX = num(o.coverX)
+  const coverY = num(o.coverY)
+  if (coverX != null) overlay.coverX = Math.min(1, Math.max(0, coverX))
+  if (coverY != null) overlay.coverY = Math.min(1, Math.max(0, coverY))
+  const pinX = num(o.pinX)
+  const pinY = num(o.pinY)
+  if (pinX != null && pinY != null) {
+    overlay.pinX = Math.min(1, Math.max(0, pinX))
+    overlay.pinY = Math.min(1, Math.max(0, pinY))
+  }
+  const hold = num(o.hold)
+  if (hold != null && hold > 0) overlay.hold = hold
+  return Object.keys(overlay).length > 0 ? overlay : undefined
+}
+
 function sanitizeAnnotation(v: unknown): Annotation | null {
   if (!v || typeof v !== 'object') return null
   const a = v as Record<string, unknown>
@@ -183,6 +220,8 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   const lyrics = str(a.lyrics)
   if (lyrics) ann.lyrics = lyrics
   if (a.question === true) ann.question = true
+  const overlay = sanitizeOverlay(a.overlay)
+  if (overlay) ann.overlay = overlay
   const blocks = sanitizeBlocks(a.blocks)
   if (blocks) ann.blocks = blocks
   // Legacy exports (contentHtml only) get their text block here, like any read.
@@ -233,6 +272,7 @@ function sanitizeScore(v: unknown): ProjectScore | undefined {
   if (fit && SCORE_FITS.has(fit)) score.fit = fit as ProjectScore['fit']
   const opacity = num(raw.opacity)
   if (opacity != null) score.opacity = Math.min(1, Math.max(0.2, opacity))
+  if (raw.onTop === true) score.onTop = true
   const turns = sanitizeTurns(raw.turns)
   if (turns) score.turns = turns
   return score

@@ -19,27 +19,18 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider, ApiTokenBridge } from './lib/auth'
 import { backendReady } from './lib/api'
+import { parseRoute } from './lib/nav'
 import Gate, { SetupNotice } from './components/Gate'
 import ShareViewer from './components/ShareViewer'
-import { PublicBrowsePage } from './components/BrowseGallery'
 import AdminProjects from './components/AdminProjects'
 import './plugins/register' // registers note plugins (side effect)
 
-const params = new URLSearchParams(window.location.search)
-// A `?view={id}` link opens the read-only share viewer, which needs no
-// sign-in — but it still mounts under ClerkProvider so "Make a copy" can
-// authenticate.
-const viewId = params.get('view')
-// `?browse=1` opens the public gallery of published tracks — no sign-in.
-const browse = params.get('browse') === '1'
-// `?admin=1` is the teacher's console over every project. It sits behind
-// <Gate> for sign-in, but the URL is not what protects it:
-// /api/admin/projects enforces an ADMIN_EMAILS allowlist and 404s everyone
-// else (see components/AdminProjects).
-//
-// `?track=…&admin=1` is a different thing — the console's Edit button — so the
-// track param wins and the app opens instead of the console.
-const admin = params.get('admin') === '1' && !params.get('track')
+// Which page the URL asks for. The root switch is decided once, at load: the
+// three shells below are genuinely different (different chrome, different
+// auth), so moving between them is a real navigation. Everything *inside* the
+// app — library, folders, trash, Browse, a track — routes client-side instead;
+// see lib/nav.ts and App's own reconciler.
+const route = parseRoute()
 // Clerk's OAuth redirect lands here mid-sign-in (see lib/auth.tsx).
 const ssoCallback = window.location.pathname === '/sso-callback'
 
@@ -68,13 +59,18 @@ createRoot(document.getElementById('root')!).render(
         <ApiTokenBridge />
         {ssoCallback ? (
           <AuthenticateWithRedirectCallback />
-        ) : viewId ? (
-          <ShareViewer projectId={viewId} />
-        ) : browse ? (
-          <PublicBrowsePage />
+        ) : /* A `?view={id}` link opens the read-only share viewer, which
+               needs no sign-in — but it still mounts under ClerkProvider so
+               "Make a copy" can authenticate. */
+        route.page === 'share' ? (
+          <ShareViewer projectId={route.id} />
         ) : (
           <AuthProvider>
-            <Gate>{admin ? <AdminProjects /> : <App />}</Gate>
+            {/* `?admin=1` is the teacher's console over every project. It sits
+                behind <Gate> for sign-in, but the URL is not what protects it:
+                /api/admin/projects enforces an ADMIN_EMAILS allowlist and 404s
+                everyone else (see components/AdminProjects). */}
+            <Gate>{route.page === 'admin' ? <AdminProjects /> : <App />}</Gate>
           </AuthProvider>
         )}
       </ClerkProvider>

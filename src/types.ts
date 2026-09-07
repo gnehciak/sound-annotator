@@ -1,7 +1,9 @@
 // NOTE — JSON import/export contract: a track's persisted *content* (title,
 // source, annotations, settings) round-trips through the portable JSON file in
-// lib/projectJson.ts. When you add or change a persisted field on Project,
-// ProjectSource, Annotation, or ProjectSettings, update projectJson.ts too:
+// lib/projectJson.ts, and is described for the outside world in
+// public/track-schema.md. When you add or change a persisted field on Project,
+// ProjectSource, Annotation, or ProjectSettings, update projectJson.ts *and*
+// that doc — scripts/check-schema-doc.mjs fails `npm run build` otherwise:
 // the export envelope carries content fields only (never account/sharing
 // state), and the import sanitizer must explicitly accept the new field or an
 // imported file silently loses it. Primitive-valued ProjectSettings keys pass
@@ -53,6 +55,63 @@ export interface NoteBlock {
   type: string
   /** Plugin-specific payload; each plugin narrows and validates this. */
   data: unknown
+}
+
+/**
+ * What a note draws on top of the video while it's on screen — the note's
+ * "stage layer". Two independent pieces, either or both:
+ *
+ *  - a **cover**: a full-frame image that stands in for the picture (a score
+ *    excerpt, a diagram, a photo) while the audio keeps playing underneath;
+ *  - a **pin**: a dot placed somewhere on the frame, captioned with the note's
+ *    own text — a callout pointing at what's happening there.
+ *
+ * Both ride the note's moment: they appear over the note's span
+ * (`start`→`end`), or for `hold` seconds from `start` when the note is a
+ * single point. They also appear whenever the note is open in the inspector,
+ * so you can compose one without scrubbing to its time.
+ *
+ * Video sources only (YouTube and Drive). An audio track's waveform *is* the
+ * picture and must stay uncovered, so nothing here is offered there — the same
+ * line `clipStart`/`clipEnd` draw (see ProjectSource).
+ */
+export interface NoteOverlay {
+  /**
+   * Public Blob URL of the cover image, under the project's ordinary note-image
+   * prefix (`users/{uid}/images/{projectId}/…`) — it *is* a note image, just
+   * one referenced from here rather than from the note's HTML. Anything that
+   * sweeps or copies note images must therefore read this field too: see
+   * `coverUrls()` in lib/overlays.ts and its callers (the image GC in App,
+   * lib/copyProject.ts).
+   */
+  coverUrl?: string
+  /**
+   * How the cover meets the 16:9 frame: 'contain' (the default) shows the whole
+   * image letterboxed, 'cover' fills the frame and crops the overflow.
+   */
+  coverFit?: 'contain' | 'cover'
+  /**
+   * Which part of a filled cover survives the crop, as 0–1 fractions (CSS
+   * `object-position`): 0 keeps the left/top edge, 1 the right/bottom, and the
+   * absent default is 0.5 — dead centre, which is where a crop lands if nobody
+   * says otherwise. Only meaningful with `coverFit: 'cover'`; a contained image
+   * has no overflow to choose from. Set by dragging the cover itself.
+   */
+  coverX?: number
+  coverY?: number
+  /**
+   * Pin position as fractions of the frame, 0–1 from the top-left. Both are
+   * set together or not at all — their absence is what "this note has no pin"
+   * means. Fractions rather than pixels so a pin holds its spot on the picture
+   * at every player size.
+   */
+  pinX?: number
+  pinY?: number
+  /**
+   * Seconds the layer stays up for a note with no `end`. Ignored on a note that
+   * has a span — that span is the window. Defaults to OVERLAY_HOLD.
+   */
+  hold?: number
 }
 
 export interface Annotation {
@@ -118,6 +177,11 @@ export interface Annotation {
    * and hand back a PDF answer sheet (lib/answerSheet.ts). Off by default.
    */
   question?: boolean
+  /**
+   * What this note puts on top of the video — a cover image, a positioned pin,
+   * or both. Absent on notes that stay in the list. See NoteOverlay.
+   */
+  overlay?: NoteOverlay
   createdAt: number
 }
 
@@ -268,6 +332,16 @@ export interface ProjectScore {
   opacity?: number
   /** Page fit. Defaults to 'height' — the whole page, letterboxed. */
   fit?: ScoreFit
+  /**
+   * Whether the score paints in front of a note's cover image and pins
+   * (lib/overlays.ts) rather than behind them. Off by default, which is the
+   * order that reads: a note that takes over the picture is a deliberate
+   * interruption of it, and a score is the steady background to the whole
+   * track. Turn it on for a track whose score is the point and whose covers
+   * are asides. Either way the score stays *under* the transport — nothing is
+   * worth losing the play button for.
+   */
+  onTop?: boolean
   /**
    * When the page turns, in clip seconds, ascending. Absent or empty means the
    * reader turns the pages by hand. Written by the Sync pages panel; shifted

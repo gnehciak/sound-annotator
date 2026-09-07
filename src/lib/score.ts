@@ -185,6 +185,8 @@ export interface ScoreView {
   mode: ScoreMode
   opacity: number
   fit: ScoreFit
+  /** Paint in front of note covers and pins rather than behind them. */
+  onTop: boolean
 }
 
 /** The view a score opens in, with every default filled in. */
@@ -193,6 +195,7 @@ export function scoreView(score?: ProjectScore): ScoreView {
     mode: score?.mode ?? DEFAULT_SCORE_MODE,
     opacity: clampOpacity(score?.opacity ?? DEFAULT_SCORE_OPACITY),
     fit: score?.fit ?? DEFAULT_SCORE_FIT,
+    onTop: score?.onTop === true,
   }
 }
 

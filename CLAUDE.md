@@ -123,7 +123,33 @@ Replicate run plus ~130 MB of stem WAVs. It answers 404 to everyone else, guests
 and ordinary owners alike, and App hides the button behind `useIsAdmin()`
 (`src/lib/admin.ts`) — a display hint fetched from
 `/api/admin/projects?whoami=1`, never the security. Their project is born `shared`, so the `?view=`
-link they hand in is the existing read-only viewer. **Ids are short and opaque.** Project/note/folder ids are 12 base64url
+link they hand in is the existing read-only viewer.
+
+**Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
+`<Router>` — a project id *is* a share credential and `?view=` links are
+already out in the world, so the route is a query param on one page: `?` the
+library, `?folder=` a folder, `?trash=1` the trash, `?browse=1` the Browse
+gallery, `?track=` the editor, plus the two pages that mount outside the app
+shell (`?view=` and `?admin=1[&tab=users]`). The query is the *only* copy of
+where you are — nothing mirrors it in React state — so anything that navigates
+calls `navigate()` and anything that needs to know calls `useRoute()`. That's
+what makes Back and a phone's edge-swipe work; App has one effect that
+reconciles the open track to the route, and back/forward need no special case
+because they're just another way the route changes. Only the three root shells
+are a real page load (different chrome, different auth); everything inside the
+app is client-side. When adding a place worth returning to, give it a route
+rather than a `useState` — and resolve a project param with `resolveProject`,
+never `p.id === param`, since the address bar may carry a legacy row's short
+`alias` instead.
+
+**There is one Browse gallery, not two.** `?browse=1` is the Browse *route*:
+signed in it's the home page's Browse tab, signed out it's the landing page,
+which already carries the same `BrowseGallery` under its paste field (and
+scrolls to it when that's the route you arrived on). The standalone public
+gallery page it used to open was the same list a second time, so it's gone —
+old `?browse=1` links keep working because the spelling didn't change.
+
+**Ids are short and opaque.** Project/note/folder ids are 12 base64url
 characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a
 project id is the whole credential for a `?view=` link, and a uuid spent 36
 characters carrying it, which pushed share links to ~69 characters and guest
@@ -150,6 +176,44 @@ scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, and `REPLICATE_API_TOKEN` —
 the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
+
+**Notes can take over the picture** (`src/lib/overlays.ts`,
+`src/components/VideoOverlays.tsx`). A note's optional `overlay` field carries
+a **cover** (a full-frame image that stands in for the video while the audio
+keeps playing) and/or a **pin** (a dot at `pinX`/`pinY`, 0–1 fractions of the
+frame, captioned with the note's own text). Both are aimed **on the frame
+itself**, by dragging: a pin goes where the pointer goes, and a `Fill` cover
+slides under the window to choose which part survives the crop
+(`coverX`/`coverY`, CSS `object-position`, absent meaning dead centre). Only
+the note open in the inspector is draggable, and only then does the layer take
+the pointer at all. Cover images arrive by picker *or* by dropping a file on
+the inspector's "On the video" section, and every one is downscaled to 1600px
+and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
+carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a
+PNG screen grab). Both show over the note's window —
+its `start`→`end`, or `hold` seconds (default 4) from `start` for a point note
+— *and* whenever the note is open in the inspector, so a cover can be composed
+without scrubbing onto its moment. Video sources only, the same line
+`clipStart`/`clipEnd` draw: an audio track's waveform is the picture. The layer
+rides PlayerPane's existing `overlay` slot, painted *before* the transport so
+the transport stays clickable over a cover; it is `pointer-events-none`
+throughout except the selected note's pin, so clicking the picture still
+reaches the player's own click-to-pause catcher.
+
+The layer is **always dark, in both themes** — it sits on the picture, where the
+light page's surfaces mean nothing — so note hues on it go through
+`hueOnDark()` rather than `hueText()` (`src/lib/noteColors.ts`); the two are
+mirror images, one lifting a hue toward white for a dark box, the other mixing
+it toward ink for the white page.
+
+The trap to remember: **a cover image is a note image that isn't in the note
+HTML.** It lives under the same `users/{uid}/images/{projectId}/` prefix, so
+purge sweeps collect it for free — but `api/blobs/gc.ts` decides what's an
+orphan by matching blob URLs against the strings it's handed, and
+`lib/copyProject.ts` re-uploads by scanning HTML. Both are fed
+`coverUrls(annotations)` alongside the HTML; drop that and the GC deletes live
+covers on the next project open. Anything else that walks a project's images
+must read it too.
 
 **PDF scores** (`src/lib/score.ts`, `src/components/ScoreLayer.tsx`): a track
 can carry the printed music, drawn over the picture so the page and the sound
@@ -182,7 +246,17 @@ control, and turning the page is the whole feature.
 
 The layer sits between the picture and the transport (PlayerPane's `score`
 slot), so 'score' mode can be fully opaque with the transport still reachable;
-'overlay' drops the ground and dims the *page* instead. An audio track's
+'overlay' drops the ground and dims the *page* instead.
+
+**Three layers share the video frame**, and the score is the one that moves.
+Note covers and pins sit at `z-10` and the transport at `z-20`; the score
+paints at `z-[5]` — just under the covers — or at `z-[15]` when the score's
+`onTop` is set, and never above the transport whatever the setting. The order
+is a z-index rather than a position in the JSX so that flipping it doesn't
+remount the layer and re-fetch the PDF. Default off, because a note that takes
+over the picture is a deliberate interruption and the score is the steady
+background to the whole track; a track whose score is the point and whose
+covers are asides turns it on. An audio track's
 waveform is the picture and must stay uncovered, so its score takes its own
 frame above — the same rule the transport follows. A 16:9 frame is a poor
 window on a portrait page, hence the expand button: the same document and page
@@ -229,6 +303,21 @@ own `sanitizeScore` pass. An uploaded score is also re-hosted by
 `copySharedProject`, like a note image: a copy pointing at the original's blob
 would go blank the day that project is purged.
 Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
+
+**The schema is published, so it can't be allowed to go stale.**
+`public/track-schema.md` is the human- and LLM-readable spec of that envelope,
+served raw at `/track-schema.md` (a `vercel.json` header — and a small dev
+plugin in `vite.config.ts` — force `text/plain; charset=utf-8`, or the em
+dashes come back as mojibake). The Import menu on the home page links it and
+copies its URL, because the point of it is that a teacher with a listening
+guide and no export to copy hands the link to an AI assistant and gets a
+valid track file back. `scripts/check-schema-doc.mjs` runs as the first step
+of `npm run build`, so a field added to `Project` / `ProjectSource` /
+`Annotation` / `NoteBlock` / `ProjectSettings` without a row in that doc
+fails the deploy. It also checks the reverse (a documented field that no
+longer exists) and that every documented, exported field is actually named in
+`projectJson.ts` — the maintenance contract, enforced rather than trusted.
+The doc's `<!-- fields: X -->` markers are what the check reads.
 
 ## Design Context
 

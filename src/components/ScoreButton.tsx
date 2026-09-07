@@ -328,6 +328,23 @@ function ScoreSettings({
       )}
 
       {view.mode !== 'off' && (
+        <button
+          type="button"
+          onClick={() => onView({ onTop: !view.onTop })}
+          aria-pressed={view.onTop}
+          title="Note covers and pins take over the picture; this decides whether they cover the score too. The transport stays on top either way."
+          className="flex w-full items-center justify-between gap-2 rounded px-0.5 py-1 text-left hover:bg-raised"
+        >
+          <span
+            className={`text-[12px] ${view.onTop ? 'text-fg' : 'text-muted'}`}
+          >
+            Keep above note covers
+          </span>
+          <span className="switch" data-on={view.onTop || undefined} />
+        </button>
+      )}
+
+      {view.mode !== 'off' && (
         <div>
           <Label>Fit</Label>
           <div className="seg mt-1 grid grid-cols-2">

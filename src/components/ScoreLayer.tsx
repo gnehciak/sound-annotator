@@ -218,11 +218,24 @@ export default function ScoreLayer({
   // 'overlay' drops the ground entirely and turns the *page* down, so the
   // picture reads through the staves and around them; dimming a black ground
   // as well would only make both halves murky.
+  //
+  // Three layers share this frame, and the score is the one that moves. Note
+  // covers and pins (VideoOverlays) sit at z-10 and the transport at z-20, so
+  // the score paints just under the covers by default and just over them when
+  // the track says so — never over the transport, whatever the setting: a
+  // score you can't pause behind is not an improvement. The order is a
+  // z-index rather than a position in the tree so that flipping it doesn't
+  // remount the layer and re-fetch the PDF.
   return (
     <div
-      className={`absolute inset-0 z-10 transition-opacity duration-200 ease-instr ${
-        view.mode === 'score' ? 'bg-black' : ''
-      }`}
+      // Inert except for its chrome, the same rule VideoOverlays follows: a
+      // page drawn across the frame must not eat the clicks aimed at what's
+      // behind it — the player's own click-to-pause catcher, and a selected
+      // note's draggable pin. The exception is a width-fitted page, which is
+      // taller than the frame and has to take the pointer to be scrolled.
+      className={`pointer-events-none absolute inset-0 transition-opacity duration-200 ease-instr ${
+        view.onTop ? 'z-[15]' : 'z-[5]'
+      } ${view.mode === 'score' ? 'bg-black' : ''}`}
       style={view.mode === 'overlay' ? { opacity: view.opacity } : undefined}
     >
       {surface}
@@ -319,7 +332,9 @@ function ScoreSurface({
       // ResizeObserver reports the *content* box, so the chrome's padding is
       // subtracted from the fit for free — the page is drawn into what's left.
       className={`h-full w-full ${pad} ${
-        fit === 'width' ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'
+        fit === 'width'
+          ? 'pointer-events-auto overflow-y-auto overflow-x-hidden'
+          : 'overflow-hidden'
       }`}
     >
       <div
@@ -378,7 +393,7 @@ function ScoreChrome({
 }) {
   const btn = 'btn-icon on-video press disabled:opacity-30'
   return (
-    <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-8 pt-1.5">
+    <div className="pointer-events-auto absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-8 pt-1.5">
       <button
         type="button"
         onClick={() => onStep(-1)}

@@ -80,6 +80,7 @@ import {
 import { useMediaQuery } from './lib/useMediaQuery'
 import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
+import { coverUrls, patchOverlay } from './lib/overlays'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Eye,
@@ -95,8 +96,16 @@ import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
 import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
-import { canonicalizeProjectParam, homeHref } from './lib/nav'
+import {
+  HOME,
+  canonicalizeProjectParam,
+  homeHref,
+  navigate,
+  resolveProject,
+  useRoute,
+} from './lib/nav'
 import PlayerPane from './components/PlayerPane'
+import VideoOverlays from './components/VideoOverlays'
 import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
@@ -130,27 +139,41 @@ import { isStructureProject } from './lib/sections'
 import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
-import { newId } from './lib/ids'
+import { newId, publicId } from './lib/ids'
 import { useIsAdmin } from './lib/admin'
 
 const uid = () => newId()
 const now = () => Date.now()
 
 // ---- URL <-> view ---------------------------------------------------------
-// No router: `/` is the home page (the project library) and `?track={id}` is a
-// deep link into the editor. Share links use `?view=` and never reach App —
-// main.tsx routes them to the ShareViewer before this module matters.
+// Every place in this component is a route (lib/nav.ts), and the URL is the
+// only copy of it: `?` is the library, `?folder=` a folder, `?trash=1` the
+// trash, `?browse=1` the Browse gallery, `?track=` the editor. Navigating
+// means calling `navigate()`; a single effect below reconciles the open track
+// to whatever the address bar says, so Back and forward need no special case —
+// they're just another way the route changes.
 
-/** The app URL for a given open track (or the home page when null). */
-const trackUrl = (id: string | null) =>
-  id ? `${window.location.pathname}?track=${id}` : window.location.pathname
+// Which home tab the user left the app on. Not the route — the route is the
+// truth about where you *are* — but the tab a bare `/` should resolve to when
+// the app is opened cold, so a teacher mid-lesson lands back on their bench.
+// Applied once on load (below) by rewriting the URL, never by silently
+// disagreeing with it.
+const HOME_TAB_KEY = 'sound-annotator:home-view'
 
-/** Reflect a navigation in the URL (popstate drives the reverse direction). */
-function syncUrl(id: string | null, mode: 'push' | 'replace' = 'push') {
-  const url = trackUrl(id)
-  if (url === window.location.pathname + window.location.search) return
-  if (mode === 'push') window.history.pushState({ track: id }, '', url)
-  else window.history.replaceState({ track: id }, '', url)
+const stickyHomeTab = (): 'library' | 'browse' => {
+  try {
+    return localStorage.getItem(HOME_TAB_KEY) === 'browse' ? 'browse' : 'library'
+  } catch {
+    return 'library'
+  }
+}
+
+const rememberHomeTab = (tab: 'library' | 'browse') => {
+  try {
+    localStorage.setItem(HOME_TAB_KEY, tab)
+  } catch {
+    /* private mode — the tab just won't stick */
+  }
 }
 
 // How long consecutive ±step seeks keep accumulating against the same target
@@ -189,11 +212,16 @@ export default function App() {
   const [loadingProjects, setLoadingProjects] = useState(true)
 
   // Home-page folders. Outside the undo history (folder CRUD and track moves
-  // are not undoable); persisted immediately via folderStore. `openFolderId`
-  // lives here, not in HomePage, so the open folder survives a trip into the
-  // editor and folder deletion can clear it in one place.
+  // are not undoable); persisted immediately via folderStore.
   const [folders, setFolders] = useState<Folder[]>([])
-  const [openFolderId, setOpenFolderId] = useState<string | null>(null)
+
+  // Where we are. The open folder, the trash and the Browse tab are all read
+  // off the URL rather than held as state, which is what makes each of them a
+  // history entry the browser can go back to.
+  const route = useRoute()
+  const openFolderId = route.page === 'library' ? route.folder : null
+  const homeTab = route.page === 'browse' ? 'browse' : 'library'
+  const trashOpen = route.page === 'trash'
 
   // The trash, deliberately kept out of `projects`: a deleted track must never
   // turn up in search, a folder's tally, the editor, or the undo history, and
@@ -740,7 +768,7 @@ export default function App() {
     // straight off the URL, and they land in it rather than on a home screen
     // that would be empty by construction.
     if (isGuest) {
-      const id = new URLSearchParams(window.location.search).get('track')
+      const id = route.page === 'track' ? route.id : null
       void (async () => {
         const p = id ? await fetchSharedProject(id) : null
         if (cancelled) return
@@ -780,12 +808,12 @@ export default function App() {
         setTrashed(loadedTrash)
         // Land on the home page — unless the URL deep-links (`?track=`) to a
         // track we actually own; a dead link falls back home and is cleaned.
-        const urlId = new URLSearchParams(window.location.search).get('track')
+        const urlId = route.page === 'track' ? route.id : null
         // A deep link to a track we don't own may be an editable share link
         // ("Edit" from the viewer): fetch it and join it to the session list.
         // It stays out of the home library and is gone on the next sign-in.
         let all = loaded
-        if (urlId && !loaded.some((p) => p.id === urlId)) {
+        if (urlId && !resolveProject(loaded, urlId)) {
           const foreign = await fetchSharedProject(urlId)
           if (cancelled) return
           // A foreign project joins the session when its link says it may
@@ -794,8 +822,7 @@ export default function App() {
           // API grants owner rights only to an ADMIN_EMAILS address, so anyone
           // else arriving with that flag would simply watch their saves fail.
           // Keeping the real check server-side is the point.
-          const sentByConsole =
-            new URLSearchParams(window.location.search).get('admin') === '1'
+          const sentByConsole = route.page === 'track' && route.admin
           const joinable =
             foreign != null &&
             foreign.ownerId !== user.uid &&
@@ -804,8 +831,14 @@ export default function App() {
               sentByConsole)
           if (joinable) all = [...loaded, foreign]
         }
-        const deepLink = urlId && all.some((p) => p.id === urlId) ? urlId : null
-        if (urlId && !deepLink) syncUrl(null, 'replace')
+        // The address bar may carry a legacy project's short alias rather
+        // than its id, so resolve rather than compare (lib/nav.ts).
+        const landed = resolveProject(all, urlId)
+        const deepLink = landed?.id ?? null
+        if (urlId && !deepLink) navigate(HOME, 'replace')
+        // Arrived on a legacy project's 36-character uuid link: show the short
+        // one instead, so what's in the address bar is what's worth copying.
+        else if (landed) canonicalizeProjectParam('track', landed)
         // Baseline the history to the freshly loaded set (clears any prior
         // undo/redo stacks); nothing before sign-in should be undoable.
         resetHistory(all, deepLink)
@@ -821,22 +854,52 @@ export default function App() {
     return () => {
       cancelled = true
     }
+    // `route` is read for the deep link the app *loaded* on; re-running this
+    // on every later navigation would re-fetch the whole library.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isGuest, resetHistory])
 
-  // Back/forward: re-derive the open track from the URL. An id that no longer
-  // exists (deleted track, stale entry) falls back to home and cleans the URL.
+  // The one place the editor follows the URL. Every navigation — a click, or
+  // Back/forward/swipe — changes `route`, and this reconciles the open track
+  // to it; nothing else calls resetHistory for navigation's sake. An id that
+  // no longer resolves (deleted track, stale link) falls back home and cleans
+  // the address bar.
+  //
+  // Skipped for a guest: they own exactly one project, reached only by the
+  // link they hold, and rewriting that URL would drop the `key` in it.
   useEffect(() => {
-    const onPop = () => {
-      const id = new URLSearchParams(window.location.search).get('track')
-      const valid =
-        id && projectsRef.current.some((p) => p.id === id) ? id : null
-      if (id && !valid) syncUrl(null, 'replace')
-      setSelectedNoteId(null)
-      resetHistory(projectsRef.current, valid)
+    if (!hydratedRef.current || isGuest) return
+    const wanted = route.page === 'track' ? route.id : null
+    const target = resolveProject(projectsRef.current, wanted)
+    if (wanted && !target) {
+      navigate(HOME, 'replace')
+      return
     }
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [resetHistory])
+    const id = target?.id ?? null
+    if (id === currentIdRef.current) return
+    setSelectedNoteId(null)
+    resetHistory(projectsRef.current, id)
+  }, [route, isGuest, resetHistory])
+
+  // A folder that isn't there any more (deleted on another device, or a link
+  // from someone else's library) is a dead deep link: show the root and say so
+  // in the URL, rather than leaving `?folder=` pointing at nothing.
+  useEffect(() => {
+    if (loadingProjects) return
+    if (route.page !== 'library' || !route.folder) return
+    if (!folders.some((f) => f.id === route.folder)) navigate(HOME, 'replace')
+  }, [route, folders, loadingProjects])
+
+  // Opened cold on a bare `/`: land on whichever home tab was last used, by
+  // rewriting the URL rather than by rendering something it doesn't say.
+  // `replace`, so there's no phantom entry to go Back to.
+  const bouncedRef = useRef(false)
+  useEffect(() => {
+    if (bouncedRef.current) return
+    bouncedRef.current = true
+    if (route.page === 'library' && !route.folder && stickyHomeTab() === 'browse')
+      navigate({ page: 'browse' }, 'replace')
+  }, [route])
 
   // Persist changed projects (debounced — TipTap fires onUpdate on every
   // keystroke). Only projects whose object reference changed are written.
@@ -922,8 +985,14 @@ export default function App() {
     if (current.ownerId && current.ownerId !== user.uid) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
-    const html = current.annotations.map((a) => a.contentHtml)
-    reconcileProjectImages(user.uid, current.id, html)
+    // Cover images are note images too, but they hang off the note's `overlay`
+    // rather than its HTML — hand them over as well or the sweep would read a
+    // live cover as an orphan and delete it out from under the note.
+    const referenced = [
+      ...current.annotations.map((a) => a.contentHtml),
+      ...coverUrls(current.annotations),
+    ]
+    reconcileProjectImages(user.uid, current.id, referenced)
       .then((n) => {
         if (n) console.info(`Swept ${n} orphaned image(s) from this project.`)
       })
@@ -992,26 +1061,41 @@ export default function App() {
   // ---- home / editor navigation ------------------------------------------
   // Opening and closing tracks are lifecycle boundaries (like create/delete):
   // both re-baseline the history, so undo can never switch tracks under the
-  // URL, and both reflect themselves in it (popstate drives the reverse).
+  // URL. They also push a history entry, which is what Back returns to; the
+  // reconciler above then does the reverse for free.
+  //
+  // The URL always carries the project's *public* id (its short alias, for
+  // rows that predate short ids) — see lib/ids.ts.
   function openTrack(id: string) {
+    const p = projects.find((x) => x.id === id)
+    if (!p) return
     setSelectedNoteId(null)
     resetHistory(projects, id)
-    syncUrl(id)
+    navigate({ page: 'track', id: publicId(p), key: null, admin: false })
   }
   function goHome() {
     setSelectedNoteId(null)
     resetHistory(projects, null)
-    syncUrl(null)
+    navigate(HOME)
   }
   /** Back from the editor: home, landed inside the track's folder (root when
       it has none — or when its folderId is foreign/stale and we don't own it). */
   function goBack() {
     const folderId = current?.folderId ?? null
-    setOpenFolderId(
-      folderId && folders.some((f) => f.id === folderId) ? folderId : null,
-    )
-    goHome()
+    setSelectedNoteId(null)
+    resetHistory(projects, null)
+    navigate({
+      page: 'library',
+      folder: folderId && folders.some((f) => f.id === folderId) ? folderId : null,
+    })
   }
+  /** The home page's Library / Browse tabs, and its Trash destination. */
+  function openHomeTab(tab: 'library' | 'browse') {
+    rememberHomeTab(tab)
+    navigate(tab === 'browse' ? { page: 'browse' } : HOME)
+  }
+  const openFolder = (id: string | null) => navigate({ page: 'library', folder: id })
+  const openTrash = () => navigate({ page: 'trash' })
 
   function createProject(kind?: 'structure') {
     const p: Project = {
@@ -1028,7 +1112,7 @@ export default function App() {
     // Adding a track is a lifecycle boundary, not an undoable edit — re-baseline
     // so undo can't later cross it and silently drop the new track.
     resetHistory([p, ...projects], p.id)
-    syncUrl(p.id)
+    navigate({ page: 'track', id: p.id, key: null, admin: false })
   }
 
   // ---- trash ---------------------------------------------------------------
@@ -1052,7 +1136,7 @@ export default function App() {
     // an undo that would resurrect a track the server has trashed. Deleting
     // the open track lands back on the home page.
     resetHistory(remaining, currentId === id ? null : currentId)
-    if (currentId === id) syncUrl(null, 'replace')
+    if (currentId === id) navigate(HOME, 'replace')
   }
 
   function restoreProject(id: string) {
@@ -1131,7 +1215,7 @@ export default function App() {
       ps.map((p) => (p.folderId === id ? { ...p, folderId: null } : p)),
     )
     setFolders((fs) => fs.filter((f) => f.id !== id))
-    if (openFolderId === id) setOpenFolderId(null)
+    if (openFolderId === id) navigate(HOME, 'replace')
     void deleteFolderDoc(id).catch((err) =>
       console.error('Failed to delete folder:', err),
     )
@@ -1365,6 +1449,35 @@ export default function App() {
         opts?.coalesceKey ? { coalesceKey: opts.coalesceKey } : undefined,
       )
     }
+  }
+
+  /**
+   * Land a pin dragged across the video frame. The drag itself is local to
+   * VideoOverlays (one save per release, not per pointer move); a run of drags
+   * on the same pin collapses into one undo step.
+   */
+  function movePin(annId: string, x: number, y: number) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    updateAnnotation(annId, patchOverlay(a, { pinX: x, pinY: y }), {
+      coalesceKey: `pin:${annId}`,
+    })
+  }
+
+  /** Land a repositioned fill crop — same one-save-per-release deal as movePin. */
+  function moveCover(annId: string, x: number, y: number) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    updateAnnotation(
+      annId,
+      // Dead centre is the default, so store nothing for it: a crop nobody
+      // aimed shouldn't carry two numbers through export and import.
+      patchOverlay(a, {
+        coverX: x === 0.5 ? undefined : x,
+        coverY: y === 0.5 ? undefined : y,
+      }),
+      { coalesceKey: `cover:${annId}` },
+    )
   }
 
   // Persist a manual order for a group of same-time notes: `orderedIds` is the
@@ -1852,6 +1965,31 @@ export default function App() {
     />
   ) : null
 
+  /**
+   * What floats inside the video frame: the note stage layer (covers + pins)
+   * with the transport on top of it. Composed in that order deliberately —
+   * PlayerPane paints the slot's children last-on-top, so the transport stays
+   * clickable over a full-frame cover.
+   *
+   * The score is *not* in here. It goes in PlayerPane's own `score` slot so
+   * that which of the two sits in front is a z-index the score's own setting
+   * moves (see ScoreLayer), not a position in this tree — reordering the JSX
+   * would remount the layer and re-fetch the PDF every time the toggle flips.
+   */
+  const videoOverlay = (
+    <>
+      <VideoOverlays
+        annotations={current?.annotations ?? []}
+        currentTime={currentTime}
+        selectedId={selectedNoteId}
+        readOnly={effectiveViewOnly}
+        onMovePin={movePin}
+        onMoveCover={moveCover}
+      />
+      {transport}
+    </>
+  )
+
   const regionSpecs = current
     ? current.annotations.map((a) => ({
         id: a.id,
@@ -2184,7 +2322,11 @@ export default function App() {
           trashed={trashed}
           folders={folders}
           openFolderId={openFolderId}
-          onOpenFolder={setOpenFolderId}
+          onOpenFolder={openFolder}
+          homeTab={homeTab}
+          onSwitchHomeTab={openHomeTab}
+          trashOpen={trashOpen}
+          onOpenTrash={openTrash}
           onOpenTrack={openTrack}
           onCreateTrack={createProject}
           onDeleteTrack={removeProject}
@@ -2316,7 +2458,7 @@ export default function App() {
                         // Video: the same floating transport as the notes
                         // workspace. Audio keeps the folded well below.
                         overlay={
-                          isVideoSource(current.source) ? transport : undefined
+                          isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         score={
                           isVideoSource(current.source) ? scoreLayer : undefined
@@ -2489,7 +2631,7 @@ export default function App() {
                         // edge. Audio keeps it docked below (the waveform is
                         // the picture and must stay uncovered).
                         overlay={
-                          isVideoSource(current.source) ? transport : undefined
+                          isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         score={
                           isVideoSource(current.source) ? scoreLayer : undefined
@@ -2504,8 +2646,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  {!isVideoSource(current.source) && transport}
-                  <TransportHints readOnly={effectiveViewOnly} />
+                  {/* Video: the transport floats inside the frame, so the
+                      hints belong out here. Audio docks the transport, which
+                      renders its own hints — don't double them up. */}
+                  {isVideoSource(current.source) ? (
+                    <TransportHints readOnly={effectiveViewOnly} />
+                  ) : (
+                    transport
+                  )}
 
                   {/* Stem mixer — only on analyzed tracks (section detection
                       saved their separated stems). Playback-only, so it stays
@@ -2688,6 +2836,7 @@ export default function App() {
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
                           allowImages
+                          allowOverlays={isVideoSource(current.source)}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2736,6 +2885,7 @@ export default function App() {
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
             allowImages
+            allowOverlays={isVideoSource(current?.source)}
           />
         </PluginWindow>
       )}
