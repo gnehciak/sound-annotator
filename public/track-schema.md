@@ -87,6 +87,7 @@ them into a file has no effect: the importer ignores every one.
 | `folderId` | The import lands in whichever folder is open. |
 | `stems` | Separated audio written only by AI section detection; bytes, not document content. |
 | `deletedAt` | Trash state. Server-set only. |
+| `myRole` | What the *current caller* may do here, stamped on every read. A property of who is asking, not of the track. |
 
 <!-- /fields -->
 

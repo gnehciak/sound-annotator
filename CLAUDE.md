@@ -38,6 +38,26 @@ never written). The SPA calls Vercel Functions in `/api`
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
 the server-stamped edit lock (see `api/projects/[id]/index.ts`).
 
+**Sharing is two independent halves, and there is only ever one URL.** The
+*link* (`shared` / `editable_by_link` / `published`) says what anyone holding
+`?view=<publicId>` may do; the *people* list (`project_shares`, one row per
+invited email) says what one named person may do on top of that. So a
+read-only link handed to a class plus an `editor` invite sent to a colleague is
+the ordinary shape — neither setting has to be weakened to express the other.
+Publishing is **not** a second link: the Browse card opens that same `?view=`
+address, so `published` implies `shared` and is refused while
+`editable_by_link` is on (the PUT coerces the pair rather than trusting the
+client). Invites are keyed by **email**, like `ADMIN_EMAILS` and for the same
+reason — the row is written before the person has necessarily signed in, and it
+survives a Clerk instance move. An `editor` invite carries exactly the link
+editor's rights (content fields only, same edit lock); a `viewer` invite
+carries exactly a view link's. Because none of that is legible from the project
+row, every read stamps `myRole` on the response (`api/_lib/db.ts`) — that, not
+a client guess, is what makes the share viewer offer an Edit button to an
+invited editor. `api/projects/[id]/shares.ts` is owner-only on all three verbs,
+deliberately including the admin: an allowlist that can hard-delete work has no
+business quietly widening access to it.
+
 **Deleting is a trash, not a delete.** `DELETE /api/projects/:id` only stamps
 `deleted_at`; the row stays whole (notes, images, `shared`/`published`) so
 restore is exact, and every read filters on `deleted_at IS NULL` rather than
@@ -50,7 +70,9 @@ permanent delete, which tears down the bytes client-side first).
 `api/cron/purge-trash.ts` hard-deletes anything past `TRASH_TTL_MS` (30 days,
 `api/_lib/db.ts`) plus **every** blob prefix a project owns (images, scores,
 legacy audio, stems, analysis — keep it in step with App's `purgeProject`,
-since a prefix only one of them knows is bytes nobody collects). Daily, and gated on a
+since a prefix only one of them knows is bytes nobody collects) and its
+`project_shares` rows, by the row's real id (an alias must never reach a delete
+predicate, or the invite rows outlive the project they name). Daily, and gated on a
 `CRON_SECRET` env var it refuses to run without. Blobs are torn down **only at
 purge**, never at trash. The trash rides its own listing (`?trash=1`) into its
 own App state, never `projects` — a trashed track must never reach search,

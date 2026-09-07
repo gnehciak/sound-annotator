@@ -1414,14 +1414,20 @@ function TrackTile({
             exact) but stops being true while it's in there — the links 404 and
             the gallery card is gone. So the chips go quiet too, rather than
             promise a live link for a track nobody can reach. */}
-        {!trashed && p.published && (
+        {/* One link, so one chip: listed on Browse is the louder fact and
+            implies the link is live, so it stands in for "Shared" rather than
+            sitting beside it. */}
+        {!trashed && (p.published || p.shared) && (
           <span className="chip chip-signal">
-            <Globe size={10} /> Published
-          </span>
-        )}
-        {!trashed && p.shared && (
-          <span className="chip chip-signal">
-            <Eye size={10} /> Shared
+            {p.published ? (
+              <>
+                <Globe size={10} /> On Browse
+              </>
+            ) : (
+              <>
+                <Eye size={10} /> Link on
+              </>
+            )}
           </span>
         )}
         {folderName && (

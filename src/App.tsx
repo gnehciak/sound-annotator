@@ -424,8 +424,14 @@ export default function App() {
   // account owns it, so share/source/folder powers are off the table here.
   const isForeign =
     !!user && !!current?.ownerId && current.ownerId !== user.uid
-  // The owner switched the link back to view-only while we were in it.
-  const foreignRevoked = isForeign && current?.editableByLink !== true
+  // The owner switched the link back to view-only while we were in it — but an
+  // email invite is a grant to *this person*, so it outlives a link the owner
+  // narrows for everyone else.
+  const foreignRevoked =
+    isForeign &&
+    current?.editableByLink !== true &&
+    current?.myRole !== 'editor' &&
+    current?.myRole !== 'owner'
 
   // While locked out, each server snapshot replaces our copy of the project,
   // so the read-only view tracks the live editor and a take-over starts from
@@ -827,6 +833,9 @@ export default function App() {
             foreign != null &&
             foreign.ownerId !== user.uid &&
             (foreign.editableByLink === true ||
+              // Invited by email: the server already decided this on the fetch
+              // above and stamped the answer on the row.
+              foreign.myRole === 'editor' ||
               foreign.ownerId?.startsWith('guest:') === true ||
               sentByConsole)
           if (joinable) all = [...loaded, foreign]

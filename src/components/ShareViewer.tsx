@@ -64,7 +64,7 @@ import { exportAnswerSheetPdf } from '../lib/answerSheet'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
-import { canonicalizeProjectParam } from '../lib/nav'
+import { canonicalizeProjectParam, routeHref } from '../lib/nav'
 
 type Status = 'loading' | 'ready' | 'notfound'
 
@@ -585,12 +585,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
           {project.title}
         </span>
-        {/* The owner set the link role to "Can edit": hand off to the full
-            editor (the Gate signs the visitor in; App then loads this track
-            by id and the edit lock serializes who edits). */}
-        {project.editableByLink && (
+        {/* The link says "can edit", or this signed-in visitor was invited as
+            an editor by email: hand off to the full editor (the Gate signs the
+            visitor in; App then loads this track by id and the edit lock
+            serializes who edits). */}
+        {(project.editableByLink || project.myRole === 'editor') && (
           <a
-            href={`${window.location.pathname}?track=${project.id}`}
+            href={routeHref({ page: 'track', id: project.id, key: null, admin: false })}
             title="Edit this track's notes — you'll be asked to sign in with Google"
             className="btn-signal press shrink-0"
           >
