@@ -44,9 +44,16 @@ interface Props {
    *  filter them out of a search or a tally. */
   trashed: Project[]
   folders: Folder[]
-  /** Open folder (null = root library). Owned by App so it survives editor trips. */
+  /** Open folder (null = root library). Comes off the URL — App reads the
+   *  route — so a folder is a place the browser can go Back to. */
   openFolderId: string | null
   onOpenFolder: (id: string | null) => void
+  /** Your library, or the public Browse gallery. Also a route (`?home=browse`). */
+  homeTab: 'library' | 'browse'
+  onSwitchHomeTab: (tab: 'library' | 'browse') => void
+  /** The trash (`?trash=1`) — a destination beside the folders, not one of them. */
+  trashOpen: boolean
+  onOpenTrash: () => void
   onOpenTrack: (id: string) => void
   /** Creates in the open folder (App reads openFolderId) and opens the editor.
    *  Pass 'structure' for a song-structure board (the section timeline). */
@@ -105,18 +112,9 @@ const salutation = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-/** Which home view is on: your library, or the public Browse gallery. */
+/** Which home view is on: your library, or the public Browse gallery. Both are
+ *  routes now (App owns them); the sticky "last bench" lives there too. */
 type HomeView = 'library' | 'browse'
-
-const VIEW_KEY = 'sound-annotator:home-view'
-
-const loadView = (): HomeView => {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'browse' ? 'browse' : 'library'
-  } catch {
-    return 'library'
-  }
-}
 
 /**
  * Stagger helper for the dashboard cascade: base delay plus a per-index step,
@@ -149,6 +147,10 @@ export default function HomePage({
   folders,
   openFolderId,
   onOpenFolder,
+  homeTab: view,
+  onSwitchHomeTab: switchView,
+  trashOpen,
+  onOpenTrash,
   onOpenTrack,
   onCreateTrack,
   onDeleteTrack,
@@ -165,17 +167,6 @@ export default function HomePage({
 }: Props) {
   const theme = useResolvedTheme()
   const { user } = useAuth()
-  // Library vs the public Browse gallery. Sticky across visits — a teacher
-  // mid-lesson reopening the app lands back on whichever bench they left.
-  const [view, setView] = useState<HomeView>(loadView)
-  const switchView = (v: HomeView) => {
-    setView(v)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {
-      /* private mode — the view just won't stick */
-    }
-  }
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -190,14 +181,17 @@ export default function HomePage({
   const [cascading, setCascading] = useState(true)
   // The trash is a destination like a folder, but not a folder: App must never
   // see it as openFolderId, or a track created while it's open would be born
-  // into it. So it's local, and this key — not openFolderId alone — is what
-  // "which view am I in" means for the cascade and the remount below.
-  const [trashOpen, setTrashOpen] = useState(false)
+  // into it. It's its own route, and this key — not openFolderId alone — is
+  // what "which view am I in" means for the cascade and the remount below.
   const viewKey = trashOpen ? 'trash' : openFolderId ?? 'root'
   const [lastViewKey, setLastViewKey] = useState(viewKey)
   if (lastViewKey !== viewKey) {
     setLastViewKey(viewKey)
     setCascading(true)
+    // Arriving in the trash clears the search: the two fight over the same
+    // tile grid, and a stale query would hide the track you came to restore.
+    // Here rather than in the click handler, so Back into the trash does it too.
+    if (viewKey === 'trash') setQuery('')
   }
   useEffect(() => {
     // 1.2s covers header rise (~320ms) + tracks-heading delay (240ms) + 12-tile
@@ -206,19 +200,9 @@ export default function HomePage({
     return () => clearTimeout(t)
   }, [viewKey])
 
-  // Opening the trash clears the search: the two would otherwise fight over the
-  // same tile grid, and a stale query would hide the track you came to restore.
-  const openTrash = () => {
-    setQuery('')
-    setTrashOpen(true)
-  }
-  const leaveTrash = () => setTrashOpen(false)
-  // Any folder navigation leaves the trash — it's a sibling destination, not a
-  // layer on top of one.
-  const goToFolder = (id: string | null) => {
-    setTrashOpen(false)
-    onOpenFolder(id)
-  }
+  // Leaving the trash is just going to the library root — sibling destinations,
+  // not a layer on top of one, so the same navigation covers both.
+  const leaveTrash = () => onOpenFolder(null)
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -527,7 +511,7 @@ export default function HomePage({
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       enterDelay={cascading ? stagger(140, i) : '0ms'}
-                      onOpen={() => goToFolder(f.id)}
+                      onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
                         setRenamingId(null)
@@ -546,7 +530,7 @@ export default function HomePage({
                     enterDelay={
                       cascading ? stagger(140, folders.length) : '0ms'
                     }
-                    onOpen={openTrash}
+                    onOpen={onOpenTrash}
                     onDropTrack={onDeleteTrack}
                   />
                   <button
