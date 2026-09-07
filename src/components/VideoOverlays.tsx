@@ -8,7 +8,7 @@ import {
 import { Move } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
-import { colorForId } from '../lib/noteColors'
+import { colorForId, hueOnDark } from '../lib/noteColors'
 import { coverPosition, isFilled, pinCaption, visibleLayer } from '../lib/overlays'
 
 interface Props {
@@ -237,13 +237,14 @@ export default function VideoOverlays({
             }`}
           />
           {coverArmed && (
-            <span
-              className="on-video-card pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 items-center py-1 text-[11px] text-white/70"
-              style={{ ['--hue' as string]: cover.color ?? colorForId(cover.id) }}
-            >
-              <Move size={11} className="shrink-0" />
-              Drag to choose what the crop keeps
-            </span>
+            // Chrome, not data: the hint keeps the default white --hue rather
+            // than the note's, so hue on this layer only ever means identity.
+            <div className="on-video-pop pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 animate-fade-in">
+              <span className="on-video-pop__label whitespace-nowrap text-white/75">
+                <Move size={11} className="shrink-0" />
+                Drag to aim the crop
+              </span>
+            </div>
           )}
         </>
       )}
@@ -251,25 +252,30 @@ export default function VideoOverlays({
       {pins.map((a) => {
         const { x, y } = posOf(a)
         const hue = a.color ?? colorForId(a.id)
+        // The layer is dark whatever the theme, so the hue takes the
+        // dark-surface treatment even on the light page.
+        const ink = hueOnDark(hue)
         const caption = pinCaption(a)
         const armed = editable && !!onMovePin && a.id === selectedId
-        // The card opens away from the nearer edge and is capped at the
-        // distance to the far one, so a long note wraps inside the frame
-        // instead of running off the picture — then capped again at a readable
-        // measure, because a caption spanning half a lecture-hall screen is a
-        // wall of text, not an annotation. Both caps are percentages of the
-        // frame, which is why the card is a sibling of the dot rather than its
-        // child: a percentage needs the frame as its containing block.
+        // The box opens away from the nearer edge and is capped at the distance
+        // to the far one, so a long note wraps inside the frame instead of
+        // running off the picture — then capped again at a readable measure,
+        // because a caption spanning half a lecture-hall screen is a wall of
+        // text, not an annotation. Both caps are percentages of the frame,
+        // which is why the box is a sibling of the dot rather than its child:
+        // a percentage needs the frame as its containing block.
         const flipX = x > 0.55
         const flipY = y > 0.72
         const pct = (n: number) => `${n * 100}%`
+        // Level the label row with the dot, so the leader runs straight into it.
+        const near = (v: string) => `calc(${v} - 11px)`
         const cardStyle: CSSProperties = {
-          left: flipX ? undefined : `calc(${pct(x)} + 14px)`,
-          right: flipX ? `calc(${pct(1 - x)} + 14px)` : undefined,
-          top: flipY ? undefined : `calc(${pct(y)} - 6px)`,
-          bottom: flipY ? `calc(${pct(1 - y)} - 6px)` : undefined,
-          maxWidth: `min(calc(${pct(flipX ? x : 1 - x)} - 22px), 22rem)`,
-          ['--hue' as string]: hue,
+          left: flipX ? undefined : `calc(${pct(x)} + 20px)`,
+          right: flipX ? `calc(${pct(1 - x)} + 20px)` : undefined,
+          top: flipY ? undefined : near(pct(y)),
+          bottom: flipY ? near(pct(1 - y)) : undefined,
+          maxWidth: `min(calc(${pct(flipX ? x : 1 - x)} - 28px), 21rem)`,
+          ['--hue' as string]: ink,
         }
         return (
           <div key={a.id} className="contents">
@@ -308,22 +314,35 @@ export default function VideoOverlays({
             </div>
 
             {(caption || armed) && (
-              <div
-                data-flip={flipX || undefined}
-                style={cardStyle}
-                className="on-video-card absolute w-max animate-fade-in flex-col gap-0.5"
-              >
-                <span className="on-video-card__time">
-                  {noteLabel(a.start, a.end)}
-                </span>
-                {caption ? (
-                  <p className="on-video-card__text">{caption}</p>
-                ) : (
-                  <p className="on-video-card__text text-white/45">
-                    Type the note&rsquo;s text to caption this pin
-                  </p>
-                )}
-              </div>
+              <>
+                <span
+                  aria-hidden
+                  className="on-video-leader animate-fade-in"
+                  style={{
+                    left: flipX ? undefined : `calc(${pct(x)} + 6px)`,
+                    right: flipX ? `calc(${pct(1 - x)} + 6px)` : undefined,
+                    top: pct(y),
+                    ['--hue' as string]: ink,
+                  }}
+                />
+                <div
+                  style={cardStyle}
+                  className="on-video-pop absolute w-max animate-fade-in"
+                >
+                  <span className="on-video-pop__label">
+                    {noteLabel(a.start, a.end)}
+                  </span>
+                  <div className="on-video-pop__body">
+                    {caption ? (
+                      <p className="on-video-pop__text">{caption}</p>
+                    ) : (
+                      <p className="on-video-pop__text text-white/45">
+                        Type the note&rsquo;s text to caption this pin
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )

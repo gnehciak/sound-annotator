@@ -166,6 +166,12 @@ the transport stays clickable over a cover; it is `pointer-events-none`
 throughout except the selected note's pin, so clicking the picture still
 reaches the player's own click-to-pause catcher.
 
+The layer is **always dark, in both themes** — it sits on the picture, where the
+light page's surfaces mean nothing — so note hues on it go through
+`hueOnDark()` rather than `hueText()` (`src/lib/noteColors.ts`); the two are
+mirror images, one lifting a hue toward white for a dark box, the other mixing
+it toward ink for the white page.
+
 The trap to remember: **a cover image is a note image that isn't in the note
 HTML.** It lives under the same `users/{uid}/images/{projectId}/` prefix, so
 purge sweeps collect it for free — but `api/blobs/gc.ts` decides what's an

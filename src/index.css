@@ -315,46 +315,55 @@ html[data-armed] body::before {
     color: #fff;
     background-color: rgb(255 255 255 / 0.1);
   }
-  /* A note lifted onto the picture: the pin caption, and the hint that arms a
-     cover for repositioning. Same doctrine as .on-video — palette-blind, since
-     a themed pane would fight whatever frame sits behind it — but built like a
-     note row: dark glass, hairline ring, and a 3px spine in the note's own hue
-     carrying its identity. The hue rides `--hue`, as everywhere else.
-     Sits on the leading edge, which flips with the bubble (see
-     components/VideoOverlays.tsx). */
-  .on-video-card {
+  /* Chrome that sits on the picture, not in a pane: the pin caption and the
+     cover's reposition hint. Palette-blind like .on-video above (a themed pane
+     would fight whatever frame is behind it) and *always dark*, whatever the
+     mode — so the note hue arrives through hueOnDark(), the dark-surface
+     counterpart of hueText().
+
+     Shaped like the app's own instrument output rather than a callout: a dense
+     floating glass box (the .pop family's job — legible over live content),
+     a silkscreen mono label row, and a hairline under it that exists only when
+     a body follows. No colored edge bar; the hue is carried by the timecode
+     and the leader hairline that ties the box back to its dot. */
+  .on-video-pop {
     --hue: #fff;
-    @apply relative flex gap-2.5 overflow-hidden rounded-md py-1.5 pl-3 pr-3;
-    background-color: rgb(0 0 0 / 0.72);
-    backdrop-filter: blur(8px);
+    @apply relative overflow-hidden rounded-md;
+    background-color: rgb(0 0 0 / 0.76);
+    backdrop-filter: blur(10px);
     box-shadow:
-      0 8px 28px rgb(0 0 0 / 0.5),
-      inset 0 0 0 1px rgb(255 255 255 / 0.1);
+      0 10px 30px rgb(0 0 0 / 0.55),
+      inset 0 0 0 1px rgb(255 255 255 / 0.14);
   }
-  .on-video-card::before {
-    content: '';
-    @apply absolute inset-y-0 left-0 w-[3px];
-    background-color: var(--hue);
+  .on-video-pop__label {
+    @apply flex items-center gap-1.5 px-2.5 py-[5px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] tabular-nums;
+    color: var(--hue);
   }
-  .on-video-card[data-flip]::before {
-    @apply left-auto right-0;
+  .on-video-pop__body {
+    @apply px-2.5 pb-[7px] pt-1.5;
   }
-  .on-video-card[data-flip] {
-    @apply pl-3 pr-3;
-  }
-  /* Note text on the picture: three lines, then the note itself carries the
-     rest — a paragraph over the frame is a wall, not a caption. */
-  .on-video-card__text {
+  /* Three lines, then the note itself carries the rest — a paragraph over the
+     frame is a wall, not a caption. The padding lives on the wrapper above:
+     a -webkit-box clips at its *padding* box, so any padding here would leak
+     a sliver of the fourth line under the clamp. */
+  .on-video-pop__text {
     @apply text-[13px] leading-[1.45] text-white/90;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     overflow: hidden;
   }
-  /* The timecode, in the note's hue — the note row's colored mono stamp. */
-  .on-video-card__time {
-    @apply font-mono text-[10px] font-semibold uppercase tracking-[0.14em] tabular-nums;
-    color: var(--hue);
+  /* The rule belongs to the pairing, not to either row: a label with nothing
+     under it is just a label. */
+  .on-video-pop__label + .on-video-pop__body {
+    border-top: 1px solid rgb(255 255 255 / 0.14);
+  }
+  /* The hairline that ties a caption back to its dot — hue as the link between
+     two things, the way a callout on a technical drawing works. */
+  .on-video-leader {
+    @apply absolute h-px w-[14px] -translate-y-1/2;
+    background-color: var(--hue);
+    opacity: 0.85;
   }
 
   /* ---------- chips ---------- */

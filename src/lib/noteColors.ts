@@ -41,6 +41,51 @@ export function hueText(hex: string, theme: 'light' | 'dark'): string {
   return `rgb(${clamp255(r + (22 - r) * k)} ${clamp255(g + (22 - g) * k)} ${clamp255(b + (24 - b) * k)})`
 }
 
+/**
+ * The mirror of `hueText`, for chrome that is dark whatever the theme: the
+ * over-video layer, whose card sits on the picture and so can never take the
+ * light page's surfaces (see DESIGN.md, The Stage Layer). The eight data hues
+ * clear AA on black on their own, but a custom colour picked from
+ * PRESET_COLORS need not — several of the blues and violets land near 3.5:1 —
+ * so lift the hue toward white until it does, and leave the rest alone.
+ */
+export function hueOnDark(hex: string): string {
+  const rgb = parseHex(hex)
+  if (!rgb) return hex
+  // The card's own fill, which the text actually sits on.
+  const bg = 0.02 // relative luminance of near-black under 76% black glass
+  let [r, g, b] = rgb
+  for (let i = 0; i < 12 && contrast(luminance(r, g, b), bg) < 4.5; i++) {
+    r = clamp255(r + (255 - r) * 0.12)
+    g = clamp255(g + (255 - g) * 0.12)
+    b = clamp255(b + (255 - b) * 0.12)
+  }
+  return `rgb(${r} ${g} ${b})`
+}
+
+function parseHex(hex: string): [number, number, number] | null {
+  const h = hex.replace('#', '')
+  if (h.length !== 6) return null
+  const v: [number, number, number] = [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ]
+  return v.some(Number.isNaN) ? null : v
+}
+
+/** WCAG relative luminance, 0–1. */
+function luminance(r: number, g: number, b: number): number {
+  const lin = (c: number) => {
+    const x = c / 255
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+const contrast = (a: number, b: number) =>
+  (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+
 // A broad palette to pick a custom note colour from.
 export const PRESET_COLORS = [
   '#ef4444', '#f97316', '#ff9f2e', '#eab308', '#84cc16', '#22c55e',
