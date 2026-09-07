@@ -113,8 +113,12 @@ takes a guest key for the same reason. Note images are still the only bytes we
 host, and the editor's `allowImages={false}` switch survives so that "images
 are impossible here" can never silently become "base64 them into
 `annotations`". **Detect sections is hidden
-too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
-guest's press could only 401. Their project is born `shared`, so the `?view=`
+too**, though no longer for a guest-specific reason: `api/projects/[id]/analyze.ts`
+is now **admin-only** (owner *and* `ADMIN_EMAILS`), because each press is a paid
+Replicate run plus ~130 MB of stem WAVs. It answers 404 to everyone else, guests
+and ordinary owners alike, and App hides the button behind `useIsAdmin()`
+(`src/lib/admin.ts`) — a display hint fetched from
+`/api/admin/projects?whoami=1`, never the security. Their project is born `shared`, so the `?view=`
 link they hand in is the existing read-only viewer. **Ids are short and opaque.** Project/note/folder ids are 12 base64url
 characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a
 project id is the whole credential for a `?view=` link, and a uuid spent 36

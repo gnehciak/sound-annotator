@@ -29,7 +29,7 @@
 // next time the button is pressed.
 import { put, del } from '@vercel/blob'
 import { waitUntil } from '@vercel/functions'
-import { getUid } from '../../_lib/auth.js'
+import { getUid, isAdmin } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type ProjectRow } from '../../_lib/db.js'
 import { json, err } from '../../_lib/respond.js'
 
@@ -86,8 +86,17 @@ function idFrom(request: Request): string {
   return decodeURIComponent(parts[2] ?? '') // /api/projects/<id>/analyze
 }
 
-/** Owner-only: analysis spends the owner's Replicate credit and writes the
- *  result onto their row, so link editors don't get the button. */
+/**
+ * Owner *and* admin: analysis spends real money (a Replicate run per press) and
+ * writes ~130 MB of stem WAVs per track, so it is not something every account
+ * gets to trigger. Link editors never had it; now neither does an ordinary
+ * signed-in owner.
+ *
+ * The order matters. Ownership is checked first so a non-owner still learns
+ * only "not yours", and the admin check answers 404 rather than 403 — the same
+ * answer api/admin/* gives, so this endpoint doesn't become the one place that
+ * confirms an allowlist exists.
+ */
 async function ownedRow(
   request: Request,
   id: string,
@@ -97,6 +106,7 @@ async function ownedRow(
   const row = await getProjectRow(id)
   if (!row) return err(404, 'Not found')
   if (row.owner_id !== uid) return err(403, 'Not yours')
+  if (!(await isAdmin(uid))) return err(404, 'Not found')
   return row
 }
 

@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   Undo2,
   X,
@@ -34,6 +35,7 @@ import Popover from './Popover'
 import BrowseGallery from './BrowseGallery'
 import { WaveArt, CueLine } from './trackArt'
 import { publicId } from '../lib/ids'
+import { useIsAdmin } from '../lib/admin'
 
 interface Props {
   projects: Project[]
@@ -262,6 +264,8 @@ export default function HomePage({
   // One view-selector tab. The active one sits raised in the inset well —
   // the same hardware "input switch" language as the Share panel's link-role
   // group.
+  const isAdmin = useIsAdmin()
+
   const viewTab = (v: HomeView, label: string, icon: React.ReactNode) => (
     <button
       key={v}
@@ -288,6 +292,24 @@ export default function HomePage({
           >
             {viewTab('library', 'Library', <FolderIcon size={11} />)}
             {viewTab('browse', 'Browse', <Globe size={11} />)}
+            {/* The console is a separate page rather than a third view, so
+                this is a link wearing the segment's clothes. Drawn only for an
+                allowlisted account (lib/admin.ts) — hiding it isn't the
+                security, /api/admin/* 404s everyone else regardless; it just
+                keeps a door nobody else can open out of everyone's way. */}
+            {isAdmin && (
+              <a
+                href="?admin=1"
+                // Deliberately not role="tab": the siblings swap a panel in
+                // place, this one leaves for another page. Calling it a tab
+                // would promise screen-reader users something it doesn't do.
+                title="Admin console — every project and account"
+                className="seg-item press h-[26px] gap-1.5 px-2.5 text-[10px] tracking-[0.14em]"
+              >
+                <ShieldCheck size={11} />
+                Admin
+              </a>
+            )}
           </div>
         </div>
 
