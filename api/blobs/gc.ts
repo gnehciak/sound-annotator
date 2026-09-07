@@ -5,11 +5,12 @@
 // once it's truly gone from the notes.
 import { del, list } from '@vercel/blob'
 import { getUid } from '../_lib/auth.js'
+import { getProjectRow } from '../_lib/db.js'
+import { guestKeyFrom, guestKeyOpens, isGuestOwner } from '../_lib/guest.js'
 import { json, err } from '../_lib/respond.js'
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)
-  if (!uid) return err(401, 'Sign in required')
 
   const body = (await request.json().catch(() => null)) as {
     projectId?: string
@@ -18,8 +19,15 @@ export async function POST(request: Request): Promise<Response> {
   if (!body?.projectId || !Array.isArray(body.html))
     return err(400, 'Missing projectId or html')
 
+  // Whose folder are we sweeping? A signed-in caller sweeps their own. A guest
+  // sweeps the one project their key opens — they upload images now, so
+  // without this their orphans would have no collector until the whole project
+  // is purged, which for a guest track may be never.
+  const owner = uid ?? (await guestOwnerFor(request, body.projectId))
+  if (!owner) return err(401, 'Sign in required')
+
   const haystack = body.html.join('\n')
-  const prefix = `users/${uid}/images/${body.projectId}/`
+  const prefix = `users/${owner}/images/${body.projectId}/`
 
   let deleted = 0
   let cursor: string | undefined
@@ -36,4 +44,21 @@ export async function POST(request: Request): Promise<Response> {
   } while (cursor)
 
   return json({ deleted })
+}
+
+/**
+ * The guest owner id whose images this request may sweep, or null. Mirrors the
+ * check in api/blobs/upload.ts: the key must open *this* project, and the
+ * prefix is built from the row's own owner id rather than anything the client
+ * claimed.
+ */
+async function guestOwnerFor(
+  request: Request,
+  projectId: string,
+): Promise<string | null> {
+  const key = guestKeyFrom(request)
+  if (!key) return null
+  const row = await getProjectRow(projectId)
+  if (!row || row.deleted_at || !isGuestOwner(row.owner_id)) return null
+  return (await guestKeyOpens(key, row.guest_token_hash)) ? row.owner_id : null
 }

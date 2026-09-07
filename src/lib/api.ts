@@ -28,6 +28,16 @@ export function registerGuestKey(key: string | null): void {
   guestKey = key
 }
 
+/**
+ * The live guest key, for the one caller that can't go through `api()`:
+ * @vercel/blob/client requests its upload token with its own fetch and carries
+ * no custom headers, so the key has to travel in that SDK's `clientPayload`
+ * instead of the X-Guest-Key header (see src/lib/imageCloud.ts).
+ */
+export function currentGuestKey(): string | null {
+  return guestKey
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {

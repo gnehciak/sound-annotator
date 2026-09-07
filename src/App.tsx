@@ -624,6 +624,10 @@ export default function App() {
   // Upload a pasted/inserted note image to Cloud Storage (scoped to this user
   // and the open project) and resolve with its download URL for inlining in the
   // note HTML. Rejecting leaves the editor to fall back to an inline data URL.
+  //
+  // Works for guests too: a guest's `user.uid` is their project's synthetic
+  // `guest:<uuid>` owner, so the path this builds needs no special case, and
+  // their capability key authorizes the upload (src/lib/imageCloud.ts).
   const handleUploadImage = useCallback(
     (blob: Blob, onProgress?: (fraction: number) => void): Promise<string> => {
       if (!user || !currentId)
@@ -824,10 +828,6 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
-    // Guests have no images to sweep and no credentials to sweep with — the
-    // endpoint is Clerk-only, so this would just 401 into the console on every
-    // project they open.
-    if (isGuest) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -2491,7 +2491,7 @@ export default function App() {
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
-                          allowImages={!isGuest}
+                          allowImages
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2539,7 +2539,7 @@ export default function App() {
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
-            allowImages={!isGuest}
+            allowImages
           />
         </PluginWindow>
       )}

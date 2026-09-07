@@ -1,11 +1,16 @@
 // Note images in Vercel Blob, one object per inserted image under the owner's
 // path:  users/{uid}/images/{projectId}/{imageId}.{ext}
 //
+// `uid` is whatever owns the project — a Clerk `user_…` id, or a guest's
+// synthetic `guest:<uuid>`. Guests upload too (their key authorizes it, see
+// uploadNoteImage below), and keeping them in the same shape means the
+// existing per-project teardown sweeps collect their images for free.
+//
 // Blob URLs are public but unguessable (the store id + the uuid path), so
 // they load for the owner and for read-only `?view=` share viewers alike —
 // the same trust model the old tokened download URLs had.
 import { upload } from '@vercel/blob/client'
-import { api } from './api'
+import { api, currentGuestKey } from './api'
 
 const newId = () => crypto.randomUUID()
 
@@ -39,9 +44,22 @@ export async function uploadNoteImage(
       handleUploadUrl: '/api/blobs/upload',
       contentType: blob.type || 'image/jpeg',
       onUploadProgress: ({ percentage }) => onProgress?.(percentage / 100),
+      // A signed-in upload authenticates with the Clerk session cookie the
+      // SDK's token request carries anyway. A guest has no session, so their
+      // capability key rides here instead — `clientPayload` is the only
+      // channel @vercel/blob/client hands to the token route, which verifies
+      // it against the project row (api/blobs/upload.ts). Omitted entirely
+      // when signed in, so a real session is never second-guessed.
+      clientPayload: guestPayload(projectId),
     },
   )
   return result.url
+}
+
+/** `{projectId, guestKey}` for a signed-out student, else undefined. */
+function guestPayload(projectId: string): string | undefined {
+  const key = currentGuestKey()
+  return key ? JSON.stringify({ projectId, guestKey: key }) : undefined
 }
 
 /**

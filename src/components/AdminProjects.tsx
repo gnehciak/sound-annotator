@@ -89,10 +89,12 @@ export default function AdminProjects() {
       // Bytes first, row second. The row is the only way to find these blobs
       // again, so dropping it first would strand them forever; failing here
       // leaves the project intact and the delete retryable instead.
-      // Guest projects own no blobs (uploads are signed-in only).
-      if (p.ownerId && p.kind === 'account') {
+      // Guest projects own images too now, under their `guest:<uuid>` owner —
+      // the same users/{owner}/images/{id}/ shape, so the same teardown works.
+      // Only the legacy audio upload stays account-only; a guest never had one.
+      if (p.ownerId) {
         await Promise.all([
-          deleteAudioCloud(p.ownerId, p.id),
+          ...(p.kind === 'account' ? [deleteAudioCloud(p.ownerId, p.id)] : []),
           deleteProjectImages(p.ownerId, p.id),
         ])
       }

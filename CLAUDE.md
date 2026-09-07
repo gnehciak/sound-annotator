@@ -80,12 +80,24 @@ never sharing/publishing/ownership — so unlike a link editor they can load the
 video they came to annotate, and pick either project kind (listening notes or a
 song-section board) before they start.
 
-Two things a guest deliberately can't reach. **Source is video only** (YouTube
-or Drive): the landing offers no blank start, so App passes no `onAudioUrl` to
+One thing a guest deliberately can't reach: **source is video only** (YouTube
+or Drive). The landing offers no blank start, so App passes no `onAudioUrl` to
 `SourcePicker` — otherwise a sourceless guest row (they predate this) would be
-a door into a source kind nothing else in their flow produces. **`allowImages={false}`** —
-image upload is signed-in only, and merely omitting the uploader makes the
-editor inline base64 into `annotations` instead. **Detect sections is hidden
+a door into a source kind nothing else in their flow produces.
+
+**Guests upload note images too** (since 2026-09-07). Their key authorizes it:
+`@vercel/blob/client` carries no custom headers, so the key travels in the
+SDK's `clientPayload` and `api/blobs/upload.ts` verifies it against the row
+exactly as `projects/[id]` does, then pins the path to that one project. Their
+token is narrower than a teacher's — images only, 8 MB, no overwrite. Images
+land under `users/guest:<uuid>/images/{projectId}/`, the *same* shape as
+everyone else (a colon is legal in a Blob pathname, `%3A` in the public URL),
+which is what makes the existing purge sweeps collect them for free — so keep
+using `users/{owner_id}/…` rather than inventing a guest prefix. `blobs/gc`
+takes a guest key for the same reason. Note images are still the only bytes we
+host, and the editor's `allowImages={false}` switch survives so that "images
+are impossible here" can never silently become "base64 them into
+`annotations`". **Detect sections is hidden
 too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
 guest's press could only 401. Their project is born `shared`, so the `?view=`
 link they hand in is the existing read-only viewer. Schema lives
