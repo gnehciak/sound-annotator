@@ -70,7 +70,6 @@ function SwitchRow({
   title,
   on,
   softDisabled,
-  note,
   explain,
   explaining,
   onToggle,
@@ -85,9 +84,6 @@ function SwitchRow({
    *  is unreachable by keyboard, and its reason — a `title` — reaches a mouse
    *  and nothing else. */
   softDisabled?: string
-  /** A permanently visible qualifier, for a precondition too important to sit
-   *  behind the explain toggle. */
-  note?: string
   explain: string
   explaining: boolean
   onToggle: () => void
@@ -97,24 +93,17 @@ function SwitchRow({
   const hintId = useId()
   return (
     <div>
-      <div className="flex items-start gap-1.5">
-        <span className="mt-[2px] shrink-0 text-muted" aria-hidden>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-muted" aria-hidden>
           {icon}
         </span>
-        <div className="min-w-0 flex-1">
-          <p
-            className={`truncate text-xs font-semibold ${
-              softDisabled ? 'text-muted' : 'text-fg'
-            }`}
-          >
-            {title}
-          </p>
-          {note && (
-            <p className="mt-0.5 truncate font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-              {note}
-            </p>
-          )}
-        </div>
+        <p
+          className={`min-w-0 flex-1 truncate text-[12px] ${
+            softDisabled ? 'text-muted' : 'text-fg'
+          }`}
+        >
+          {title}
+        </p>
         <button
           role="switch"
           aria-checked={on}
@@ -125,7 +114,7 @@ function SwitchRow({
             if (!softDisabled) onToggle()
           }}
           title={softDisabled ?? switchTitle}
-          className={`switch press mt-0.5 shrink-0 ${
+          className={`switch press shrink-0 ${
             softDisabled ? 'opacity-40' : ''
           }`}
         />
@@ -186,10 +175,16 @@ function SectionHeader({
  * rather than standing beside it: listing on Browse never minted a second
  * address — the gallery card opens this same `?view=` link.
  *
- * The one action here that reaches strangers — listing on Browse — asks before
- * it happens, and the invite list gets its own modal rather than half of this
- * popover: it is edited a couple of times a term, while the link is opened
+ * The one action here that reaches strangers — publishing to Browse — asks
+ * before it happens, and the invite list gets its own modal rather than half of
+ * this popover: it is edited a couple of times a term, while the link is opened
  * weekly.
+ *
+ * Type in this pane is deliberately four things and no more: every row label is
+ * 12px sans, every secondary line is 11px muted sans, the section label is the
+ * 10px mono silkscreen (as in the settings menu), and mono is otherwise
+ * reserved for what it means elsewhere in the app — data and numerals, here the
+ * link readout and the invite count. A new treatment is a bug.
  */
 export default function ShareExportMenu({
   project,
@@ -430,7 +425,7 @@ export default function ShareExportMenu({
                   <span className="shrink-0 text-muted" aria-hidden>
                     {shared ? <Globe size={13} /> : <Lock size={13} />}
                   </span>
-                  <p className="min-w-0 flex-1 truncate text-xs font-semibold text-fg">
+                  <p className="min-w-0 flex-1 truncate text-[12px] text-fg">
                     Share link
                   </p>
                   {/* One disclosure for the whole panel: press it once and
@@ -509,12 +504,15 @@ export default function ShareExportMenu({
                         under it instead of standing beside it as peers — which is
                         what made this panel read like three separate sharing
                         systems. */}
-                    <div className="mt-2.5 space-y-2.5 border-l border-line pl-2.5">
+                    {/* No spine: the two settings sit directly under the link's
+                      own field and button, which is proximity enough — a rule
+                      down the side was one more line in a pane that had too
+                      many. */}
+                  <div className="mt-2.5 space-y-2">
                       <SwitchRow
                         icon={<Pencil size={13} />}
-                        title="Link can edit too"
-                        note="Sign-in · one at a time"
-                        on={canEdit}
+                        title="Allow editing"
+                          on={canEdit}
                         explaining={explaining}
                         switchTitle={
                           canEdit ? 'Make the link read-only' : 'Let link holders edit'
@@ -527,19 +525,21 @@ export default function ShareExportMenu({
                             published: false,
                           })
                         }}
-                        explain="Everyone holding the link can change the notes. To let one colleague edit while the class stays read-only, invite them below instead."
+                        explain="Everyone holding the link can change the notes — after signing in, one person at a time. To let a single colleague edit while the class stays read-only, invite them under People instead."
                       />
                       <SwitchRow
                         icon={<LibraryBig size={13} />}
-                        title="Also list on Browse"
+                        title="Publish to Browse"
                         on={published}
                         softDisabled={
                           canEdit
-                            ? 'Only a read-only link can be listed — a public page of tracks strangers can rewrite isn’t a promise worth making.'
+                            ? 'Only a read-only link can be published — a public page of tracks strangers can rewrite isn’t a promise worth making.'
                             : undefined
                         }
                         explaining={explaining}
-                        switchTitle={published ? 'Remove from Browse' : 'List on Browse'}
+                        switchTitle={
+                        published ? 'Remove from Browse' : 'Publish to Browse'
+                      }
                         onToggle={() => {
                           if (published) {
                             setConfirmPublish(false)
@@ -580,7 +580,7 @@ export default function ShareExportMenu({
                         {published && (
                           <a
                             href={`${window.location.pathname}?browse=1`}
-                            className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-accentink hover:underline"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-accentink hover:underline"
                           >
                             See it on Browse →
                           </a>
@@ -619,8 +619,8 @@ export default function ShareExportMenu({
               >
                 <UserPlus size={13} className="shrink-0" />
                 People with access
-                <span className="ml-auto font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                  {shares == null ? '—' : invitedCount === 0 ? 'Only you' : invitedCount}
+                <span className="ml-auto font-mono text-[11px] tabular-nums text-muted">
+                  {shares == null ? '—' : invitedCount}
                 </span>
               </button>
             </>
@@ -642,7 +642,7 @@ export default function ShareExportMenu({
                 >
                   <FileDown size={13} className="shrink-0" />
                   PDF
-                  <span className="ml-auto text-[10px] text-muted">notes list</span>
+                  <span className="ml-auto text-[11px] text-muted">notes list</span>
                 </button>
               )}
               <button
@@ -656,7 +656,7 @@ export default function ShareExportMenu({
               >
                 <Braces size={13} className="shrink-0" />
                 JSON
-                <span className="ml-auto text-[10px] text-muted">portable file</span>
+                <span className="ml-auto text-[11px] text-muted">portable file</span>
               </button>
             </div>
           </div>
