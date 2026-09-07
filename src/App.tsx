@@ -13,8 +13,6 @@ import {
   loadVolume,
   saveVolume,
   DEFAULT_VOLUME,
-  loadViewOnly,
-  saveViewOnly,
   loadNoteOrder,
   saveNoteOrder,
   type NoteOrder,
@@ -231,7 +229,12 @@ export default function App() {
   // While any stem is soloed the main player is silenced — the stems are the
   // sound, the player stays the clock (see StemMixer).
   const [stemActive, setStemActive] = useState(false)
-  const [viewOnly, setViewOnly] = useState(loadViewOnly)
+  // View-only is a per-visit mode, not a preference: a track always opens
+  // editable, and flipping to View lasts only while you stay on it (the reset
+  // effect below keys on currentId). It used to persist to localStorage, which
+  // meant one presentation left every later track — new ones included — silently
+  // read-only.
+  const [viewOnly, setViewOnly] = useState(false)
   // Settings modal — central knob for cross-cutting prefs. Each pref's effective
   // value is project.settings.X ?? user-local fallback (localStorage). Writes
   // go to both: the project (so it travels with the share) and localStorage
@@ -247,16 +250,8 @@ export default function App() {
   const [windowMode, setWindowMode] = useState<WindowMode>(loadWindowMode)
   const wideForDock = useMediaQuery('(min-width: 1100px)')
 
-  function setViewMode(view: boolean) {
-    saveViewOnly(view)
-    setViewOnly(view)
-  }
   function toggleViewOnly() {
-    setViewOnly((on) => {
-      const next = !on
-      saveViewOnly(next)
-      return next
-    })
+    setViewOnly((on) => !on)
   }
   // toggleOverview is defined below, after `current` is in scope (so the
   // toggle can also persist to project settings — see canEditSettings).
@@ -519,6 +514,13 @@ export default function App() {
   useEffect(() => {
     if (effectiveViewOnly) setSelectedNoteId(null)
   }, [effectiveViewOnly])
+
+  // Every track opens in Edit mode — creating one, opening one, or coming
+  // back to the home page all clear the View toggle. (The edit lock is the
+  // only thing that can still force read-only, and it does that on its own.)
+  useEffect(() => {
+    setViewOnly(false)
+  }, [currentId])
 
   // ---- note inspector (dock 3rd column or modal) ------------------------
   const effectiveWindowMode: WindowMode =
@@ -1886,7 +1888,7 @@ export default function App() {
           >
             <button
               type="button"
-              onClick={() => setViewMode(false)}
+              onClick={() => setViewOnly(false)}
               aria-pressed={!viewOnly}
               title="Edit mode (V)"
               aria-label="Edit mode"
@@ -1898,7 +1900,7 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => setViewMode(true)}
+              onClick={() => setViewOnly(true)}
               aria-pressed={viewOnly}
               title="View-only mode (V)"
               aria-label="View-only mode"
