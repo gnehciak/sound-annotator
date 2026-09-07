@@ -6,7 +6,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Annotation, Folder, PlayerHandle, Project } from './types'
+import type {
+  Annotation,
+  Folder,
+  PlayerHandle,
+  Project,
+  ProjectScore,
+} from './types'
 import {
   loadInspectorWidth,
   saveInspectorWidth,
@@ -43,6 +49,12 @@ import {
   deleteProjectImages,
   reconcileProjectImages,
 } from './lib/imageCloud'
+import {
+  uploadScorePdf,
+  deleteProjectScores,
+  deleteScoreBlob,
+} from './lib/scoreCloud'
+import { scoreView as scoreViewOf, type ScoreView } from './lib/score'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -85,6 +97,8 @@ import TrackOverview from './components/TrackOverview'
 import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import DetectSectionsButton from './components/DetectSectionsButton'
+import ScoreButton from './components/ScoreButton'
+import ScoreLayer, { ScoreFrame } from './components/ScoreLayer'
 import StemMixer from './components/StemMixer'
 import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
@@ -471,6 +485,57 @@ export default function App() {
       patchProjectSettings({ playOnce: on })
     },
     [patchProjectSettings],
+  )
+
+  // ---- the PDF score laid over the picture (lib/score.ts) ----
+  // How it's shown is persisted on the score, so a shared track opens the way
+  // its owner left it — but a reader who can't write settings must still be
+  // able to turn it off or dim it for themselves, so the live value is the
+  // saved one under a per-session override. `patchProjectSettings` already
+  // no-ops for anyone who can't save, which is exactly who needs the override.
+  const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
+  // Bumped by "Reload from Drive": it changes the fetch URL, and so the CDN
+  // cache key, which is the only reliable way past a freshly annotated file's
+  // stale copies.
+  const [scoreReload, setScoreReload] = useState(0)
+  const score = current?.settings?.score
+  // A session override belongs to the track it was made on — drop it when the
+  // track changes. Adjusted during render (React's documented shape for state
+  // derived from a prop change) rather than in an effect, which would paint
+  // one frame of the previous track's override over the new track's score.
+  const [overrideFor, setOverrideFor] = useState(currentId)
+  if (overrideFor !== currentId) {
+    setOverrideFor(currentId)
+    setScoreOverride({})
+    setScoreReload(0)
+  }
+  const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
+
+  const changeScoreView = useCallback(
+    (patch: Partial<ScoreView>) => {
+      setScoreOverride((o) => ({ ...o, ...patch }))
+      if (score) patchProjectSettings({ score: { ...score, ...patch } })
+    },
+    [patchProjectSettings, score],
+  )
+
+  /**
+   * Attach, replace or remove the score. An uploaded one is bytes we host, so
+   * the outgoing object is deleted by URL — never by sweeping the project's
+   * `scores/` folder, which is where its replacement has just landed.
+   */
+  const changeScore = useCallback(
+    (next: ProjectScore | null) => {
+      const previous = score
+      patchProjectSettings({ score: next ?? undefined })
+      setScoreOverride({})
+      setScoreReload(0)
+      if (previous?.kind === 'blob' && previous.url && previous.url !== next?.url)
+        void deleteScoreBlob(previous.url).catch((err) =>
+          console.error('Failed to delete the old score:', err),
+        )
+    },
+    [patchProjectSettings, score],
   )
   const setOverviewOpenPref = useCallback(
     (on: boolean) => {
@@ -999,6 +1064,9 @@ export default function App() {
       )
       void deleteProjectImages(user.uid, id).catch((err) =>
         console.error('Failed to delete cloud images:', err),
+      )
+      void deleteProjectScores(user.uid, id).catch((err) =>
+        console.error('Failed to delete the score:', err),
       )
       void deleteAnalysisArtifacts(user.uid, id).catch((err) =>
         console.error('Failed to delete analysis artifacts:', err),
@@ -1681,6 +1749,34 @@ export default function App() {
     />
   )
 
+  // The score, built once: it lays over the video frame (PlayerPane's `score`
+  // slot) or takes its own frame above an audio waveform, which must stay
+  // uncovered — the same rule the transport follows.
+  const scoreLayer =
+    score && scoreView.mode !== 'off' ? (
+      <ScoreLayer score={score} view={scoreView} reloadKey={scoreReload} />
+    ) : null
+
+  // Attaching is the track's business, so it follows the same rights as the
+  // other settings: a reader gets the display knobs only (changeScoreView
+  // falls back to a session override), and uploading additionally needs an
+  // account to own the bytes — a guest links a Drive score instead.
+  const scoreButton = current ? (
+    <ScoreButton
+      score={score}
+      view={scoreView}
+      onView={changeScoreView}
+      onReload={() => setScoreReload((n) => n + 1)}
+      onScore={canEditSettings ? changeScore : undefined}
+      onUpload={
+        canEditSettings && user && !isGuest
+          ? (file, onProgress) =>
+              uploadScorePdf(user.uid, current.id, file, onProgress)
+          : undefined
+      }
+    />
+  ) : null
+
   const regionSpecs = current
     ? current.annotations.map((a) => ({
         id: a.id,
@@ -2094,6 +2190,7 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
+                      {scoreButton}
                       {/* AI section detection — it fills this very board.
                           Admin-only: /analyze spends a Replicate run and
                           writes ~130 MB of stems per track, so it answers 404
@@ -2125,6 +2222,9 @@ export default function App() {
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+                  {!isVideoSource(current.source) && scoreLayer && (
+                    <ScoreFrame>{scoreLayer}</ScoreFrame>
+                  )}
                   <div
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
@@ -2142,6 +2242,9 @@ export default function App() {
                         // workspace. Audio keeps the folded well below.
                         overlay={
                           isVideoSource(current.source) ? transport : undefined
+                        }
+                        score={
+                          isVideoSource(current.source) ? scoreLayer : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2260,6 +2363,7 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
+                      {scoreButton}
                       {/* Detection is admin-only (each press is a paid
                           Replicate run plus ~130 MB of stems): audio tracks
                           need their cloud URL; YouTube tracks prompt for a
@@ -2290,6 +2394,9 @@ export default function App() {
                   }
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+                  {!isVideoSource(current.source) && scoreLayer && (
+                    <ScoreFrame>{scoreLayer}</ScoreFrame>
+                  )}
                   <div
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
@@ -2308,6 +2415,9 @@ export default function App() {
                         // the picture and must stay uncovered).
                         overlay={
                           isVideoSource(current.source) ? transport : undefined
+                        }
+                        score={
+                          isVideoSource(current.source) ? scoreLayer : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}

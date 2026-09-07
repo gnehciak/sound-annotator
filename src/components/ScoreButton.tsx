@@ -1,0 +1,380 @@
+import { useRef, useState } from 'react'
+import {
+  ExternalLink,
+  Loader2,
+  RotateCw,
+  ScrollText,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import Popover from './Popover'
+import type { ProjectScore, ScoreFit, ScoreMode } from '../types'
+import {
+  DEFAULT_SCORE_OPACITY,
+  scoreFromLink,
+  scoreLabel,
+  scoreLinkUrl,
+  type ScoreView,
+} from '../lib/score'
+
+/**
+ * The Player title-bar action for the PDF score: attach one, and decide how it
+ * sits over the picture.
+ *
+ * Three callers with three sets of rights, all through the same menu:
+ *  • an owner — everything, including uploading a PDF we host;
+ *  • a guest or a link editor — may link a Drive score but not upload one
+ *    (`onUpload` absent), because hosted bytes need an account to own them;
+ *  • a read-only reader (the share viewer) — `onScore` absent: they can change
+ *    how the score is shown for their own session, but not what it is.
+ */
+export default function ScoreButton({
+  score,
+  view,
+  onView,
+  onReload,
+  onScore,
+  onUpload,
+}: {
+  score?: ProjectScore
+  view: ScoreView
+  onView: (patch: Partial<ScoreView>) => void
+  /** Re-fetch the bytes, past both caches — Drive scores change under us. */
+  onReload: () => void
+  /** Absent when the caller may not change the score itself. */
+  onScore?: (next: ProjectScore | null) => void
+  /** Absent when the caller has no account to host bytes under. */
+  onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  const canAttach = Boolean(onScore)
+  // Nothing to open a menu for: no score, and no right to attach one.
+  if (!score && !canAttach) return null
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={score ? 'Score — how it sits over the picture' : 'Add a PDF score'}
+        aria-label={score ? 'Score options' : 'Add a PDF score'}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`btn-ghost btn-sm press shrink-0 ${
+          score && view.mode !== 'off' ? 'text-accentink' : ''
+        }`}
+      >
+        <ScrollText size={12} />
+        {score ? 'Score' : 'Add score'}
+      </button>
+
+      <Popover
+        open={open}
+        anchorRef={triggerRef}
+        onClose={() => setOpen(false)}
+        width={272}
+        className="p-2.5"
+      >
+        {score ? (
+          <ScoreSettings
+            score={score}
+            view={view}
+            onView={onView}
+            onReload={() => {
+              onReload()
+              setOpen(false)
+            }}
+            onScore={onScore}
+            onUpload={onUpload}
+          />
+        ) : (
+          <ScoreAttach
+            onScore={(next) => {
+              onScore?.(next)
+              setOpen(false)
+            }}
+            onUpload={onUpload}
+          />
+        )}
+      </Popover>
+    </>
+  )
+}
+
+// ---- attaching ------------------------------------------------------------
+
+const MODES: { value: ScoreMode; label: string; title: string }[] = [
+  { value: 'off', label: 'Off', title: 'Hide the score — just the video' },
+  { value: 'score', label: 'Score', title: 'The score over the picture' },
+  {
+    value: 'overlay',
+    label: 'Overlay',
+    title: 'The score turned down so the picture reads through it',
+  },
+]
+
+const FITS: { value: ScoreFit; label: string; title: string }[] = [
+  { value: 'height', label: 'Page', title: 'The whole page, fitted to the frame' },
+  { value: 'width', label: 'Width', title: 'Fill the width — bigger staves, scrolls' },
+]
+
+/** The form shown when the track has no score yet. */
+function ScoreAttach({
+  onScore,
+  onUpload,
+}: {
+  onScore: (score: ProjectScore) => void
+  onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
+}) {
+  const [link, setLink] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState<number | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const attachLink = () => {
+    const result = scoreFromLink(link)
+    if ('error' in result) {
+      setError(result.error)
+      return
+    }
+    onScore(result.score)
+  }
+
+  const attachFile = async (file: File | null | undefined) => {
+    if (!file || !onUpload) return
+    setError(null)
+    setUploading(0)
+    try {
+      const url = await onUpload(file, (f) => setUploading(f))
+      onScore({ kind: 'blob', url, fileName: file.name })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That upload failed.')
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Google Drive link</Label>
+      <input
+        value={link}
+        onChange={(e) => {
+          setLink(e.target.value)
+          setError(null)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            attachLink()
+          }
+        }}
+        placeholder="https://drive.google.com/file/d/…"
+        aria-label="Google Drive link to the score PDF"
+        className="field text-[12px]"
+      />
+      <p className="text-[11px] leading-snug text-muted">
+        Share the PDF as <strong className="font-semibold">Anyone with the link</strong>.
+        Annotate it in Drive later and everyone sees the new version — as long as
+        you keep the same file.
+      </p>
+      <button
+        type="button"
+        onClick={attachLink}
+        disabled={!link.trim()}
+        className="btn-signal btn-sm press w-full justify-center"
+      >
+        Link this score
+      </button>
+
+      {onUpload && (
+        <>
+          <div className="my-0.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            hidden
+            onChange={(e) => {
+              void attachFile(e.target.files?.[0])
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading != null}
+            className="btn-ghost btn-sm press w-full justify-center"
+          >
+            {uploading != null ? (
+              <>
+                <Loader2 size={12} className="animate-spin" />
+                Uploading {Math.round(uploading * 100)}%
+              </>
+            ) : (
+              <>
+                <Upload size={12} />
+                Upload a PDF
+              </>
+            )}
+          </button>
+          <p className="text-[11px] leading-snug text-muted">
+            An upload is fixed once it&rsquo;s here — changing it means uploading
+            again.
+          </p>
+        </>
+      )}
+
+      {error && <p className="text-[11px] leading-snug text-danger">{error}</p>}
+    </div>
+  )
+}
+
+// ---- settings for an attached score ---------------------------------------
+
+function ScoreSettings({
+  score,
+  view,
+  onView,
+  onReload,
+  onScore,
+  onUpload,
+}: {
+  score: ProjectScore
+  view: ScoreView
+  onView: (patch: Partial<ScoreView>) => void
+  onReload: () => void
+  onScore?: (next: ProjectScore | null) => void
+  onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
+}) {
+  const [replacing, setReplacing] = useState(false)
+  const link = scoreLinkUrl(score)
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[12px] text-fg" title={scoreLabel(score)}>
+          {scoreLabel(score)}
+        </span>
+        {link && (
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open the PDF in Drive (new tab)"
+            className="btn-icon press shrink-0 text-muted"
+            aria-label="Open the score in Drive"
+          >
+            <ExternalLink size={13} />
+          </a>
+        )}
+      </div>
+
+      <div>
+        <Label>Show</Label>
+        <div className="seg mt-1 grid grid-cols-3">
+          {MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => onView({ mode: m.value })}
+              aria-pressed={view.mode === m.value}
+              title={m.title}
+              className="seg-item"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view.mode === 'overlay' && (
+        <label className="flex items-center gap-2">
+          <span className="shrink-0 text-[11px] text-muted">Opacity</span>
+          <input
+            type="range"
+            min={20}
+            max={100}
+            value={Math.round((view.opacity ?? DEFAULT_SCORE_OPACITY) * 100)}
+            onChange={(e) => onView({ opacity: Number(e.target.value) / 100 })}
+            aria-label="Score opacity"
+            className="flex-1 accent-accent"
+          />
+          <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted">
+            {Math.round(view.opacity * 100)}%
+          </span>
+        </label>
+      )}
+
+      {view.mode !== 'off' && (
+        <div>
+          <Label>Fit</Label>
+          <div className="seg mt-1 grid grid-cols-2">
+            {FITS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => onView({ fit: f.value })}
+                aria-pressed={view.fit === f.value}
+                title={f.title}
+                className="seg-item"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1 border-t border-line pt-2">
+        {score.kind === 'drive' && (
+          <button type="button" onClick={onReload} className="pop-row rounded">
+            <RotateCw size={13} />
+            Reload from Drive
+          </button>
+        )}
+        {onScore && (
+          <>
+            {replacing ? (
+              <div className="pt-1">
+                <ScoreAttach onScore={onScore} onUpload={onUpload} />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setReplacing(true)}
+                className="pop-row rounded"
+              >
+                <Upload size={13} />
+                Replace the score…
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onScore(null)}
+              className="pop-row rounded text-danger hover:text-danger"
+            >
+              <Trash2 size={13} />
+              Remove the score
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
+      {children}
+    </span>
+  )
+}

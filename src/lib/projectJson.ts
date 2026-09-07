@@ -19,6 +19,7 @@ import type {
   Annotation,
   NoteBlock,
   Project,
+  ProjectScore,
   ProjectSettings,
   ProjectSource,
 } from '../types'
@@ -187,6 +188,51 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
 }
 
 const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
+const SCORE_MODES = new Set(['off', 'score', 'overlay'])
+const SCORE_FITS = new Set(['height', 'width'])
+
+/**
+ * The one settings key holding an object, so it needs its own pass — the
+ * lenient primitive sweep below drops anything nested. A score that names
+ * neither a Drive file nor a hosted URL can never load, so it is dropped
+ * whole rather than imported as a broken attachment.
+ *
+ * The URL of an uploaded score survives the trip deliberately: it is public
+ * (unguessable, like a note image), and copySharedProject re-uploads it under
+ * the importer's own path so the copy stops depending on the exporter's bytes.
+ */
+function sanitizeScore(v: unknown): ProjectScore | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const raw = v as Record<string, unknown>
+  const driveUrl = str(raw.driveUrl)
+  // As with a Drive source, re-derive the id from the link when the export is
+  // missing it — the id is what actually loads.
+  const driveFileId =
+    str(raw.driveFileId) ??
+    (driveUrl ? (parseDriveFileId(driveUrl) ?? undefined) : undefined)
+  const url = str(raw.url)
+  const kind = raw.kind === 'drive' || driveFileId ? 'drive' : 'blob'
+
+  const score: ProjectScore = { kind }
+  if (kind === 'drive') {
+    if (!driveFileId) return undefined
+    score.driveFileId = driveFileId
+    if (driveUrl) score.driveUrl = driveUrl
+  } else {
+    if (!url) return undefined
+    score.url = url
+    const fileName = str(raw.fileName)
+    if (fileName) score.fileName = fileName
+  }
+
+  const mode = str(raw.mode)
+  if (mode && SCORE_MODES.has(mode)) score.mode = mode as ProjectScore['mode']
+  const fit = str(raw.fit)
+  if (fit && SCORE_FITS.has(fit)) score.fit = fit as ProjectScore['fit']
+  const opacity = num(raw.opacity)
+  if (opacity != null) score.opacity = Math.min(1, Math.max(0.2, opacity))
+  return score
+}
 
 /**
  * Settings pass through leniently: any key holding a primitive survives, so a
@@ -194,7 +240,8 @@ const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
  * open as a song-structure board — round-trips without this file having to
  * know it. Only `noteOrder` is checked against its enum (an unknown value
  * would silently break the notes-list sorting); everything non-primitive
- * (nested objects, arrays) is dropped.
+ * (nested objects, arrays) is dropped, which is why the score — the one
+ * object-valued key — gets an explicit pass of its own.
  */
 function sanitizeSettings(v: unknown): ProjectSettings | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
@@ -212,6 +259,8 @@ function sanitizeSettings(v: unknown): ProjectSettings | undefined {
     !NOTE_ORDERS.has(settings.noteOrder as string)
   )
     delete settings.noteOrder
+  const score = sanitizeScore((v as Record<string, unknown>).score)
+  if (score) settings.score = score
   return Object.keys(settings).length > 0
     ? (settings as ProjectSettings)
     : undefined
