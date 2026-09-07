@@ -89,6 +89,15 @@ export interface NoteOverlay {
    */
   coverFit?: 'contain' | 'cover'
   /**
+   * Which part of a filled cover survives the crop, as 0–1 fractions (CSS
+   * `object-position`): 0 keeps the left/top edge, 1 the right/bottom, and the
+   * absent default is 0.5 — dead centre, which is where a crop lands if nobody
+   * says otherwise. Only meaningful with `coverFit: 'cover'`; a contained image
+   * has no overflow to choose from. Set by dragging the cover itself.
+   */
+  coverX?: number
+  coverY?: number
+  /**
    * Pin position as fractions of the frame, 0–1 from the top-left. Both are
    * set together or not at all — their absence is what "this note has no pin"
    * means. Fractions rather than pixels so a pin holds its spot on the picture

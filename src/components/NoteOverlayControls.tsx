@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Image as ImageIcon, MapPin, Trash2, Loader2 } from 'lucide-react'
+import { useRef, useState, type DragEvent } from 'react'
+import { Image as ImageIcon, MapPin, Trash2, Loader2, Crosshair } from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -7,9 +7,11 @@ import {
   HOLD_MIN,
   OVERLAY_HOLD,
   clampHold,
+  coverPosition,
   hasCover,
   hasPin,
   hasOverlay,
+  isFilled,
   patchOverlay,
 } from '../lib/overlays'
 
@@ -29,6 +31,9 @@ interface Props {
 /**
  * A cover is shown at full frame, so it's worth more pixels than an inline note
  * image — but not so many that a class on a phone hotspot waits on it.
+ * `fileToScaledBlob` downscales to this and re-encodes (WebP where the source
+ * can carry transparency, else JPEG), so what leaves the browser is a fraction
+ * of what a phone photo or a screen grab weighs.
  */
 const COVER_MAX_DIM = 1600
 
@@ -48,14 +53,23 @@ export default function NoteOverlayControls({
   const fileRef = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Depth counter, not a boolean: dragging across a child fires `dragleave` on
+  // the parent, which would flicker the highlight off mid-hover.
+  const [dragDepth, setDragDepth] = useState(0)
   const overlay: NoteOverlay = annotation.overlay ?? {}
   const busy = progress != null
+  const crop = coverPosition(annotation)
+  const cropMoved = crop.x !== 0.5 || crop.y !== 0.5
 
   const patch = (next: Partial<NoteOverlay>) =>
     onUpdate(patchOverlay(annotation, next))
 
-  const pickCover = async (file: File | undefined) => {
+  const pickCover = async (file: File | undefined | null) => {
     if (!file || !uploadImage) return
+    if (!file.type.startsWith('image/')) {
+      setError('That file isn’t an image.')
+      return
+    }
     setError(null)
     setProgress(0)
     try {
@@ -67,11 +81,34 @@ export default function NoteOverlayControls({
       patch({ coverUrl: await uploadImage(blob, setProgress) })
     } catch (err) {
       console.error('Cover image upload failed:', err)
-      setError("That image couldn't be uploaded — try again.")
+      setError('That image couldn’t be uploaded — try again.')
     } finally {
       setProgress(null)
     }
   }
+
+  // Drop an image anywhere on this section to set (or replace) the cover.
+  const dropZone = {
+    onDragEnter: (e: DragEvent) => {
+      if (!uploadImage || !e.dataTransfer.types.includes('Files')) return
+      e.preventDefault()
+      setDragDepth((d) => d + 1)
+    },
+    onDragOver: (e: DragEvent) => {
+      if (!uploadImage || !e.dataTransfer.types.includes('Files')) return
+      // Without this the browser navigates away to the dropped file.
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    },
+    onDragLeave: () => setDragDepth((d) => Math.max(0, d - 1)),
+    onDrop: (e: DragEvent) => {
+      if (!uploadImage) return
+      e.preventDefault()
+      setDragDepth(0)
+      void pickCover(e.dataTransfer.files?.[0])
+    },
+  }
+  const dropping = dragDepth > 0 && !!uploadImage
 
   const togglePin = () => {
     // A new pin lands dead centre, where it's impossible to miss; the frame is
@@ -84,51 +121,99 @@ export default function NoteOverlayControls({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-b border-line/60 px-[13px] py-2.5">
+    <div
+      {...dropZone}
+      className={`relative flex flex-col gap-2 border-b px-[13px] py-2.5 transition-colors ${
+        dropping ? 'border-accent/40 bg-accent/[0.06]' : 'border-line/60'
+      }`}
+    >
       <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         On the video
       </span>
 
       {/* ---- cover image ---- */}
       {hasCover(annotation) ? (
-        <div className="flex items-center gap-2.5 rounded-md border border-line/70 p-2">
-          <img
-            src={overlay.coverUrl}
-            alt="Cover"
-            className="h-11 w-[74px] shrink-0 rounded bg-black object-contain"
-          />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="text-[11px] text-muted">
-              Covers the picture for this note
-            </span>
-            <div className="seg w-max" role="group" aria-label="How the cover fits the frame">
-              {(['contain', 'cover'] as const).map((fit) => (
-                <button
-                  key={fit}
-                  type="button"
-                  className="seg-item press"
-                  aria-pressed={(overlay.coverFit ?? 'contain') === fit}
-                  title={
-                    fit === 'contain'
-                      ? 'Show the whole image, letterboxed'
-                      : 'Fill the frame, cropping the overflow'
-                  }
-                  onClick={() => patch({ coverFit: fit === 'contain' ? undefined : 'cover' })}
-                >
-                  {fit === 'contain' ? 'Fit' : 'Fill'}
-                </button>
-              ))}
+        <div className="flex flex-col gap-2 rounded-md border border-line/70 p-2">
+          <div className="flex items-center gap-2.5">
+            <img
+              src={overlay.coverUrl}
+              alt="Cover"
+              style={
+                isFilled(annotation)
+                  ? { objectPosition: `${crop.x * 100}% ${crop.y * 100}%` }
+                  : undefined
+              }
+              className={`h-11 w-[74px] shrink-0 rounded bg-black ${
+                isFilled(annotation) ? 'object-cover' : 'object-contain'
+              }`}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="text-[11px] text-muted">
+                Covers the picture for this note
+              </span>
+              <div
+                className="seg w-max"
+                role="group"
+                aria-label="How the cover fits the frame"
+              >
+                {(['contain', 'cover'] as const).map((fit) => (
+                  <button
+                    key={fit}
+                    type="button"
+                    className="seg-item press"
+                    aria-pressed={(overlay.coverFit ?? 'contain') === fit}
+                    title={
+                      fit === 'contain'
+                        ? 'Show the whole image, letterboxed'
+                        : 'Fill the frame, cropping the overflow — then drag the cover to aim the crop'
+                    }
+                    onClick={() =>
+                      patch({ coverFit: fit === 'contain' ? undefined : 'cover' })
+                    }
+                  >
+                    {fit === 'contain' ? 'Fit' : 'Fill'}
+                  </button>
+                ))}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() =>
+                patch({
+                  coverUrl: undefined,
+                  coverFit: undefined,
+                  coverX: undefined,
+                  coverY: undefined,
+                })
+              }
+              title="Remove cover image"
+              aria-label="Remove cover image"
+              className="btn-icon press hover:text-danger"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => patch({ coverUrl: undefined, coverFit: undefined })}
-            title="Remove cover image"
-            aria-label="Remove cover image"
-            className="btn-icon press hover:text-danger"
-          >
-            <Trash2 size={14} />
-          </button>
+
+          {/* Filling crops, and which part it keeps is the teacher's call —
+              aimed on the frame itself, where the picture is. Only the way
+              back to centre needs a control here. */}
+          {isFilled(annotation) && (
+            <div className="flex items-center justify-between gap-2 border-t border-line/50 pt-1.5">
+              <span className="text-[11px] leading-snug text-muted/80">
+                Drag the cover on the video to aim the crop.
+              </span>
+              <button
+                type="button"
+                disabled={!cropMoved}
+                onClick={() => patch({ coverX: undefined, coverY: undefined })}
+                title="Put the crop back in the middle"
+                className="btn-ghost btn-sm press shrink-0"
+              >
+                <Crosshair size={11} />
+                Centre
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <button
@@ -136,7 +221,7 @@ export default function NoteOverlayControls({
           disabled={!uploadImage || busy}
           onClick={() => fileRef.current?.click()}
           title="Show an image over the video while this note is on screen"
-          className="press flex w-full items-center justify-between gap-2.5 rounded-md border border-line/70 px-[11px] py-2 text-left transition-colors hover:border-line-strong disabled:cursor-default disabled:opacity-50"
+          className="press flex w-full items-center justify-between gap-2.5 rounded-md border border-dashed border-line/70 px-[11px] py-2 text-left transition-colors hover:border-line-strong disabled:cursor-default disabled:opacity-50"
         >
           <span className="flex items-center gap-2 text-[12.5px] text-muted">
             {busy ? (
@@ -144,8 +229,15 @@ export default function NoteOverlayControls({
             ) : (
               <ImageIcon size={14} className="shrink-0" />
             )}
-            {busy ? `Uploading… ${Math.round((progress ?? 0) * 100)}%` : 'Add a cover image'}
+            {busy
+              ? `Uploading… ${Math.round((progress ?? 0) * 100)}%`
+              : 'Add a cover image'}
           </span>
+          {!busy && (
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-muted/60">
+              or drop
+            </span>
+          )}
         </button>
       )}
       <input
@@ -186,7 +278,7 @@ export default function NoteOverlayControls({
       </button>
       {hasPin(annotation) && (
         <p className="text-[11.5px] leading-relaxed text-muted/80">
-          Drag the dot on the video to aim it. This note's text is its caption.
+          Drag the dot on the video to aim it. This note’s text is its caption.
         </p>
       )}
 
@@ -216,6 +308,15 @@ export default function NoteOverlayControls({
           />
           <span className="shrink-0">seconds</span>
         </label>
+      )}
+
+      {/* The drop target says so only while something is over it. */}
+      {dropping && (
+        <div className="pointer-events-none absolute inset-1 grid place-items-center rounded-md border border-dashed border-accent/60 bg-ink/70">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-accentink">
+            Drop to set the cover
+          </span>
+        </div>
       )}
     </div>
   )

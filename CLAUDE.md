@@ -147,7 +147,16 @@ the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Loca
 `src/components/VideoOverlays.tsx`). A note's optional `overlay` field carries
 a **cover** (a full-frame image that stands in for the video while the audio
 keeps playing) and/or a **pin** (a dot at `pinX`/`pinY`, 0–1 fractions of the
-frame, captioned with the note's own text). Both show over the note's window —
+frame, captioned with the note's own text). Both are aimed **on the frame
+itself**, by dragging: a pin goes where the pointer goes, and a `Fill` cover
+slides under the window to choose which part survives the crop
+(`coverX`/`coverY`, CSS `object-position`, absent meaning dead centre). Only
+the note open in the inspector is draggable, and only then does the layer take
+the pointer at all. Cover images arrive by picker *or* by dropping a file on
+the inspector's "On the video" section, and every one is downscaled to 1600px
+and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
+carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a
+PNG screen grab). Both show over the note's window —
 its `start`→`end`, or `hold` seconds (default 4) from `start` for a point note
 — *and* whenever the note is open in the inspector, so a cover can be composed
 without scrubbing onto its moment. Video sources only, the same line

@@ -315,6 +315,47 @@ html[data-armed] body::before {
     color: #fff;
     background-color: rgb(255 255 255 / 0.1);
   }
+  /* A note lifted onto the picture: the pin caption, and the hint that arms a
+     cover for repositioning. Same doctrine as .on-video — palette-blind, since
+     a themed pane would fight whatever frame sits behind it — but built like a
+     note row: dark glass, hairline ring, and a 3px spine in the note's own hue
+     carrying its identity. The hue rides `--hue`, as everywhere else.
+     Sits on the leading edge, which flips with the bubble (see
+     components/VideoOverlays.tsx). */
+  .on-video-card {
+    --hue: #fff;
+    @apply relative flex gap-2.5 overflow-hidden rounded-md py-1.5 pl-3 pr-3;
+    background-color: rgb(0 0 0 / 0.72);
+    backdrop-filter: blur(8px);
+    box-shadow:
+      0 8px 28px rgb(0 0 0 / 0.5),
+      inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  }
+  .on-video-card::before {
+    content: '';
+    @apply absolute inset-y-0 left-0 w-[3px];
+    background-color: var(--hue);
+  }
+  .on-video-card[data-flip]::before {
+    @apply left-auto right-0;
+  }
+  .on-video-card[data-flip] {
+    @apply pl-3 pr-3;
+  }
+  /* Note text on the picture: three lines, then the note itself carries the
+     rest — a paragraph over the frame is a wall, not a caption. */
+  .on-video-card__text {
+    @apply text-[13px] leading-[1.45] text-white/90;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+  /* The timecode, in the note's hue — the note row's colored mono stamp. */
+  .on-video-card__time {
+    @apply font-mono text-[10px] font-semibold uppercase tracking-[0.14em] tabular-nums;
+    color: var(--hue);
+  }
 
   /* ---------- chips ---------- */
   .chip {

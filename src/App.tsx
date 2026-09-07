@@ -1284,6 +1284,22 @@ export default function App() {
     })
   }
 
+  /** Land a repositioned fill crop — same one-save-per-release deal as movePin. */
+  function moveCover(annId: string, x: number, y: number) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    updateAnnotation(
+      annId,
+      // Dead centre is the default, so store nothing for it: a crop nobody
+      // aimed shouldn't carry two numbers through export and import.
+      patchOverlay(a, {
+        coverX: x === 0.5 ? undefined : x,
+        coverY: y === 0.5 ? undefined : y,
+      }),
+      { coalesceKey: `cover:${annId}` },
+    )
+  }
+
   // Persist a manual order for a group of same-time notes: `orderedIds` is the
   // group in its new top-to-bottom order, and each gets `order` = its position.
   // Other notes are untouched (the order field only breaks same-`start` ties).
@@ -1710,6 +1726,7 @@ export default function App() {
         selectedId={selectedNoteId}
         readOnly={effectiveViewOnly}
         onMovePin={movePin}
+        onMoveCover={moveCover}
       />
       {transport}
     </>

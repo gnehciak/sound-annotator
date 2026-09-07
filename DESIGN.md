@@ -449,14 +449,21 @@ the frame captioned with the note's own text. Both are drawn inside the 16:9
 frame beneath the transport (`src/components/VideoOverlays.tsx`).
 
 Chrome over video is **palette-blind**, the same rule the overlay transport
-follows: the caption bubble is black at 70% with white text and a 2px edge in
-the note's own hue, never a themed pane — panes carry no hue, and a translucent
-`panel` would fight whatever frame is behind it. The pin is a 10px dot in the
-note's hue, ringed white so it reads on any picture, over a breathing halo of
-the same hue at 30%. The bubble opens away from the nearer frame edge and is
-capped at the distance to the far one, so it always wraps inside the picture.
-In the notes list a note that owns the frame wears an `ON VIDEO` outline chip
-in its own hue.
+follows — a themed pane would fight whatever frame sits behind it. The caption
+is `on-video-card` (`src/index.css`): a **note row lifted onto the picture** —
+dark glass at 72% with an 8px blur, a hairline inset ring, the note row's own
+3px spine in the note's hue on the leading edge, its colored mono timecode
+stamp, and the note's text clamped to three lines (a paragraph over the frame
+is a wall, not a caption — the note itself carries the rest). Hue rides
+`--hue`, as everywhere else; the spine flips to the trailing edge via
+`data-flip` when the card opens leftward, so it always faces its dot.
+
+The card opens away from the nearer frame edge, is capped at the distance to
+the far one **and** at a 22rem measure, so it wraps inside the picture and
+never spans a lecture-hall screen. The pin is a 10px dot in the note's hue,
+ringed white so it reads on any picture, over a breathing halo of the same hue
+at 30%. In the notes list a note that owns the frame wears an `ON VIDEO`
+outline chip in its own hue.
 
 ### Note Rows (Signature Component)
 The note list is a flush cue list inside the notes pane, not a stack of

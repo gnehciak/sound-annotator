@@ -1,12 +1,15 @@
 import {
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { Move } from 'lucide-react'
 import type { Annotation } from '../types'
+import { noteLabel } from '../lib/format'
 import { colorForId } from '../lib/noteColors'
-import { pinCaption, visibleLayer } from '../lib/overlays'
+import { coverPosition, isFilled, pinCaption, visibleLayer } from '../lib/overlays'
 
 interface Props {
   annotations: Annotation[]
@@ -14,20 +17,29 @@ interface Props {
   currentTime: number
   /**
    * The note open in the inspector. Its layer shows whatever the playhead says
-   * (so a cover can be composed without scrubbing), and its pin is the only
-   * draggable one.
+   * (so a cover can be composed without scrubbing), and it is the only note
+   * whose pin can be dragged and whose filled cover can be repositioned.
    */
   selectedId?: string | null
   /** View-only (share links, foreign tracks): draw the layer, never edit it. */
   readOnly?: boolean
   /** Commit a dragged pin's new position, as 0–1 fractions of the frame. */
   onMovePin?: (id: string, x: number, y: number) => void
+  /** Commit a repositioned fill crop, as 0–1 object-position fractions. */
+  onMoveCover?: (id: string, x: number, y: number) => void
 }
 
 /** One nudge of the arrow keys, as a fraction of the frame (Shift = ×5). */
 const NUDGE = 0.01
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+
+const ARROWS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
 
 /**
  * The note stage layer, drawn inside the video frame (PlayerPane's `overlay`
@@ -36,7 +48,9 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
  *
  * Inert by default — `pointer-events-none` throughout, so clicking the picture
  * still reaches the player's own click-to-pause catcher underneath. Only the
- * selected note's pin takes the pointer, and only when editing is allowed.
+ * selected note takes the pointer: its pin can be dragged anywhere on the
+ * frame, and its cover, when filled, can be dragged to choose which part of
+ * the image survives the crop.
  */
 export default function VideoOverlays({
   annotations,
@@ -44,12 +58,23 @@ export default function VideoOverlays({
   selectedId,
   readOnly,
   onMovePin,
+  onMoveCover,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   // Live position while a pin is under the pointer. Held locally rather than
   // written through on every move: a drag would otherwise push a project save
   // (and an undo entry) per pointer event. Committed once, on release.
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(
+    null,
+  )
+  // Same idea for the cover's crop, which needs the grab point too: the image
+  // follows the pointer from wherever it was picked up, rather than jumping.
+  const [coverDrag, setCoverDrag] = useState<{
+    id: string
+    x: number
+    y: number
+  } | null>(null)
+  const coverGrab = useRef<{ clientX: number; clientY: number; x: number; y: number } | null>(
     null,
   )
   // Cover URLs the browser couldn't load. A cover can outlive its bytes — a
@@ -62,12 +87,20 @@ export default function VideoOverlays({
   const coverUrl = layer.cover?.overlay?.coverUrl
   const cover = coverUrl && !broken.has(coverUrl) ? layer.cover : null
   const pins = layer.pins
-  const editable = !readOnly && !!onMovePin
+  const editable = !readOnly
+
+  // A filled cover on the open note can be aimed; a contained one has no
+  // overflow to choose from, so it stays inert and the frame stays clickable.
+  const coverArmed =
+    !!cover && editable && !!onMoveCover && cover.id === selectedId && isFilled(cover)
 
   const posOf = (a: Annotation) =>
     drag?.id === a.id
       ? { x: drag.x, y: drag.y }
       : { x: a.overlay?.pinX ?? 0.5, y: a.overlay?.pinY ?? 0.5 }
+
+  const cropOf = (a: Annotation) =>
+    coverDrag?.id === a.id ? { x: coverDrag.x, y: coverDrag.y } : coverPosition(a)
 
   const fractionAt = (clientX: number, clientY: number) => {
     const box = frameRef.current?.getBoundingClientRect()
@@ -78,49 +111,86 @@ export default function VideoOverlays({
     }
   }
 
-  const startDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
-    if (!editable || a.id !== selectedId) return
+  // ---- pin drag: the dot goes wherever the pointer is ----------------------
+
+  const startPinDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
+    if (!editable || !onMovePin || a.id !== selectedId) return
     e.preventDefault()
     e.stopPropagation()
-    try {
-      // Capture keeps the drag alive when the pointer leaves the dot — the
-      // whole point, since aiming a pin means moving away from it.
-      e.currentTarget.setPointerCapture(e.pointerId)
-    } catch {
-      /* ignore — the drag still tracks while the pointer is over the dot */
-    }
+    capture(e)
     const at = fractionAt(e.clientX, e.clientY)
     setDrag({ id: a.id, ...(at ?? posOf(a)) })
   }
 
-  const moveDrag = (e: ReactPointerEvent<HTMLElement>) => {
+  const movePinDrag = (e: ReactPointerEvent<HTMLElement>) => {
     if (!drag) return
     const at = fractionAt(e.clientX, e.clientY)
     if (at) setDrag({ id: drag.id, ...at })
   }
 
-  const endDrag = (e: ReactPointerEvent<HTMLElement>) => {
+  const endPinDrag = (e: ReactPointerEvent<HTMLElement>) => {
     if (!drag) return
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    } catch {
-      /* ignore */
-    }
+    release(e)
     onMovePin?.(drag.id, drag.x, drag.y)
     setDrag(null)
   }
 
-  const nudge = (a: Annotation) => (e: ReactKeyboardEvent) => {
-    if (!editable || a.id !== selectedId) return
-    const step = e.shiftKey ? NUDGE * 5 : NUDGE
-    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[
-      e.key
-    ]
-    if (!d) return
+  // ---- cover drag: the picture slides under a fixed window -----------------
+  // Inverted, because `object-position` names the part of the *image* pinned to
+  // the frame: dragging right should reveal what's to the left, which is a
+  // smaller percentage. One frame-width of travel sweeps the whole range,
+  // which keeps the gesture predictable whatever the image's real overflow is.
+
+  const startCoverDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
+    if (!coverArmed) return
     e.preventDefault()
-    const { x, y } = posOf(a)
-    onMovePin?.(a.id, clamp01(x + d[0]), clamp01(y + d[1]))
+    e.stopPropagation()
+    capture(e)
+    const at = cropOf(a)
+    coverGrab.current = { clientX: e.clientX, clientY: e.clientY, ...at }
+    setCoverDrag({ id: a.id, ...at })
   }
+
+  const moveCoverDrag = (e: ReactPointerEvent<HTMLElement>) => {
+    const grab = coverGrab.current
+    if (!coverDrag || !grab) return
+    const box = frameRef.current?.getBoundingClientRect()
+    if (!box || box.width === 0 || box.height === 0) return
+    setCoverDrag({
+      id: coverDrag.id,
+      x: clamp01(grab.x - (e.clientX - grab.clientX) / box.width),
+      y: clamp01(grab.y - (e.clientY - grab.clientY) / box.height),
+    })
+  }
+
+  const endCoverDrag = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!coverDrag) return
+    release(e)
+    onMoveCover?.(coverDrag.id, coverDrag.x, coverDrag.y)
+    coverGrab.current = null
+    setCoverDrag(null)
+  }
+
+  /**
+   * Arrow-key nudging, for both draggables — a pin needs it to reach an exact
+   * spot, and a crop to be trimmed a hair. `sign` flips it for the cover,
+   * whose axis runs the other way (see startCoverDrag).
+   */
+  const nudge =
+    (
+      a: Annotation,
+      armed: boolean,
+      at: { x: number; y: number },
+      commit: ((id: string, x: number, y: number) => void) | undefined,
+      sign: 1 | -1,
+    ) =>
+    (e: ReactKeyboardEvent) => {
+      const dir = ARROWS[e.key]
+      if (!armed || !dir || !commit) return
+      e.preventDefault()
+      const step = (e.shiftKey ? NUDGE * 5 : NUDGE) * sign
+      commit(a.id, clamp01(at.x + dir[0] * step), clamp01(at.y + dir[1] * step))
+    }
 
   if (!cover && pins.length === 0) return null
 
@@ -130,37 +200,77 @@ export default function VideoOverlays({
       className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
     >
       {cover && (
-        <img
-          // Re-keyed per image so swapping a cover (or crossing from one note's
-          // to another's) replays the fade instead of hard-cutting.
-          key={`${cover.id}:${cover.overlay?.coverUrl}`}
-          src={coverUrl}
-          alt=""
-          draggable={false}
-          onError={() =>
-            setBroken((prev) =>
-              coverUrl && !prev.has(coverUrl) ? new Set(prev).add(coverUrl) : prev,
-            )
-          }
-          className={`absolute inset-0 h-full w-full animate-fade-in bg-black ${
-            cover.overlay?.coverFit === 'cover' ? 'object-cover' : 'object-contain'
-          }`}
-        />
+        <>
+          <img
+            // Re-keyed per image so swapping a cover (or crossing from one
+            // note's to another's) replays the fade instead of hard-cutting.
+            key={`${cover.id}:${coverUrl}`}
+            src={coverUrl}
+            alt=""
+            draggable={false}
+            role={coverArmed ? 'button' : undefined}
+            tabIndex={coverArmed ? 0 : undefined}
+            aria-label={coverArmed ? 'Drag to reposition the cover image' : undefined}
+            onError={() =>
+              setBroken((prev) =>
+                coverUrl && !prev.has(coverUrl) ? new Set(prev).add(coverUrl) : prev,
+              )
+            }
+            onPointerDown={startCoverDrag(cover)}
+            onPointerMove={moveCoverDrag}
+            onPointerUp={endCoverDrag}
+            onPointerCancel={endCoverDrag}
+            onKeyDown={nudge(cover, coverArmed, cropOf(cover), onMoveCover, -1)}
+            style={
+              isFilled(cover)
+                ? {
+                    objectPosition: `${cropOf(cover).x * 100}% ${cropOf(cover).y * 100}%`,
+                  }
+                : undefined
+            }
+            className={`absolute inset-0 h-full w-full animate-fade-in bg-black ${
+              isFilled(cover) ? 'object-cover' : 'object-contain'
+            } ${
+              coverArmed
+                ? 'pointer-events-auto cursor-grab touch-none active:cursor-grabbing'
+                : ''
+            }`}
+          />
+          {coverArmed && (
+            <span
+              className="on-video-card pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 items-center py-1 text-[11px] text-white/70"
+              style={{ ['--hue' as string]: cover.color ?? colorForId(cover.id) }}
+            >
+              <Move size={11} className="shrink-0" />
+              Drag to choose what the crop keeps
+            </span>
+          )}
+        </>
       )}
 
       {pins.map((a) => {
         const { x, y } = posOf(a)
         const hue = a.color ?? colorForId(a.id)
         const caption = pinCaption(a)
-        const armed = editable && a.id === selectedId
-        // The bubble opens away from the nearer edge and is capped at the
-        // distance to the far one, so a long caption wraps inside the frame
-        // instead of running off the picture. Both are percentages of the
-        // frame — which is why the bubble is a sibling of the dot rather than
-        // its child: a percentage needs the frame as its containing block.
+        const armed = editable && !!onMovePin && a.id === selectedId
+        // The card opens away from the nearer edge and is capped at the
+        // distance to the far one, so a long note wraps inside the frame
+        // instead of running off the picture — then capped again at a readable
+        // measure, because a caption spanning half a lecture-hall screen is a
+        // wall of text, not an annotation. Both caps are percentages of the
+        // frame, which is why the card is a sibling of the dot rather than its
+        // child: a percentage needs the frame as its containing block.
         const flipX = x > 0.55
         const flipY = y > 0.72
         const pct = (n: number) => `${n * 100}%`
+        const cardStyle: CSSProperties = {
+          left: flipX ? undefined : `calc(${pct(x)} + 14px)`,
+          right: flipX ? `calc(${pct(1 - x)} + 14px)` : undefined,
+          top: flipY ? undefined : `calc(${pct(y)} - 6px)`,
+          bottom: flipY ? `calc(${pct(1 - y)} - 6px)` : undefined,
+          maxWidth: `min(calc(${pct(flipX ? x : 1 - x)} - 22px), 22rem)`,
+          ['--hue' as string]: hue,
+        }
         return (
           <div key={a.id} className="contents">
             <div
@@ -170,11 +280,11 @@ export default function VideoOverlays({
                 armed ? 'Drag to move this pin, or nudge it with the arrow keys' : undefined
               }
               title={armed ? 'Drag to move — arrow keys nudge, Shift for bigger steps' : undefined}
-              onPointerDown={startDrag(a)}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              onKeyDown={nudge(a)}
+              onPointerDown={startPinDrag(a)}
+              onPointerMove={movePinDrag}
+              onPointerUp={endPinDrag}
+              onPointerCancel={endPinDrag}
+              onKeyDown={nudge(a, armed, { x, y }, onMovePin, 1)}
               style={{ left: pct(x), top: pct(y) }}
               className={`absolute -translate-x-1/2 -translate-y-1/2 animate-fade-in rounded-full p-2 ${
                 armed ? 'pointer-events-auto cursor-grab touch-none active:cursor-grabbing' : ''
@@ -199,25 +309,19 @@ export default function VideoOverlays({
 
             {(caption || armed) && (
               <div
-                style={{
-                  left: flipX ? undefined : `calc(${pct(x)} + 14px)`,
-                  right: flipX ? `calc(${pct(1 - x)} + 14px)` : undefined,
-                  top: flipY ? undefined : `calc(${pct(y)} - 4px)`,
-                  bottom: flipY ? `calc(${pct(1 - y)} - 4px)` : undefined,
-                  maxWidth: `calc(${pct(flipX ? x : 1 - x)} - 22px)`,
-                  [flipX ? 'borderRight' : 'borderLeft']: `2px solid ${hue}`,
-                }}
-                className="absolute w-max animate-fade-in rounded-md bg-black/70 px-2.5 py-1.5 text-[12.5px] leading-snug text-white/95 backdrop-blur-sm"
+                data-flip={flipX || undefined}
+                style={cardStyle}
+                className="on-video-card absolute w-max animate-fade-in flex-col gap-0.5"
               >
+                <span className="on-video-card__time">
+                  {noteLabel(a.start, a.end)}
+                </span>
                 {caption ? (
-                  // One line of the note is a caption; a paragraph is a wall of
-                  // text over the picture. Clamp and let the note itself carry
-                  // the rest.
-                  <span className="line-clamp-3 block">{caption}</span>
+                  <p className="on-video-card__text">{caption}</p>
                 ) : (
-                  <span className="text-white/50">
+                  <p className="on-video-card__text text-white/45">
                     Type the note&rsquo;s text to caption this pin
-                  </span>
+                  </p>
                 )}
               </div>
             )}
@@ -226,4 +330,22 @@ export default function VideoOverlays({
       })}
     </div>
   )
+}
+
+/** Pointer capture keeps a drag alive once the pointer leaves the element —
+ *  the whole point, since aiming something means moving away from it. */
+function capture(e: ReactPointerEvent<HTMLElement>) {
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId)
+  } catch {
+    /* ignore — the drag still tracks while the pointer is over the element */
+  }
+}
+
+function release(e: ReactPointerEvent<HTMLElement>) {
+  try {
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  } catch {
+    /* ignore */
+  }
 }

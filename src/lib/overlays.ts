@@ -22,6 +22,18 @@ export const HOLD_MAX = 120
 
 export const hasCover = (a: Annotation): boolean => !!a.overlay?.coverUrl
 
+/** True when the cover fills the frame (and so has a crop worth aiming). */
+export const isFilled = (a: Annotation): boolean =>
+  a.overlay?.coverFit === 'cover'
+
+/**
+ * Which part of a filled cover survives the crop, as 0–1 `object-position`
+ * fractions. Dead centre unless the note says otherwise.
+ */
+export function coverPosition(a: Annotation): { x: number; y: number } {
+  return { x: a.overlay?.coverX ?? 0.5, y: a.overlay?.coverY ?? 0.5 }
+}
+
 export const hasPin = (a: Annotation): boolean =>
   a.overlay?.pinX != null && a.overlay?.pinY != null
 

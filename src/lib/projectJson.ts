@@ -166,6 +166,10 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
   const coverUrl = str(o.coverUrl)
   if (coverUrl) overlay.coverUrl = coverUrl
   if (o.coverFit === 'cover') overlay.coverFit = 'cover'
+  const coverX = num(o.coverX)
+  const coverY = num(o.coverY)
+  if (coverX != null) overlay.coverX = Math.min(1, Math.max(0, coverX))
+  if (coverY != null) overlay.coverY = Math.min(1, Math.max(0, coverY))
   const pinX = num(o.pinX)
   const pinY = num(o.pinY)
   if (pinX != null && pinY != null) {
