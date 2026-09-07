@@ -6,6 +6,7 @@ import { deleteAudioCloud } from '../lib/audioCloud'
 import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
 import HomeDot from './HomeDot'
+import AdminUsers from './AdminUsers'
 import { publicId } from '../lib/ids'
 
 interface AdminProject extends Project {
@@ -15,6 +16,7 @@ interface AdminProject extends Project {
 }
 
 type Filter = 'all' | 'guest' | 'account'
+type Tab = 'projects' | 'users'
 
 /**
  * Every project in the database — students' guest work and account libraries
@@ -31,6 +33,7 @@ export default function AdminProjects() {
   const [state, setState] = useState<'loading' | 'ok' | 'denied' | 'error'>('loading')
   const [projects, setProjects] = useState<AdminProject[]>([])
   const [filter, setFilter] = useState<Filter>('all')
+  const [tab, setTab] = useState<Tab>('projects')
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -127,9 +130,21 @@ export default function AdminProjects() {
               the console, not the app. */}
           <HomeDot size={10} />
           <h1 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
-            All projects
+            {tab === 'projects' ? 'All projects' : 'All users'}
           </h1>
-          <div className="flex items-center gap-1">
+          <div className="seg">
+            {(['projects', 'users'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                aria-pressed={tab === t}
+                className="seg-item press text-[11px] capitalize"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <div className={`items-center gap-1 ${tab === 'projects' ? 'flex' : 'hidden'}`}>
             {(['all', 'account', 'guest'] as const).map((f) => (
               <button
                 key={f}
@@ -145,15 +160,19 @@ export default function AdminProjects() {
               </button>
             ))}
           </div>
-          <button
-            onClick={() => void load()}
-            className="btn-ghost btn-sm press ml-auto"
-          >
-            <RefreshCw size={12} /> Refresh
-          </button>
+          {tab === 'projects' && (
+            <button
+              onClick={() => void load()}
+              className="btn-ghost btn-sm press ml-auto"
+            >
+              <RefreshCw size={12} /> Refresh
+            </button>
+          )}
         </div>
 
-        {shown.length === 0 ? (
+        {tab === 'users' ? (
+          <AdminUsers />
+        ) : shown.length === 0 ? (
           <p className="empty text-sm text-muted">
             Nothing here.
           </p>

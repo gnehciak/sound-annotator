@@ -59,6 +59,21 @@ silently opt them out of their own trash. Permanence is always asked for
 explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
 live rows only.
 
+**Who the admin is: `ADMIN_EMAILS`**, a comma-separated allowlist checked
+server-side by `isAdmin` (`api/_lib/auth.ts`), by *email* so it survives the
+dev→production Clerk move that mints new uids. Unset means nobody, which is the
+right default for a role that can hard-delete other people's work. The console
+(`?admin=1`) has two tabs, both 404 rather than 403 for everyone else:
+`api/admin/projects.ts` (every live project, guests included) and
+`api/admin/users.ts` (every Clerk account, with the project counts stitched on
+from Postgres — the only place the two stores are joined). Guests can never
+appear as users, so that endpoint reports them as a separate tally, and
+surfaces owner ids whose account is gone; both exist so the numbers on the two
+tabs reconcile instead of quietly disagreeing. **`ADMIN_EMAILS` is a
+`sensitive` env var in Vercel — write-only.** Neither the API nor `vercel env
+pull` will read it back (both answer `""`), so never treat an empty read as
+"unset": setting it overwrites whatever was there, unseen.
+
 **The 12-function ceiling is gone — the team is on Pro (verified 2026-09-07),
 where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
 which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
