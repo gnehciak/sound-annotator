@@ -53,7 +53,7 @@ export const ELEMENTS: ElementCategory[] = [
   {
     id: 'timbre',
     color: '#ffd633',
-    label: 'Tone colour',
+    label: 'Timbre',
     fields: [
       {
         id: 'timbre.instrument',
@@ -63,7 +63,10 @@ export const ELEMENTS: ElementCategory[] = [
       },
       {
         id: 'timbre.quality',
-        label: 'Timbre',
+        // Id stays `timbre.quality` — it's the key stored on every note that
+        // already set this; only the display label moved off "Timbre" when
+        // the category took that name.
+        label: 'Tone quality',
         options: ['Bright', 'Warm', 'Mellow', 'Harsh', 'Nasal', 'Breathy', 'Rich', 'Thin'],
         allowCustom: true,
       },
@@ -134,6 +137,41 @@ export const ELEMENTS: ElementCategory[] = [
         id: 'dynamics.volume',
         label: 'Volume of layer',
         options: ['pp', 'p', 'mp', 'mf', 'f', 'ff', 'Crescendo', 'Diminuendo'],
+        allowCustom: true,
+      },
+    ],
+  },
+  {
+    id: 'expressive',
+    color: '#3ddc74',
+    label: 'Expressive techniques',
+    fields: [
+      {
+        id: 'expressive.articulation',
+        label: 'Articulation',
+        options: ['Legato', 'Staccato', 'Accent', 'Marcato', 'Tenuto', 'Slurred', 'Detached'],
+        allowCustom: true,
+      },
+      {
+        id: 'expressive.ornament',
+        label: 'Ornamentation',
+        options: ['Trill', 'Grace note', 'Mordent', 'Turn', 'Glissando', 'Portamento', 'Bend'],
+        allowCustom: true,
+      },
+      {
+        id: 'expressive.technique',
+        label: 'Performance technique',
+        options: [
+          'Vibrato',
+          'Tremolo',
+          'Pizzicato',
+          'Arco',
+          'Muted / con sordino',
+          'Harmonics',
+          'Flutter-tongue',
+          'Palm mute',
+          'Falsetto',
+        ],
         allowCustom: true,
       },
     ],
