@@ -3,7 +3,7 @@ import { Loader2, RotateCw, Trash2, UserPlus, X } from 'lucide-react'
 import type { Project, ProjectShare } from '../types'
 
 /**
- * "People with access" — the per-person half of sharing, in its own modal.
+ * "Invite collaborators" — the per-person half of sharing, in its own modal.
  *
  * It lives here rather than inside the share popover because the two are
  * different jobs at different rhythms: the link is opened weekly, glanced at
@@ -73,12 +73,12 @@ export default function PeopleAccessModal({
     >
       <div
         role="dialog"
-        aria-label="People with access"
+        aria-label="Invite collaborators"
         className="glass-pop flex w-full max-w-md flex-col overflow-hidden rounded-2xl"
       >
         <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-            People with access
+            Invite collaborators
           </span>
           <div className="flex-1" />
           <button
@@ -93,7 +93,7 @@ export default function PeopleAccessModal({
         </div>
 
         <div className="flex flex-col gap-3 px-5 py-4">
-          <p className="text-[12px] leading-snug text-muted">
+          <p className="text-[11.5px] leading-snug text-muted">
             Give one person access to{' '}
             <span className="text-fg">{project.title}</span> by the email they
             sign in with — independent of the share link, so it can stay
@@ -153,7 +153,7 @@ export default function PeopleAccessModal({
 
           {failed && (
             <div className="empty flex items-center justify-center gap-2 py-4">
-              <span className="text-[12px] text-muted">
+              <span className="text-[11.5px] text-muted">
                 Couldn’t load who has access.
               </span>
               <button type="button" onClick={onRetry} className="btn-ghost press">
@@ -163,7 +163,7 @@ export default function PeopleAccessModal({
           )}
 
           {shares != null && shares.length === 0 && (
-            <div className="empty py-5 text-[12px]">
+            <div className="empty py-5 text-[11.5px]">
               Nobody yet — only you can open this track.
             </div>
           )}

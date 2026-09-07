@@ -411,7 +411,7 @@ export default function ShareExportMenu({
           role="dialog"
           aria-label="Sharing and export"
           className={`pop absolute right-0 top-full z-30 mt-1.5 animate-panel-in py-1 ${
-            canShare ? 'w-[19rem]' : 'w-60'
+            canShare ? 'w-[22rem]' : 'w-60'
           }`}
         >
           {canShare && (
@@ -470,30 +470,37 @@ export default function ShareExportMenu({
 
                 {shared && (
                   <>
-                    <input
-                      ref={urlRef}
-                      readOnly
-                      value={shownUrl}
-                      onFocus={(e) => e.currentTarget.select()}
-                      aria-label="Share link"
-                      className="field led mt-2 w-full font-mono text-[11px]"
-                    />
-                    {/* Copy is the panel's job — the one filled key, at full
-                        width, rather than a ghost sitting quieter than the field
-                        beside it. */}
-                    <button
-                      onClick={copy}
-                      title="Copy the link to the clipboard"
-                      className="btn-primary press mt-1.5 h-[30px] w-full justify-center py-0 text-[12px]"
-                    >
-                      {copied ? <Check size={13} /> : <Copy size={13} />}
-                      {copied ? 'Copied' : 'Copy link'}
-                    </button>
+                    {/* Copy rides on the field it copies — one row, and the
+                        icon alone: a full-width filled key for a two-word
+                        action was the loudest thing in a pane whose job is to
+                        be read at a glance. The pane is 22rem rather than 19
+                        so the whole link still fits beside the button —
+                        truncating it would hide the id, which is the only part
+                        that differs between tracks and the only part worth
+                        checking before you hand it to a class. */}
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <input
+                        ref={urlRef}
+                        readOnly
+                        value={shownUrl}
+                        onFocus={(e) => e.currentTarget.select()}
+                        aria-label="Share link"
+                        className="field led min-w-0 flex-1 font-mono text-[11px]"
+                      />
+                      <button
+                        onClick={copy}
+                        aria-label="Copy link"
+                        title="Copy the link to the clipboard"
+                        className="btn-icon press shrink-0 hover:text-accentink"
+                      >
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    </div>
                     <p role="status" aria-live="polite" className="sr-only">
                       {copied ? 'Link copied to the clipboard' : ''}
                     </p>
                     {copyFailed && (
-                      <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                      <p className="mt-1 text-[11px] leading-snug text-muted">
                         Your browser blocked the clipboard — the link is selected
                         above, press{' '}
                         {navigator.platform.includes('Mac') ? '⌘C' : 'Ctrl+C'}.
@@ -618,7 +625,7 @@ export default function ShareExportMenu({
                 className="pop-row press mt-1 border-t border-line pt-2"
               >
                 <UserPlus size={13} className="shrink-0" />
-                People with access
+                Invite collaborators
                 <span className="ml-auto font-mono text-[11px] tabular-nums text-muted">
                   {shares == null ? '—' : invitedCount}
                 </span>
