@@ -23,6 +23,7 @@ import { exportProjectPdf } from '../lib/exportPdf'
 import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
 import { publicId } from '../lib/ids'
+import { routeHref } from '../lib/nav'
 import { listShares, removeShare, setShare } from '../lib/shares'
 import { ApiError } from '../lib/api'
 
@@ -47,10 +48,11 @@ interface Props {
  *  (see api/projects/[id]/index.ts). */
 type Reach = 'private' | 'link' | 'browse'
 
-/** Link to this project's share viewer (same app, `?view=` route). */
+/** Link to this project's share viewer. Built through the router rather than
+ *  hand-assembled, so the one place that knows the shape of a `?view=` route
+ *  stays src/lib/nav.ts — and a deployment on a sub-path keeps its prefix. */
 function shareUrl(id: string): string {
-  const { origin, pathname } = window.location
-  return `${origin}${pathname}?view=${id}`
+  return window.location.origin + routeHref({ page: 'share', id })
 }
 
 /** Mirrors the server's deliberately loose check (api/_lib/shares.ts) so an
@@ -120,7 +122,9 @@ export default function ShareExportMenu({
   // Split for the readout: the host is context, the id is the part that differs
   // between tracks and the only part worth checking before handing one to a
   // class — so the id gets the LED line and the host ellipsises above it.
-  const host = `${new URL(url).origin.replace(/^https?:\/\//, '')}/?view=`
+  // Everything the url is *apart from* the id, so the split can't be wrong
+  // whatever shape the route takes: the id is always its tail.
+  const host = url.replace(/^https?:\/\//, '').slice(0, -publicId(project).length)
   const trackId = publicId(project)
   // Question notes turn the view link into a worksheet (see lib/questions.ts) —
   // it changes what the person opening it is handed, so it belongs beside the

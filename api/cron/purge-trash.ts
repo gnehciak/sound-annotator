@@ -53,10 +53,12 @@ export async function GET(request: Request): Promise<Response> {
     // just come back round on tomorrow's pass. So the cheap failure is the one
     // to arrange for.
     try {
-      // Every prefix a project can own — note images, the legacy audio upload,
-      // and AI section detection's separated stems + analysis audio. Mirrors
-      // App.tsx's purgeProject (imageCloud.ts / audioCloud.ts hold the paths).
+      // Every prefix a project can own — note images, an uploaded PDF score,
+      // the legacy audio upload, and AI section detection's separated stems +
+      // analysis audio. Mirrors App.tsx's purgeProject (imageCloud.ts /
+      // scoreCloud.ts / audioCloud.ts hold the paths).
       blobs += await deletePrefix(`users/${r.owner_id}/images/${r.id}/`)
+      blobs += await deletePrefix(`users/${r.owner_id}/scores/${r.id}/`)
       blobs += await deletePrefix(`users/${r.owner_id}/audio/${r.id}`)
       blobs += await deletePrefix(`users/${r.owner_id}/stems/${r.id}/`)
       blobs += await deletePrefix(`users/${r.owner_id}/analysis/${r.id}`)

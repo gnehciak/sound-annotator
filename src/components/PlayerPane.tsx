@@ -18,6 +18,13 @@ interface Props {
    * and must stay uncovered; the host docks the transport beneath it instead.
    */
   overlay?: ReactNode
+  /**
+   * The PDF score, drawn in the same frame *between* the picture and the
+   * transport — so a score at full opacity still leaves the transport
+   * reachable. Ignored for audio for the same reason `overlay` is: there is no
+   * frame to lay it over, and the host gives it its own box above the waveform.
+   */
+  score?: ReactNode
   onTime: (t: number) => void
   onDuration: (d: number) => void
   onPlayingChange: (playing: boolean) => void
@@ -42,6 +49,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         playbackRate={props.playbackRate}
         volume={props.volume}
         overlay={props.overlay}
+        score={props.score}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}
@@ -58,6 +66,7 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
         playbackRate={props.playbackRate}
         volume={props.volume}
         overlay={props.overlay}
+        score={props.score}
         onTime={props.onTime}
         onDuration={props.onDuration}
         onPlayingChange={props.onPlayingChange}

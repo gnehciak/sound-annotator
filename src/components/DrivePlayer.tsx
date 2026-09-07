@@ -13,6 +13,8 @@ import { driveStreamUrl, driveViewUrl } from '../lib/drive'
 interface Props {
   /** Floating chrome rendered inside the 16:9 frame, above the picture (the transport). */
   overlay?: ReactNode
+  /** The PDF score, drawn over the picture and under the transport. */
+  score?: ReactNode
   /** Google Drive file id (see lib/drive.ts). */
   fileId: string
   /**
@@ -63,6 +65,7 @@ const RETRY_MS = 800
 const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
   {
     overlay,
+    score,
     fileId,
     clipStart,
     clipEnd,
@@ -323,6 +326,7 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
           </span>
         </button>
       )}
+      {score}
       {overlay}
     </div>
   )

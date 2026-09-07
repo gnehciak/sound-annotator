@@ -1,15 +1,20 @@
 // Clone a shared project into the signed-in user's own account ("make a copy"
 // from the read-only viewer). The copy gets a fresh doc id and owns the bytes
-// we host: every note image is re-uploaded under the new owner's Storage path,
-// so it survives the original being unshared or deleted. The *source* is only
+// we host: every note image — and an uploaded PDF score — is re-uploaded under
+// the new owner's Storage path, so it survives the original being unshared or
+// deleted. (A *Drive* score is a link like the source, so it copies verbatim
+// and both tracks follow the same file.) The *source* is only
 // a link now (YouTube, Google Drive, or a direct audio URL), so it's copied
 // verbatim and both projects point at the same audio — if that link dies, both
 // lose it.
 // Note ids are kept as-is — @mentions in note HTML link notes by id, and the
 // id also seeds each note's fallback colour.
 import { uploadNoteImage } from './imageCloud'
+import { uploadScorePdf } from './scoreCloud'
+import { withScore } from './score'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
+import { coverUrls } from './overlays'
 import type { Annotation, Project } from '../types'
 import { newId } from './ids'
 
@@ -22,12 +27,29 @@ import { newId } from './ids'
 const IMAGE_URL_RE =
   /https:\/\/[^\s"'<>]*\.public\.blob\.vercel-storage\.com\/users\/[^\s"'<>]*\/images\/[^\s"'<>]+/g
 
+/**
+ * An image carried *inside* the HTML as a base64 payload rather than as a link
+ * to bytes we already host. Nothing in the app writes these — the editor
+ * uploads what you paste — but a hand-authored track file has nowhere else to
+ * put an image, so a `data:` URI is the only way one can arrive self-contained.
+ * They're re-hosted exactly like a blob URL below, which is the point: the
+ * inline copy exists only until the import turns it into a real note image.
+ */
+const DATA_IMAGE_RE = /data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+/g
+
 /** TipTap escapes `&` in attribute values — the form a URL takes inside HTML. */
 const escAmp = (url: string) => url.replaceAll('&', '&amp;')
 
-/** Every image download URL referenced in the HTML, decoded back to raw form. */
+/**
+ * Every image source referenced in the HTML, decoded back to raw form: blob
+ * URLs we host, and inline `data:` payloads a hand-authored file brought with
+ * it. Both are fetchable with `fetch()`, which is all the copy below needs.
+ */
 function imageUrlsIn(html: string): string[] {
-  return (html.match(IMAGE_URL_RE) ?? []).map((u) => u.replaceAll('&amp;', '&'))
+  return [
+    ...(html.match(IMAGE_URL_RE) ?? []).map((u) => u.replaceAll('&amp;', '&')),
+    ...(html.match(DATA_IMAGE_RE) ?? []),
+  ]
 }
 
 /** Swap old image URLs for the re-uploaded ones (both escaped and raw forms). */
@@ -53,8 +75,13 @@ function htmlOf(a: Annotation): string[] {
 
 function rewriteAnnotation(a: Annotation, urlMap: Map<string, string>): Annotation {
   if (urlMap.size === 0) return a
+  // The note's cover image is referenced by URL, not embedded in HTML, so it
+  // gets swapped by lookup rather than by string replacement.
+  const coverUrl = a.overlay?.coverUrl
+  const nextCover = coverUrl ? urlMap.get(coverUrl) ?? coverUrl : undefined
   return {
     ...a,
+    ...(a.overlay ? { overlay: { ...a.overlay, ...(nextCover ? { coverUrl: nextCover } : {}) } } : {}),
     contentHtml: rewriteHtml(a.contentHtml ?? '', urlMap),
     blocks: a.blocks?.map((b) =>
       b.type === TEXT_BLOCK
@@ -128,8 +155,15 @@ export async function copySharedProject(
   // is what the old `onMissingAudio: 'detach'` existed to arrange.
   const source = src.source
 
-  // Note images: re-upload each referenced image and map old URL → new.
-  const urls = [...new Set(src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)))]
+  // Note images: re-upload each referenced image and map old URL → new. Both
+  // the ones embedded in note HTML and the notes' video cover images, which
+  // live in the same Blob folder but are referenced from `overlay.coverUrl`.
+  const urls = [
+    ...new Set([
+      ...src.annotations.flatMap((a) => htmlOf(a).flatMap(imageUrlsIn)),
+      ...coverUrls(src.annotations),
+    ]),
+  ]
   const urlMap = new Map<string, string>()
   if (urls.length > 0) {
     onStatus?.('Copying images…')
@@ -145,6 +179,28 @@ export async function copySharedProject(
     )
   }
 
+  // An uploaded score is bytes we host, so the copy takes its own: leaving the
+  // URL pointing at the original's blob would blank the copy the day that
+  // project is purged. A Drive score is a link and needs nothing.
+  let settings = src.settings
+  const score = settings?.score
+  if (score?.kind === 'blob' && score.url) {
+    onStatus?.('Copying score…')
+    try {
+      const pdf = await fetchBlob(score.url)
+      const name = score.fileName ?? 'score.pdf'
+      const url = await uploadScorePdf(
+        uid,
+        copyId,
+        new File([pdf], name, { type: 'application/pdf' }),
+      )
+      settings = withScore(settings, { ...score, url })
+    } catch (err) {
+      // Keep the original URL — the score still loads while it exists.
+      console.error('Failed to copy the score:', err)
+    }
+  }
+
   onStatus?.('Saving…')
   const copy: Project = {
     id: copyId,
@@ -152,9 +208,10 @@ export async function copySharedProject(
     title,
     source,
     annotations: src.annotations.map((a) => rewriteAnnotation(a, urlMap)),
-    // Settings travel with the copy — they carry presentation prefs and the
-    // project kind (a song-structure copy must open as a structure board).
-    settings: src.settings,
+    // Settings travel with the copy — they carry presentation prefs, the
+    // project kind (a song-structure copy must open as a structure board) and
+    // the score, whose URL was just rewritten if we re-hosted it.
+    settings,
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
