@@ -699,8 +699,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   />
                 </div>
 
-                {!isVideoSource(source) && transport}
-                <TransportHints readOnly />
+                {/* Video: transport floats in the frame, hints go here.
+                    Audio docks the transport, which draws its own hints. */}
+                {isVideoSource(source) ? <TransportHints readOnly /> : transport}
               </>
             ) : (
               <div className="empty py-6 text-sm text-muted">
