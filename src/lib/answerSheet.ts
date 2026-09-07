@@ -16,6 +16,7 @@ import { colorForId } from './noteColors'
 import { primaryTextHtml } from './noteBlocks'
 import { countAnswered, questionsOf } from './questions'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
+import { publicId } from './ids'
 
 /** Escape text for safe interpolation into HTML. */
 function esc(s: string): string {
@@ -305,8 +306,8 @@ export function buildAnswerSheetHtml(
     )}</span></div>
     ${sourceRow}
     <div class="meta-row"><span class="meta-k">Task</span><a class="meta-v" href="${esc(
-      projectUrl(project.id),
-    )}">${esc(projectUrl(project.id))}</a></div>
+      projectUrl(publicId(project)),
+    )}">${esc(projectUrl(publicId(project)))}</a></div>
     <div class="meta-row"><span class="meta-k">Answered</span><span class="meta-v">${answered} of ${
       questions.length
     }</span></div>

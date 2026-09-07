@@ -80,7 +80,7 @@ import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
 import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
-import { homeHref } from './lib/nav'
+import { canonicalizeProjectParam, homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
 import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
@@ -655,6 +655,8 @@ export default function App() {
       void (async () => {
         const p = id ? await fetchSharedProject(id) : null
         if (cancelled) return
+        // A guest may have arrived on a legacy uuid link; show the short one.
+        if (p) canonicalizeProjectParam('track', p)
         const all = p ? [p] : []
         setFolders([])
         resetHistory(all, p ? p.id : null)

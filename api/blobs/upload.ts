@@ -113,7 +113,9 @@ async function guestToken(pathname: string, clientPayload: string | null) {
   if (!(await guestKeyOpens(guestKey, row.guest_token_hash)))
     throw new Error('Upload not allowed')
 
-  if (!pathname.startsWith(`users/${row.owner_id}/images/${projectId}/`))
+  // Built from the row's own key, not the id the client sent — that may be the
+  // short alias, while the path the browser built uses the project's real id.
+  if (!pathname.startsWith(`users/${row.owner_id}/images/${row.id}/`))
     throw new Error('Uploads must stay inside this project')
 
   return {

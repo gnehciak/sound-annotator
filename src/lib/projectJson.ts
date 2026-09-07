@@ -33,6 +33,10 @@ interface ProjectJsonEnvelope {
   format: typeof PROJECT_JSON_FORMAT
   version: number
   exportedAt: number
+  // An allowlist, deliberately: identity is never exported. `id` and `alias`
+  // are this installation's handles on the row — an import is a *new* project
+  // and mints its own (see fromJson), so inheriting either would point two
+  // projects at one link.
   project: Pick<Project, 'title' | 'source' | 'annotations' | 'settings'>
 }
 

@@ -15,6 +15,7 @@ import { useAuth } from '../lib/auth'
 import { WaveArt, CueLine } from './trackArt'
 import HomeDot from './HomeDot'
 import { homeHref } from '../lib/nav'
+import { publicId } from '../lib/ids'
 
 type Status = 'loading' | 'ready' | 'error'
 
@@ -238,7 +239,7 @@ function BrowseTile({
       ? driveThumbUrl(it.driveFileId)
       : null
   const open = () => {
-    window.location.href = `${window.location.pathname}?view=${it.id}`
+    window.location.href = `${window.location.pathname}?view=${publicId(it)}`
   }
   return (
     <div

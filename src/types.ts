@@ -123,6 +123,14 @@ export interface Annotation {
 
 export interface Project {
   id: string
+  /**
+   * The short public id links are built from — see `publicId()` in lib/ids.ts.
+   * Server-assigned and read-only: it exists only on projects created before
+   * ids themselves were short, so that their 36-character uuid keys (which are
+   * also baked into their Blob paths, and into links already handed out) never
+   * have to change. Absent when `id` is already short. Never send it back.
+   */
+  alias?: string
   title: string
   /**
    * Uid of the account that owns this project. Set on load (toProject); absent
@@ -218,6 +226,8 @@ export interface ProjectSettings {
  */
 export interface BrowseItem {
   id: string
+  /** Short public id for the gallery's `?view=` link — see lib/ids.ts. */
+  alias?: string
   ownerId: string
   title: string
   sourceType: SourceType | null

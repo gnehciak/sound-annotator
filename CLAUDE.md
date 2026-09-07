@@ -106,9 +106,20 @@ project id is the whole credential for a `?view=` link, and a uuid spent 36
 characters carrying it, which pushed share links to ~69 characters and guest
 links to ~118 and got them flagged as tracking payloads by ad blockers. Guest
 keys are 22 characters for the same reason. Both are minted client-side into a
-`text` column and compared only for exact equality, so **existing uuid rows and
-every link already handed out keep working** — never parse an id or assume its
-shape. Schema lives
+`text` column, so **existing uuid rows and every link already handed out keep
+working** — never parse an id or assume its shape.
+
+The 80 projects that predate short ids keep their uuid *key* (it's baked into
+their Blob paths and into links already distributed) and carry a short `alias`
+column alongside, backfilled by `scripts/backfill-aliases.mjs`. So a project
+has a key and a public id: **build every user-facing URL through `publicId()`
+(`alias ?? id`), never `p.id`**, or old projects keep emitting 69-character
+links. `getProjectRow` resolves `id OR alias`, and every route that writes
+canonicalises to the row's real id first — an alias must never reach a Blob
+path or the purge sweeps would lose the bytes. Both identifiers are
+unguessable, so neither is the weaker door. On load the app swaps a legacy uuid
+in the address bar for the short form (`canonicalizeProjectParam`), which is
+why no redirect route was needed. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only

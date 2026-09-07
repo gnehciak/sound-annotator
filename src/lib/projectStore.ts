@@ -15,6 +15,8 @@ import type { Annotation, BrowseItem, Project } from '../types'
 export function toProject(id: string, data: Record<string, unknown>): Project {
   return {
     id,
+    // Server-assigned short id for pre-short-id projects; see lib/ids.ts.
+    alias: typeof data.alias === 'string' ? data.alias : undefined,
     title: typeof data.title === 'string' ? data.title : 'Untitled track',
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : undefined,
     source: (data.source ?? undefined) as Project['source'],

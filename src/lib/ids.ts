@@ -24,3 +24,16 @@ export function newId(): string {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
 }
+
+/**
+ * The id to put in a link. Prefers the short `alias` the server assigns to
+ * projects whose own id predates short ids; falls back to `id`, which for
+ * anything created since is already 12 characters.
+ *
+ * Always build user-facing URLs through this — never `p.id` directly — or old
+ * projects keep emitting 69-character share links. The API resolves either
+ * form (api/_lib/db.ts), so both keep working forever.
+ */
+export function publicId(p: { id: string; alias?: string }): string {
+  return p.alias || p.id
+}

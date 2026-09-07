@@ -6,6 +6,7 @@ import { deleteAudioCloud } from '../lib/audioCloud'
 import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
 import HomeDot from './HomeDot'
+import { publicId } from '../lib/ids'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -195,7 +196,7 @@ export default function AdminProjects() {
                     <td className="whitespace-nowrap px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         <a
-                          href={`/?view=${p.id}`}
+                          href={`/?view=${publicId(p)}`}
                           className="btn-ghost btn-sm press"
                           title="Open read-only"
                         >
