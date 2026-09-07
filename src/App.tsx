@@ -80,7 +80,7 @@ import { usePresence } from './lib/usePresence'
 import { useTheme } from './lib/theme'
 import GuestLinks from './components/GuestLinkBar'
 import ThemeToggle from './components/ThemeToggle'
-import { homeHref } from './lib/nav'
+import { canonicalizeProjectParam, homeHref } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
 import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
@@ -113,8 +113,9 @@ import { isStructureProject } from './lib/sections'
 import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
+import { newId } from './lib/ids'
 
-const uid = () => crypto.randomUUID()
+const uid = () => newId()
 const now = () => Date.now()
 
 // ---- URL <-> view ---------------------------------------------------------
@@ -624,6 +625,10 @@ export default function App() {
   // Upload a pasted/inserted note image to Cloud Storage (scoped to this user
   // and the open project) and resolve with its download URL for inlining in the
   // note HTML. Rejecting leaves the editor to fall back to an inline data URL.
+  //
+  // Works for guests too: a guest's `user.uid` is their project's synthetic
+  // `guest:<uuid>` owner, so the path this builds needs no special case, and
+  // their capability key authorizes the upload (src/lib/imageCloud.ts).
   const handleUploadImage = useCallback(
     (blob: Blob, onProgress?: (fraction: number) => void): Promise<string> => {
       if (!user || !currentId)
@@ -650,6 +655,8 @@ export default function App() {
       void (async () => {
         const p = id ? await fetchSharedProject(id) : null
         if (cancelled) return
+        // A guest may have arrived on a legacy uuid link; show the short one.
+        if (p) canonicalizeProjectParam('track', p)
         const all = p ? [p] : []
         setFolders([])
         resetHistory(all, p ? p.id : null)
@@ -824,10 +831,6 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
-    // Guests have no images to sweep and no credentials to sweep with — the
-    // endpoint is Clerk-only, so this would just 401 into the console on every
-    // project they open.
-    if (isGuest) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     const html = current.annotations.map((a) => a.contentHtml)
@@ -2491,7 +2494,7 @@ export default function App() {
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
                           uploadImage={handleUploadImage}
-                          allowImages={!isGuest}
+                          allowImages
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2539,7 +2542,7 @@ export default function App() {
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
             uploadImage={handleUploadImage}
-            allowImages={!isGuest}
+            allowImages
           />
         </PluginWindow>
       )}

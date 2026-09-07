@@ -33,6 +33,7 @@ import { useAuth } from '../lib/auth'
 import Popover from './Popover'
 import BrowseGallery from './BrowseGallery'
 import { WaveArt, CueLine } from './trackArt'
+import { publicId } from '../lib/ids'
 
 interface Props {
   projects: Project[]
@@ -1394,7 +1395,7 @@ function TrackActionsMenu({
       // Auto-enable view-only sharing the first time, so the copied link
       // actually resolves. Already-shared tracks just get a clipboard copy.
       if (!p.shared) onShare()
-      const url = `${window.location.origin}${window.location.pathname}?view=${p.id}`
+      const url = `${window.location.origin}${window.location.pathname}?view=${publicId(p)}`
       await navigator.clipboard.writeText(url)
       setDone('share')
       setTimeout(() => {

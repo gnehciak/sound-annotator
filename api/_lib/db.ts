@@ -35,6 +35,8 @@ export interface ProjectRow {
   // Guest projects only — see _lib/guest.ts. Never surfaced by rowToProject:
   // it is a credential, not project data.
   guest_token_hash: string | null
+  /** Short public id, backfilled for rows whose `id` predates short ids. */
+  alias: string | null
 }
 
 export interface FolderRow {
@@ -69,6 +71,9 @@ export function rowToProject(
 ): Record<string, unknown> {
   const p: Record<string, unknown> = {
     id: r.id,
+    // The short id links are built from. Absent on projects whose `id` is
+    // already short — see publicId() in src/lib/ids.ts.
+    alias: r.alias ?? undefined,
     ownerId: r.owner_id,
     title: r.title,
     source: r.source ?? undefined,
@@ -101,8 +106,20 @@ export function rowToFolder(r: FolderRow): Record<string, unknown> {
 /** The raw row, trashed or not — restore and purge need to read a trashed one,
  *  so the filter belongs at the call sites that must not serve it (GET, the
  *  library listing, the public gallery). */
+/**
+ * Resolve a project by either identifier: its primary key, or its short
+ * `alias`. Old links carry the uuid key and must keep working forever; new
+ * ones carry the alias. Every route goes through here, so accepting both in
+ * one place is what makes a legacy link work for reads *and* writes — not just
+ * for loading the page. Both are unguessable, so neither is the weaker door.
+ *
+ * `alias` is UNIQUE, and the backfill refuses a value that collides with any
+ * existing id, so this can never match two rows.
+ */
 export async function getProjectRow(id: string): Promise<ProjectRow | null> {
-  const rows = (await sql`SELECT * FROM projects WHERE id = ${id}`) as ProjectRow[]
+  const rows = (await sql`
+    SELECT * FROM projects WHERE id = ${id} OR alias = ${id} LIMIT 1
+  `) as ProjectRow[]
   return rows[0] ?? null
 }
 

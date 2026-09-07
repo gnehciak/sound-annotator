@@ -11,6 +11,7 @@ import { uploadNoteImage } from './imageCloud'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
 import type { Annotation, Project } from '../types'
+import { newId } from './ids'
 
 /**
  * Vercel Blob URLs for note images embedded in note HTML
@@ -107,7 +108,7 @@ export async function copySharedProject(
   onStatus?: (label: string) => void,
   opts?: CopyProjectOptions,
 ): Promise<Project> {
-  const newId = crypto.randomUUID()
+  const copyId = newId()
 
   // De-dupe the title against the user's existing tracks: a name that's already
   // taken becomes "Title (2)" / "(3)" / … Best-effort — purely cosmetic, so a
@@ -135,7 +136,7 @@ export async function copySharedProject(
     await Promise.all(
       urls.map(async (url) => {
         try {
-          urlMap.set(url, await uploadNoteImage(uid, newId, await fetchBlob(url)))
+          urlMap.set(url, await uploadNoteImage(uid, copyId, await fetchBlob(url)))
         } catch (err) {
           // Keep the original URL — the image still renders while it exists.
           console.error('Failed to copy note image:', err)
@@ -146,7 +147,7 @@ export async function copySharedProject(
 
   onStatus?.('Saving…')
   const copy: Project = {
-    id: newId,
+    id: copyId,
     ownerId: uid,
     title,
     source,

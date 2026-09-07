@@ -60,6 +60,7 @@ import { exportAnswerSheetPdf } from '../lib/answerSheet'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
+import { canonicalizeProjectParam } from '../lib/nav'
 
 type Status = 'loading' | 'ready' | 'notfound'
 
@@ -209,7 +210,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       if (cancelled) return
       setProject(p)
       setStatus(p ? 'ready' : 'notfound')
-      if (p) document.title = `${p.title} — Sound Annotator`
+      if (p) {
+        document.title = `${p.title} — Sound Annotator`
+        // Arrived on a legacy uuid link? Swap the address bar to the short id.
+        canonicalizeProjectParam('view', p)
+      }
     })
     return () => {
       cancelled = true

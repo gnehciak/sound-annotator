@@ -23,16 +23,18 @@ interface LockBody {
 
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)
-  const id = idFrom(request)
-  if (!id) return err(400, 'Missing project id')
+  const ref = idFrom(request)
+  if (!ref) return err(400, 'Missing project id')
 
   const body = (await request.json().catch(() => null)) as LockBody | null
   if (!body || typeof body.sessionId !== 'string') return err(400, 'Missing sessionId')
 
-  const row = await getProjectRow(id)
+  const row = await getProjectRow(ref)
   // A brand-new project's lock subscription starts before the first save
   // creates the row — 404 is expected noise the client swallows.
   if (!row) return err(404, 'Not found')
+  // `ref` may be the short alias; lock writes go by the real key.
+  const id = row.id
 
   // Guests hold the lock too: a student with two tabs open deserves the same
   // protection from clobbering themselves as anyone else. Their principal is

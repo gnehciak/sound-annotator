@@ -154,10 +154,14 @@ async function replicate(
 export async function POST(request: Request): Promise<Response> {
   if (!process.env.REPLICATE_API_TOKEN)
     return err(500, 'Section detection is not configured (REPLICATE_API_TOKEN)')
-  const id = idFrom(request)
-  if (!id) return err(400, 'Missing project id')
-  const row = await ownedRow(request, id)
+  const ref = idFrom(request)
+  if (!ref) return err(400, 'Missing project id')
+  const row = await ownedRow(request, ref)
   if (row instanceof Response) return row
+  // `ref` may be the short alias; everything below writes by key or builds a
+  // Blob path from it (users/{uid}/stems/{id}/), and those must be the row's
+  // real id or the purge sweeps would never find the bytes again.
+  const id = row.id
 
   // A finished run is cached; a live one is joined, not duplicated. Only an
   // errored (or absent) analysis starts a fresh — billed — prediction.
@@ -213,10 +217,14 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const id = idFrom(request)
-  if (!id) return err(400, 'Missing project id')
-  const row = await ownedRow(request, id)
+  const ref = idFrom(request)
+  if (!ref) return err(400, 'Missing project id')
+  const row = await ownedRow(request, ref)
   if (row instanceof Response) return row
+  // `ref` may be the short alias; everything below writes by key or builds a
+  // Blob path from it (users/{uid}/stems/{id}/), and those must be the row's
+  // real id or the purge sweeps would never find the bytes again.
+  const id = row.id
 
   const analysis = row.analysis as Analysis | null
 

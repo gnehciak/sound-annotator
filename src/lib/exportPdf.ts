@@ -19,6 +19,7 @@ import { isVideoSource, sourceLabel, sourceLinkUrl, sourceThumbUrl } from './sou
 import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
 import { getPlugin } from './notePlugins'
 import { layerOf, summarizeElements, type ElementsData } from './musicElements'
+import { publicId } from './ids'
 
 /** Escape text for safe interpolation into HTML (note bodies are inserted raw). */
 function esc(s: string): string {
@@ -136,7 +137,7 @@ function noteRange(notes: Annotation[]): string {
  */
 function coverBlock(project: Project, notes: Annotation[]): string {
   const source = project.source
-  const link = projectUrl(project.id)
+  const link = projectUrl(publicId(project))
   // Thumbnail: the video host's poster, or a glyph banner for audio tracks
   // that have no artwork.
   let thumb = ''

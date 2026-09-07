@@ -248,7 +248,7 @@ export async function PUT(request: Request): Promise<Response> {
       published = ${published},
       published_at = ${publishedAt},
       published_by_name = ${publishedByName}
-    WHERE id = ${id}
+    WHERE id = ${existing.id}
   `
   return json({ ok: true })
 }
@@ -266,7 +266,8 @@ export async function POST(request: Request): Promise<Response> {
 
   await sql`
     UPDATE projects SET deleted_at = NULL
-    WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NOT NULL
+    WHERE (id = ${id} OR alias = ${id})
+      AND owner_id = ${uid} AND deleted_at IS NOT NULL
   `
   return json({ ok: true })
 }
@@ -284,14 +285,15 @@ export async function DELETE(request: Request): Promise<Response> {
     // The console deletes live projects outright — the one caller allowed to
     // skip the trash, and it owns the "cannot be undone" confirm that says so.
     if (await isAdmin(uid)) {
-      await sql`DELETE FROM projects WHERE id = ${id}`
+      await sql`DELETE FROM projects WHERE id = ${id} OR alias = ${id}`
       return json({ ok: true })
     }
     // An owner purges only out of their own trash: unreachable except through
     // it, so no stray call hard-deletes a track that was never deleted.
     await sql`
       DELETE FROM projects
-      WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NOT NULL
+      WHERE (id = ${id} OR alias = ${id})
+        AND owner_id = ${uid} AND deleted_at IS NOT NULL
     `
     return json({ ok: true })
   }
@@ -302,7 +304,8 @@ export async function DELETE(request: Request): Promise<Response> {
   // that clock, hence `deleted_at IS NULL`.
   await sql`
     UPDATE projects SET deleted_at = ${Date.now()}
-    WHERE id = ${id} AND owner_id = ${uid} AND deleted_at IS NULL
+    WHERE (id = ${id} OR alias = ${id})
+      AND owner_id = ${uid} AND deleted_at IS NULL
   `
   return json({ ok: true })
 }

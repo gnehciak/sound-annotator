@@ -6,6 +6,7 @@ import { deleteAudioCloud } from '../lib/audioCloud'
 import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
 import HomeDot from './HomeDot'
+import { publicId } from '../lib/ids'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -89,10 +90,12 @@ export default function AdminProjects() {
       // Bytes first, row second. The row is the only way to find these blobs
       // again, so dropping it first would strand them forever; failing here
       // leaves the project intact and the delete retryable instead.
-      // Guest projects own no blobs (uploads are signed-in only).
-      if (p.ownerId && p.kind === 'account') {
+      // Guest projects own images too now, under their `guest:<uuid>` owner —
+      // the same users/{owner}/images/{id}/ shape, so the same teardown works.
+      // Only the legacy audio upload stays account-only; a guest never had one.
+      if (p.ownerId) {
         await Promise.all([
-          deleteAudioCloud(p.ownerId, p.id),
+          ...(p.kind === 'account' ? [deleteAudioCloud(p.ownerId, p.id)] : []),
           deleteProjectImages(p.ownerId, p.id),
         ])
       }
@@ -193,7 +196,7 @@ export default function AdminProjects() {
                     <td className="whitespace-nowrap px-3 py-2">
                       <div className="flex items-center gap-1.5">
                         <a
-                          href={`/?view=${p.id}`}
+                          href={`/?view=${publicId(p)}`}
                           className="btn-ghost btn-sm press"
                           title="Open read-only"
                         >

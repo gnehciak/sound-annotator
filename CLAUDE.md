@@ -59,13 +59,16 @@ silently opt them out of their own trash. Permanence is always asked for
 explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
 live rows only.
 
-**The Hobby plan caps a deployment at 12 Serverless Functions, and `/api` is at
-exactly 12.** That's why restore/purge are query verbs on `[id]/index.ts`, and
-the Drive byte proxy a query verb on `browse.ts`, rather than routes of their
-own. Adding any new `/api/*` file fails the
-deploy at `patchBuild` (`exceeded_serverless_functions_per_deployment`, and the
-build log looks *successful* — the error is only in the deployment's API
-record); fold new endpoints into an existing function, or upgrade to Pro.
+**The 12-function ceiling is gone — the team is on Pro (verified 2026-09-07),
+where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
+which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
+proxy a query verb on `browse.ts` rather than routes of their own — and `/api`
+still sits at exactly 12 files. Keep that shape where it reads well (the verbs
+are genuinely about the same resource), but a new endpoint no longer *has* to be
+folded into an existing function. If this ever drops back to Hobby, the symptom
+returns as a `patchBuild` failure
+(`exceeded_serverless_functions_per_deployment`) whose build log looks
+*successful* — the error lives only in the deployment's API record.
 
 **Guests** (students, who have no accounts) are the third kind of caller: the
 landing page's paste field (`src/components/LandingPage.tsx`) mints one project
@@ -77,15 +80,46 @@ never sharing/publishing/ownership — so unlike a link editor they can load the
 video they came to annotate, and pick either project kind (listening notes or a
 song-section board) before they start.
 
-Two things a guest deliberately can't reach. **Source is video only** (YouTube
-or Drive): the landing offers no blank start, so App passes no `onAudioUrl` to
+One thing a guest deliberately can't reach: **source is video only** (YouTube
+or Drive). The landing offers no blank start, so App passes no `onAudioUrl` to
 `SourcePicker` — otherwise a sourceless guest row (they predate this) would be
-a door into a source kind nothing else in their flow produces. **`allowImages={false}`** —
-image upload is signed-in only, and merely omitting the uploader makes the
-editor inline base64 into `annotations` instead. **Detect sections is hidden
+a door into a source kind nothing else in their flow produces.
+
+**Guests upload note images too** (since 2026-09-07). Their key authorizes it:
+`@vercel/blob/client` carries no custom headers, so the key travels in the
+SDK's `clientPayload` and `api/blobs/upload.ts` verifies it against the row
+exactly as `projects/[id]` does, then pins the path to that one project. Their
+token is narrower than a teacher's — images only, 8 MB, no overwrite. Images
+land under `users/guest:<uuid>/images/{projectId}/`, the *same* shape as
+everyone else (a colon is legal in a Blob pathname, `%3A` in the public URL),
+which is what makes the existing purge sweeps collect them for free — so keep
+using `users/{owner_id}/…` rather than inventing a guest prefix. `blobs/gc`
+takes a guest key for the same reason. Note images are still the only bytes we
+host, and the editor's `allowImages={false}` switch survives so that "images
+are impossible here" can never silently become "base64 them into
+`annotations`". **Detect sections is hidden
 too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
 guest's press could only 401. Their project is born `shared`, so the `?view=`
-link they hand in is the existing read-only viewer. Schema lives
+link they hand in is the existing read-only viewer. **Ids are short and opaque.** Project/note/folder ids are 12 base64url
+characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a
+project id is the whole credential for a `?view=` link, and a uuid spent 36
+characters carrying it, which pushed share links to ~69 characters and guest
+links to ~118 and got them flagged as tracking payloads by ad blockers. Guest
+keys are 22 characters for the same reason. Both are minted client-side into a
+`text` column, so **existing uuid rows and every link already handed out keep
+working** — never parse an id or assume its shape.
+
+The 80 projects that predate short ids keep their uuid *key* (it's baked into
+their Blob paths and into links already distributed) and carry a short `alias`
+column alongside, backfilled by `scripts/backfill-aliases.mjs`. So a project
+has a key and a public id: **build every user-facing URL through `publicId()`
+(`alias ?? id`), never `p.id`**, or old projects keep emitting 69-character
+links. `getProjectRow` resolves `id OR alias`, and every route that writes
+canonicalises to the row's real id first — an alias must never reach a Blob
+path or the purge sweeps would lose the bytes. Both identifiers are
+unguessable, so neither is the weaker door. On load the app swaps a legacy uuid
+in the address bar for the short form (`canonicalizeProjectParam`), which is
+why no redirect route was needed. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only

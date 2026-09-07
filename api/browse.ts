@@ -157,7 +157,7 @@ export async function GET(req: Request): Promise<Response> {
   if (driveFileId) return driveStream(driveFileId, req)
 
   const rows = (await sql`
-    SELECT id, owner_id, title, source, annotations, updated_at,
+    SELECT id, alias, owner_id, title, source, annotations, updated_at,
            published_at, published_by_name
     FROM projects WHERE published AND deleted_at IS NULL
     ORDER BY published_at DESC NULLS LAST
@@ -174,6 +174,7 @@ export async function GET(req: Request): Promise<Response> {
       const { ticks, count } = ticksOf(r.annotations)
       return {
         id: r.id,
+        alias: r.alias ?? undefined,
         ownerId: r.owner_id,
         title: r.title,
         sourceType: src.type ?? null,

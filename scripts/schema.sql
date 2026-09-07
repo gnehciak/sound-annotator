@@ -20,6 +20,17 @@ CREATE TABLE IF NOT EXISTS projects (
 
 CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects (owner_id);
 
+-- Short public id (src/lib/ids.ts). The primary key stays whatever it was —
+-- for the 80 projects that predate short ids that's a 36-character uuid, which
+-- is also baked into their Blob paths (users/{owner}/images/{id}/...) and into
+-- every link already handed to a class. So the short id rides alongside as an
+-- alias rather than replacing the key: links are built from `alias ?? id`, and
+-- lookups accept either, which keeps old links resolving and leaves 898 MB of
+-- blobs exactly where the teardown sweeps expect to find them.
+-- Backfill with scripts/backfill-aliases.mjs.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS alias text;
+CREATE UNIQUE INDEX IF NOT EXISTS projects_alias_idx ON projects (alias);
+
 -- Publishing (the public Browse gallery). Kept as ALTERs so re-running this
 -- file upgrades an existing database in place.
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS published boolean NOT NULL DEFAULT false;

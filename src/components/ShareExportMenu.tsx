@@ -15,6 +15,7 @@ import type { Project } from '../types'
 import { exportProjectPdf } from '../lib/exportPdf'
 import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
+import { publicId } from '../lib/ids'
 
 interface Props {
   project: Project
@@ -56,7 +57,7 @@ export default function ShareExportMenu({
   const shared = canShare && project.shared === true
   const canEdit = shared && project.editableByLink === true
   const published = canShare && project.published === true
-  const url = shareUrl(project.id)
+  const url = shareUrl(publicId(project))
   // Question notes make the view link a listening task (see lib/questions.ts).
   const questionCount = isListeningTask(project)
     ? questionsOf(project.annotations).length

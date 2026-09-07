@@ -37,7 +37,7 @@ interface Props {
    * Upload a (downscaled) image blob to Cloud Storage and resolve with its
    * download URL, which is what gets stored in the note HTML. `onProgress`
    * receives a 0–1 fraction. When omitted, the image falls back to an inline
-   * data URL (legacy / signed-out behaviour).
+   * data URL (legacy behaviour, and the last resort if an upload fails).
    */
   uploadImage?: (
     blob: Blob,
@@ -45,10 +45,14 @@ interface Props {
   ) => Promise<string>
   /**
    * When false, images are refused outright rather than falling back to a data
-   * URL. Guests have no Blob storage (uploads are signed-in only), and the
-   * fallback would base64 a screenshot straight into the project's
-   * `annotations` jsonb — so for them "no uploader" must mean "no image", not
-   * "inline it".
+   * URL — because that fallback base64s a screenshot straight into the
+   * project's `annotations` jsonb, which is a far worse outcome than refusing.
+   *
+   * This used to be how guests were kept out of Blob storage. It no longer is:
+   * guests upload with their project key like anyone else (imageCloud.ts). The
+   * switch stays because "images are impossible here" and "the uploader
+   * happens to be missing" must not collapse into "inline the bytes"; no
+   * caller currently passes false.
    */
   allowImages?: boolean
 }
