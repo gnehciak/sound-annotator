@@ -8,6 +8,7 @@ import { Move } from 'lucide-react'
 import type { Annotation } from '../types'
 import PinLayer from './PinLayer'
 import { coverPosition, isFilled, isScorePin, visibleLayer } from '../lib/overlays'
+import { usePinTarget } from '../lib/pinTargets'
 
 interface Props {
   annotations: Annotation[]
@@ -74,6 +75,8 @@ export default function VideoOverlays({
   // original's owner may later delete — and a broken-image glyph stretched
   // across the frame is worse than simply showing the video.
   const [broken, setBroken] = useState<Set<string>>(() => new Set())
+
+  const frameTarget = usePinTarget('frame')
 
   const layer = visibleLayer(annotations, currentTime, selectedId)
   const coverUrl = layer.cover?.overlay?.coverUrl
@@ -146,11 +149,15 @@ export default function VideoOverlays({
       commit(a.id, clamp01(at.x + dir[0] * step), clamp01(at.y + dir[1] * step))
     }
 
-  if (!cover && pins.length === 0) return null
-
+  // Rendered even when empty, which it often is: this box is what a pin
+  // dragged out of the inspector is dropped on (lib/pinTargets.ts), and the
+  // moment you most want to drop one is when the note has nothing yet.
   return (
     <div
-      ref={frameRef}
+      ref={(node) => {
+        frameRef.current = node
+        frameTarget(node)
+      }}
       className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
     >
       {cover && (

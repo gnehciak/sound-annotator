@@ -1,5 +1,18 @@
-import { useRef, useState, type DragEvent } from 'react'
-import { Image as ImageIcon, MapPin, Trash2, Loader2, Crosshair } from 'lucide-react'
+import {
+  useRef,
+  useState,
+  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
+import {
+  Image as ImageIcon,
+  MapPin,
+  Trash2,
+  Loader2,
+  Crosshair,
+  GripVertical,
+} from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -16,6 +29,7 @@ import {
   patchOverlay,
   pinPageOf,
 } from '../lib/overlays'
+import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
 
 interface Props {
   annotation: Annotation
@@ -147,6 +161,60 @@ export default function NoteOverlayControls({
         ? { pinAnchor: 'score', pinPage: scorePage ?? 1 }
         : { pinAnchor: undefined, pinPage: undefined },
     )
+
+  /**
+   * Dragging the pin out of the inspector and onto the picture.
+   *
+   * One gesture, two outcomes: where it lands decides what it is anchored to,
+   * because the thing you dropped it on *is* the answer — the score's page for
+   * a place in the music, the frame for a place on screen. That saves the
+   * round trip of switching a pin on, hunting for the dot at dead centre, and
+   * dragging it to where you meant in the first place.
+   *
+   * Pointer events rather than HTML5 drag-and-drop: this needs a live readout
+   * of what's under the cursor, and the drop boxes are `pointer-events: none`
+   * (so they don't eat the player's clicks), which drag-and-drop would skip
+   * entirely. lib/pinTargets.ts does the hit-testing by geometry.
+   */
+  const [placing, setPlacing] = useState<{
+    x: number
+    y: number
+    over: PinDrop | null
+  } | null>(null)
+
+  const startPlacing = (e: ReactPointerEvent<HTMLElement>) => {
+    e.preventDefault()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* the drag still tracks while the pointer is over the handle */
+    }
+    setPlacing({ x: e.clientX, y: e.clientY, over: pinTargetAt(e.clientX, e.clientY) })
+  }
+
+  const movePlacing = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!placing) return
+    setPlacing({ x: e.clientX, y: e.clientY, over: pinTargetAt(e.clientX, e.clientY) })
+  }
+
+  const endPlacing = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!placing) return
+    setPlacing(null)
+    const drop = pinTargetAt(e.clientX, e.clientY)
+    // Dropped on nothing: no pin, no change. A gesture that fizzles is better
+    // than one that leaves a dot somewhere nobody aimed.
+    if (!drop) return
+    patch(
+      drop.kind === 'score'
+        ? {
+            pinX: drop.x,
+            pinY: drop.y,
+            pinAnchor: 'score',
+            pinPage: drop.page ?? scorePage ?? 1,
+          }
+        : { pinX: drop.x, pinY: drop.y, pinAnchor: undefined, pinPage: undefined },
+    )
+  }
 
   return (
     <div
@@ -304,6 +372,31 @@ export default function NoteOverlayControls({
         </span>
         <span className="switch" data-on={hasPin(annotation) || undefined} />
       </button>
+
+      {/* Drag it where you want it. Placing and anchoring are the same motion:
+          the picture and the score's page are both drop boxes, and whichever
+          one catches it decides what the pin is a fraction of. */}
+      <button
+        type="button"
+        onPointerDown={startPlacing}
+        onPointerMove={movePlacing}
+        onPointerUp={endPlacing}
+        onPointerCancel={endPlacing}
+        title={
+          scorePage != null
+            ? 'Drag onto the video, or onto the score’s page to pin it to the music'
+            : 'Drag onto the video to place the pin'
+        }
+        className={`press flex w-full cursor-grab touch-none items-center gap-2 rounded-md border border-dashed px-[11px] py-1.5 text-left text-[11.5px] active:cursor-grabbing ${
+          placing
+            ? 'border-accent/60 bg-accent/[0.06] text-fg'
+            : 'border-line/70 text-muted hover:border-line-strong hover:text-fg'
+        }`}
+      >
+        <GripVertical size={13} className="shrink-0" />
+        {hasPin(annotation) ? 'Drag to re-place it' : 'Drag onto the video to place a pin'}
+      </button>
+
       {hasPin(annotation) && (
         <>
           {/* What the pin's position is a fraction *of*. On the frame it holds
@@ -389,6 +482,25 @@ export default function NoteOverlayControls({
           <span className="shrink-0">seconds</span>
         </label>
       )}
+
+      {/* The ghost: what's under the cursor, and what dropping there means.
+          Portalled to the body so no pane's overflow clips it on the way. */}
+      {placing &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[90] -translate-y-1/2 translate-x-3"
+            style={{ left: placing.x, top: placing.y }}
+          >
+            <span className="on-video-pop__label whitespace-nowrap rounded-full bg-ink/90 px-2 py-1 text-[11px] text-white shadow-lg ring-1 ring-white/15">
+              {placing.over?.kind === 'score'
+                ? `Pin to the score — page ${placing.over.page ?? 1}`
+                : placing.over?.kind === 'frame'
+                  ? 'Pin to the picture'
+                  : 'Drop it on the video'}
+            </span>
+          </div>,
+          document.body,
+        )}
 
       {/* The drop target says so only while something is over it. */}
       {dropping && (
