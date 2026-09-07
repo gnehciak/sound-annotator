@@ -147,6 +147,28 @@ scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
+**Note properties come in two shapes.** The `elements` *block*
+(`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects
+the whole elements grid into one panel under the note. **Inline property tags**
+put a single value in the prose instead: type `@` in a note's text and the
+menu offers the flattened taxonomy (`src/lib/propertyTags.ts` — `@pitch` opens
+the category, `@rising` finds the one value, an unmatched word becomes a plain
+tag), then the pick lands as a hued chip you can drag anywhere in the sentence.
+The same `@` menu still lists note cross-references below the properties, so
+there is one trigger key, not two (`src/components/noteMention.ts`).
+
+The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
+`PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new
+field on `Annotation`, so it needs no schema, no API whitelist entry and no
+line in `projectJson.ts`; it travels wherever `contentHtml` travels, and
+`propertyTagsInHtml()` reads the values back out structured. Its markup carries
+its own colours: `--hue` for fills on either theme, and `--hue-ink` (an
+`hueText`-darkened hue) for text on white paper, because the two print
+documents that inject note HTML raw — `lib/exportPdf.ts` and
+`lib/answerSheet.ts` — have no React to resolve a theme and share
+`PROPERTY_TAG_PRINT_CSS`. Add a category to `lib/musicElements.ts` and it
+appears in the `@` menu, the elements grid and both PDFs at once.
+
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's
 share/export menu, the share viewer, and the track-tile menu; Import on the

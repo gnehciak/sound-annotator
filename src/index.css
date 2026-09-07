@@ -1065,3 +1065,45 @@ html[data-armed] body::before {
 .note-mention:hover {
   background: rgb(var(--accent-ink) / 0.2);
 }
+
+/* Inline property tag — an elements value committed mid-sentence. Two halves:
+   a mono category prefix and the value, both washed in the category's hue
+   (`--hue`, stamped by components/propertyTag.tsx). Sits on the text baseline
+   and never wraps, so it reads as one object you can pick up and drag. */
+.prop-tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  vertical-align: baseline;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--hue) 38%, transparent);
+  background: color-mix(in srgb, var(--hue) 13%, transparent);
+  border-radius: 6px;
+  padding: 0.08em 0.45em;
+  margin: 0 0.06em;
+  font-size: 0.88em;
+  line-height: inherit;
+  color: var(--hue);
+  user-select: none;
+}
+/* The category half. No opacity wash here: the hue is already tuned for AA
+   text by hueText(), and dimming it further drops this ~9px label under 3:1 on
+   the light canvas. The mono micro-type is what marks it as secondary. */
+.prop-tag-cat {
+  font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.prop-tag-val {
+  color: rgb(var(--text));
+}
+.ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 22%, transparent);
+}
+/* ProseMirror marks the lifted node while it's being dragged. */
+.ProseMirror .prop-tag.ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--hue) 70%, transparent);
+  outline-offset: 1px;
+}

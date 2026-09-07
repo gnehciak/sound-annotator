@@ -21,6 +21,8 @@ export interface ElementField {
 export interface ElementCategory {
   id: string
   label: string
+  /** Note-palette hue, worn by this category's inline property tags. */
+  color: string
   fields: ElementField[]
 }
 
@@ -50,6 +52,7 @@ export const LAYERS: Layer[] = [
 export const ELEMENTS: ElementCategory[] = [
   {
     id: 'timbre',
+    color: '#ffd633',
     label: 'Tone colour',
     fields: [
       {
@@ -74,6 +77,7 @@ export const ELEMENTS: ElementCategory[] = [
   },
   {
     id: 'texture',
+    color: '#2dd4bf',
     label: 'Texture',
     fields: [
       {
@@ -91,6 +95,7 @@ export const ELEMENTS: ElementCategory[] = [
   },
   {
     id: 'duration',
+    color: '#a06bff',
     label: 'Duration',
     fields: [
       {
@@ -103,6 +108,7 @@ export const ELEMENTS: ElementCategory[] = [
   },
   {
     id: 'pitch',
+    color: '#5aa8ff',
     label: 'Pitch',
     fields: [
       {
@@ -121,6 +127,7 @@ export const ELEMENTS: ElementCategory[] = [
   },
   {
     id: 'dynamics',
+    color: '#f472b6',
     label: 'Dynamics',
     fields: [
       {

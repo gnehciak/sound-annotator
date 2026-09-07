@@ -17,6 +17,7 @@ import { primaryTextHtml } from './noteBlocks'
 import { countAnswered, questionsOf } from './questions'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
 import { publicId } from './ids'
+import { PROPERTY_TAG_PRINT_CSS } from './propertyTags'
 
 /** Escape text for safe interpolation into HTML. */
 function esc(s: string): string {
@@ -191,6 +192,9 @@ const STYLES = `
     padding: 0 4px;
     border-radius: 3px;
   }
+  /* A question prompt can carry inline property tags — same paper styling as
+     the track export. */
+  ${PROPERTY_TAG_PRINT_CSS}
   /* The student's answer — typed text, kept exactly as written. */
   .answer {
     margin-top: 8px;

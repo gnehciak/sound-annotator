@@ -20,6 +20,7 @@ import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
 import { getPlugin } from './notePlugins'
 import { layerOf, summarizeElements, type ElementsData } from './musicElements'
 import { publicId } from './ids'
+import { PROPERTY_TAG_PRINT_CSS } from './propertyTags'
 
 /** Escape text for safe interpolation into HTML (note bodies are inserted raw). */
 function esc(s: string): string {
@@ -392,6 +393,9 @@ const STYLES = `
     padding: 0 4px;
     border-radius: 3px;
   }
+  /* Inline property tags travel inside the note HTML, so the paper document
+     styles them itself — shared with the answer sheet. */
+  ${PROPERTY_TAG_PRINT_CSS}
   .specs { margin-top: 6px; display: grid; gap: 3px; }
   .spec {
     display: flex;
