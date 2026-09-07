@@ -209,10 +209,12 @@ export default function ShareExportMenu({
   const canEdit = shared && project.editableByLink === true
   const published = canShare && project.published === true
   const url = shareUrl(publicId(project))
-  // Copy always carries the whole URL; the field shows it without the scheme,
-  // the way an address bar does, so the id — the only part that differs
-  // between tracks — is visible instead of truncated off the right edge.
-  const shownUrl = url.replace(/^https?:\/\//, '')
+  // Copy always carries the whole URL. The field shows only its tail, marked
+  // elided: in a pane this narrow something has to go, and the origin is the
+  // half the teacher already knows — while the id is the only part that differs
+  // between tracks, and so the only part worth checking before handing the link
+  // to a class. Truncation would have cut exactly the wrong end.
+  const shownUrl = `…${url.slice(new URL(url).origin.length)}`
   // Question notes make the view link a listening task (see lib/questions.ts).
   const questionCount = isListeningTask(project)
     ? questionsOf(project.annotations).length
@@ -411,7 +413,7 @@ export default function ShareExportMenu({
           role="dialog"
           aria-label="Sharing and export"
           className={`pop absolute right-0 top-full z-30 mt-1.5 animate-panel-in py-1 ${
-            canShare ? 'w-[22rem]' : 'w-60'
+            canShare ? 'w-[19rem]' : 'w-60'
           }`}
         >
           {canShare && (
@@ -473,25 +475,25 @@ export default function ShareExportMenu({
                     {/* Copy rides on the field it copies — one row, and the
                         icon alone: a full-width filled key for a two-word
                         action was the loudest thing in a pane whose job is to
-                        be read at a glance. The pane is 22rem rather than 19
-                        so the whole link still fits beside the button —
-                        truncating it would hide the id, which is the only part
-                        that differs between tracks and the only part worth
-                        checking before you hand it to a class. */}
+                        be read at a glance. See `shownUrl` for why the field
+                        shows the link's tail rather than all of it. */}
                     <div className="mt-2 flex items-center gap-1.5">
                       <input
                         ref={urlRef}
                         readOnly
                         value={shownUrl}
                         onFocus={(e) => e.currentTarget.select()}
-                        aria-label="Share link"
+                        aria-label={`Share link, ${url}`}
+                        title={url}
                         className="field led min-w-0 flex-1 font-mono text-[11px]"
                       />
+                      {/* Small, but still the pane's one filled key: copying
+                          the link is what most visits here are for. */}
                       <button
                         onClick={copy}
                         aria-label="Copy link"
                         title="Copy the link to the clipboard"
-                        className="btn-icon press shrink-0 hover:text-accentink"
+                        className="btn-primary press h-[30px] w-[30px] shrink-0 justify-center rounded-full p-0"
                       >
                         {copied ? <Check size={14} /> : <Copy size={14} />}
                       </button>
