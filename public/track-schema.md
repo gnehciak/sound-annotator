@@ -149,7 +149,7 @@ the note intact. So a minimal note is:
 | `start` | number | **Required.** Seconds from the start of the track (see the clip warning in §4). Fractions are fine: `92.5`. |
 | `end` | number | Makes the note cover a span rather than a moment. Ignored unless > `start`. |
 | `contentHtml` | string | The note's rich text as HTML — see §6. Defaults to `""`. |
-| `blocks` | array | Typed content blocks (§8). **Omit this**: the importer builds a text block from `contentHtml` automatically. |
+| `blocks` | array | Typed content blocks (§9). **Omit this**: the importer builds a text block from `contentHtml` automatically. |
 | `id` | string | Omit it. The importer mints one, and duplicates are re-minted. Note colours are derived from the id, so a hand-written id changes nothing but the hue. |
 | `createdAt` | number | Epoch ms. Defaults to import time. Only used as the tiebreaker between notes sharing a `start`. |
 | `tags` | string[] | Category chips. Preset ids: `pitch`, `rhythm`, `duration`, `dynamics`, `harmony`, `form`, `timbre`, `comment`. Any other string is a custom tag and is shown verbatim, so keep custom tags short and consistent. |
@@ -161,6 +161,7 @@ the note intact. So a minimal note is:
 | `structure` | boolean | `true` marks the note as a structural section, drawing a bracket down the overview timeline beside its span. Give it an `end`. |
 | `sectionName` | string | The label on that bracket. Only meaningful with `structure: true`, or on a song-structure board (§7). |
 | `lyrics` | string | Plain-text lyrics for a section, shown in the structure board's Lyrics panel. Whole-section granularity — not line-synced. Structure sections only. |
+| `overlay` | object | Puts the note **on the video** for its moment — a pinned caption, and/or a cover image. Video tracks only. See §9; you can hand-write the pin, but not the cover. |
 
 <!-- /fields -->
 
@@ -234,7 +235,45 @@ through older files. Nested objects and arrays are dropped.
 
 ---
 
-## 8. `blocks` (advanced — you almost certainly want to skip this)
+## 8. `overlay` — putting a note on the video
+
+A note can take over the picture while it is on screen. Two independent pieces,
+either or both, on the note's `overlay` object:
+
+| field | type | notes |
+| --- | --- | --- |
+| `pinX` | number | Where the pin's dot sits across the frame, `0`–`1` from the left. |
+| `pinY` | number | And down the frame, `0`–`1` from the top. |
+| `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
+| `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
+| `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
+| `coverX` | number | Which part of a *filled* cover survives the crop, `0`–`1` across. Omit for centred. |
+| `coverY` | number | And down. Omit for centred. |
+
+`pinX` and `pinY` only mean anything **together** — a pin with one of them is
+dropped rather than pinned to a corner. The dot is captioned with the note's own
+text, clamped to three lines on the frame, so a note that is also a pin wants a
+first sentence that reads on its own.
+
+**The cover is the `<img>` rule again.** A cover image is a note image: the app
+hosts the bytes, and a file can't bring its own. `coverUrl` is a link, so a URL
+pointing somewhere else will render — but nothing about it is yours: it breaks
+the day that host changes it, it is fetched from the classroom on every play,
+and importing the track again won't rescue it. Attach covers in the editor after
+importing, which uploads them properly. A hand-written `overlay` is a pin.
+
+```json
+{
+  "start": 92,
+  "end": 118,
+  "contentHtml": "<p>The timpanist changes the timbre by striking nearer the edge.</p>",
+  "overlay": { "pinX": 0.62, "pinY": 0.44 }
+}
+```
+
+---
+
+## 9. `blocks` (advanced — you almost certainly want to skip this)
 
 A note's content is really a list of typed blocks, each rendered by a plugin.
 Notes that carry only `contentHtml` are migrated to a single `text` block on
@@ -252,7 +291,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 9. A complete, valid file
+## 10. A complete, valid file
 
 ```json
 {
@@ -294,7 +333,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 10. Checklist before importing
+## 11. Checklist before importing
 
 - `format` is exactly `"sound-annotator-project"` and `version` is `1`.
 - Every note has a numeric `start` in **seconds** — `2:14` must become `134`,
@@ -303,7 +342,8 @@ read, which is why authoring `contentHtml` is enough.
 - No `clipStart` unless the timestamps were written relative to it.
 - `videoId` (YouTube) or `driveFileId` (Drive) is present.
 - Note text is HTML wrapped in `<p>`, not raw prose or Markdown.
-- No `id` fields, no `<img>` tags, no ownership or sharing fields.
+- No `id` fields, no `<img>` tags, no `overlay.coverUrl`, no ownership or
+  sharing fields.
 
 ---
 

@@ -173,6 +173,44 @@ scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
+**Notes can take over the picture** (`src/lib/overlays.ts`,
+`src/components/VideoOverlays.tsx`). A note's optional `overlay` field carries
+a **cover** (a full-frame image that stands in for the video while the audio
+keeps playing) and/or a **pin** (a dot at `pinX`/`pinY`, 0–1 fractions of the
+frame, captioned with the note's own text). Both are aimed **on the frame
+itself**, by dragging: a pin goes where the pointer goes, and a `Fill` cover
+slides under the window to choose which part survives the crop
+(`coverX`/`coverY`, CSS `object-position`, absent meaning dead centre). Only
+the note open in the inspector is draggable, and only then does the layer take
+the pointer at all. Cover images arrive by picker *or* by dropping a file on
+the inspector's "On the video" section, and every one is downscaled to 1600px
+and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
+carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a
+PNG screen grab). Both show over the note's window —
+its `start`→`end`, or `hold` seconds (default 4) from `start` for a point note
+— *and* whenever the note is open in the inspector, so a cover can be composed
+without scrubbing onto its moment. Video sources only, the same line
+`clipStart`/`clipEnd` draw: an audio track's waveform is the picture. The layer
+rides PlayerPane's existing `overlay` slot, painted *before* the transport so
+the transport stays clickable over a cover; it is `pointer-events-none`
+throughout except the selected note's pin, so clicking the picture still
+reaches the player's own click-to-pause catcher.
+
+The layer is **always dark, in both themes** — it sits on the picture, where the
+light page's surfaces mean nothing — so note hues on it go through
+`hueOnDark()` rather than `hueText()` (`src/lib/noteColors.ts`); the two are
+mirror images, one lifting a hue toward white for a dark box, the other mixing
+it toward ink for the white page.
+
+The trap to remember: **a cover image is a note image that isn't in the note
+HTML.** It lives under the same `users/{uid}/images/{projectId}/` prefix, so
+purge sweeps collect it for free — but `api/blobs/gc.ts` decides what's an
+orphan by matching blob URLs against the strings it's handed, and
+`lib/copyProject.ts` re-uploads by scanning HTML. Both are fed
+`coverUrls(annotations)` alongside the HTML; drop that and the GC deletes live
+covers on the next project open. Anything else that walks a project's images
+must read it too.
+
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's
 share/export menu, the share viewer, and the track-tile menu; Import on the
