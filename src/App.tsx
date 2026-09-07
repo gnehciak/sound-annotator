@@ -113,8 +113,9 @@ import { isStructureProject } from './lib/sections'
 import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
+import { newId } from './lib/ids'
 
-const uid = () => crypto.randomUUID()
+const uid = () => newId()
 const now = () => Date.now()
 
 // ---- URL <-> view ---------------------------------------------------------

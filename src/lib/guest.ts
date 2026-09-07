@@ -13,6 +13,7 @@ import type { ProjectSource } from '../types'
 import { api, registerGuestKey } from './api'
 import { fetchSharedProject } from './projectStore'
 import { isStructureProject } from './sections'
+import { newId } from './ids'
 
 const STORE_KEY = 'sound-annotator:guest'
 
@@ -169,7 +170,7 @@ export async function createGuestProject(init?: {
   source?: ProjectSource
   kind?: 'structure'
 }): Promise<GuestSession> {
-  const projectId = crypto.randomUUID()
+  const projectId = newId()
   const title = init?.title?.trim() || 'Untitled track'
   const res = await api<{ guestKey: string; ownerId: string }>(
     `/api/projects/${encodeURIComponent(projectId)}`,

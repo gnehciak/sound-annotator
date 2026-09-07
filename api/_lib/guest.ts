@@ -34,9 +34,18 @@ export function isGuestOwner(ownerId: string): boolean {
   return ownerId.startsWith(GUEST_OWNER_PREFIX)
 }
 
-/** 32 bytes of CSPRNG, base64url — the key that rides in the student's URL. */
+/**
+ * 16 bytes of CSPRNG, base64url — the key that rides in the student's URL.
+ *
+ * 22 characters, down from the 43 that 32 bytes produced. 128 bits is already
+ * far past anything guessable online (and there is no offline attack: only the
+ * server can test a key), and the URL is something a teacher has to hand to a
+ * class, so the halving is worth more than the unusable margin. Keys already
+ * issued keep working — they're compared as SHA-256 hashes, which are the same
+ * length whatever went in.
+ */
 export function mintGuestKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

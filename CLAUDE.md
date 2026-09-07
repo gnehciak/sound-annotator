@@ -100,7 +100,15 @@ are impossible here" can never silently become "base64 them into
 `annotations`". **Detect sections is hidden
 too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
 guest's press could only 401. Their project is born `shared`, so the `?view=`
-link they hand in is the existing read-only viewer. Schema lives
+link they hand in is the existing read-only viewer. **Ids are short and opaque.** Project/note/folder ids are 12 base64url
+characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a
+project id is the whole credential for a `?view=` link, and a uuid spent 36
+characters carrying it, which pushed share links to ~69 characters and guest
+links to ~118 and got them flagged as tracking payloads by ad blockers. Guest
+keys are 22 characters for the same reason. Both are minted client-side into a
+`text` column and compared only for exact equality, so **existing uuid rows and
+every link already handed out keep working** — never parse an id or assume its
+shape. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
 `vercel env pull` writes `.env.local` (client reads only

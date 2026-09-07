@@ -24,6 +24,7 @@ import type {
 } from '../types'
 import { withBlocks } from './noteBlocks'
 import { parseDriveFileId } from './drive'
+import { newId } from './ids'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -138,7 +139,7 @@ function sanitizeBlocks(v: unknown): NoteBlock[] | undefined {
     const raw = b as Record<string, unknown>
     const type = str(raw.type)
     if (!type) continue
-    blocks.push({ id: str(raw.id) ?? crypto.randomUUID(), type, data: raw.data })
+    blocks.push({ id: str(raw.id) ?? newId(), type, data: raw.data })
   }
   return blocks.length > 0 ? blocks : undefined
 }
@@ -150,7 +151,7 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   const start = num(a.start)
   if (start == null || start < 0) return null
   const ann: Annotation = {
-    id: str(a.id) ?? crypto.randomUUID(),
+    id: str(a.id) ?? newId(),
     start,
     contentHtml: str(a.contentHtml) ?? '',
     createdAt: num(a.createdAt) ?? Date.now(),
@@ -252,12 +253,12 @@ export function parseProjectJson(text: string): Project {
   // A corrupted file with duplicates keeps the first and re-mints the rest.
   const seen = new Set<string>()
   for (const a of annotations) {
-    if (seen.has(a.id)) a.id = crypto.randomUUID()
+    if (seen.has(a.id)) a.id = newId()
     seen.add(a.id)
   }
 
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     title: str(data.title)?.trim() || 'Untitled track',
     source: sanitizeSource(data.source),
     annotations,
