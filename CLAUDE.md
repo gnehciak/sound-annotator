@@ -113,9 +113,39 @@ takes a guest key for the same reason. Note images are still the only bytes we
 host, and the editor's `allowImages={false}` switch survives so that "images
 are impossible here" can never silently become "base64 them into
 `annotations`". **Detect sections is hidden
-too** (`!isGuest` in App): `api/projects/[id]/analyze.ts` is Clerk-only, so a
-guest's press could only 401. Their project is born `shared`, so the `?view=`
-link they hand in is the existing read-only viewer. **Ids are short and opaque.** Project/note/folder ids are 12 base64url
+too**, though no longer for a guest-specific reason: `api/projects/[id]/analyze.ts`
+is now **admin-only** (owner *and* `ADMIN_EMAILS`), because each press is a paid
+Replicate run plus ~130 MB of stem WAVs. It answers 404 to everyone else, guests
+and ordinary owners alike, and App hides the button behind `useIsAdmin()`
+(`src/lib/admin.ts`) — a display hint fetched from
+`/api/admin/projects?whoami=1`, never the security. Their project is born `shared`, so the `?view=`
+link they hand in is the existing read-only viewer.
+
+**Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
+`<Router>` — a project id *is* a share credential and `?view=` links are
+already out in the world, so the route is a query param on one page: `?` the
+library, `?folder=` a folder, `?trash=1` the trash, `?browse=1` the Browse
+gallery, `?track=` the editor, plus the two pages that mount outside the app
+shell (`?view=` and `?admin=1[&tab=users]`). The query is the *only* copy of
+where you are — nothing mirrors it in React state — so anything that navigates
+calls `navigate()` and anything that needs to know calls `useRoute()`. That's
+what makes Back and a phone's edge-swipe work; App has one effect that
+reconciles the open track to the route, and back/forward need no special case
+because they're just another way the route changes. Only the three root shells
+are a real page load (different chrome, different auth); everything inside the
+app is client-side. When adding a place worth returning to, give it a route
+rather than a `useState` — and resolve a project param with `resolveProject`,
+never `p.id === param`, since the address bar may carry a legacy row's short
+`alias` instead.
+
+**There is one Browse gallery, not two.** `?browse=1` is the Browse *route*:
+signed in it's the home page's Browse tab, signed out it's the landing page,
+which already carries the same `BrowseGallery` under its paste field (and
+scrolls to it when that's the route you arrived on). The standalone public
+gallery page it used to open was the same list a second time, so it's gone —
+old `?browse=1` links keep working because the spelling didn't change.
+
+**Ids are short and opaque.** Project/note/folder ids are 12 base64url
 characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a
 project id is the whole credential for a `?view=` link, and a uuid spent 36
 characters carrying it, which pushed share links to ~69 characters and guest
@@ -191,6 +221,21 @@ change: add the field to the export envelope and the import sanitizer, or
 imported files silently lose it. Primitive-valued `settings` keys (including
 the project `kind`, e.g. song-structure boards) pass through automatically.
 Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
+
+**The schema is published, so it can't be allowed to go stale.**
+`public/track-schema.md` is the human- and LLM-readable spec of that envelope,
+served raw at `/track-schema.md` (a `vercel.json` header — and a small dev
+plugin in `vite.config.ts` — force `text/plain; charset=utf-8`, or the em
+dashes come back as mojibake). The Import menu on the home page links it and
+copies its URL, because the point of it is that a teacher with a listening
+guide and no export to copy hands the link to an AI assistant and gets a
+valid track file back. `scripts/check-schema-doc.mjs` runs as the first step
+of `npm run build`, so a field added to `Project` / `ProjectSource` /
+`Annotation` / `NoteBlock` / `ProjectSettings` without a row in that doc
+fails the deploy. It also checks the reverse (a documented field that no
+longer exists) and that every documented, exported field is actually named in
+`projectJson.ts` — the maintenance contract, enforced rather than trusted.
+The doc's `<!-- fields: X -->` markers are what the check reads.
 
 ## Design Context
 

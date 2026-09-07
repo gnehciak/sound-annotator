@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   Undo2,
   X,
@@ -34,6 +35,7 @@ import Popover from './Popover'
 import BrowseGallery from './BrowseGallery'
 import { WaveArt, CueLine } from './trackArt'
 import { publicId } from '../lib/ids'
+import { useIsAdmin } from '../lib/admin'
 
 interface Props {
   projects: Project[]
@@ -42,9 +44,16 @@ interface Props {
    *  filter them out of a search or a tally. */
   trashed: Project[]
   folders: Folder[]
-  /** Open folder (null = root library). Owned by App so it survives editor trips. */
+  /** Open folder (null = root library). Comes off the URL — App reads the
+   *  route — so a folder is a place the browser can go Back to. */
   openFolderId: string | null
   onOpenFolder: (id: string | null) => void
+  /** Your library, or the public Browse gallery. Also a route (`?browse=1`). */
+  homeTab: 'library' | 'browse'
+  onSwitchHomeTab: (tab: 'library' | 'browse') => void
+  /** The trash (`?trash=1`) — a destination beside the folders, not one of them. */
+  trashOpen: boolean
+  onOpenTrash: () => void
   onOpenTrack: (id: string) => void
   /** Creates in the open folder (App reads openFolderId) and opens the editor.
    *  Pass 'structure' for a song-structure board (the section timeline). */
@@ -103,18 +112,9 @@ const salutation = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-/** Which home view is on: your library, or the public Browse gallery. */
+/** Which home view is on: your library, or the public Browse gallery. Both are
+ *  routes now (App owns them); the sticky "last bench" lives there too. */
 type HomeView = 'library' | 'browse'
-
-const VIEW_KEY = 'sound-annotator:home-view'
-
-const loadView = (): HomeView => {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'browse' ? 'browse' : 'library'
-  } catch {
-    return 'library'
-  }
-}
 
 /**
  * Stagger helper for the dashboard cascade: base delay plus a per-index step,
@@ -147,6 +147,10 @@ export default function HomePage({
   folders,
   openFolderId,
   onOpenFolder,
+  homeTab: view,
+  onSwitchHomeTab: switchView,
+  trashOpen,
+  onOpenTrash,
   onOpenTrack,
   onCreateTrack,
   onDeleteTrack,
@@ -163,17 +167,6 @@ export default function HomePage({
 }: Props) {
   const theme = useResolvedTheme()
   const { user } = useAuth()
-  // Library vs the public Browse gallery. Sticky across visits — a teacher
-  // mid-lesson reopening the app lands back on whichever bench they left.
-  const [view, setView] = useState<HomeView>(loadView)
-  const switchView = (v: HomeView) => {
-    setView(v)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {
-      /* private mode — the view just won't stick */
-    }
-  }
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -188,14 +181,17 @@ export default function HomePage({
   const [cascading, setCascading] = useState(true)
   // The trash is a destination like a folder, but not a folder: App must never
   // see it as openFolderId, or a track created while it's open would be born
-  // into it. So it's local, and this key — not openFolderId alone — is what
-  // "which view am I in" means for the cascade and the remount below.
-  const [trashOpen, setTrashOpen] = useState(false)
+  // into it. It's its own route, and this key — not openFolderId alone — is
+  // what "which view am I in" means for the cascade and the remount below.
   const viewKey = trashOpen ? 'trash' : openFolderId ?? 'root'
   const [lastViewKey, setLastViewKey] = useState(viewKey)
   if (lastViewKey !== viewKey) {
     setLastViewKey(viewKey)
     setCascading(true)
+    // Arriving in the trash clears the search: the two fight over the same
+    // tile grid, and a stale query would hide the track you came to restore.
+    // Here rather than in the click handler, so Back into the trash does it too.
+    if (viewKey === 'trash') setQuery('')
   }
   useEffect(() => {
     // 1.2s covers header rise (~320ms) + tracks-heading delay (240ms) + 12-tile
@@ -204,19 +200,9 @@ export default function HomePage({
     return () => clearTimeout(t)
   }, [viewKey])
 
-  // Opening the trash clears the search: the two would otherwise fight over the
-  // same tile grid, and a stale query would hide the track you came to restore.
-  const openTrash = () => {
-    setQuery('')
-    setTrashOpen(true)
-  }
-  const leaveTrash = () => setTrashOpen(false)
-  // Any folder navigation leaves the trash — it's a sibling destination, not a
-  // layer on top of one.
-  const goToFolder = (id: string | null) => {
-    setTrashOpen(false)
-    onOpenFolder(id)
-  }
+  // Leaving the trash is just going to the library root — sibling destinations,
+  // not a layer on top of one, so the same navigation covers both.
+  const leaveTrash = () => onOpenFolder(null)
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -262,6 +248,8 @@ export default function HomePage({
   // One view-selector tab. The active one sits raised in the inset well —
   // the same hardware "input switch" language as the Share panel's link-role
   // group.
+  const isAdmin = useIsAdmin()
+
   const viewTab = (v: HomeView, label: string, icon: React.ReactNode) => (
     <button
       key={v}
@@ -288,6 +276,24 @@ export default function HomePage({
           >
             {viewTab('library', 'Library', <FolderIcon size={11} />)}
             {viewTab('browse', 'Browse', <Globe size={11} />)}
+            {/* The console is a separate page rather than a third view, so
+                this is a link wearing the segment's clothes. Drawn only for an
+                allowlisted account (lib/admin.ts) — hiding it isn't the
+                security, /api/admin/* 404s everyone else regardless; it just
+                keeps a door nobody else can open out of everyone's way. */}
+            {isAdmin && (
+              <a
+                href="?admin=1"
+                // Deliberately not role="tab": the siblings swap a panel in
+                // place, this one leaves for another page. Calling it a tab
+                // would promise screen-reader users something it doesn't do.
+                title="Admin console — every project and account"
+                className="seg-item press h-[26px] gap-1.5 px-2.5 text-[10px] tracking-[0.14em]"
+              >
+                <ShieldCheck size={11} />
+                Admin
+              </a>
+            )}
           </div>
         </div>
 
@@ -505,7 +511,7 @@ export default function HomePage({
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       enterDelay={cascading ? stagger(140, i) : '0ms'}
-                      onOpen={() => goToFolder(f.id)}
+                      onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
                         setRenamingId(null)
@@ -524,7 +530,7 @@ export default function HomePage({
                     enterDelay={
                       cascading ? stagger(140, folders.length) : '0ms'
                     }
-                    onOpen={openTrash}
+                    onOpen={onOpenTrash}
                     onDropTrack={onDeleteTrack}
                   />
                   <button
@@ -646,10 +652,54 @@ export default function HomePage({
 
 /* ---- import button --------------------------------------------------------- */
 
+/** Where the published track-file spec lives (public/track-schema.md). */
+const SCHEMA_PATH = '/track-schema.md'
+
 /**
- * "Import" — brings an exported track JSON back in through a hidden file
- * picker. Import runs async (audio/images are re-hosted), so the button shows
- * its own busy state; failures surface as an alert with the parser's message.
+ * One two-line row in a home-page menu: icon, title, and a line of detail
+ * under it. Shared by the Import and New-track menus so the two popovers read
+ * as one control.
+ */
+function MenuRow({
+  icon,
+  title,
+  detail,
+  onClick,
+}: {
+  icon: React.ReactNode
+  title: string
+  detail: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-raised"
+    >
+      <span className="mt-[1px] shrink-0 text-accentink/80">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[12.5px] font-semibold text-fg">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+          {detail}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/**
+ * "Import" — a two-way door onto the portable track JSON (see
+ * lib/projectJson.ts): choose a file to bring one in, or reach the published
+ * schema that describes what such a file looks like. The schema rows are the
+ * point of the menu: a teacher with a listening guide and no export to copy
+ * hands the link to an AI assistant and gets a file back, so the spec has to
+ * be findable from the same button that eats its output.
+ *
+ * Import runs async (audio/images are re-hosted), so the button shows its own
+ * busy state; failures surface as an alert with the parser's message.
  * `variant` picks the chrome: the quiet secondary next to "New track", or the
  * matching-size hero button for the first-run empty state.
  */
@@ -661,7 +711,10 @@ function ImportTrackButton({
   variant: 'header' | 'hero'
 }) {
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   async function handleFile(file: File) {
     setBusy(true)
@@ -682,6 +735,24 @@ function ImportTrackButton({
     }
   }
 
+  // Handlers live in the component body, not inline in the rows below: a
+  // lambda handed to `row()` during render reads as render-phase ref access.
+  function chooseFile() {
+    setOpen(false)
+    inputRef.current?.click()
+  }
+
+  function openSchema() {
+    setOpen(false)
+    window.open(SCHEMA_PATH, '_blank', 'noopener')
+  }
+
+  async function copySchemaLink() {
+    await navigator.clipboard.writeText(`${window.location.origin}${SCHEMA_PATH}`)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
+  }
+
   return (
     <>
       <input
@@ -697,10 +768,13 @@ function ImportTrackButton({
         }}
       />
       <button
+        ref={btnRef}
         type="button"
         disabled={busy}
-        onClick={() => inputRef.current?.click()}
-        title="Import a track from an exported JSON file"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Import a track from a JSON file, or read the file schema"
         className={`btn-ghost press shrink-0 disabled:cursor-wait ${
           variant === 'hero' ? 'px-4 py-2 text-[11px]' : ''
         }`}
@@ -713,7 +787,39 @@ function ImportTrackButton({
         <span className={variant === 'hero' ? '' : 'hidden sm:inline'}>
           {busy ? 'Importing…' : 'Import'}
         </span>
+        <ChevronDown
+          size={11}
+          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
+      <Popover
+        open={open}
+        anchorRef={btnRef}
+        onClose={() => setOpen(false)}
+        width={280}
+      >
+        <div className="py-1">
+          <MenuRow
+            icon={<FileUp size={14} />}
+            title="Choose a file…"
+            detail="Bring in a track exported as JSON."
+            onClick={chooseFile}
+          />
+          <div className="my-1 border-t border-line/60" />
+          <MenuRow
+            icon={<Braces size={14} />}
+            title="Track file schema"
+            detail="The spec an AI assistant needs to write one."
+            onClick={openSchema}
+          />
+          <MenuRow
+            icon={copied ? <Check size={14} /> : <Copy size={14} />}
+            title={copied ? 'Link copied' : 'Copy schema link'}
+            detail="Paste it to Claude with your listening guide."
+            onClick={() => void copySchemaLink()}
+          />
+        </div>
+      </Popover>
     </>
   )
 }
@@ -736,31 +842,10 @@ function NewTrackButton({
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
 
-  const row = (
-    icon: React.ReactNode,
-    title: string,
-    detail: string,
-    kind?: 'structure',
-  ) => (
-    <button
-      type="button"
-      onClick={() => {
-        setOpen(false)
-        onCreate(kind)
-      }}
-      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-raised"
-    >
-      <span className="mt-[1px] shrink-0 text-accentink/80">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-[12.5px] font-semibold text-fg">
-          {title}
-        </span>
-        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
-          {detail}
-        </span>
-      </span>
-    </button>
-  )
+  function create(kind?: 'structure') {
+    setOpen(false)
+    onCreate(kind)
+  }
 
   return (
     <>
@@ -781,17 +866,18 @@ function NewTrackButton({
       </button>
       <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={252}>
         <div className="py-1">
-          {row(
-            <Pencil size={14} />,
-            'Annotated track',
-            'Timestamped rich-text notes that cue the player.',
-          )}
-          {row(
-            <Blocks size={14} />,
-            'Song structure',
-            'A visual map of a song’s sections — intro, verse, chorus…',
-            'structure',
-          )}
+          <MenuRow
+            icon={<Pencil size={14} />}
+            title="Annotated track"
+            detail="Timestamped rich-text notes that cue the player."
+            onClick={() => create()}
+          />
+          <MenuRow
+            icon={<Blocks size={14} />}
+            title="Song structure"
+            detail="A visual map of a song’s sections — intro, verse, chorus…"
+            onClick={() => create('structure')}
+          />
         </div>
       </Popover>
     </>

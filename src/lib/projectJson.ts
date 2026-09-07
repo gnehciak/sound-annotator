@@ -15,6 +15,11 @@
 // settings keys holding primitives already pass through automatically. Bump
 // PROJECT_JSON_VERSION only for breaking shape changes (old files must keep
 // importing). See the note atop src/types.ts.
+//
+// The same change must add a row to public/track-schema.md, the published
+// spec people hand to an AI assistant to author a track file. That isn't a
+// courtesy: scripts/check-schema-doc.mjs runs first in `npm run build` and
+// fails the deploy when the doc and src/types.ts disagree.
 import type {
   Annotation,
   NoteBlock,

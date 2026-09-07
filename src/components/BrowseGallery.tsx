@@ -1,9 +1,11 @@
-// The public Browse gallery: every published track as a Station Card. Used in
-// two places — the Browse view on the signed-in home page, and the anonymous
-// `?browse` route (see PublicBrowsePage below / main.tsx). Opening a card
-// routes into the read-only share viewer (`?view=`), where "Make a copy"
-// clones the track into the visitor's own library: publish → browse → copy →
-// annotate is the classroom loop.
+// The public Browse gallery: every published track as a Station Card. One
+// component, two mounts — the Browse view on the signed-in home page
+// (`?browse=1`), and the published section of the signed-out landing page —
+// which is why there is no standalone gallery page: the same list already sits
+// under the landing page's paste field. Opening a card routes into the
+// read-only share viewer (`?view=`), where "Make a copy" clones the track into
+// the visitor's own library: publish → browse → copy → annotate is the
+// classroom loop.
 import { useEffect, useMemo, useState } from 'react'
 import { Globe, Play, RefreshCw, Search, X } from 'lucide-react'
 import type { BrowseItem } from '../types'
@@ -13,8 +15,6 @@ import { formatRelativeTime } from '../lib/format'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import { WaveArt, CueLine } from './trackArt'
-import HomeDot from './HomeDot'
-import { homeHref } from '../lib/nav'
 import { publicId } from '../lib/ids'
 
 type Status = 'loading' | 'ready' | 'error'
@@ -161,58 +161,6 @@ export default function BrowseGallery() {
         </div>
       )}
     </>
-  )
-}
-
-/* ---- anonymous route ------------------------------------------------------ */
-
-/**
- * The standalone `?browse` page — the gallery with the app's dark masthead,
- * rendered outside the auth Gate (see main.tsx). Signed-out visitors get a
- * sign-in path; signed-in ones a way back to their library.
- */
-export function PublicBrowsePage() {
-  const { user, loading } = useAuth()
-  useEffect(() => {
-    document.title = 'Browse — Sound Annotator'
-  }, [])
-  return (
-    <div className="flex h-full flex-col text-fg">
-      <header className="flex h-[54px] shrink-0 items-center gap-3 px-4">
-        <HomeDot>
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-fg">
-            Sound&nbsp;Annotator
-          </span>
-        </HomeDot>
-        <span className="chip chip-signal h-[26px] font-semibold tracking-[0.14em]">
-          <Globe size={11} /> Browse
-        </span>
-        <span className="flex-1" />
-        {!loading && (
-          <a
-            href={homeHref()}
-            className="btn-ghost press shrink-0"
-          >
-            {user ? 'Your library' : 'Sign in'}
-          </a>
-        )}
-      </header>
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6">
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold tracking-tight text-fg-strong">
-              Published tracks
-            </h1>
-            <p className="mt-1 text-[13px] text-muted">
-              Annotated analyses published by teachers on this station — open
-              one to listen through its notes, or copy it into your own
-              library.
-            </p>
-          </div>
-          <BrowseGallery />
-        </div>
-      </main>
-    </div>
   )
 }
 
