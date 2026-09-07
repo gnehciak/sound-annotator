@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Share2,
   Check,
@@ -6,13 +7,9 @@ import {
   Globe,
   HelpCircle,
   LibraryBig,
-  Loader2,
   Lock,
   Pencil,
-  RotateCw,
-  Trash2,
   UserPlus,
-  Users,
   FileDown,
   Braces,
   ClipboardList,
@@ -23,6 +20,7 @@ import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
 import { publicId } from '../lib/ids'
 import { listShares, removeShare, setShare } from '../lib/shares'
+import PeopleAccessModal from './PeopleAccessModal'
 import { ApiError } from '../lib/api'
 
 interface Props {
@@ -143,45 +141,6 @@ function SwitchRow({
 }
 
 /**
- * The mono status line under the link switch: what is true *right now*, in the
- * app's own readout voice.
- *
- * Without it the current access model has to be inferred by parsing three
- * switch positions — and the person doing the parsing is usually thirty
- * seconds from handing the link to a class. The reassuring word, *read-only*,
- * belongs here in plain sight rather than inside an explanation nobody opens.
- */
-function LinkStatus({
-  shared,
-  canEdit,
-  published,
-}: {
-  shared: boolean
-  canEdit: boolean
-  published: boolean
-}) {
-  const parts: { text: string; hot?: boolean }[] = shared
-    ? [
-        canEdit ? { text: 'Anyone can edit', hot: true } : { text: 'Read-only' },
-        published ? { text: 'On Browse', hot: true } : { text: 'Not listed' },
-      ]
-    : [{ text: 'Link off' }]
-  return (
-    <p
-      role="status"
-      className="mt-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
-    >
-      {parts.map((p, i) => (
-        <span key={p.text}>
-          {i > 0 && <span className="text-muted"> · </span>}
-          <span className={p.hot ? 'text-accentink' : 'text-muted'}>{p.text}</span>
-        </span>
-      ))}
-    </p>
-  )
-}
-
-/**
  * Section header — the settings menu's vocabulary, so the two popovers in the
  * same title bar read as one system: a hairline straight across the pane with
  * the silkscreen label tucked directly under it (see ThemeMenuContent). A label
@@ -227,9 +186,10 @@ function SectionHeader({
  * rather than standing beside it: listing on Browse never minted a second
  * address — the gallery card opens this same `?view=` link.
  *
- * The panel answers "what is true right now" (see {@link LinkStatus}) before it
- * offers a single switch, and the one action that reaches strangers — listing
- * on Browse — asks before it happens.
+ * The one action here that reaches strangers — listing on Browse — asks before
+ * it happens, and the invite list gets its own modal rather than half of this
+ * popover: it is edited a couple of times a term, while the link is opened
+ * weekly.
  */
 export default function ShareExportMenu({
   project,
@@ -269,7 +229,7 @@ export default function ShareExportMenu({
   // and an empty list is only ever the server's own answer.
   const [shares, setShares] = useState<ProjectShare[] | null>(null)
   const [sharesFailed, setSharesFailed] = useState(false)
-  const [invitee, setInvitee] = useState('')
+  const [peopleOpen, setPeopleOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
@@ -315,18 +275,14 @@ export default function ShareExportMenu({
     }
   }, [])
 
-  const invite = () => {
-    const email = invitee.trim()
+  const invite = (raw: string) => {
+    const email = raw.trim()
     if (!email || busy) return
     if (!looksLikeEmail(email)) {
       setShareError('That doesn’t look like an email address.')
       return
     }
-    void runShare(async () => {
-      const list = await setShare(project.id, email, 'viewer')
-      setInvitee('')
-      return list
-    })
+    void runShare(() => setShare(project.id, email, 'viewer'))
   }
 
   const close = useCallback(() => {
@@ -342,7 +298,7 @@ export default function ShareExportMenu({
   // open: it floats over the editor, so walking out of it with the keyboard
   // lands in a workspace the pane is covering.
   useEffect(() => {
-    if (!open) return
+    if (!open || peopleOpen) return
     const onDown = (e: MouseEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
     }
@@ -374,7 +330,7 @@ export default function ShareExportMenu({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open, close])
+  }, [open, peopleOpen, close])
 
   const copy = async () => {
     try {
@@ -425,6 +381,35 @@ export default function ShareExportMenu({
         )}
       </button>
 
+      {peopleOpen &&
+        canShare &&
+        createPortal(
+          <PeopleAccessModal
+            project={project}
+            shares={shares}
+            failed={sharesFailed}
+            busy={busy}
+            error={shareError}
+            onInvite={invite}
+            onSetRole={(email, role) =>
+              void runShare(() => setShare(project.id, email, role))
+            }
+            onRemove={(email) =>
+              void runShare(() => removeShare(project.id, email))
+            }
+            onRetry={() => {
+              setSharesFailed(false)
+              setShares(null)
+              setReloadTick((t) => t + 1)
+            }}
+            onClose={() => {
+              setPeopleOpen(false)
+              setShareError(null)
+            }}
+          />,
+          document.body,
+        )}
+
       {open && (
         <div
           ref={popRef}
@@ -436,12 +421,21 @@ export default function ShareExportMenu({
         >
           {canShare && (
             <>
-              <SectionHeader
-                first
-                action={
-                  /* One disclosure for the whole panel: press it once and every
-                     setting explains itself at the same time — the comparison a
-                     row of separate `?` dots makes impossible. */
+              <div className="px-2.5 pb-2 pt-1">
+                {/* One row, one switch. A section header, a restatement of it
+                    and a status readout were three lines saying the same
+                    thing — the switch position is the status, and when the
+                    link is on its own settings are right there under it. */}
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-muted" aria-hidden>
+                    {shared ? <Globe size={13} /> : <Lock size={13} />}
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-xs font-semibold text-fg">
+                    Share link
+                  </p>
+                  {/* One disclosure for the whole panel: press it once and
+                      every setting explains itself at the same time — the
+                      comparison a row of separate `?` dots makes impossible. */}
                   <button
                     type="button"
                     onClick={() => setExplaining((v) => !v)}
@@ -451,34 +445,14 @@ export default function ShareExportMenu({
                       explaining ? 'Hide the explanations' : 'What do these do?'
                     }
                     data-active={explaining || undefined}
-                    className="btn-icon press -my-1 shrink-0"
+                    className="btn-icon press shrink-0"
                   >
                     <HelpCircle size={13} />
                   </button>
-                }
-              >
-                Share link
-              </SectionHeader>
-
-              <div className="px-2.5 pb-2">
-                <div className="flex items-start gap-1.5">
-                  <span className="mt-[2px] shrink-0 text-muted" aria-hidden>
-                    {shared ? <Globe size={13} /> : <Lock size={13} />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-fg">
-                      Anyone with the link
-                    </p>
-                    <LinkStatus
-                      shared={shared}
-                      canEdit={canEdit}
-                      published={published}
-                    />
-                  </div>
                   <button
                     role="switch"
                     aria-checked={shared}
-                    aria-label="Anyone with the link"
+                    aria-label="Share link"
                     onClick={() => {
                       setConfirmPublish(false)
                       onChange(
@@ -488,7 +462,7 @@ export default function ShareExportMenu({
                       )
                     }}
                     title={shared ? 'Stop sharing' : 'Start sharing'}
-                    className="switch press mt-0.5 shrink-0"
+                    className="switch press shrink-0"
                   />
                 </div>
                 {explaining && (
@@ -634,151 +608,21 @@ export default function ShareExportMenu({
                 )}
               </div>
 
-              {/* People — the other half of access, and the only way to give
-                  one person more than the link gives everyone. */}
-              <SectionHeader
-                action={
-                  <Users size={13} className="shrink-0 text-muted" aria-hidden />
-                }
+              {/* The invite list is a couple of edits a term, not a weekly
+                  glance — it gets its own room (PeopleAccessModal) rather than
+                  half of this popover, which left the link, the thing people
+                  actually open this for, as the smaller half. */}
+              <button
+                type="button"
+                onClick={() => setPeopleOpen(true)}
+                className="pop-row press mt-1 border-t border-line pt-2"
               >
-                People{invitedCount > 0 ? ` · ${invitedCount}` : ''}
-              </SectionHeader>
-              <div className="px-2.5 pb-2">
-                {explaining && (
-                  <p className="mt-1 text-[11px] leading-snug text-muted">
-                    Named people, by the email they sign in with — independent of
-                    the link, so it can stay read-only (or off) while a colleague
-                    edits. We don’t send the invitation: copy the link and send it
-                    yourself.
-                  </p>
-                )}
-
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <input
-                    value={invitee}
-                    onChange={(e) => {
-                      setInvitee(e.target.value)
-                      if (shareError) setShareError(null)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        invite()
-                      }
-                    }}
-                    type="email"
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="name@school.edu"
-                    aria-label="Invite by email"
-                    className="field min-w-0 flex-1 text-[11px]"
-                  />
-                  <button
-                    type="button"
-                    onClick={invite}
-                    disabled={busy || invitee.trim() === ''}
-                    aria-label="Invite this address as a viewer"
-                    title="Invite as a viewer — change the role in the list"
-                    className="btn-ghost btn-sm press h-[26px] shrink-0 hover:border-accent hover:text-accentink disabled:opacity-40"
-                  >
-                    {busy ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <UserPlus size={12} />
-                    )}
-                    Invite
-                  </button>
-                </div>
-                {shareError && (
-                  <p
-                    role="alert"
-                    className="mt-1.5 text-[11px] leading-snug text-danger"
-                  >
-                    {shareError}
-                  </p>
-                )}
-
-                {/* Three distinct answers, never one: still asking, couldn't ask,
-                    and the server's own "nobody". */}
-                {shares == null && !sharesFailed && (
-                  <div className="mt-2 space-y-1" aria-hidden>
-                    <div className="h-[18px] w-2/3 animate-pulse rounded bg-fg/[0.06]" />
-                    <div className="h-[18px] w-1/2 animate-pulse rounded bg-fg/[0.06]" />
-                  </div>
-                )}
-                {sharesFailed && (
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <p className="min-w-0 flex-1 text-[11px] leading-snug text-muted">
-                      Couldn’t load who has access.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setReloadTick((t) => t + 1)}
-                      className="btn-ghost btn-sm press shrink-0"
-                    >
-                      <RotateCw size={12} /> Retry
-                    </button>
-                  </div>
-                )}
-                {shares != null && shares.length > 0 && (
-                  <ul className="mt-2 max-h-[7.5rem] space-y-1 overflow-y-auto">
-                    {shares.map((s) => (
-                      <li key={s.email} className="flex items-center gap-1.5">
-                        <span
-                          title={s.email}
-                          className="min-w-0 flex-1 truncate text-[11px] text-fg"
-                        >
-                          {s.email}
-                        </span>
-                        {/* Two roles, so the chip *is* the control: clicking it is
-                            the change, with no menu in between. */}
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void runShare(() =>
-                              setShare(
-                                project.id,
-                                s.email,
-                                s.role === 'editor' ? 'viewer' : 'editor',
-                              ),
-                            )
-                          }
-                          aria-label={`${s.email} can ${
-                            s.role === 'editor' ? 'edit' : 'view'
-                          } — click to change`}
-                          title={
-                            s.role === 'editor'
-                              ? 'Can edit the notes — click to make it view-only'
-                              : 'Opens it read-only — click to let them edit'
-                          }
-                          data-active={s.role === 'editor' || undefined}
-                          // Role is data, so it takes the signal hue rather than a
-                          // second grey: an editor is the exception worth spotting
-                          // in a list of readers.
-                          className={`chip chip-outline press shrink-0 ${
-                            s.role === 'editor' ? 'chip-signal' : ''
-                          }`}
-                        >
-                          {s.role === 'editor' ? 'Editor' : 'Viewer'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void runShare(() => removeShare(project.id, s.email))
-                          }
-                          aria-label={`Remove ${s.email}`}
-                          title="Remove"
-                          className="press shrink-0 rounded p-1.5 text-muted hover:text-danger"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                <UserPlus size={13} className="shrink-0" />
+                People with access
+                <span className="ml-auto font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  {shares == null ? '—' : invitedCount === 0 ? 'Only you' : invitedCount}
+                </span>
+              </button>
             </>
           )}
 
