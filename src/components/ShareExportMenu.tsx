@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Share2,
   Check,
+  ClipboardList,
   Copy,
   Globe,
-  HelpCircle,
-  LibraryBig,
+  Info,
+  Link2,
+  Loader2,
   Lock,
+  Eye,
   Pencil,
-  UserPlus,
+  Plus,
+  RotateCw,
+  TriangleAlert,
+  X,
   FileDown,
   Braces,
-  ClipboardList,
 } from 'lucide-react'
 import type { Project, ProjectShare } from '../types'
 import { exportProjectPdf } from '../lib/exportPdf'
@@ -20,26 +24,28 @@ import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
 import { publicId } from '../lib/ids'
 import { listShares, removeShare, setShare } from '../lib/shares'
-import PeopleAccessModal from './PeopleAccessModal'
 import { ApiError } from '../lib/api'
 
 interface Props {
   project: Project
-  /** Owner only — guests and link editors get the export section alone. */
+  /** Owner only — guests and link editors get the export band alone. */
   canShare: boolean
   /** PDF renders the notes list; structure boards have none to print. */
   canPdf: boolean
-  /** Persist a sharing change; flags travel together so a role flip and
-   *  the switch are each one write — including `published`, which is a
-   *  property of the view-only link rather than a second gate, so turning the
-   *  link off or handing it edit rights delists in the same patch. Unused
-   *  (never called) when !canShare. */
+  /** Persist a sharing change; flags travel together so one rung of the ladder
+   *  is one write. Unused (never called) when !canShare. */
   onChange: (patch: {
     shared?: boolean
     editableByLink?: boolean
     published?: boolean
   }) => void
 }
+
+/** How far this track reaches. The three flags underneath are not independent —
+ *  publishing implies a link, and privacy is the absence of one — so the panel
+ *  drives them as one ordered choice, and the server enforces the same ordering
+ *  (see api/projects/[id]/index.ts). */
+type Reach = 'private' | 'link' | 'browse'
 
 /** Link to this project's share viewer (same app, `?view=` route). */
 function shareUrl(id: string): string {
@@ -56,135 +62,34 @@ function looksLikeEmail(raw: string): boolean {
   )
 }
 
-/**
- * One switchable setting: label, switch, and — only while the panel is in
- * explain mode — one short line saying what it does.
- *
- * The explanations are one shared disclosure rather than a `?` per row. Four
- * identical dots is not progressive disclosure: nothing marks which you have
- * read, only one can be open at a time (so two can never be compared), and each
- * one shoves the rows below it down while you are aiming at them.
- */
-function SwitchRow({
-  icon,
-  title,
-  on,
-  softDisabled,
-  explain,
-  explaining,
-  onToggle,
-  switchTitle,
-  children,
-}: {
-  icon: React.ReactNode
-  title: string
-  on: boolean
-  /** Refused rather than removed: `aria-disabled`, so the control keeps its
-   *  place in the tab order and can still say why. A natively disabled button
-   *  is unreachable by keyboard, and its reason — a `title` — reaches a mouse
-   *  and nothing else. */
-  softDisabled?: string
-  explain: string
-  explaining: boolean
-  onToggle: () => void
-  switchTitle: string
-  children?: React.ReactNode
-}) {
-  const hintId = useId()
+/** The app's silkscreen label, as the pane title bars wear it. */
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div>
-      <div className="flex items-center gap-2">
-        <span className="shrink-0 text-muted" aria-hidden>
-          {icon}
-        </span>
-        <p
-          className={`min-w-0 flex-1 truncate text-[12px] ${
-            softDisabled ? 'text-muted' : 'text-fg'
-          }`}
-        >
-          {title}
-        </p>
-        <button
-          role="switch"
-          aria-checked={on}
-          aria-label={title}
-          aria-disabled={softDisabled ? true : undefined}
-          aria-describedby={softDisabled || explaining ? hintId : undefined}
-          onClick={() => {
-            if (!softDisabled) onToggle()
-          }}
-          title={softDisabled ?? switchTitle}
-          className={`switch press shrink-0 ${
-            softDisabled ? 'opacity-40' : ''
-          }`}
-        />
-      </div>
-      {(softDisabled || explaining) && (
-        <p id={hintId} className="mt-1 text-[11px] leading-snug text-muted">
-          {softDisabled ?? explain}
-        </p>
-      )}
+    <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
       {children}
-    </div>
+    </span>
   )
 }
 
 /**
- * Section header — the settings menu's vocabulary, so the two popovers in the
- * same title bar read as one system: a hairline straight across the pane with
- * the silkscreen label tucked directly under it (see ThemeMenuContent). A label
- * with a rule trailing off to its right is a different language; dividing the
- * pane edge to edge is what makes the blocks read as blocks.
- */
-function SectionHeader({
-  children,
-  first,
-  action,
-}: {
-  children: React.ReactNode
-  /** The first header needs no rule — the pane's own edge divides it. */
-  first?: boolean
-  action?: React.ReactNode
-}) {
-  return (
-    <div
-      className={`flex items-center gap-2 px-2.5 pb-1 pt-1.5 ${
-        first ? '' : 'mt-1 border-t border-line'
-      }`}
-    >
-      <p className="min-w-0 flex-1 truncate font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
-        {children}
-      </p>
-      {action}
-    </div>
-  )
-}
-
-/**
- * The editor bar's outputs control: one icon button opening sharing (owners
- * only) and the PDF / JSON exports.
+ * The editor bar's sharing control: one popover holding everything that answers
+ * "who can open this track", plus the two exports.
  *
- * Sharing is two independent halves, and the panel is shaped like that rather
- * than like a list of flags. The **link** says what anyone holding it may do —
- * open it, optionally edit it, optionally be findable on Browse. The **people**
- * list says what one named person may do on top of that. Neither has to be
- * weakened to express the other: a read-only link handed to a class plus an
- * editor invite sent to a colleague is the ordinary shape, not a conflict.
+ * **Reach is one ladder, not three switches.** A track has exactly one url, so
+ * sharing isn't a set of independent flags — it is a single quantity, how far
+ * this track travels: Private → Link → Browse. Driving it as one ordered choice
+ * makes the state readable at a glance (the ladder *is* the status) and turns
+ * the product's rule into structure rather than a validation error: while the
+ * link can be written to, Browse simply isn't a stop, with the reason sitting in
+ * the same line that always explains the current one.
  *
- * There is one URL throughout, which is why the two link settings nest under it
- * rather than standing beside it: listing on Browse never minted a second
- * address — the gallery card opens this same `?view=` link.
+ * Writing is a separate axis and stays a switch — it says what a link holder may
+ * *do*, not how far the track goes — and per-person access is a third, because a
+ * read-only link for the class plus one editor colleague is the normal shape and
+ * neither has to be weakened to express the other.
  *
- * The one action here that reaches strangers — publishing to Browse — asks
- * before it happens, and the invite list gets its own modal rather than half of
- * this popover: it is edited a couple of times a term, while the link is opened
- * weekly.
- *
- * Type in this pane is deliberately four things and no more: every row label is
- * 12px sans, every secondary line is 11px muted sans, the section label is the
- * 10px mono silkscreen (as in the settings menu), and mono is otherwise
- * reserved for what it means elsewhere in the app — data and numerals, here the
- * link readout and the invite count. A new treatment is a bug.
+ * Everything lives on this one surface. Splitting "who can see it" across a
+ * popover and a modal is exactly what leaves a teacher unsure what is true.
  */
 export default function ShareExportMenu({
   project,
@@ -195,45 +100,46 @@ export default function ShareExportMenu({
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  const [explaining, setExplaining] = useState(false)
-  const [confirmPublish, setConfirmPublish] = useState(false)
+  // Stepping up to Browse arms rather than fires: it is the one move here that
+  // reaches strangers, and the only one that cannot be taken back.
+  const [arming, setArming] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
+
   // A legacy row could be published without `shared` (they used to be
   // independent gates); the server has always served those to link holders, so
-  // read them as shared here too rather than stranding their Browse switch
-  // behind an off link toggle.
-  const shared = canShare && (project.shared === true || project.published === true)
-  const canEdit = shared && project.editableByLink === true
+  // read them as shared here too.
   const published = canShare && project.published === true
+  const shared = canShare && (project.shared === true || published)
+  const canEdit = shared && project.editableByLink === true
+  const reach: Reach = published ? 'browse' : shared ? 'link' : 'private'
+
   const url = shareUrl(publicId(project))
-  // Copy always carries the whole URL. The field shows only its tail, marked
-  // elided: in a pane this narrow something has to go, and the origin is the
-  // half the teacher already knows — while the id is the only part that differs
-  // between tracks, and so the only part worth checking before handing the link
-  // to a class. Truncation would have cut exactly the wrong end.
-  const shownUrl = `…${url.slice(new URL(url).origin.length)}`
-  // Question notes make the view link a listening task (see lib/questions.ts).
+  // Split for the readout: the host is context, the id is the part that differs
+  // between tracks and the only part worth checking before handing one to a
+  // class — so the id gets the LED line and the host ellipsises above it.
+  const host = `${new URL(url).origin.replace(/^https?:\/\//, '')}/?view=`
+  const trackId = publicId(project)
+  // Question notes turn the view link into a worksheet (see lib/questions.ts) —
+  // it changes what the person opening it is handed, so it belongs beside the
+  // sentence describing the link rather than behind anything.
   const questionCount = isListeningTask(project)
     ? questionsOf(project.annotations).length
     : 0
 
-  /* ---- people with access ------------------------------------------------ */
-  // `null` is "not asked yet", never "nobody": in an access-control panel those
-  // two must not render the same, so loading and failure get their own states
-  // and an empty list is only ever the server's own answer.
+  /* ---- people ------------------------------------------------------------ */
+  // `null` is "not asked yet", never "nobody": in an access list those two must
+  // not render the same.
   const [shares, setShares] = useState<ProjectShare[] | null>(null)
   const [sharesFailed, setSharesFailed] = useState(false)
-  const [peopleOpen, setPeopleOpen] = useState(false)
+  const [invitee, setInvitee] = useState('')
+  const [inviteRole, setInviteRole] = useState<ProjectShare['role']>('viewer')
   const [busy, setBusy] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
 
-  // Fetched when the panel opens, not on mount: most sessions never open it,
-  // and the list is small enough that a refetch per open beats a cache that can
-  // disagree with what another tab just changed.
   useEffect(() => {
     if (!open || !canShare) return
     let cancelled = false
@@ -272,22 +178,36 @@ export default function ShareExportMenu({
     }
   }, [])
 
-  const invite = (raw: string) => {
-    const email = raw.trim()
+  const invite = () => {
+    const email = invitee.trim()
     if (!email || busy) return
     if (!looksLikeEmail(email)) {
       setShareError('That doesn’t look like an email address.')
       return
     }
-    void runShare(() => setShare(project.id, email, 'viewer'))
+    void runShare(async () => {
+      const list = await setShare(project.id, email, inviteRole)
+      setInvitee('')
+      return list
+    })
+  }
+
+  /* ---- reach ------------------------------------------------------------- */
+  const setReach = (next: Reach) => {
+    if (next === reach) return
+    setArming(false)
+    if (next === 'private') {
+      onChange({ shared: false, editableByLink: false, published: false })
+    } else if (next === 'link') {
+      onChange({ shared: true, published: false })
+    } else {
+      setArming(true) // Browse asks first
+    }
   }
 
   const close = useCallback(() => {
     setOpen(false)
-    setExplaining(false)
-    setConfirmPublish(false)
-    // Escape must not drop focus on the document body — the keyboard user came
-    // from the trigger and that is where they are put back.
+    setArming(false)
     triggerRef.current?.focus()
   }, [])
 
@@ -295,7 +215,7 @@ export default function ShareExportMenu({
   // open: it floats over the editor, so walking out of it with the keyboard
   // lands in a workspace the pane is covering.
   useEffect(() => {
-    if (!open || peopleOpen) return
+    if (!open) return
     const onDown = (e: MouseEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
     }
@@ -327,7 +247,7 @@ export default function ShareExportMenu({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open, peopleOpen, close])
+  }, [open, close])
 
   const copy = async () => {
     try {
@@ -338,14 +258,63 @@ export default function ShareExportMenu({
     } catch {
       // A blocked clipboard used to fail in total silence — the teacher pastes
       // whatever was already there into the class chat and finds out from the
-      // room. Select the field and say so instead.
+      // room. Select the url and name the keystroke instead.
       setCopyFailed(true)
       urlRef.current?.focus()
       urlRef.current?.select()
     }
   }
 
-  const invitedCount = shares?.length ?? 0
+  // The trigger's *glyph* carries the reach, not just its colour: the panel is
+  // shut almost always, and a wash alone dies on a projector and on a
+  // colourblind viewer.
+  const TriggerIcon = published ? Globe : shared ? Link2 : Share2
+
+  const count = shares?.length ?? 0
+  const stat = sharesFailed
+    ? 'Link · people unknown'
+    : `${
+        published
+          ? 'Browse'
+          : shared
+            ? canEdit
+              ? 'Link · editable'
+              : 'Link'
+            : 'Private'
+      }${count > 0 ? ` · ${count} ${count === 1 ? 'person' : 'people'}` : ''}`
+
+  const explain =
+    reach === 'private' ? (
+      <>Only you and the people below can open this track. The link is dead.</>
+    ) : canEdit ? (
+      <>
+        Anyone holding the link can{' '}
+        <b className="font-semibold text-fg">change the notes</b> after signing in.
+        Browse is closed while that is true — a public listing has to be read-only.
+      </>
+    ) : reach === 'browse' ? (
+      <>
+        Listed on the public Browse page. Strangers can find this track and open it{' '}
+        <b className="font-semibold text-fg">read-only</b>, or take their own copy.
+      </>
+    ) : (
+      <>
+        Anyone holding the link opens this track{' '}
+        <b className="font-semibold text-fg">read-only</b>. No account, no sign-in —
+        safe to give a class.
+      </>
+    )
+
+  const rungs: { key: Reach; label: string; Icon: typeof Lock; off?: string }[] = [
+    { key: 'private', label: 'Private', Icon: Lock },
+    { key: 'link', label: 'Link', Icon: Link2 },
+    {
+      key: 'browse',
+      label: 'Browse',
+      Icon: Globe,
+      off: canEdit ? 'Turn link editing off to publish' : undefined,
+    },
+  ]
 
   return (
     <div ref={wrapRef} className="relative shrink-0">
@@ -357,317 +326,445 @@ export default function ShareExportMenu({
         aria-label="Share and export"
         title={
           canShare
-            ? shared
-              ? published
-                ? 'Shared by link and listed on Browse — manage sharing & exports'
-                : 'Shared by link — manage sharing & exports'
-              : 'Share this track by link or with people, or export it'
+            ? published
+              ? 'Listed on Browse — manage sharing & exports'
+              : shared
+                ? 'Shared by link — manage sharing & exports'
+                : 'Private — share this track, or export it'
             : 'Export this track'
         }
-        // The tint means "this track is shared", not "this menu is open", so
-        // the header answers "is it out there?" without being opened at all.
         data-active={shared || undefined}
-        className="btn-icon-lg press relative"
+        className="btn-icon-lg press"
       >
-        <Share2 size={15} />
-        {published && (
-          <span
-            aria-hidden
-            className="absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full bg-accent"
-          />
-        )}
+        <TriggerIcon size={15} />
       </button>
-
-      {peopleOpen &&
-        canShare &&
-        createPortal(
-          <PeopleAccessModal
-            project={project}
-            shares={shares}
-            failed={sharesFailed}
-            busy={busy}
-            error={shareError}
-            onInvite={invite}
-            onSetRole={(email, role) =>
-              void runShare(() => setShare(project.id, email, role))
-            }
-            onRemove={(email) =>
-              void runShare(() => removeShare(project.id, email))
-            }
-            onRetry={() => {
-              setSharesFailed(false)
-              setShares(null)
-              setReloadTick((t) => t + 1)
-            }}
-            onClose={() => {
-              setPeopleOpen(false)
-              setShareError(null)
-            }}
-          />,
-          document.body,
-        )}
 
       {open && (
         <div
           ref={popRef}
           role="dialog"
           aria-label="Sharing and export"
-          className={`pop absolute right-0 top-full z-30 mt-1.5 animate-panel-in py-1 ${
-            canShare ? 'w-[19rem]' : 'w-60'
+          className={`pop absolute right-0 top-full z-30 mt-1.5 animate-panel-in ${
+            canShare ? 'w-[23rem]' : 'w-56'
           }`}
         >
           {canShare && (
             <>
-              <div className="px-2.5 pb-2 pt-1">
-                {/* One row, one switch. A section header, a restatement of it
-                    and a status readout were three lines saying the same
-                    thing — the switch position is the status, and when the
-                    link is on its own settings are right there under it. */}
-                <div className="flex items-center gap-2">
-                  <span className="shrink-0 text-muted" aria-hidden>
-                    {shared ? <Globe size={13} /> : <Lock size={13} />}
-                  </span>
-                  <p className="min-w-0 flex-1 truncate text-[12px] text-fg">
-                    Share link
-                  </p>
-                  {/* One disclosure for the whole panel: press it once and
-                      every setting explains itself at the same time — the
-                      comparison a row of separate `?` dots makes impossible. */}
-                  <button
-                    type="button"
-                    onClick={() => setExplaining((v) => !v)}
-                    aria-pressed={explaining}
-                    aria-label="Explain these settings"
-                    title={
-                      explaining ? 'Hide the explanations' : 'What do these do?'
-                    }
-                    data-active={explaining || undefined}
-                    className="btn-icon press shrink-0"
-                  >
-                    <HelpCircle size={13} />
-                  </button>
-                  <button
-                    role="switch"
-                    aria-checked={shared}
-                    aria-label="Share link"
-                    onClick={() => {
-                      setConfirmPublish(false)
-                      onChange(
-                        shared
-                          ? { shared: false, editableByLink: false, published: false }
-                          : { shared: true, editableByLink: false },
-                      )
-                    }}
-                    title={shared ? 'Stop sharing' : 'Start sharing'}
-                    className="switch press shrink-0"
-                  />
-                </div>
-                {explaining && (
-                  <p className="mt-1 text-[11px] leading-snug text-muted">
-                    One link, opened read-only with no sign-in — students don’t
-                    need accounts. Turning it off kills the link and clears both
-                    settings below.
-                  </p>
-                )}
-
-                {shared && (
-                  <>
-                    {/* Copy rides on the field it copies — one row, and the
-                        icon alone: a full-width filled key for a two-word
-                        action was the loudest thing in a pane whose job is to
-                        be read at a glance. See `shownUrl` for why the field
-                        shows the link's tail rather than all of it. */}
-                    <div className="mt-2 flex items-center gap-1.5">
-                      <input
-                        ref={urlRef}
-                        readOnly
-                        value={shownUrl}
-                        onFocus={(e) => e.currentTarget.select()}
-                        aria-label={`Share link, ${url}`}
-                        title={url}
-                        className="field led min-w-0 flex-1 font-mono text-[11px]"
-                      />
-                      {/* Small, but still the pane's one filled key: copying
-                          the link is what most visits here are for. */}
-                      <button
-                        onClick={copy}
-                        aria-label="Copy link"
-                        title="Copy the link to the clipboard"
-                        className="btn-primary press h-[30px] w-[30px] shrink-0 justify-center rounded-full p-0"
-                      >
-                        {copied ? <Check size={14} /> : <Copy size={14} />}
-                      </button>
-                    </div>
-                    <p role="status" aria-live="polite" className="sr-only">
-                      {copied ? 'Link copied to the clipboard' : ''}
-                    </p>
-                    {copyFailed && (
-                      <p className="mt-1 text-[11px] leading-snug text-muted">
-                        Your browser blocked the clipboard — the link is selected
-                        above, press{' '}
-                        {navigator.platform.includes('Mac') ? '⌘C' : 'Ctrl+C'}.
-                      </p>
-                    )}
-
-                    {/* Both settings below describe that one link, so they nest
-                        under it instead of standing beside it as peers — which is
-                        what made this panel read like three separate sharing
-                        systems. */}
-                    {/* No spine: the two settings sit directly under the link's
-                      own field and button, which is proximity enough — a rule
-                      down the side was one more line in a pane that had too
-                      many. */}
-                  <div className="mt-2.5 space-y-2">
-                      <SwitchRow
-                        icon={<Pencil size={13} />}
-                        title="Allow editing"
-                          on={canEdit}
-                        explaining={explaining}
-                        switchTitle={
-                          canEdit ? 'Make the link read-only' : 'Let link holders edit'
-                        }
-                        onToggle={() => {
-                          setConfirmPublish(false)
-                          onChange({
-                            shared: true,
-                            editableByLink: !canEdit,
-                            published: false,
-                          })
-                        }}
-                        explain="Everyone holding the link can change the notes — after signing in, one person at a time. To let a single colleague edit while the class stays read-only, invite them under People instead."
-                      />
-                      <SwitchRow
-                        icon={<LibraryBig size={13} />}
-                        title="Publish to Browse"
-                        on={published}
-                        softDisabled={
-                          canEdit
-                            ? 'Only a read-only link can be published — a public page of tracks strangers can rewrite isn’t a promise worth making.'
-                            : undefined
-                        }
-                        explaining={explaining}
-                        switchTitle={
-                        published ? 'Remove from Browse' : 'Publish to Browse'
-                      }
-                        onToggle={() => {
-                          if (published) {
-                            setConfirmPublish(false)
-                            onChange({ shared: true, published: false })
-                          } else {
-                            setConfirmPublish(true)
-                          }
-                        }}
-                        explain="Puts this track on the public Browse page so anyone can find it, not just the people you send the link to. Same link either way."
-                      >
-                        {confirmPublish && !published && !canEdit && (
-                          <div className="well mt-1.5 p-2">
-                            <p className="text-[11px] leading-snug text-fg">
-                              Anyone on the internet will be able to find “
-                              {project.title}” and open it.
-                            </p>
-                            <div className="mt-1.5 flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmPublish(false)
-                                  onChange({ shared: true, published: true })
-                                }}
-                                className="btn-signal btn-sm press"
-                              >
-                                List it
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmPublish(false)}
-                                className="btn-ghost btn-sm press"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {published && (
-                          <a
-                            href={`${window.location.pathname}?browse=1`}
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-accentink hover:underline"
-                          >
-                            See it on Browse →
-                          </a>
-                        )}
-                      </SwitchRow>
-                    </div>
-
-                    {/* A listening task is what the link *becomes*, not a
-                        setting — so it stays visible, in one line: it changes
-                        what the person opening it is handed. */}
-                    {questionCount > 0 && (
-                      <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-snug text-muted">
-                        <ClipboardList
-                          size={12}
-                          className="mt-[1px] shrink-0 text-accentink"
-                        />
-                        <span>
-                          Opens as a listening task — {questionCount}{' '}
-                          {questionCount === 1 ? 'question' : 'questions'}, answered
-                          in the page and handed back as a PDF.
-                        </span>
-                      </p>
-                    )}
-                  </>
-                )}
+              <div className="strip flex h-9 items-center justify-between gap-2.5 border-b border-line/70 px-3.5">
+                <Label>Sharing</Label>
+                <span
+                  role="status"
+                  className={`truncate font-mono text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                    shared ? 'text-accentink' : 'text-muted'
+                  }`}
+                >
+                  {stat}
+                </span>
               </div>
 
-              {/* The invite list is a couple of edits a term, not a weekly
-                  glance — it gets its own room (PeopleAccessModal) rather than
-                  half of this popover, which left the link, the thing people
-                  actually open this for, as the smaller half. */}
-              <button
-                type="button"
-                onClick={() => setPeopleOpen(true)}
-                className="pop-row press mt-1 border-t border-line pt-2"
-              >
-                <UserPlus size={13} className="shrink-0" />
-                Invite collaborators
-                <span className="ml-auto font-mono text-[11px] tabular-nums text-muted">
-                  {shares == null ? '—' : invitedCount}
-                </span>
-              </button>
+              {/* ---- reach ------------------------------------------------ */}
+              <div className="p-3.5">
+                <Label>Reach</Label>
+                <div
+                  role="radiogroup"
+                  aria-label="Reach"
+                  className="seg mt-2 flex w-full p-[3px]"
+                >
+                  {rungs.map(({ key, label, Icon, off }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="radio"
+                      aria-checked={reach === key}
+                      aria-disabled={off ? true : undefined}
+                      title={off ?? `Reach: ${label}`}
+                      onClick={() => !off && setReach(key)}
+                      className={`seg-item press h-8 flex-1 text-[10px] tracking-[0.12em] ${
+                        off ? 'opacity-35' : ''
+                      } ${
+                        arming && key === 'browse'
+                          ? 'border border-dashed border-accent/80 text-accentink'
+                          : ''
+                      }`}
+                    >
+                      <Icon size={13} /> {label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-2 flex gap-1.5 text-[12px] leading-snug text-muted">
+                  <Info
+                    size={13}
+                    className={`mt-[3px] shrink-0 ${
+                      canEdit ? 'text-accentink' : 'text-muted'
+                    }`}
+                  />
+                  <span>{explain}</span>
+                </p>
+
+                {shared && questionCount > 0 && (
+                  <p className="mt-1.5 flex gap-1.5 text-[12px] leading-snug text-muted">
+                    <ClipboardList
+                      size={13}
+                      className="mt-[3px] shrink-0 text-accentink"
+                    />
+                    <span>
+                      It opens as a listening task — {questionCount}{' '}
+                      {questionCount === 1 ? 'question' : 'questions'}, answered in
+                      the page and handed back as a PDF.
+                    </span>
+                  </p>
+                )}
+
+                {/* Arming Browse asks in place — no modal thrown over the state
+                    the teacher was just reading. */}
+                {arming && (
+                  <div className="mt-2.5 rounded-lg border border-accent/45 bg-accent/[0.07] p-3">
+                    <p className="flex items-start gap-1.5 text-[12.5px] font-semibold leading-snug text-fg">
+                      <Globe size={13} className="mt-[3px] shrink-0 text-accentink" />
+                      <span>List “{project.title}” publicly?</span>
+                    </p>
+                    <p className="ml-[21px] mt-1.5 text-[12px] leading-snug text-muted">
+                      It appears on the Browse page under your name. Strangers can
+                      open it, play it and copy it. You can unlist it later — you
+                      can’t un-publish what someone already read.
+                    </p>
+                    <div className="mt-2.5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setArming(false)}
+                        className="btn-ghost btn-sm press"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setArming(false)
+                          onChange({
+                            shared: true,
+                            editableByLink: false,
+                            published: true,
+                          })
+                        }}
+                        className="btn-signal btn-sm press"
+                      >
+                        List in Browse
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* The url doesn't vanish when the link is off, it goes dark —
+                    the fear on switching off is that it burns the address
+                    already written on the board. It doesn't. */}
+                <div
+                  className={`mt-3 flex items-center gap-2.5 rounded-lg border bg-inset py-2 pl-3 pr-2 ${
+                    copyFailed ? 'border-danger/60' : 'border-line'
+                  } ${shared ? '' : 'opacity-40'}`}
+                  style={{ boxShadow: 'var(--bevel-inset)' }}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-mono text-[10.5px] text-muted">
+                      {host}
+                    </span>
+                    <input
+                      ref={urlRef}
+                      readOnly
+                      value={trackId}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label={`Share link, ${url}`}
+                      title={url}
+                      className="led mt-[3px] block w-full border-0 bg-transparent p-0 font-mono text-[15px] font-medium outline-none"
+                    />
+                  </span>
+                  <button
+                    onClick={copy}
+                    disabled={!shared}
+                    aria-label="Copy link"
+                    title="Copy the link to the clipboard"
+                    className="btn-primary press shrink-0 disabled:opacity-40"
+                  >
+                    {copied ? <Check size={13} /> : <Copy size={13} />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p role="status" aria-live="polite" className="sr-only">
+                  {copied ? 'Link copied to the clipboard' : ''}
+                </p>
+                {!shared && (
+                  <p className="mt-1.5 flex gap-1.5 text-[11.5px] leading-snug text-muted">
+                    <Check size={12} className="mt-[2px] shrink-0" />
+                    The same url comes back when you switch the link on again.
+                  </p>
+                )}
+                {copyFailed && (
+                  <p className="mt-1.5 flex gap-1.5 text-[11.5px] leading-snug text-danger">
+                    <TriangleAlert size={12} className="mt-[2px] shrink-0" />
+                    Your browser blocked the clipboard. The url is selected — press{' '}
+                    {navigator.platform.includes('Mac') ? '⌘C' : 'Ctrl+C'}.
+                  </p>
+                )}
+
+                {/* Writing is a different axis from reach, so it stays a switch.
+                    Refused rather than removed while listed: `aria-disabled`
+                    keeps it in the tab order and lets it say why. */}
+                <div className="mt-3 flex items-start gap-2.5 border-t border-line/70 pt-3">
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block text-[12.5px] leading-snug ${
+                        canEdit ? 'font-semibold text-fg' : 'text-fg'
+                      }`}
+                    >
+                      Link holders may edit the notes
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                      {published
+                        ? 'Unlist from Browse to allow this'
+                        : 'Sign-in required · one at a time'}
+                    </span>
+                  </span>
+                  <button
+                    role="switch"
+                    aria-checked={canEdit}
+                    aria-label="Link holders may edit the notes"
+                    aria-disabled={!shared || published ? true : undefined}
+                    onClick={() => {
+                      if (!shared || published) return
+                      setArming(false)
+                      onChange({
+                        shared: true,
+                        editableByLink: !canEdit,
+                        published: false,
+                      })
+                    }}
+                    title={
+                      published
+                        ? 'Unlist from Browse to allow editing'
+                        : !shared
+                          ? 'Turn the link on first'
+                          : canEdit
+                            ? 'Make the link read-only'
+                            : 'Let link holders edit'
+                    }
+                    className={`switch press mt-0.5 shrink-0 ${
+                      !shared || published ? 'opacity-40' : ''
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* ---- people ----------------------------------------------- */}
+              <div className="border-t border-line/70 p-3.5">
+                <div className="flex items-center gap-2">
+                  <Label>People</Label>
+                  {count > 0 && (
+                    <span className="font-mono text-[10px] font-semibold tabular-nums tracking-[0.14em] text-fg">
+                      {count}
+                    </span>
+                  )}
+                </div>
+
+                {shares == null && !sharesFailed && (
+                  <div className="mt-2 space-y-1" aria-hidden>
+                    <div className="h-7 animate-pulse rounded bg-fg/[0.06]" />
+                    <div className="h-7 w-2/3 animate-pulse rounded bg-fg/[0.06]" />
+                  </div>
+                )}
+
+                {sharesFailed && (
+                  <div className="well mt-2 p-3.5">
+                    <p className="flex items-start gap-1.5 text-[12.5px] text-fg">
+                      <TriangleAlert
+                        size={13}
+                        className="mt-[3px] shrink-0 text-danger"
+                      />
+                      Couldn’t load the people on this track.
+                    </p>
+                    <p className="ml-[21px] mt-1 text-[11.5px] leading-snug text-muted">
+                      Nobody has been added or removed, and the link settings above
+                      are unaffected.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSharesFailed(false)
+                        setReloadTick((t) => t + 1)
+                      }}
+                      className="btn-ghost btn-sm press ml-[21px] mt-2.5"
+                    >
+                      <RotateCw size={12} /> Try again
+                    </button>
+                  </div>
+                )}
+
+                {shares != null && shares.length > 0 && (
+                  <ul className="mt-1.5 max-h-[9rem] overflow-y-auto">
+                    {shares.map((s) => (
+                      <li
+                        key={s.email}
+                        className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-raised [&+&]:border-t [&+&]:border-line/55"
+                      >
+                        <span
+                          title={s.email}
+                          className="min-w-0 flex-1 truncate text-[12.5px] text-fg"
+                        >
+                          {s.email}
+                        </span>
+                        {/* Two roles, so the chip *is* the control: clicking it
+                            is the change, with no menu in between. */}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void runShare(() =>
+                              setShare(
+                                project.id,
+                                s.email,
+                                s.role === 'editor' ? 'viewer' : 'editor',
+                              ),
+                            )
+                          }
+                          aria-label={`${s.email} can ${
+                            s.role === 'editor' ? 'edit' : 'view'
+                          } — click to change`}
+                          title={
+                            s.role === 'editor'
+                              ? 'Can edit the notes — click to make it view-only'
+                              : 'Opens it read-only — click to let them edit'
+                          }
+                          data-active={s.role === 'editor' || undefined}
+                          className={`chip chip-outline press shrink-0 ${
+                            s.role === 'editor' ? 'chip-signal' : 'chip-neutral'
+                          }`}
+                        >
+                          {s.role === 'editor' ? (
+                            <Pencil size={11} />
+                          ) : (
+                            <Eye size={11} />
+                          )}
+                          {s.role === 'editor' ? 'Editor' : 'Viewer'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void runShare(() => removeShare(project.id, s.email))
+                          }
+                          aria-label={`Remove ${s.email}`}
+                          title="Remove"
+                          className="btn-icon press shrink-0 opacity-0 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          <X size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* The composer is the list's next line: address, role, add. */}
+                <div className="mt-2.5 flex items-center gap-1.5 border-t border-line/70 pt-2.5">
+                  <input
+                    value={invitee}
+                    onChange={(e) => {
+                      setInvitee(e.target.value)
+                      if (shareError) setShareError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        invite()
+                      }
+                    }}
+                    type="email"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="Add by email"
+                    aria-label="Add by email"
+                    className="field h-[30px] min-w-0 flex-1 py-0 text-[12px]"
+                  />
+                  <div role="radiogroup" aria-label="Role" className="seg h-[30px]">
+                    {(['viewer', 'editor'] as const).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        role="radio"
+                        aria-checked={inviteRole === r}
+                        aria-label={
+                          r === 'viewer' ? 'Invite as viewer' : 'Invite as editor'
+                        }
+                        title={r === 'viewer' ? 'Viewer' : 'Editor'}
+                        onClick={() => setInviteRole(r)}
+                        className="seg-item press h-[24px] px-2"
+                      >
+                        {r === 'viewer' ? <Eye size={12} /> : <Pencil size={12} />}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={invite}
+                    disabled={busy || invitee.trim() === ''}
+                    aria-label="Add this person"
+                    title={`Add as ${inviteRole}`}
+                    className="btn-ghost btn-sm press h-[30px] shrink-0 hover:border-accent hover:text-accentink disabled:opacity-40"
+                  >
+                    {busy ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Plus size={12} />
+                    )}
+                    Add
+                  </button>
+                </div>
+                {shareError && (
+                  <p
+                    role="alert"
+                    className="mt-1.5 text-[11.5px] leading-snug text-danger"
+                  >
+                    {shareError}
+                  </p>
+                )}
+                <p className="mt-2 flex gap-1.5 text-[11.5px] leading-snug text-muted">
+                  <Info size={12} className="mt-[2px] shrink-0" />
+                  No invitation is emailed. Send them the link yourself.
+                </p>
+              </div>
             </>
           )}
 
-          {/* Export — the portable outputs, one row each. */}
-          <div>
-            <SectionHeader first={!canShare}>Export</SectionHeader>
-            <div>
-              {canPdf && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    close()
-                    exportProjectPdf(project)
-                  }}
-                  title="Export this track's notes to a PDF (opens in a new tab)"
-                  className="pop-row press rounded"
-                >
-                  <FileDown size={13} className="shrink-0" />
-                  PDF
-                  <span className="ml-auto text-[11px] text-muted">notes list</span>
-                </button>
-              )}
+          {/* ---- export --------------------------------------------------- */}
+          <div
+            className={`strip flex items-center gap-2 px-3.5 py-2.5 ${
+              canShare ? 'border-t border-line/70' : ''
+            }`}
+          >
+            <Label>Export</Label>
+            <span className="flex-1" />
+            {canPdf && (
               <button
                 type="button"
                 onClick={() => {
                   close()
-                  downloadProjectJson(project)
+                  exportProjectPdf(project)
                 }}
-                title="Export this track (source + notes) as a JSON file you can re-import"
-                className="pop-row press rounded"
+                title="Export this track's notes to a PDF (opens in a new tab)"
+                className="btn-ghost btn-sm press"
               >
-                <Braces size={13} className="shrink-0" />
-                JSON
-                <span className="ml-auto text-[11px] text-muted">portable file</span>
+                <FileDown size={12} /> PDF
               </button>
-            </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                close()
+                downloadProjectJson(project)
+              }}
+              title="Export this track (source + notes) as a JSON file you can re-import"
+              className="btn-ghost btn-sm press"
+            >
+              <Braces size={12} /> JSON
+            </button>
           </div>
         </div>
       )}
