@@ -8,6 +8,9 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
+import ScoreButton from './ScoreButton'
+import ScoreLayer, { ScoreFrame } from './ScoreLayer'
+import { scoreView as scoreViewOf, type ScoreView } from '../lib/score'
 import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
@@ -97,6 +100,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  // Per-session score display, over whatever the owner saved (see below).
+  const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
+  const [scoreReload, setScoreReload] = useState(0)
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   // Resolved view prefs. State initializes from localStorage; on project load
@@ -495,6 +501,33 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the same StructureEditor the owner uses, in read-only mode.
   const isStructure = isStructureProject(project)
 
+  // The score the owner attached, if any. A reader can't change what the score
+  // *is* — no `onScore`, no `onUpload` — but they can decide how it sits over
+  // the picture for their own session, so the view is local state seeded from
+  // the owner's saved choice and never written back.
+  const score = project.settings?.score
+  const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
+  const scoreLayer =
+    score && scoreView.mode !== 'off' ? (
+      // A reader gets the following, never the timing of it: the turns are
+      // the owner's, like the notes.
+      <ScoreLayer
+        score={score}
+        view={scoreView}
+        reloadKey={scoreReload}
+        currentTime={currentTime}
+        onSeek={seek}
+      />
+    ) : null
+  const scoreButton = (
+    <ScoreButton
+      score={score}
+      view={scoreView}
+      onView={(patch) => setScoreOverride((o) => ({ ...o, ...patch }))}
+      onReload={() => setScoreReload((n) => n + 1)}
+    />
+  )
+
   // The transport, built once: it floats inside the video frame (PlayerPane's
   // `overlay` slot) or docks beneath an audio waveform.
   const transport = (
@@ -590,10 +623,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <TitleBar
               left="Player"
               right={sourceLabel(source)}
+              actions={scoreButton}
             />
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
               {hasPlayer ? (
                 <>
+                  {!isVideoSource(source) && scoreLayer && (
+                    <ScoreFrame>{scoreLayer}</ScoreFrame>
+                  )}
                   <div
                     ref={setPlayerArea}
                     className={
@@ -611,6 +648,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       volume={muted ? 0 : volume}
                       readOnly
                       overlay={isVideoSource(source) ? videoOverlay : undefined}
+                      score={isVideoSource(source) ? scoreLayer : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
                       onPlayingChange={handlePlaying}
@@ -686,10 +724,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <TitleBar
             left="Player"
             right={sourceLabel(source)}
+            actions={scoreButton}
           />
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
             {hasPlayer ? (
               <>
+                {!isVideoSource(source) && scoreLayer && (
+                  <ScoreFrame>{scoreLayer}</ScoreFrame>
+                )}
                 <div
                   ref={setPlayerArea}
                   className={
@@ -707,6 +749,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     volume={muted ? 0 : volume}
                     readOnly
                     overlay={isVideoSource(source) ? videoOverlay : undefined}
+                    score={isVideoSource(source) ? scoreLayer : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
                     onPlayingChange={handlePlaying}

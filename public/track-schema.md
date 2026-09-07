@@ -226,12 +226,14 @@ editor after importing.
 | `noteOrder` | string | Default ordering of the notes list: `"timeline"`, `"auto"`, or `"live"`. Any other value is dropped. |
 | `overviewOpen` | boolean | Whether the overview timeline strip opens by default. |
 | `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
+| `score` | object | A PDF score laid over the video — see [§9](#9-score--the-printed-music-over-the-video). The one nested object settings accept. |
 
 <!-- /fields -->
 
 Settings are lenient by design: **any** key holding a string, finite number, or
 boolean passes through, so a knob added to the app later still round-trips
-through older files. Nested objects and arrays are dropped.
+through older files. Nested objects and arrays are dropped — `score` is the
+single exception, and it is validated field by field.
 
 ---
 
@@ -273,7 +275,60 @@ importing, which uploads them properly. A hand-written `overlay` is a pin.
 
 ---
 
-## 9. `blocks` (advanced — you almost certainly want to skip this)
+## 9. `score` — the printed music over the video
+
+A track can carry the score it is about: a PDF drawn over the picture, turning
+its own pages as the music plays. It lives on `settings.score`.
+
+| field | type | notes |
+| --- | --- | --- |
+| `kind` | string | `"drive"` for a Google Drive link, `"blob"` for a PDF the app hosts. |
+| `driveFileId` | string | Drive only — the file id. Re-derived from `driveUrl` if absent. |
+| `driveUrl` | string | Drive only — the link it was pasted from. |
+| `url` | string | Hosted PDFs only. **You can't write this** — same rule as cover images. |
+| `fileName` | string | Hosted PDFs only; what the score menu calls it. |
+| `mode` | string | `"score"` (default) shows the page opaque, `"overlay"` dims it over the video, `"off"` hides it. |
+| `opacity` | number | `0.2`–`1`, overlay mode only. Defaults to `0.85`. |
+| `fit` | string | `"height"` (default) fits the whole page; `"width"` fills the frame width and scrolls. |
+| `onTop` | boolean | Paint the score in front of note covers and pins instead of behind them. Off by default. |
+| `turns` | array | When the page turns — see below. |
+
+A score that names neither a `driveFileId` nor a `url` is dropped whole rather
+than imported as an attachment that can never load.
+
+**Write a Drive link, not a hosted file.** `kind: "drive"` is the one you can
+author: point it at a PDF shared **Anyone with the link** and the track will
+load it. `kind: "blob"` describes bytes this installation hosts, and a `url`
+copied from an export belongs to the account that uploaded it — it may go dark
+without warning. Attach those in the editor, which uploads them properly.
+
+### `turns` — the page changes
+
+Each entry says that from second `t`, the score shows page `page`:
+
+```json
+"turns": [
+  { "t": 57, "page": 2 },
+  { "t": 89, "page": 3 },
+  { "t": 125, "page": 4 }
+]
+```
+
+Times are **track seconds**, on the same clock as the notes (so a `clipStart`
+shifts them with everything else), and pages are 1-based. The list holds one
+entry per *turn*, not one per page: the score shows the last turn at or before
+the playhead, so a page nobody turns away from needs no second entry, and a
+repeat can bring an earlier page back simply by naming it again later. Before
+the first entry the score sits on the page that entry turns away from — a first
+turn to page 2 means page 1 is what's read until then.
+
+Entries missing a usable `t` or `page` are dropped individually, and the list
+is re-sorted on import, so order in the file is a convenience rather than a
+requirement.
+
+---
+
+## 10. `blocks` (advanced — you almost certainly want to skip this)
 
 A note's content is really a list of typed blocks, each rendered by a plugin.
 Notes that carry only `contentHtml` are migrated to a single `text` block on
@@ -291,7 +346,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 10. A complete, valid file
+## 11. A complete, valid file
 
 ```json
 {
@@ -333,7 +388,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 11. Checklist before importing
+## 12. Checklist before importing
 
 - `format` is exactly `"sound-annotator-project"` and `version` is `1`.
 - Every note has a numeric `start` in **seconds** — `2:14` must become `134`,
@@ -342,8 +397,10 @@ read, which is why authoring `contentHtml` is enough.
 - No `clipStart` unless the timestamps were written relative to it.
 - `videoId` (YouTube) or `driveFileId` (Drive) is present.
 - Note text is HTML wrapped in `<p>`, not raw prose or Markdown.
-- No `id` fields, no `<img>` tags, no `overlay.coverUrl`, no ownership or
-  sharing fields.
+- No `id` fields, no `<img>` tags, no `overlay.coverUrl`, no `score.url`, no
+  ownership or sharing fields.
+- A `score`, if any, is `kind: "drive"` with a `driveFileId`, and its `turns`
+  are in track seconds with 1-based pages.
 
 ---
 

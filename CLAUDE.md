@@ -5,7 +5,8 @@ A web app for time-anchored music annotation in the classroom: load a video
 timestamped rich-text notes that seek the player when clicked. **Audio is never
 uploaded** — a track's sound is always a link, and wavesurfer streams it from
 wherever it lives, so the host's CORS policy decides whether it loads (see
-`src/components/AudioUrlForm.tsx`). Note images are the only bytes we host.
+`src/components/AudioUrlForm.tsx`). The only bytes we host are note images
+and uploaded PDF scores.
 
 **Three source kinds, two of them videos.** `youtube` and `drive` behave
 identically everywhere outside their own player — 16:9 frame, clip window,
@@ -28,9 +29,11 @@ email + password, with verification and reset — themed from our tokens in
 `src/lib/clerkAppearance.ts`, which must hand Clerk hex: its JS color parser
 rejects the space-separated `rgb()` that `cssRgb` emits). Projects/notes in
 Neon Postgres (one row per project, notes inline in `annotations` jsonb),
-note images in Vercel Blob (`users/{uid}/images/{projectId}/…` — the only
-path `api/blobs/upload.ts` still accepts; legacy `users/{uid}/audio/…` objects
-are served and deleted but never written). The SPA calls Vercel Functions in `/api`
+note images and uploaded scores in Vercel Blob
+(`users/{uid}/images/{projectId}/…` and `users/{uid}/scores/{projectId}/…` —
+the paths `api/blobs/upload.ts` accepts, alongside the ephemeral
+`analysis/`; legacy `users/{uid}/audio/…` objects are served and deleted but
+never written). The SPA calls Vercel Functions in `/api`
 (Web signature), which enforce all authorization — owner-only access,
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
 the server-stamped edit lock (see `api/projects/[id]/index.ts`).
@@ -45,9 +48,9 @@ only hard delete** — an owner may purge only their own row and only out of the
 trash, while an admin may purge any row, live or trashed (the console's
 permanent delete, which tears down the bytes client-side first).
 `api/cron/purge-trash.ts` hard-deletes anything past `TRASH_TTL_MS` (30 days,
-`api/_lib/db.ts`) plus **every** blob prefix a project owns (images, legacy
-audio, stems, analysis — keep it in step with App's `purgeProject`, since a
-prefix only one of them knows is bytes nobody collects). Daily, and gated on a
+`api/_lib/db.ts`) plus **every** blob prefix a project owns (images, scores,
+legacy audio, stems, analysis — keep it in step with App's `purgeProject`,
+since a prefix only one of them knows is bytes nobody collects). Daily, and gated on a
 `CRON_SECRET` env var it refuses to run without. Blobs are torn down **only at
 purge**, never at trash. The trash rides its own listing (`?trash=1`) into its
 own App state, never `projects` — a trashed track must never reach search,
@@ -109,8 +112,9 @@ land under `users/guest:<uuid>/images/{projectId}/`, the *same* shape as
 everyone else (a colon is legal in a Blob pathname, `%3A` in the public URL),
 which is what makes the existing purge sweeps collect them for free — so keep
 using `users/{owner_id}/…` rather than inventing a guest prefix. `blobs/gc`
-takes a guest key for the same reason. Note images are still the only bytes we
-host, and the editor's `allowImages={false}` switch survives so that "images
+takes a guest key for the same reason. Guests never *upload* anything else —
+their token is images-only, so the score they can attach is a Drive link, not
+a PDF of their own — and the editor's `allowImages={false}` switch survives so that "images
 are impossible here" can never silently become "base64 them into
 `annotations`". **Detect sections is hidden
 too**, though no longer for a guest-specific reason: `api/projects/[id]/analyze.ts`
@@ -211,6 +215,80 @@ orphan by matching blob URLs against the strings it's handed, and
 covers on the next project open. Anything else that walks a project's images
 must read it too.
 
+**PDF scores** (`src/lib/score.ts`, `src/components/ScoreLayer.tsx`): a track
+can carry the printed music, drawn over the picture so the page and the sound
+arrive together. It lives at `settings.score` — inside the existing jsonb, so
+it needs no schema or API change and an owner *and* a guest can set it (both
+may write `settings`), exactly like the project `kind`.
+
+Two ways in, and the difference is the point. A **Drive link** is a link: the
+teacher annotates the same file in Drive and every reader picks up the new
+version, no re-upload and no new link — but only while the annotation tool
+writes back to the *same file id* ("Manage versions → Upload new version" is
+the safe route; a tool that "saves a copy" mints a new id and silently strands
+the link). Its bytes can't be fetched from Drive by a browser for the same two
+reasons a Drive video can't, so they come through the same proxy with a second
+verb: `GET /api/browse?drive=<id>&pdf=1`, which asserts a PDF, caps it at
+30 MB, and — unlike the video path — is *shared*-cacheable (`s-maxage=300`),
+which is what keeps a class of thirty opening one score down to one fetch from
+Drive. The reader's Reload bumps a `&v=` that changes the cache key. Note the
+proxy's live-project fence now matches `settings->'score'->>'driveFileId'` as
+well as the source's id; a score whose track is trashed goes dark with it. An
+**upload** is bytes we host (signed-in owners only — a guest's token is
+images-only), fixed at upload time.
+
+Rendering is pdf.js (`src/lib/pdf.ts`, the only file that knows it exists),
+lazily imported so a track without a score never pays for the ~430 KB chunk or
+its worker. Renders are serialized through a chain: pdf.js refuses two renders
+onto one canvas and cancelling isn't instant, which a fast page-flip produces
+immediately. An `<iframe>` of the PDF would be free but exposes no page
+control, and turning the page is the whole feature.
+
+The layer sits between the picture and the transport (PlayerPane's `score`
+slot), so 'score' mode can be fully opaque with the transport still reachable;
+'overlay' drops the ground and dims the *page* instead.
+
+**Three layers share the video frame**, and the score is the one that moves.
+Note covers and pins sit at `z-10` and the transport at `z-20`; the score
+paints at `z-[5]` — just under the covers — or at `z-[15]` when the score's
+`onTop` is set, and never above the transport whatever the setting. The order
+is a z-index rather than a position in the JSX so that flipping it doesn't
+remount the layer and re-fetch the PDF. Default off, because a note that takes
+over the picture is a deliberate interruption and the score is the steady
+background to the whole track; a track whose score is the point and whose
+covers are asides turns it on. An audio track's
+waveform is the picture and must stay uncovered, so its score takes its own
+frame above — the same rule the transport follows. A 16:9 frame is a poor
+window on a portrait page, hence the expand button: the same document and page
+drawn to the whole viewport through a **portal**, which is required rather
+than stylistic — `.glass` uses `backdrop-filter`, and that makes an ancestor
+the containing block for `position: fixed`.
+
+**Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
+clip time — the same clock the notes use, so App's `setClip` shifts it along
+with them. A *list of turns*, not a time per page, because music repeats: a da
+capo brings a page back at a later moment, which a page→time map can't say.
+`pageAt` binary-searches it; before the first turn the score sits on the page
+that turn leaves from.
+
+A synced score turns its own pages, with one rule worth knowing: **a reader
+who looks ahead is peeking**, and the peek remembers which followed page it
+was taken from, so it expires by itself the moment the music reaches the next
+turn. Nothing to time out, nothing to press to resume — though the chrome
+offers a Follow chip for going back at once. The sync workspace suspends
+following entirely: the page on screen is the one being timed and must not
+move under the person timing it.
+
+Timing them is one button. Press play and hit **Turn here** at each turn and
+you've made a live pass; pause, scrub, and hit it and you've placed one turn
+by hand — which is also how a wrong one is fixed, since nobody should replay
+eight minutes to move page 12. The **lead offset** (default 0.3 s) is what
+makes the live pass usable: the press always lands after the moment it marks,
+by roughly a constant, so the stamp goes in that much earlier. Note a live
+pass can't be run much faster than 2× on YouTube — the iframe API caps there
+(`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
+Chrome mutes them, and you need the audio to know where you are.
+
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's
 share/export menu, the share viewer, and the track-tile menu; Import on the
@@ -219,7 +297,11 @@ any persisted field on `Project` / `Annotation` / `ProjectSource` /
 `ProjectSettings` (in `src/types.ts`), update `projectJson.ts` in the same
 change: add the field to the export envelope and the import sanitizer, or
 imported files silently lose it. Primitive-valued `settings` keys (including
-the project `kind`, e.g. song-structure boards) pass through automatically.
+the project `kind`, e.g. song-structure boards) pass through automatically;
+object-valued ones do not — `score` is the only one so far, and it carries its
+own `sanitizeScore` pass. An uploaded score is also re-hosted by
+`copySharedProject`, like a note image: a copy pointing at the original's blob
+would go blank the day that project is purged.
 Bump `PROJECT_JSON_VERSION` only on breaking shape changes.
 
 **The schema is published, so it can't be allowed to go stale.**

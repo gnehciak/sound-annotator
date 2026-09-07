@@ -266,6 +266,90 @@ export interface Project {
   deletedAt?: number
 }
 
+/** How a score sits over the picture. */
+export type ScoreMode = 'off' | 'score' | 'overlay'
+
+/** Fit a page by its height (whole page, letterboxed) or its width (fills the
+ *  frame, scrolls). */
+export type ScoreFit = 'height' | 'width'
+
+/**
+ * One page turn: at clip time `t`, the score shows page `page`.
+ *
+ * A list of these, not one time per page, because music repeats. A da capo, a
+ * repeated exposition or a second verse brings the same page back at a later
+ * moment, which a page→time map cannot express and a sorted list of turns
+ * can. The page shown at any moment is the last turn at or before it (see
+ * `pageAt` in lib/score.ts), so the list also needs no entry for "still on
+ * this page".
+ */
+export interface ScoreTurn {
+  /** Clip time in seconds — the same clock notes use (0 = `clipStart`). */
+  t: number
+  /** 1-based page number. */
+  page: number
+}
+
+/**
+ * A PDF score attached to a track — the printed music the recording is of,
+ * shown over the video so the notes on the page and the sound arrive together.
+ *
+ * Two ways in, and they are not equivalent. A `blob` score is bytes we host
+ * (owner-only upload, `users/{uid}/scores/{projectId}/…`), fixed at the moment
+ * it was uploaded. A `drive` score is a *link*: the teacher keeps annotating
+ * the same Drive file and every reader picks the new version up, which is the
+ * whole reason the Drive path exists. Its bytes cannot be fetched from Drive
+ * by the browser for exactly the reasons a Drive video can't be — see
+ * lib/drive.ts — so they come through the same `/api/browse?drive=` proxy.
+ *
+ * Lives inside `settings` rather than at the top of Project so it rides the
+ * existing jsonb through the client and API field whitelists with no schema
+ * or API change, the way the project `kind` does. That also means an owner
+ * *and* a guest can set it (both may write `settings`), which is deliberate:
+ * a guest may link a Drive score, and the upload half is gated in the UI and
+ * by the upload token, not here.
+ *
+ * `turns` is anchored to the clip window like every note time, so App's
+ * setClip shifts it alongside the notes when the window is retuned.
+ */
+export interface ProjectScore {
+  /** Where the bytes live: a Drive file we proxy, or a PDF we host. */
+  kind: 'drive' | 'blob'
+  /** Drive — the file id plus the link it was pasted from, the same pair a
+   *  Drive video source carries. The file must be shared "Anyone with the
+   *  link": the proxy holds no Drive credentials. */
+  driveFileId?: string
+  driveUrl?: string
+  /** Blob — the public (unguessable) URL of the uploaded PDF. */
+  url?: string
+  /** The uploaded file's name, for the score menu. Uploads only. */
+  fileName?: string
+  /** How the score shows by default — it travels with the project, so a
+   *  shared track opens the way its owner left it. A reader may override it
+   *  for their own session without writing anything back. */
+  mode?: ScoreMode
+  /** Overlay opacity, 0.2–1. Only meaningful in 'overlay' mode. */
+  opacity?: number
+  /** Page fit. Defaults to 'height' — the whole page, letterboxed. */
+  fit?: ScoreFit
+  /**
+   * Whether the score paints in front of a note's cover image and pins
+   * (lib/overlays.ts) rather than behind them. Off by default, which is the
+   * order that reads: a note that takes over the picture is a deliberate
+   * interruption of it, and a score is the steady background to the whole
+   * track. Turn it on for a track whose score is the point and whose covers
+   * are asides. Either way the score stays *under* the transport — nothing is
+   * worth losing the play button for.
+   */
+  onTop?: boolean
+  /**
+   * When the page turns, in clip seconds, ascending. Absent or empty means the
+   * reader turns the pages by hand. Written by the Sync pages panel; shifted
+   * with the notes when the clip window moves.
+   */
+  turns?: ScoreTurn[]
+}
+
 export interface ProjectSettings {
   /**
    * What kind of editor this project opens in. Absent (the default) is a
@@ -282,6 +366,13 @@ export interface ProjectSettings {
   overviewOpen?: boolean
   /** Default ordering for the notes list. See AnnotationList for the modes. */
   noteOrder?: 'timeline' | 'auto' | 'live'
+  /**
+   * The PDF score shown over the picture, when the track has one. Unlike the
+   * other keys here it holds an object, so it needs an explicit branch in
+   * lib/projectJson.ts's settings sanitizer (primitives pass through on their
+   * own; anything else is dropped).
+   */
+  score?: ProjectScore
 }
 
 /**

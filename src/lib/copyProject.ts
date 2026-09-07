@@ -1,13 +1,17 @@
 // Clone a shared project into the signed-in user's own account ("make a copy"
 // from the read-only viewer). The copy gets a fresh doc id and owns the bytes
-// we host: every note image is re-uploaded under the new owner's Storage path,
-// so it survives the original being unshared or deleted. The *source* is only
+// we host: every note image — and an uploaded PDF score — is re-uploaded under
+// the new owner's Storage path, so it survives the original being unshared or
+// deleted. (A *Drive* score is a link like the source, so it copies verbatim
+// and both tracks follow the same file.) The *source* is only
 // a link now (YouTube, Google Drive, or a direct audio URL), so it's copied
 // verbatim and both projects point at the same audio — if that link dies, both
 // lose it.
 // Note ids are kept as-is — @mentions in note HTML link notes by id, and the
 // id also seeds each note's fallback colour.
 import { uploadNoteImage } from './imageCloud'
+import { uploadScorePdf } from './scoreCloud'
+import { withScore } from './score'
 import { fetchProjects, saveProject } from './projectStore'
 import { TEXT_BLOCK, type TextBlockData } from './noteBlocks'
 import { coverUrls } from './overlays'
@@ -158,6 +162,28 @@ export async function copySharedProject(
     )
   }
 
+  // An uploaded score is bytes we host, so the copy takes its own: leaving the
+  // URL pointing at the original's blob would blank the copy the day that
+  // project is purged. A Drive score is a link and needs nothing.
+  let settings = src.settings
+  const score = settings?.score
+  if (score?.kind === 'blob' && score.url) {
+    onStatus?.('Copying score…')
+    try {
+      const pdf = await fetchBlob(score.url)
+      const name = score.fileName ?? 'score.pdf'
+      const url = await uploadScorePdf(
+        uid,
+        copyId,
+        new File([pdf], name, { type: 'application/pdf' }),
+      )
+      settings = withScore(settings, { ...score, url })
+    } catch (err) {
+      // Keep the original URL — the score still loads while it exists.
+      console.error('Failed to copy the score:', err)
+    }
+  }
+
   onStatus?.('Saving…')
   const copy: Project = {
     id: copyId,
@@ -165,9 +191,10 @@ export async function copySharedProject(
     title,
     source,
     annotations: src.annotations.map((a) => rewriteAnnotation(a, urlMap)),
-    // Settings travel with the copy — they carry presentation prefs and the
-    // project kind (a song-structure copy must open as a structure board).
-    settings: src.settings,
+    // Settings travel with the copy — they carry presentation prefs, the
+    // project kind (a song-structure copy must open as a structure board) and
+    // the score, whose URL was just rewritten if we re-hosted it.
+    settings,
     // Freshest updatedAt → the app opens the copy first after the redirect.
     updatedAt: Date.now(),
     shared: false,
