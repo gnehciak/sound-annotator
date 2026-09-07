@@ -157,14 +157,27 @@ export interface Project {
    */
   editableByLink?: boolean
   /**
-   * When true, the project is listed on the public Browse gallery — anyone
-   * can find it there and open it read-only (publishing implies viewability,
-   * independent of `shared`). Off by default; toggled from the Share panel.
-   * Only the owner can flip it; the server stamps the byline on publish.
+   * When true, the project is listed on the public Browse gallery. Not a
+   * second door: the gallery card opens the same `?view={id}` link, so this is
+   * a property *of* that link rather than a gate beside it — it implies
+   * `shared`, and it is refused while `editableByLink` is on (the server
+   * coerces both, see api/projects/[id]/index.ts). Off by default; toggled
+   * from the Share panel under the view-only link. Only the owner can flip it;
+   * the server stamps the byline on publish.
    */
   published?: boolean
   /** Display name stamped by the server when the project was published. */
   publishedByName?: string
+  /**
+   * What *this* caller may do here, stamped by the server on every read of a
+   * project (api/_lib/db.ts). Absent for an anonymous link holder, who has
+   * exactly the powers the link itself describes. It exists because an email
+   * invite (`ProjectShare`) is otherwise invisible from the client: nothing on
+   * the row says "and Sam may edit this", so the viewer would offer a reader's
+   * screen to someone who was invited to write. Never sent on a save — a
+   * client's opinion of its own role is not consulted.
+   */
+  myRole?: 'owner' | 'editor' | 'viewer'
   /**
    * Id of the home-page folder this track lives in, or null/absent for the
    * root library ("unfiled"). Folders live in their own `folders` collection
@@ -241,6 +254,28 @@ export interface BrowseItem {
   publishedByName: string
   publishedAt: number
   updatedAt: number
+}
+
+/**
+ * One person invited to a project by email (the `project_shares` table).
+ *
+ * Sharing has two independent halves and this is the second: the link says
+ * what *anyone holding it* may do, an invite says what *one named person* may
+ * do on top of that. So a view-only link plus an editor invite is the ordinary
+ * shape — the link is the class, the invite is the colleague — and neither
+ * setting has to be weakened to express the other.
+ *
+ * Keyed by email rather than uid because the invite is written before the
+ * person has necessarily signed in. Owner-only to read or change; the server
+ * is the enforcement (api/projects/[id]/shares.ts).
+ */
+export interface ProjectShare {
+  /** Lowercased by the server; compare case-insensitively. */
+  email: string
+  /** `viewer` opens it read-only; `editor` may write content, under the same
+   *  edit lock as everyone else. */
+  role: 'viewer' | 'editor'
+  invitedAt: number
 }
 
 /** A home-page folder grouping tracks. Flat (no nesting), never shared. */

@@ -28,6 +28,12 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     shared: data.shared === true,
     editableByLink: data.editableByLink === true,
     published: data.published === true,
+    // Server-stamped on every read; a project the client only ever wrote (a
+    // brand-new one) simply has none until its first fetch.
+    myRole:
+      data.myRole === 'owner' || data.myRole === 'editor' || data.myRole === 'viewer'
+        ? data.myRole
+        : undefined,
     publishedByName:
       typeof data.publishedByName === 'string' ? data.publishedByName : undefined,
     folderId: typeof data.folderId === 'string' ? data.folderId : null,

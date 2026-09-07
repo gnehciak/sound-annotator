@@ -66,6 +66,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     // The predicate is re-checked here: if a restore landed between the scan
     // and now, the row is live again and this delete must miss it.
+    await sql`DELETE FROM project_shares WHERE project_id = ${r.id}`
     await sql`
       DELETE FROM projects
       WHERE id = ${r.id} AND deleted_at IS NOT NULL AND deleted_at < ${cutoff}
