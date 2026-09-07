@@ -124,19 +124,26 @@ link they hand in is the existing read-only viewer.
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are
 already out in the world, so the route is a query param on one page: `?` the
-library, `?folder=` a folder, `?trash=1` the trash, `?home=browse` the Browse
-tab, `?track=` the editor, plus the three pages that mount outside the app
-shell (`?view=`, `?browse=1`, `?admin=1[&tab=users]`). The query is the *only*
-copy of where you are — nothing mirrors it in React state — so anything that
-navigates calls `navigate()` and anything that needs to know calls
-`useRoute()`. That's what makes Back and a phone's edge-swipe work; App has one
-effect that reconciles the open track to the route, and back/forward need no
-special case because they're just another way the route changes. Only the four
-root pages are a real page load (different chrome, different auth); everything
-inside the app is client-side. When adding a place worth returning to, give it
-a route rather than a `useState` — and resolve a project param with
-`resolveProject`, never `p.id === param`, since the address bar may carry a
-legacy row's short `alias` instead.
+library, `?folder=` a folder, `?trash=1` the trash, `?browse=1` the Browse
+gallery, `?track=` the editor, plus the two pages that mount outside the app
+shell (`?view=` and `?admin=1[&tab=users]`). The query is the *only* copy of
+where you are — nothing mirrors it in React state — so anything that navigates
+calls `navigate()` and anything that needs to know calls `useRoute()`. That's
+what makes Back and a phone's edge-swipe work; App has one effect that
+reconciles the open track to the route, and back/forward need no special case
+because they're just another way the route changes. Only the three root shells
+are a real page load (different chrome, different auth); everything inside the
+app is client-side. When adding a place worth returning to, give it a route
+rather than a `useState` — and resolve a project param with `resolveProject`,
+never `p.id === param`, since the address bar may carry a legacy row's short
+`alias` instead.
+
+**There is one Browse gallery, not two.** `?browse=1` is the Browse *route*:
+signed in it's the home page's Browse tab, signed out it's the landing page,
+which already carries the same `BrowseGallery` under its paste field (and
+scrolls to it when that's the route you arrived on). The standalone public
+gallery page it used to open was the same list a second time, so it's gone —
+old `?browse=1` links keep working because the spelling didn't change.
 
 **Ids are short and opaque.** Project/note/folder ids are 12 base64url
 characters (9 random bytes, 72 bits) from `src/lib/ids.ts`, not uuids — a

@@ -48,7 +48,7 @@ interface Props {
    *  route — so a folder is a place the browser can go Back to. */
   openFolderId: string | null
   onOpenFolder: (id: string | null) => void
-  /** Your library, or the public Browse gallery. Also a route (`?home=browse`). */
+  /** Your library, or the public Browse gallery. Also a route (`?browse=1`). */
   homeTab: 'library' | 'browse'
   onSwitchHomeTab: (tab: 'library' | 'browse') => void
   /** The trash (`?trash=1`) — a destination beside the folders, not one of them. */

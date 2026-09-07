@@ -129,7 +129,7 @@ const now = () => Date.now()
 // ---- URL <-> view ---------------------------------------------------------
 // Every place in this component is a route (lib/nav.ts), and the URL is the
 // only copy of it: `?` is the library, `?folder=` a folder, `?trash=1` the
-// trash, `?home=browse` the Browse gallery, `?track=` the editor. Navigating
+// trash, `?browse=1` the Browse gallery, `?track=` the editor. Navigating
 // means calling `navigate()`; a single effect below reconciles the open track
 // to whatever the address bar says, so Back and forward need no special case —
 // they're just another way the route changes.

@@ -22,12 +22,11 @@ import { backendReady } from './lib/api'
 import { parseRoute } from './lib/nav'
 import Gate, { SetupNotice } from './components/Gate'
 import ShareViewer from './components/ShareViewer'
-import { PublicBrowsePage } from './components/BrowseGallery'
 import AdminProjects from './components/AdminProjects'
 import './plugins/register' // registers note plugins (side effect)
 
 // Which page the URL asks for. The root switch is decided once, at load: the
-// four pages below are genuinely different shells (different chrome, different
+// three shells below are genuinely different (different chrome, different
 // auth), so moving between them is a real navigation. Everything *inside* the
 // app — library, folders, trash, Browse, a track — routes client-side instead;
 // see lib/nav.ts and App's own reconciler.
@@ -65,10 +64,6 @@ createRoot(document.getElementById('root')!).render(
                "Make a copy" can authenticate. */
         route.page === 'share' ? (
           <ShareViewer projectId={route.id} />
-        ) : /* `?browse=1` is the public gallery of published tracks — no
-               sign-in, and so outside the Gate. */
-        route.page === 'gallery' ? (
-          <PublicBrowsePage />
         ) : (
           <AuthProvider>
             {/* `?admin=1` is the teacher's console over every project. It sits

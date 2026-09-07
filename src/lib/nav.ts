@@ -18,7 +18,8 @@ import { useSyncExternalStore } from 'react'
 export type Route =
   /** The signed-in library: the root, or one folder drilled into. */
   | { page: 'library'; folder: string | null }
-  /** The published-track gallery, as a tab of the signed-in home page. */
+  /** The published-track gallery. Signed in that's a tab of the home page;
+   *  signed out it's the landing page, which carries the same gallery. */
   | { page: 'browse' }
   /** The trash — a destination beside the folders, never one of them. */
   | { page: 'trash' }
@@ -27,8 +28,6 @@ export type Route =
   | { page: 'track'; id: string; key: string | null; admin: boolean }
   /** A `?view=` share link: the read-only viewer, no sign-in. */
   | { page: 'share'; id: string }
-  /** The standalone `?browse=1` gallery, outside the auth gate. */
-  | { page: 'gallery' }
   /** The admin console and which of its two tabs is showing. */
   | { page: 'admin'; tab: 'projects' | 'users' }
 
@@ -38,16 +37,14 @@ export const HOME: Route = { page: 'library', folder: null }
 /**
  * Read a Route out of a query string.
  *
- * Order is precedence, and it matches what main.tsx has always done: a share
- * link wins over everything, `?track=` beats `?admin=1` (that pair is the
- * console's "edit this project" hand-off, which wants the editor), and an
- * unrecognised query is simply the library.
+ * Order is precedence: a share link wins over everything, `?track=` beats
+ * `?admin=1` (that pair is the console's "edit this project" hand-off, which
+ * wants the editor), and an unrecognised query is simply the library.
  */
 export function parseRoute(search: string = window.location.search): Route {
   const p = new URLSearchParams(search)
   const view = p.get('view')
   if (view) return { page: 'share', id: view }
-  if (p.get('browse') === '1') return { page: 'gallery' }
   const track = p.get('track')
   if (track)
     return {
@@ -59,7 +56,7 @@ export function parseRoute(search: string = window.location.search): Route {
   if (p.get('admin') === '1')
     return { page: 'admin', tab: p.get('tab') === 'users' ? 'users' : 'projects' }
   if (p.get('trash') === '1') return { page: 'trash' }
-  if (p.get('home') === 'browse') return { page: 'browse' }
+  if (p.get('browse') === '1') return { page: 'browse' }
   return { page: 'library', folder: p.get('folder') || null }
 }
 
@@ -71,7 +68,7 @@ export function routeSearch(r: Route): string {
       if (r.folder) p.set('folder', r.folder)
       break
     case 'browse':
-      p.set('home', 'browse')
+      p.set('browse', '1')
       break
     case 'trash':
       p.set('trash', '1')
@@ -83,9 +80,6 @@ export function routeSearch(r: Route): string {
       break
     case 'share':
       p.set('view', r.id)
-      break
-    case 'gallery':
-      p.set('browse', '1')
       break
     case 'admin':
       p.set('admin', '1')
