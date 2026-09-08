@@ -164,9 +164,12 @@ instead of bright?" is the question the menu exists to answer. That needs
 `allowSpaces` on the suggestion, which would otherwise match `@` plus the whole
 paragraph; a four-word cap and a menu that *hides* itself when nothing matches
 are what bound it. Retuning the vocabulary is one array in
-`lib/musicElements.ts` — but **field ids there are stored data** (the keys of
-`ElementsData.fields`, the `data-field` of every chip), so relabel freely and
-rename ids never.
+`lib/musicElements.ts` — eight categories hued to match the owner's concept nav
+(Dynamics/Expression and Performing media/Timbre are paired there, so each
+pair shares a colour family) — but **field ids there are stored data** (the
+keys of `ElementsData.fields`, the `data-field` of every chip), so relabel
+freely and rename an id only after checking the database says nothing stores
+it.
 
 The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
 `PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new
