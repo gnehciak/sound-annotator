@@ -432,10 +432,12 @@ strictest to loosest:
 
 1. **Typing the term.** An input rule on `PropertyTag` tags an unmistakable
    word the moment it ends, and Backspace puts the plain word straight back.
-   Which words qualify is `AUTO_TERMS` in `lib/propertyTags.ts`: an allowlist
-   on purpose, and a narrow one (~140 of 434), because "even", "light",
-   "clear" and "major" are ordinary English several times a paragraph and a
-   chip must not land in the middle of one. Note what else it can't catch — an
+   Which words qualify is the **Auto-tag tick in Notion** (`AUTO_TERMS` in the
+   generated file): an allowlist on purpose, and a narrow one (149 of 434),
+   because "even", "light", "clear" and "major" are ordinary English several
+   times a paragraph and a chip must not land in the middle of one. Matching
+   is case-insensitive, and the chip keeps the case the sentence used. Note
+   what else it can't catch — an
    input rule fires on the keystroke that *ends* the word, so a word with no
    trailing character, a word finished with Enter, and **anything pasted** all
    go untagged however unmistakable they are.
@@ -444,7 +446,16 @@ strictest to loosest:
    the text that isn't already a tag; clicking one opens a card
    (`SuggestCard` in `AnnotationEditor.tsx`) offering the concept, or both
    concepts where two fields share the word ("thin" is Timbre *and* Texture).
-   This side carries the **whole** vocabulary rather than an allowlist, and the
+   This side also matches **the other forms of the word**, which the exact side
+   never does. Regular English ones are generated in `propertyTags.ts`
+   (plurals, verb forms, `-ation`/`-ic`/`-y` pairs and the same read backwards,
+   plus Italian plurals, hyphen variants and accent-stripped spellings) and are
+   derived **only from words already ticked Auto-tag** — a term of art is one
+   in every form, whereas deriving from "Even" would put "evening" in front of
+   the reader. The irregular ones (`arpeggios`, `cadences`, `pizz.`, `cresc.`)
+   are the `Aliases` column in Notion, which is a *recognition* list: aliases
+   never appear in the `@` menu or the dictionary. This side carries the
+   **whole** vocabulary rather than an allowlist, and the
    asymmetry with `AUTO_TERMS` is the point: being wrong here costs a dotted
    line someone ignores, not a mangled sentence. Nothing is stored — the
    underline is derived from the text on every keystroke and stops matching by
@@ -468,19 +479,29 @@ instead of bright?" is the question the menu exists to answer. That needs
 paragraph; a four-word cap and a menu that *hides* itself when nothing matches
 are what bound it.
 
-**The vocabulary is synced from Notion, not hand-written.** The words live in
-the owner's "Concept vocabulary" database (HSC & Trial marking guidelines);
-`npm run sync:vocab` (`scripts/sync-vocabulary.mjs`) pulls them and rewrites
-`src/lib/vocabulary.generated.ts`, which is the only place `ELEMENTS` is
-defined — never edit it by hand. **Notion owns the words; the script owns the
-shape.** Its `CATEGORIES` config decides which concept a Notion category lands
-in, the field order, and the eight hues (matched to the owner's concept nav,
-where Dynamics/Expression and Performing media/Timbre are paired, so each pair
-shares a colour family — AA-verified in both themes). `OWN` holds the lists the
-bank has no equivalent for (performing media, the ppp–fff ladder, Layer role,
-and the Italian markings split by concept). A new *category* in Notion is
-reported as unmapped rather than guessed at. `--check` fails when the file is
-stale, and the run flags any `AUTO_TERMS` entry the vocabulary no longer has.
+**The vocabulary is synced from Notion, not hand-written**, and it lives in
+**two related databases** under "Elements of Music — Vocabulary".
+*Vocabulary Fields* is the shape: one row per sub-list, carrying the concept it
+belongs to, its stable `Field ID`, and its `Order`. *Vocabulary Terms* is the
+words: **one row is exactly one word**, spelled as the app shows it, related to
+its field, ticked or not as a word that tags itself, and carrying any
+`Aliases`. `npm run sync:vocab` (`scripts/sync-vocabulary.mjs`) pulls both and
+rewrites `src/lib/vocabulary.generated.ts` — the only place `ELEMENTS`,
+`AUTO_TERMS` and `ALIASES` are defined. Never edit it by hand.
+
+That leaves the script three things a word bank has no business holding: which
+concepts exist and in what order, the eight hues (matched to the owner's
+concept nav, where Dynamics/Expression and Performing media/Timbre are paired
+so each shares a colour family — AA-verified in both themes), and `LADDERS`,
+the one field whose options are a sequence rather than a list (ppp–fff, where
+alphabetical order would be musical nonsense). Everything else is a row someone
+edits without touching code. A field whose `Concept` the app doesn't know is
+reported rather than guessed at, and `--check` fails when the file is stale.
+
+**Field ids and the `Auto-tag` tick are the two things to change carefully.**
+An id is stored on every chip ever written; the tick decides which words
+rewrite a sentence as you type, so it belongs only on words nobody uses in
+their everyday sense.
 **A button in the Notion page pushes it.** `npm run build` runs the sync first
 (the `prebuild` script, `--soft`), so the deploy reads Notion and the words ship
 inside the bundle; `POST|GET /api/sync-vocab?key=…` fires the project's Vercel

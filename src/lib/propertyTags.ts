@@ -12,6 +12,7 @@
 // schema, no API change, and no line in projectJson's sanitizer: they travel
 // wherever `contentHtml` travels.
 import { ELEMENTS, LAYERS, type ElementField } from './musicElements'
+import { ALIASES, AUTO_TERMS } from './vocabulary.generated'
 import { hueText } from './noteColors'
 
 /** Field id of the synthetic "Layer" category (LAYERS, as a pickable field). */
@@ -178,56 +179,18 @@ export function searchProperties(query: string, limit = 10): PropertyOption[] {
  * Words that tag themselves as you type, with no "@" — the rest of the
  * vocabulary stays a keystroke away behind the menu.
  *
- * This is an allowlist rather than a stoplist, and deliberately so: it holds
- * only terms you would essentially never type in a music note in their
- * everyday sense. "Legato", "hemiola" and "monophonic" can fire on sight;
- * "even", "light", "full", "clear", "return" and "major" cannot, because a
- * sentence about music uses those words as ordinary English several times a
- * paragraph and a chip would land in the middle of one. Dynamic letters (p, f,
- * ff…) are out for the same reason, only more so.
+ * The list is the **Auto-tag tick** in the Notion Terms database, and it is an
+ * allowlist on purpose: it holds only terms you would essentially never type
+ * in a music note in their everyday sense. "Legato", "hemiola" and
+ * "monophonic" can fire on sight; "even", "light", "full", "clear", "return"
+ * and "major" cannot, because a sentence about music uses those as ordinary
+ * English several times a paragraph and a chip must not land in the middle of
+ * one. Dynamic letters (p, f, ff…) are out for the same reason, only more so.
  *
- * Failing closed is the point — a term added to the taxonomy later does not
- * start auto-firing until someone puts it here on purpose. Add a line to widen
- * it; every entry must match a value in lib/musicElements.ts exactly (the
- * index below silently drops any that does not).
+ * It fails closed: a word added to the vocabulary does not start auto-firing
+ * until someone ticks it. Tick a row in Notion to widen it — never here, since
+ * this file no longer holds the list.
  */
-const AUTO_TERMS = [
-  // Performance markings and playing techniques — the Italian and the named.
-  'Accelerando', 'Allegro', 'Animando', 'Arco', 'Cantabile', 'Crescendo',
-  'Decrescendo', 'Delicatamente', 'Diminuendo', 'Dolce', 'Espressivo',
-  'Glissandi', 'Glissando', 'Grazioso', 'Legato', 'Leggierissimo', 'Leggiero',
-  'Lento', 'Maestoso', 'Marcato', 'Pizzicato', 'Rallentando', 'Ritardando',
-  'Ritenuto', 'Rubato', 'Semplice', 'Sfzp', 'Spiccato', 'Staccatissimo',
-  'Staccato', 'Tenuto', 'Tremolo', 'Trill', 'Vibrato',
-  // Pitch and harmony.
-  'Aeolian', 'Arpeggiated', 'Ascending', 'Augmented', 'Bitonal', 'Cadential',
-  'Cadenza', 'Chromatic', 'Chromaticism', 'Cluster-like', 'Clusters',
-  'Conjunct', 'Consonant', 'Descending', 'Diatonic', 'Diminished',
-  'Disjunct', 'Dissonance', 'Dissonant', 'Dorian', 'Drone', 'Florid',
-  'Imperfect', 'Mixolydian', 'Modal', 'Modality', 'Modulating', 'Pentatonic',
-  'Phrygian', 'Polytonal', 'Quartal', 'Scale-based', 'Scalic', 'Stepwise',
-  'Tessitura', 'Tonal', 'Triadic', 'Unresolved', 'Whole-tone',
-  // Duration.
-  'Anacrusis', 'Compound', 'Cross-rhythm', 'Dotted', 'Duple', 'Duplet',
-  'Hemiola', 'Hemiolic', 'Multimetric', 'Off-beat', 'Polyrhythm',
-  'Polyrhythmic', 'Quadruple', 'Quintuplet', 'Sextuplet', 'Syncopated',
-  'Triple', 'Triplet',
-  // Texture and structure.
-  'Antiphonal', 'Canon', 'Canonic', 'Contrapuntal', 'Counter-melody',
-  'Countermelody', 'Fugal', 'Fugue-like', 'Hocket', 'Homogenous',
-  'Homophonic', 'Imitation', 'Imitative', 'Monophonic', 'Ostinato',
-  'Polyphonic', 'Polyphony', 'Augmentation', 'Call-and-response', 'Climactic',
-  'Coda', 'Codetta', 'Diminution', 'Motivic', 'Question-and-answer',
-  'Sectional', 'Sequential', 'Through-composed',
-  // Timbre and expression that read as terms of art, not description.
-  'Accented', 'Arc-shaped', 'Bell-like', 'Chant-like', 'Dance-like',
-  'Echoey', 'Ethereal', 'Lilting', 'Lyrical', 'March-like', 'Mellow',
-  'Metallic', 'Nasal', 'Percussive', 'Slurred', 'Slurs', 'Terraced',
-  'Warlike',
-  // Performing media.
-  'Blowing', 'Bowing', 'Brass', 'Choir', 'Duet', 'Orchestra', 'Percussion',
-  'Plucking', 'Quartet', 'Quintet', 'Trio', 'Woodwind',
-]
 
 /** Lowercased auto-taggable word → the option it stands for. */
 const AUTO_INDEX = new Map<string, PropertyOption>()
@@ -242,11 +205,6 @@ for (const term of AUTO_TERMS) {
  */
 export function autoTagFor(word: string): PropertyOption | undefined {
   return AUTO_INDEX.get(word.toLowerCase())
-}
-
-/** Auto-taggable terms that no longer match a value — a dev-time typo check. */
-export function unmatchedAutoTerms(): string[] {
-  return AUTO_TERMS.filter((t) => !ALL.some((o) => o.value === t))
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +329,14 @@ function formsOf(value: string): string[] {
  * two terms of art inflect onto the same string.
  */
 const LOOSE_INDEX = new Map<string, PropertyOption>()
+// Notion's Aliases column first: it carries the forms no rule reaches — Italian
+// plurals, abbreviations, variant spellings — and an explicit answer outranks a
+// derived one where the two ever collide.
+for (const [alias, value] of Object.entries(ALIASES)) {
+  const option = BY_VALUE.get(value.toLowerCase())?.[0]
+  const key = alias.toLowerCase()
+  if (option && !BY_VALUE.has(key)) LOOSE_INDEX.set(key, option)
+}
 for (const option of AUTO_INDEX.values()) {
   for (const form of formsOf(option.value)) {
     if (form.length < 2 || BY_VALUE.has(form) || LOOSE_INDEX.has(form)) continue
