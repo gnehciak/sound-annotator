@@ -8,6 +8,18 @@ interface Props {
   title: string
   /** Optional right-of-title detail, e.g. the note's timecode. */
   subtitle?: string
+  /**
+   * Rendered before the title — the plugin's own identity mark, e.g. the
+   * note's colour swatch. The title bar is the one row every presentation
+   * already pays for, so an identity control belongs here rather than in a
+   * row of its own inside the body.
+   */
+  leading?: ReactNode
+  /**
+   * Plugin actions, placed before the window-mode buttons and separated by a
+   * hairline: the plugin's verbs (delete) sit apart from the window's.
+   */
+  actions?: ReactNode
   mode: WindowMode
   onSetMode: (mode: WindowMode) => void
   /** When omitted, the close button + Esc-to-close are off (a persistent panel). */
@@ -30,6 +42,8 @@ interface Props {
 export default function PluginWindow({
   title,
   subtitle,
+  leading,
+  actions,
   mode,
   onSetMode,
   onClose,
@@ -51,6 +65,7 @@ export default function PluginWindow({
 
   const header = (
     <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
+      {leading}
       <span className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {title}
       </span>
@@ -60,6 +75,12 @@ export default function PluginWindow({
         </span>
       )}
       <div className="flex-1" />
+      {actions && (
+        <>
+          {actions}
+          <span className="mx-0.5 h-3.5 w-px bg-line" />
+        </>
+      )}
       <ModeButton
         active={mode === 'dock'}
         title="Dock to the side — keeps playback live"

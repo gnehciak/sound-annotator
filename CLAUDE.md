@@ -212,7 +212,13 @@ the pointer at all.
 
 **A pin is placed by dragging it out of the inspector** onto the picture — and
 where it lands decides what it is anchored to, because the thing you dropped it
-on *is* the answer. `src/lib/pinTargets.ts` is a tiny registry the two drop
+on *is* the answer. What you drag is the pin itself: a recessed round key in
+the inspector holding the dot in the note's own hue, ringed white, exactly the
+object `PinLayer` draws out there (`NoteOverlayControls`). A press that never
+travels `DRAG_SLOP` is a click, which drops it dead centre — or takes a placed
+pin off again — so the key is still the on/off switch it replaced, and the
+arrows nudge a placed pin by 1% (5% with ⇧), the one path to a position that
+needs no pointer. `src/lib/pinTargets.ts` is a tiny registry the two drop
 boxes register themselves with (VideoOverlays the frame, ScoreLayer the drawn
 page), so the drag can ask what it is over without refs being threaded up
 through App and back down. Hit-testing is by rectangle rather than
@@ -237,8 +243,9 @@ all, because there is no page box for it to be a fraction of and a dot
 floating over the video at those coordinates would mean nothing there. The one
 thing `PinLayer` needs told is `spill`, since a caption's width cap is a
 percentage of its box — right for a wide frame, and a column of one-word lines
-on a portrait page. Cover images arrive by picker *or* by dropping a file on
-the inspector's "On the video" section, and every one is downscaled to 1600px
+on a portrait page. Cover images arrive by clicking the inspector's cover slot — a 16:9 well
+beside the pin key that echoes the frame's shape and *is* the thumbnail once
+set — *or* by dropping a file anywhere on that row, and every one is downscaled to 1600px
 and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
 carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a
 PNG screen grab). Both show over the note's window —
@@ -344,6 +351,21 @@ by roughly a constant, so the stamp goes in that much earlier. Note a live
 pass can't be run much faster than 2× on YouTube — the iframe API caps there
 (`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
 Chrome mutes them, and you need the audio to know where you are.
+
+**The note inspector is three groups, split by what they act on**
+(`NoteInspector.tsx`). The note's **time** is a `well` — its own transport:
+Begin, a scrubber through the note, End, and the length as an LED readout
+flanked by − / +. The stepper moves *End* only, so trimming never loses the
+moment the note is cued to; ⇧ steps 5s, a held key repeats, and stepping under
+a second clears the end outright, which is how a range becomes a point note
+again (and takes `structure` with it, since a section brackets a span). The
+note's **record** — tags plus Section, Question and Bar — is a rail of
+`chip-outline` switches, each one's field revealed only when it is on; turning
+Bar off clears the value, so what the panel hides is never data. What the note
+puts **on the picture** is two objects rather than switches (the cover slot and
+the pin key, above). The note's colour and its delete button live in the host's
+title bar, which every presentation already pays for — `PluginWindow` takes
+them as `leading` / `actions`, and App supplies them.
 
 **Note properties come in two shapes.** The `elements` *block*
 (`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects

@@ -88,6 +88,7 @@ import {
   Check,
   Play,
   Proportions,
+  Trash2,
   Undo2,
   Redo2,
 } from 'lucide-react'
@@ -132,6 +133,7 @@ import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
+import ColorPicker from './components/ColorPicker'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
@@ -685,6 +687,27 @@ export default function App() {
   const inspectorSubtitle = selectedNote
     ? noteLabel(selectedNote.start, selectedNote.end)
     : undefined
+  // The note's identity mark and its one destructive verb ride the inspector's
+  // title bar — the row every presentation already pays for — rather than a
+  // metadata row of their own inside the panel (PluginWindow `leading`/
+  // `actions`; see NoteInspector's doc comment).
+  const inspectorSwatch = selectedNote ? (
+    <ColorPicker
+      color={selectedNote.color ?? colorForId(selectedNote.id)}
+      onChange={(c) => updateAnnotation(selectedNote.id, { color: c })}
+    />
+  ) : undefined
+  const inspectorActions = selectedNote ? (
+    <button
+      type="button"
+      onClick={() => deleteAnnotation(selectedNote.id)}
+      title="Delete note"
+      aria-label="Delete note"
+      className="btn-icon press hover:text-danger"
+    >
+      <Trash2 size={14} />
+    </button>
+  ) : undefined
 
   // Esc deselects the open note in the docked inspector (the modal inspector
   // closes on Esc via PluginWindow). A window listener so it fires even while
@@ -2828,6 +2851,8 @@ export default function App() {
                     <PluginWindow
                       title="Note"
                       subtitle={inspectorSubtitle}
+                      leading={inspectorSwatch}
+                      actions={inspectorActions}
                       mode="dock"
                       onSetMode={changeWindowMode}
                       // The dock is persistent; ✕ just deselects (→ empty state).
@@ -2850,7 +2875,6 @@ export default function App() {
                           onUpdate={(patch, opts) =>
                             updateAnnotation(selectedNote.id, patch, opts)
                           }
-                          onDelete={() => deleteAnnotation(selectedNote.id)}
                           onSeek={seek}
                           onSeekNote={seekToNote}
                           mentionItems={getMentionItems}
@@ -2886,6 +2910,8 @@ export default function App() {
         <PluginWindow
           title="Note"
           subtitle={inspectorSubtitle}
+          leading={inspectorSwatch}
+          actions={inspectorActions}
           mode="modal"
           onSetMode={changeWindowMode}
           onClose={() => setSelectedNoteId(null)}
@@ -2901,7 +2927,6 @@ export default function App() {
             autoFocus={focusNoteId === selectedNote.id}
             onFocusHandled={() => setFocusNoteId(null)}
             onUpdate={(patch, opts) => updateAnnotation(selectedNote.id, patch, opts)}
-            onDelete={() => deleteAnnotation(selectedNote.id)}
             onSeek={seek}
             onSeekNote={seekToNote}
             mentionItems={getMentionItems}
