@@ -1,7 +1,5 @@
-import { useRef, useState } from 'react'
 import { ChevronFirst, ChevronLast, Plus, X } from 'lucide-react'
-import { formatTime, parseTime } from '../lib/format'
-import Popover from './Popover'
+import { formatTime } from '../lib/format'
 
 interface Props {
   pendingIn: number | null
@@ -9,10 +7,8 @@ interface Props {
   onMarkIn: () => void
   onMarkOut: () => void
   onCancelMark: () => void
-  /** Add a note at the live current time (the N shortcut, and the "now" action). */
+  /** Add a note at the live current time (the N shortcut). */
   onAddNote: () => void
-  /** Add a note at an explicit start (and optional end for a range). */
-  onAddNoteAt: (start: number, end?: number) => void
 }
 
 // Note-creation actions, docked as a strip beneath the Notes header — that's
@@ -20,6 +16,11 @@ interface Props {
 // Mark end sit in three equal columns (minmax(0,1fr)) so each keeps a fixed
 // width regardless of contents; the Start cancel (X) lives inside column 1, so
 // it eats into Start's own width rather than shifting Add note / Mark end.
+//
+// Add note is a plain button, not a menu: it adds at the current moment, and
+// the time it will use is printed on it. A note's time is editable in the note
+// itself, so a second way to type one here was a menu whose only item repeated
+// the button that opened it.
 export default function NoteActions({
   pendingIn,
   currentTime,
@@ -27,33 +28,7 @@ export default function NoteActions({
   onMarkOut,
   onCancelMark,
   onAddNote,
-  onAddNoteAt,
 }: Props) {
-  const [open, setOpen] = useState(false)
-  const [startStr, setStartStr] = useState('')
-  const [endStr, setEndStr] = useState('')
-  const addRef = useRef<HTMLButtonElement>(null)
-
-  const openMenu = () => {
-    setStartStr(formatTime(currentTime))
-    setEndStr('')
-    setOpen(true)
-  }
-
-  const start = parseTime(startStr)
-  const endProvided = endStr.trim() !== ''
-  const end = endProvided ? parseTime(endStr) : null
-  const customValid =
-    start != null && (!endProvided || (end != null && end > start))
-
-  const submitCustom = () => {
-    if (!customValid || start == null) return
-    onAddNoteAt(start, end != null ? end : undefined)
-    setOpen(false)
-  }
-
-  const timeInput = 'field px-1.5 py-1.5 text-center font-mono text-[12px]'
-
   return (
     <div className="border-b border-line/70 px-3 py-2.5">
       <div className="grid grid-cols-3 items-stretch gap-[7px]">
@@ -86,9 +61,8 @@ export default function NoteActions({
         </div>
 
         <button
-          ref={addRef}
-          onClick={() => (open ? setOpen(false) : openMenu())}
-          title="Add a note — at the current moment (N) or a custom time"
+          onClick={onAddNote}
+          title="Add a note at the current moment (N)"
           className="btn-signal press min-w-0 px-2"
         >
           <Plus size={13} className="shrink-0" />
@@ -108,72 +82,6 @@ export default function NoteActions({
           Mark end <ChevronLast size={13} />
         </button>
       </div>
-
-      <Popover
-        open={open}
-        anchorRef={addRef}
-        onClose={() => setOpen(false)}
-        width={252}
-        className="origin-top p-2.5"
-      >
-        <button
-          type="button"
-          onClick={() => {
-            onAddNote()
-            setOpen(false)
-          }}
-          className="btn-signal press w-full px-2"
-        >
-          <Plus size={13} /> Add at {formatTime(currentTime)}
-          <span className="tabular-nums tracking-[0.02em] opacity-75">(now)</span>
-        </button>
-
-        <div className="mb-1 mt-2.5 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
-          Custom time
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            submitCustom()
-          }}
-          className="flex items-end gap-1.5"
-        >
-          <label className="min-w-0 flex-1">
-            <span className="mb-0.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
-              Start
-            </span>
-            <input
-              value={startStr}
-              onChange={(e) => setStartStr(e.target.value)}
-              placeholder="m:ss"
-              inputMode="numeric"
-              aria-label="Custom start time"
-              className={timeInput}
-            />
-          </label>
-          <span className="pb-1.5 text-muted">–</span>
-          <label className="min-w-0 flex-1">
-            <span className="mb-0.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
-              End
-            </span>
-            <input
-              value={endStr}
-              onChange={(e) => setEndStr(e.target.value)}
-              placeholder="optional"
-              inputMode="numeric"
-              aria-label="Custom end time (optional)"
-              className={timeInput}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={!customValid}
-            className="btn-ghost press shrink-0 px-2.5 py-1.5 font-medium tracking-[0.12em] hover:border-accent hover:text-accentink"
-          >
-            Add
-          </button>
-        </form>
-      </Popover>
     </div>
   )
 }
