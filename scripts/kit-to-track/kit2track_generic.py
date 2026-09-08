@@ -13,9 +13,10 @@ as inline images, tasks as question notes — is the SSO converter's machinery
 """
 import fitz, re, json, sys, os
 from flow import flow, png_data_uri
-from kit2track import (para_html, esc, bar_label, ENTRY_RE, SECTION_RE, ROW_RE,
+from kit2track import (cover_title, para_html, esc, bar_label, ENTRY_RE, SECTION_RE, ROW_RE,
                        ROW2_RE, secs, NOISE_RE, LIGATURES, slug)
 import amc_guide
+import recipes
 
 # A guide heading is not always a bare line: it can be numbered ("3.5 Listening
 # Guide"), carry a decorative bullet glyph, run on into its first sentence, or
@@ -39,6 +40,7 @@ STOP = re.compile(
 ACT = re.compile(r'^(Activit|Task\s+\d|Questions?\b)', re.I)
 # Contents entries: "4. Judy Bailey: So Many Rivers" / "6. Jenna Cave: Orange…"
 TOC_ENTRY = re.compile(r'^\s*\d{1,2}\.?\s+(.{6,80}?)\s*$')
+BOILER = re.compile(r'^(Acknowledge|Contents|Contact|Teachers? Resource|Learning|About)', re.I)
 FRONT = re.compile(
     r'^(Introduction|References|Bibliograph|Teaching Ideas|Contents|Table of'
     r'|Acknowledge|About|Appendix|Glossary|Conclusion|Foreword|Preface'
@@ -149,7 +151,11 @@ def split_units(items, works, kit):
     floor0 = contents_end(items)
     guides = [i for i, it in enumerate(items)
               if i > floor0 and it["kind"] == "text" and is_guide(it["text"])]
-    if not guides:
+    # A booklet about ONE work must not be split. Only an anthology has several
+    # works in its contents, and only an anthology repeats its guide heading for
+    # each of them — a single-work kit that happens to say "Listening Guide"
+    # twice (a summary and the guide proper) is still one track.
+    if len(works) < 2 and len(guides) < 3:
         return [(works[0] if len(works) == 1 else kit, items)]
 
     def work_head(g, title, floor):
@@ -190,7 +196,24 @@ def build_units(path, max_img_bytes=300_000):
 
     kit = re.sub(r'^(AMC Resource Kit -|DET Kit -|Resource Kit -)\s*', '',
                  os.path.basename(path).rsplit('.', 1)[0]).strip(' "')
-    units = split_units(items, works, kit)
+    cover = cover_title(doc, "")
+    # Covers run on into the licence notice and the publisher's name; the work
+    # is what comes first.
+    cover = re.split(r'\s+(?:Reproduced|Distributed|Copyright|\u00a9|NSW Department'
+                     r'|Australian Music Centre|Music Education Resource'
+                     r'|Teaching and Learning|Digital resources)\b',
+                     re.sub(r'\s+', ' ', cover or ''), maxsplit=1)[0].strip(' -–—:')
+    if cover and not BOILER.match(cover) and 8 <= len(cover) <= 90:
+        kit = cover
+    role = re.search(r'(teacher guide|activities with answers|activities|analysis'
+                     r'|toolkit|workbook)', os.path.basename(path), re.I)
+    if role:
+        kit = f"{kit} — {role.group(1).title()}"
+    # A handful of kits have a shape no general rule captures; those are
+    # described one by one in recipes.py rather than by bending the heuristics,
+    # which kept regressing the kits that already worked.
+    recipe = recipes.find(path)
+    units = recipes.units(items, recipe, head) if recipe else split_units(items, works, kit)
 
     out = []
     for title, chunk in units:
@@ -263,9 +286,19 @@ def build_units(path, max_img_bytes=300_000):
                 cur = add(question=True, tags=["comment"],
                           contentHtml=f"<p><strong>{esc(s)}</strong></p>")
                 kind = "head"; continue
-            if (STOP.match(s) or TAIL.match(s)) and len(s) < 60:
+            if TAIL.match(s) and len(s) < 60:
+                mode = "done"          # back matter: nothing after this belongs
+            if mode == "done": continue
+            if STOP.match(s) and len(s) < 60:
                 mode, cur, kind = "skip", None, None; continue
-            if mode == "skip": continue
+            if mode == "skip":
+                # Front matter only pauses: resume at the next heading that
+                # isn't itself front matter, or a kit with no guide heading
+                # would be skipped from its contents page to the last page.
+                if (it["bold"] or it["size"] >= 13) and len(s) < 70 and not FRONT.match(s):
+                    mode = "body"
+                else:
+                    continue
             if it["bold"] and len(s) < 60 and not ENTRY_RE.match(s) and mode != "questions":
                 cur = add(contentHtml=f"<p><strong>{esc(s)}</strong></p>"); kind = "head"; continue
 
@@ -307,6 +340,24 @@ def build_units(path, max_img_bytes=300_000):
             if "end" in n and n["end"] <= n["start"]: n.pop("end")
             t = max(t, n.get("end", t))
         keep = [n for n in notes if n.get("contentHtml")]
+        # A track should open on the music, not on the title page. Drop leading
+        # notes that are only cover furniture — the series banner, the
+        # publisher, a contents list, the author-and-date line. Letter-spaced
+        # cover type ("D i g i t a l") survives extraction as single letters,
+        # so match that shape too.
+        COVER = re.compile(
+            r'^(?:(?:[A-Za-z]\s){4,}|AUSTRALIAN MUSIC CENTRE|NSW Department'
+            r'|CONTENTS\b|Table of contents|C U R R I C U L U M|Author:|Digital resources'
+            r'|MUSIC EDUCATION|SECONDARY SCHOOL)', re.I)
+        while keep:
+            txt = re.sub(r'<[^>]+>', ' ', keep[0]["contentHtml"])
+            txt = re.sub(r'\s+', ' ', txt).strip()
+            if COVER.match(txt) or len(txt) < 25:
+                keep.pop(0)
+            else:
+                break
+        for t, n in enumerate(keep, start=1):
+            if n.get("_orig_start") is None: pass
         if len(keep) < 3: continue
         out.append(({
             "format": "sound-annotator-project", "version": 1, "exportedAt": 0,
