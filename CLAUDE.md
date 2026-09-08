@@ -498,6 +498,17 @@ like a guest link.
 `data-field` of every chip), so relabel freely and rename an id only after
 checking the database says nothing stores it.
 
+**A chip carries two strings, and the split is load-bearing.** `data-value` is
+the vocabulary's own spelling and is the *data* — search, the exports and
+`propertyTagsInHtml()` all read it. `data-text` is the surface form as the
+sentence actually spells it, written only when the two differ (so every chip
+made before this, and every one whose word already matches, carries no such
+attribute). That is what lets "the texture is monophonic" keep its lower-case
+m: the chip shows what you wrote and files it under what it means, and the
+tooltip still names the concept in its proper spelling. Picking a different
+word from the chip's own menu clears `text`, because the old surface form was
+a spelling of the *old* value.
+
 The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
 `PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new
 field on `Annotation`, so it needs no schema, no API whitelist entry and no
