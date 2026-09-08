@@ -476,6 +476,14 @@ white so it reads on any picture, over a breathing halo of the same hue at 30%.
 In the notes list a note that owns the frame wears an `ON VIDEO` outline chip in
 its own hue.
 
+**Closing a caption.** The label row is a title bar, so it carries a title
+bar's actions slot: a `btn-icon on-video` ✕, hidden at rest and revealed on
+hover or focus like every other secondary control here. It keeps its place in
+the layout (revealing it must not reflow the card) and stays untouchable while
+invisible, so it can't swallow a click meant for the picture. Closing leaves
+**the dot**, which is then the way back — a caption put away stays away, and
+nothing about it is written to the note.
+
 ### Note Rows (Signature Component)
 The note list is a flush cue list inside the notes pane, not a stack of
 cards. Each note is a full-width row separated by hairline dividers, with a
