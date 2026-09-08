@@ -78,7 +78,7 @@ pull` will read it back (both answer `""`), so never treat an empty read as
 where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
 which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
 proxy a query verb on `browse.ts` rather than routes of their own — and `/api`
-still sits at exactly 12 files. Keep that shape where it reads well (the verbs
+sits at 14 function files. Keep that shape where it reads well (the verbs
 are genuinely about the same resource), but a new endpoint no longer *has* to be
 folded into an existing function. If this ever drops back to Hobby, the symptom
 returns as a `patchBuild` failure
@@ -182,8 +182,18 @@ bank has no equivalent for (performing media, the ppp–fff ladder, Layer role,
 and the Italian markings split by concept). A new *category* in Notion is
 reported as unmapped rather than guessed at. `--check` fails when the file is
 stale, and the run flags any `AUTO_TERMS` entry the vocabulary no longer has.
-Setup is one env var, `NOTION_TOKEN`, in `.env.local` only — nothing at runtime
-reaches Notion, so the app has no dependency on it.
+**A button in the Notion page pushes it.** `npm run build` runs the sync first
+(the `prebuild` script, `--soft`), so the deploy reads Notion and the words ship
+inside the bundle; `POST|GET /api/sync-vocab?key=…` fires the project's Vercel
+deploy hook, and the Notion page's button block calls that. So the press costs a
+rebuild, not a runtime dependency: nothing in the running app ever reaches
+Notion, and an outage or a revoked token costs a stale word list rather than an
+empty `@` menu (`--soft` falls back to the committed file and never fails a
+build). Three env vars, all Vercel-side: `NOTION_TOKEN` (build), plus
+`VOCAB_SYNC_SECRET` and `VERCEL_DEPLOY_HOOK_URL` for the endpoint, which refuses
+to run unless both are set. The secret rides in the query string because a
+Notion webhook action sends no custom headers — the whole URL is the credential,
+like a guest link.
 
 **Field ids are stored data** (the keys of `ElementsData.fields`, the
 `data-field` of every chip), so relabel freely and rename an id only after

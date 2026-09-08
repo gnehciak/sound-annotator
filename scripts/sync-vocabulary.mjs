@@ -4,6 +4,14 @@
 //   npm run sync:vocab            # fetch from Notion and write
 //   npm run sync:vocab -- --check # fail if the file is out of date, write nothing
 //   node scripts/sync-vocabulary.mjs --from rows.json   # offline, from a saved pull
+//   node scripts/sync-vocabulary.mjs --soft             # never fail the caller
+//
+// `--soft` is how the build runs it (see the `prebuild` script): the deploy
+// picks up whatever Notion says right now, but an unset token, a Notion outage
+// or a revoked integration must not take the site down with it — it falls back
+// to the committed file and carries on. That is also what makes the "push"
+// button in the Notion page work: the button asks Vercel to rebuild, and the
+// rebuild is what actually reads Notion.
 //
 // **Notion owns the words. This file owns the shape.** The database has three
 // columns that matter — Concept, Category, Term — which is exactly a category,
@@ -138,6 +146,13 @@ const SPLIT_OVERRIDES = {
 
 const args = process.argv.slice(2)
 const check = args.includes('--check')
+const soft = args.includes('--soft')
+
+/** Give up without failing the caller — `--soft` only. */
+function bail(message) {
+  console.warn(`vocabulary sync skipped: ${message}`)
+  process.exit(0)
+}
 const fromIndex = args.indexOf('--from')
 const fromFile = fromIndex >= 0 ? args[fromIndex + 1] : null
 
@@ -145,6 +160,7 @@ const fromFile = fromIndex >= 0 ? args[fromIndex + 1] : null
 async function fetchRows() {
   const token = process.env.NOTION_TOKEN
   if (!token) {
+    if (soft) bail('NOTION_TOKEN is not set — using the committed vocabulary')
     console.error(
       'NOTION_TOKEN is not set. Create an internal integration at\n' +
         'https://www.notion.so/my-integrations, share the vocabulary database\n' +
@@ -168,7 +184,9 @@ async function fetchRows() {
       },
     )
     if (!res.ok) {
-      console.error(`Notion ${res.status}: ${await res.text()}`)
+      const body = await res.text()
+      if (soft) bail(`Notion ${res.status} — using the committed vocabulary`)
+      console.error(`Notion ${res.status}: ${body}`)
       process.exit(1)
     }
     const page = await res.json()
@@ -264,9 +282,20 @@ export const ELEMENTS: ElementCategory[] = [
   return { source: header + body + ']\n', count, unmapped }
 }
 
-const rows = fromFile
-  ? JSON.parse(readFileSync(fromFile, 'utf8'))
-  : await fetchRows()
+let rows
+try {
+  rows = fromFile ? JSON.parse(readFileSync(fromFile, 'utf8')) : await fetchRows()
+} catch (e) {
+  if (soft) bail(`${e.message} — using the committed vocabulary`)
+  throw e
+}
+if (rows.length === 0) {
+  // An empty pull is far more likely to be a permissions problem than a really
+  // empty database, and writing it out would silently wipe the vocabulary.
+  if (soft) bail('Notion returned no rows — using the committed vocabulary')
+  console.error('Notion returned no rows. Is the database shared with the integration?')
+  process.exit(1)
+}
 
 const { source, count, unmapped } = buildFile(rows)
 

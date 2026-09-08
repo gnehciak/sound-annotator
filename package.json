@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "vercel dev",
+    "prebuild": "node scripts/sync-vocabulary.mjs --soft",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "sync:vocab": "node --env-file-if-exists=.env.local scripts/sync-vocabulary.mjs",
