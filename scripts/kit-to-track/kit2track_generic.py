@@ -17,7 +17,22 @@ from kit2track import (para_html, esc, bar_label, ENTRY_RE, SECTION_RE, ROW_RE,
                        ROW2_RE, secs, NOISE_RE, LIGATURES, slug)
 import amc_guide
 
-GUIDE = re.compile(r'^(Listening\s+guides?|Listening/Musicolog)\b', re.I)
+# A guide heading is not always a bare line: it can be numbered ("3.5 Listening
+# Guide"), carry a decorative bullet glyph, run on into its first sentence, or
+# be called Listening Notes. Match it as a prefix of a cleaned line.
+GUIDE = re.compile(r'^(?:\d{1,2}(?:\.\d{1,2})*\.?\s*)?'
+                   r'(Listening\s+(guides?|notes)|Listening/Musicolog)\b', re.I)
+CTRL = re.compile(r'[\x00-\x1f\x7f\u2022\u25aa\u25cf\uf0a7\uf0b7]+')
+
+
+def head(t):
+    """A heading line stripped of the glyphs and numbering kits decorate it with."""
+    return CTRL.sub(' ', t).strip()
+
+
+def is_guide(t):
+    t = head(t)
+    return bool(GUIDE.match(t)) and len(t) < 160
 STOP = re.compile(
     r'^(Score Excerpt|Score Video|Appendix|References|Bibliograph|Acknowledge'
     r'|Contents|Glossary|Further (listening|reading)|Syllabus)', re.I)
@@ -56,7 +71,11 @@ def toc_works(items):
             if len(name) < 6 or FRONT.match(name) or name.isdigit(): continue
             if re.search(r'https?://|\(\d{4}\)|‘.{20,}', name): continue   # a citation
             if name not in out: out.append(name)
-    return out
+    # These kits name works as "Composer: Work". When most entries look like
+    # that, the ones that don't are front matter ("Who can play chamber
+    # music?", "Background to the project") and must not consume a work slot.
+    colon = [w for w in out if ':' in w and len(w.split(':', 1)[1].strip()) > 3]
+    return colon if len(colon) >= 2 else out
 
 
 TAIL = re.compile(r'^\s*(?:\d{1,2}\.?\s+)?(Teaching Ideas|References|Bibliograph'
@@ -70,6 +89,53 @@ def norm(t):
     return re.sub(r'[^a-z0-9 ]+', ' ', re.sub(r'\s+', ' ', t)).strip()
 
 
+def contents_end(items):
+    """Index just past the table of contents.
+
+    Its entries ("3.5 Listening Guide 22") match the guide heading pattern
+    exactly, so a guide found at or before this point is a contents line, not a
+    section, and must not start a unit.
+    """
+    start = next((i for i, it in enumerate(items[:150])
+                  if it["kind"] == "text"
+                  and re.match(r'^(Table of contents|Contents)$', head(it["text"]), re.I)), None)
+    if start is None: return 0
+    page = items[start]["page"]
+    last = start
+    for i in range(start, len(items)):
+        if items[i]["page"] > page + 1: break
+        last = i
+    return last
+
+
+# A work heading in these kits reads "Composer: Title", sometimes numbered.
+# A work heading reads "Composer: Title" — at least two capitalised words before
+# the colon. One word is a metadata label ("Difficulty:", "Texture:"), of which
+# these kits carry a great many, and they look like headings otherwise.
+WORK_HEAD = re.compile(r"^(?:\d{1,2}\.?\s+)?([A-Z][\w.\u2019'-]+(?:\s+[A-Z][\w.\u2019'-]+){1,3})\s*:\s*(.{3,60})$")
+
+
+def nearest_heading(items, g, floor):
+    """A work title taken from the page itself, for kits whose contents page
+    can't be parsed. Prefers a real "Composer: Title" heading over any other
+    short line — without that test the search settles on body prose, which is
+    short and bold often enough to look like a heading."""
+    fallback = None
+    for j in range(g - 1, max(floor - 1, -1), -1):
+        it = items[j]
+        if it["kind"] != "text": continue
+        t = head(it["text"])
+        if not (4 < len(t) < 70) or FRONT.match(t) or NOISE_RE.match(t): continue
+        if is_guide(t): continue
+        m = WORK_HEAD.match(re.sub(r'\s+', ' ', t))
+        if m and not re.match(r'^(Work Background|Listening Guide|Score Excerpt)$',
+                              m.group(1), re.I):
+            return f"{m.group(1)}: {m.group(2)}".strip(' .:-–—')
+        if fallback is None and (it["size"] >= 13 or it["bold"]):
+            fallback = re.sub(r'\s+', ' ', t).strip(' .:-–—')
+    return fallback
+
+
 def split_units(items, works, kit):
     """One unit per work.
 
@@ -80,9 +146,9 @@ def split_units(items, works, kit):
     So walk back from each guide to the nearest line that matches the work's
     title, and fall back to the end of the front matter when there isn't one.
     """
+    floor0 = contents_end(items)
     guides = [i for i, it in enumerate(items)
-              if it["kind"] == "text" and GUIDE.match(it["text"].strip())
-              and len(it["text"].strip()) < 60]
+              if i > floor0 and it["kind"] == "text" and is_guide(it["text"])]
     if not guides:
         return [(works[0] if len(works) == 1 else kit, items)]
 
@@ -103,8 +169,10 @@ def split_units(items, works, kit):
 
     units, floor = [], 0
     for n, g in enumerate(guides):
-        title = works[n] if n < len(works) else f"{kit} — work {n + 1}"
-        start = work_head(g, title, floor)
+        title = works[n] if n < len(works) else None
+        start = work_head(g, title or "", floor)
+        if title is None:
+            title = nearest_heading(items, g, start) or f"{kit} — work {n + 1}"
         end = guides[n + 1] if n + 1 < len(guides) else len(items)
         if n + 1 == len(guides):
             tail = next((j for j in range(g, len(items))
@@ -135,8 +203,7 @@ def build_units(path, max_img_bytes=300_000):
         # An AMC guide is a four-column table spread over pages; reading order
         # scrambles it, so rebuild it from the page geometry instead (amc_guide).
         gi = next((k for k, it in enumerate(chunk)
-                   if it["kind"] == "text" and GUIDE.match(it["text"].strip())
-                   and len(it["text"].strip()) < 60), None)
+                   if it["kind"] == "text" and is_guide(it["text"])), None)
         table_rows = []
         if gi is not None:
             p0 = chunk[gi]["page"]
@@ -168,7 +235,7 @@ def build_units(path, max_img_bytes=300_000):
                 if b["_t"] > a["_t"]: a["end"] = b["_t"]
 
         for it in chunk:
-            if table_rows and it["kind"] == "text" and GUIDE.match(it["text"].strip()):
+            if table_rows and it["kind"] == "text" and is_guide(it["text"]):
                 mode = "table"; cur = None; kind = None; continue
             if mode == "table":
                 s2 = it["text"].strip() if it["kind"] == "text" else ""
@@ -189,7 +256,7 @@ def build_units(path, max_img_bytes=300_000):
                 continue
             s = clean(it)
             if not s or NOISE_RE.match(s): continue
-            if GUIDE.match(s) and len(s) < 60:
+            if is_guide(s):
                 mode, cur, kind = "guide", None, None; continue
             if ACT.match(s) and len(s) < 90 and mode != "body":
                 mode = "questions"
