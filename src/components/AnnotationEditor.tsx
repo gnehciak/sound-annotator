@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
@@ -18,12 +19,17 @@ import {
   ImagePlus,
   Loader2,
   TriangleAlert,
+  X,
 } from 'lucide-react'
 import { fileToScaledBlob, blobToDataUrl } from '../lib/image'
+import { hueText } from '../lib/noteColors'
+import { useResolvedTheme } from '../lib/theme'
 import { ResizableImage } from './resizableImage'
 import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
 import { createMention } from './noteMention'
 import { PropertyTag } from './propertyTag'
+import { PropertySuggest, suggestAt, type SuggestHit } from './propertySuggest'
+import Popover from './Popover'
 import type { MentionItem } from './MentionList'
 
 interface Props {
@@ -61,6 +67,8 @@ interface Props {
 /** Imperative handle: drop the caret into the editor (used to focus new notes). */
 export interface AnnotationEditorHandle {
   focus: () => void
+  /** Insert a property tag at the caret — the dictionary's way in. */
+  insertProperty: (field: string, value: string) => void
 }
 
 const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function AnnotationEditor(
@@ -82,6 +90,13 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   const [uploading, setUploading] = useState(0)
   /** Transient: a guest tried to add an image (see insertImageFile). */
   const [imagesRefused, setImagesRefused] = useState(false)
+  /**
+   * The underlined word whose card is open, and the DOM span it points at.
+   * The span is held in a ref rather than state because Popover anchors to a
+   * live element, and the decoration is re-rendered on every keystroke.
+   */
+  const [suggestion, setSuggestion] = useState<SuggestHit | null>(null)
+  const suggestAnchor = useRef<HTMLElement | null>(null)
 
   const insertImageFile = async (file: File) => {
     const ed = editorRef.current
@@ -132,14 +147,31 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
       ResizableImage.configure({ inline: false }),
       ImageUploadPlaceholder,
       PropertyTag,
+      PropertySuggest,
       createMention(mentionItems, noteId),
     ],
     content,
     autofocus: autofocus ? 'end' : false,
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML())
+      // The word the card was offered for has just moved or changed (and if the
+      // change *was* the tag being applied, the card's work is done).
+      setSuggestion(null)
+    },
     editorProps: {
       attributes: {
         class: 'text-[13px] leading-[1.65] text-fg px-3.5 pt-3 pb-4',
+      },
+      // Clicking an underlined word offers to make it a tag. `false` so the
+      // click also does its ordinary job of placing the caret — the card is an
+      // offer alongside the edit, never instead of it.
+      handleClick: (view, pos, event) => {
+        if (readOnly) return false
+        const span = (event.target as HTMLElement | null)?.closest?.('.prop-suggest')
+        const hit = span ? suggestAt(view.state, pos) : undefined
+        suggestAnchor.current = hit ? (span as HTMLElement) : null
+        setSuggestion(hit ?? null)
+        return false
       },
       handlePaste: (_view, event) => {
         if (readOnly) return false
@@ -163,10 +195,36 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   })
   editorRef.current = editor
 
+  /** Replace a range (or just the caret) with a property tag. */
+  const putTag = (field: string, value: string, range?: { from: number; to: number }) => {
+    const ed = editorRef.current
+    if (!ed) return
+    const chain = ed.chain().focus()
+    const node = { type: 'propertyTag', attrs: { field, value } }
+    // Replacing a word leaves the spacing around it alone. Inserting at the
+    // caret has to supply it: a trailing space the way the "@" menu does, and a
+    // leading one unless there is already whitespace (or nothing) behind —
+    // otherwise two tags picked in a row from the dictionary run together into
+    // what reads as a single word.
+    if (range) {
+      chain.insertContentAt(range, node)
+    } else {
+      const before = ed.state.selection.$from.nodeBefore
+      const spaced = !before || (before.isText && /\s$/.test(before.text ?? ''))
+      chain.insertContent([
+        ...(spaced ? [] : [{ type: 'text', text: ' ' }]),
+        node,
+        { type: 'text', text: ' ' },
+      ])
+    }
+    chain.run()
+  }
+
   useImperativeHandle(
     ref,
     () => ({
       focus: () => editorRef.current?.commands.focus('end'),
+      insertProperty: (field, value) => putTag(field, value),
     }),
     [],
   )
@@ -244,7 +302,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
             </span>
           ) : (
             <span className="ml-1 font-mono text-[10px] text-muted">
-              type @ to tag a property
+              type @, or click an underlined word
             </span>
           )}
           <input
@@ -261,11 +319,83 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
         </div>
       )}
       <EditorContent editor={editor} />
+      <SuggestCard
+        hit={suggestion}
+        anchorRef={suggestAnchor}
+        onClose={() => setSuggestion(null)}
+        onPick={(field, value, range) => {
+          setSuggestion(null)
+          putTag(field, value, range)
+        }}
+      />
     </div>
   )
 })
 
 export default AnnotationEditor
+
+/**
+ * The card behind an underlined word: the concept (or concepts) it names, one
+ * click each. Nothing is applied until one is picked, and dismissing leaves the
+ * prose exactly as typed — the underline is a reading of the text, not a claim
+ * about it.
+ */
+function SuggestCard({
+  hit,
+  anchorRef,
+  onClose,
+  onPick,
+}: {
+  hit: SuggestHit | null
+  anchorRef: RefObject<HTMLElement | null>
+  onClose: () => void
+  onPick: (field: string, value: string, range: { from: number; to: number }) => void
+}) {
+  const theme = useResolvedTheme()
+  return (
+    <Popover
+      open={!!hit}
+      anchorRef={anchorRef}
+      onClose={onClose}
+      width={214}
+      className="origin-top-left py-1"
+    >
+      <div className="px-2.5 pb-1 pt-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+        Tag as
+      </div>
+      {hit?.options.map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          onClick={() => onPick(opt.field, opt.value, { from: hit.from, to: hit.to })}
+          title={`${opt.category} — ${opt.fieldLabel}`}
+          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
+        >
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: opt.color }}
+          />
+          <span
+            className="truncate"
+            style={{ color: hueText(opt.color, theme) }}
+          >
+            {opt.value}
+          </span>
+          <span className="ml-auto shrink-0 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
+            {opt.category}
+          </span>
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-1 flex w-full items-center gap-1.5 border-t border-line/60 px-2.5 pb-0.5 pt-2 text-left text-[12px] text-muted hover:text-fg"
+      >
+        <X size={12} /> Leave it as text
+      </button>
+    </Popover>
+  )
+}
 
 function ToolbarButton({
   icon,

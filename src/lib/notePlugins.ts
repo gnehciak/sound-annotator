@@ -29,7 +29,7 @@ export interface PluginEditorProps {
 export interface NotePlugin {
   /** Stable key, stored on NoteBlock.type. */
   type: string
-  /** Human label for the "+ property" menu. */
+  /** Human label shown on the block's header. */
   label: string
   icon: IconComponent
   surface: PluginSurface
@@ -41,15 +41,15 @@ export interface NotePlugin {
   Editor?: ComponentType<PluginEditorProps>
   /** One-line text digest, for spec lines / future search & export. */
   summarize?: (data: unknown) => string
-  /**
-   * When false, the plugin is hidden from the "+ property" menu (e.g. the
-   * built-in text block, which every note already has). Defaults to true.
-   */
-  addable?: boolean
 }
 
-// Registration order drives the "+ property" menu order. Plugins land in later
-// phases; the registry ships empty so Phase 1 changes no behavior.
+// The registry is now read-only in practice: nothing in the UI adds a block any
+// more, because inline property tags say the same thing inside the sentence
+// (see components/ElementsDictionary.tsx, which took the "+ Property" menu's
+// place). It stays so that notes which already carry an `elements` block still
+// render, still edit, and can still be removed — a plugin whose registration is
+// dropped takes its data off the screen without deleting it, which is the one
+// outcome worth avoiding.
 const REGISTRY: NotePlugin[] = []
 
 export function registerPlugin(plugin: NotePlugin): void {
@@ -64,9 +64,4 @@ export function getPlugin(type: string): NotePlugin | undefined {
 /** All registered plugins, in registration order. */
 export function allPlugins(): readonly NotePlugin[] {
   return REGISTRY
-}
-
-/** Plugins offered in the "+ property" menu (addable, window-surfaced). */
-export function addablePlugins(): NotePlugin[] {
-  return REGISTRY.filter((p) => p.addable !== false)
 }
