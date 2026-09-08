@@ -26,6 +26,12 @@ interface Props {
   onMovePin?: (id: string, x: number, y: number) => void
   /** Commit a repositioned fill crop, as 0–1 object-position fractions. */
   onMoveCover?: (id: string, x: number, y: number) => void
+  /**
+   * Play/pause, handed to the captions. A caption has to take the pointer to
+   * offer its close control, which means it covers the player's own
+   * click-to-pause catcher — so it does that job itself instead.
+   */
+  onTogglePlay?: () => void
 }
 
 /** One nudge of the arrow keys, as a fraction of the frame (Shift = ×5). */
@@ -58,6 +64,7 @@ export default function VideoOverlays({
   readOnly,
   onMovePin,
   onMoveCover,
+  onTogglePlay,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   // Same idea for the cover's crop, which needs the grab point too: the image
@@ -218,6 +225,7 @@ export default function VideoOverlays({
         selectedId={selectedId}
         readOnly={readOnly}
         onMovePin={onMovePin}
+        onTogglePlay={onTogglePlay}
       />
     </div>
   )

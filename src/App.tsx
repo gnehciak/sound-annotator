@@ -2004,6 +2004,7 @@ export default function App() {
         readOnly={effectiveViewOnly}
         onMovePin={movePin}
         onMoveCover={moveCover}
+        onTogglePlay={() => (isPlaying ? pause() : play())}
       />
       {transport}
     </>

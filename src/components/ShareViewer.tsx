@@ -564,6 +564,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         annotations={project.annotations}
         currentTime={currentTime}
         readOnly
+        onTogglePlay={() => (isPlaying ? pause() : play())}
       />
       {transport}
     </>

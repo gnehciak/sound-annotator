@@ -248,8 +248,13 @@ without scrubbing onto its moment. Video sources only, the same line
 `clipStart`/`clipEnd` draw: an audio track's waveform is the picture. The layer
 rides PlayerPane's existing `overlay` slot, painted *before* the transport so
 the transport stays clickable over a cover; it is `pointer-events-none`
-throughout except the selected note's pin, so clicking the picture still
-reaches the player's own click-to-pause catcher.
+except where it has to take the pointer — the selected note's pin and filled
+cover, and the caption cards, which need it to reveal their close control.
+Because a card therefore covers the player's own click-to-pause catcher, it
+does that job itself: `PinLayer` takes an `onTogglePlay` the hosts wire to the
+same handler the transport uses. Closing a caption (the ✕ on hover) is a
+*viewing* decision, never an edit — it lives in `PinLayer` state, saves
+nothing, and lasts until the dot it leaves behind is clicked.
 
 The layer is **always dark, in both themes** — it sits on the picture, where the
 light page's surfaces mean nothing — so note hues on it go through

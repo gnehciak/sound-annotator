@@ -5,6 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { X } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
 import { colorForId, hueOnDark } from '../lib/noteColors'
@@ -19,6 +20,13 @@ interface Props {
   readOnly?: boolean
   /** Commit a dragged pin, as 0–1 fractions of *this* box. */
   onMovePin?: (id: string, x: number, y: number) => void
+  /**
+   * What a click on a caption should do, since the card has to take the pointer
+   * to be hoverable and so swallows whatever was behind it. On the video frame
+   * that's the player's own click-to-pause catcher, and this hands it back;
+   * on the score page there's nothing to hand back, so it's left off.
+   */
+  onTogglePlay?: () => void
   /**
    * Let captions size themselves against the viewport instead of this box.
    *
@@ -62,6 +70,7 @@ export default function PinLayer({
   selectedId,
   readOnly,
   onMovePin,
+  onTogglePlay,
   spill,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -71,7 +80,24 @@ export default function PinLayer({
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(
     null,
   )
+  // Captions the viewer has closed. A dismissal is a *viewing* decision, not
+  // an edit — nothing is saved, and the note is untouched — so it lives here
+  // and dies with the page. It has no expiry either: a caption put away stays
+  // away, because coming back on the next replay is exactly what someone who
+  // just closed it doesn't want. The dot is the way back.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set())
+  // Whether the pointer travelled during the current press on a dot, so a
+  // drag that ends on the dot isn't also read as a click.
+  const dragMoved = useRef(false)
   const editable = !readOnly
+
+  const hide = (id: string) => setHidden((prev) => new Set(prev).add(id))
+  const show = (id: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
 
   const posOf = (a: Annotation) =>
     drag?.id === a.id
@@ -88,6 +114,7 @@ export default function PinLayer({
   }
 
   const startPinDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
+    dragMoved.current = false
     if (!editable || !onMovePin || a.id !== selectedId) return
     e.preventDefault()
     e.stopPropagation()
@@ -99,7 +126,9 @@ export default function PinLayer({
   const movePinDrag = (e: ReactPointerEvent<HTMLElement>) => {
     if (!drag) return
     const at = fractionAt(e.clientX, e.clientY)
-    if (at) setDrag({ id: drag.id, ...at })
+    if (!at) return
+    if (at.x !== drag.x || at.y !== drag.y) dragMoved.current = true
+    setDrag({ id: drag.id, ...at })
   }
 
   const endPinDrag = (e: ReactPointerEvent<HTMLElement>) => {
@@ -132,6 +161,10 @@ export default function PinLayer({
       const ink = hueOnDark(hue)
       const caption = pinCaption(a)
       const armed = editable && !!onMovePin && a.id === selectedId
+      // Closed captions leave their dot behind, and the dot is how they come
+      // back — so it takes the pointer for that alone, whether or not the note
+      // is the one being edited.
+      const closed = hidden.has(a.id)
       // The box opens away from the nearer edge and is capped at the distance
       // to the far one, so a long note wraps inside the frame instead of
       // running off the picture — then capped again at a readable measure,
@@ -157,20 +190,46 @@ export default function PinLayer({
       return (
         <div key={a.id} className="contents">
           <div
-            role={armed ? 'button' : undefined}
-            tabIndex={armed ? 0 : undefined}
+            role={armed || closed ? 'button' : undefined}
+            tabIndex={armed || closed ? 0 : undefined}
             aria-label={
-              armed ? 'Drag to move this pin, or nudge it with the arrow keys' : undefined
+              closed
+                ? 'Show this note again'
+                : armed
+                  ? 'Drag to move this pin, or nudge it with the arrow keys'
+                  : undefined
             }
-            title={armed ? 'Drag to move — arrow keys nudge, Shift for bigger steps' : undefined}
+            title={
+              closed
+                ? 'Show this note again'
+                : armed
+                  ? 'Drag to move — arrow keys nudge, Shift for bigger steps'
+                  : undefined
+            }
             onPointerDown={startPinDrag(a)}
             onPointerMove={movePinDrag}
             onPointerUp={endPinDrag}
             onPointerCancel={endPinDrag}
-            onKeyDown={nudge(a, armed, { x, y })}
+            // A press that never travelled is a click, even on a pin that was
+            // also draggable — that's what reopens a closed caption.
+            onClick={() => {
+              if (closed && !dragMoved.current) show(a.id)
+            }}
+            onKeyDown={(e) => {
+              if (closed && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault()
+                show(a.id)
+                return
+              }
+              nudge(a, armed, { x, y })(e)
+            }}
             style={{ left: pct(x), top: pct(y) }}
             className={`absolute -translate-x-1/2 -translate-y-1/2 animate-fade-in rounded-full p-2 ${
-              armed ? 'pointer-events-auto cursor-grab touch-none active:cursor-grabbing' : ''
+              armed
+                ? 'pointer-events-auto cursor-grab touch-none active:cursor-grabbing'
+                : closed
+                  ? 'pointer-events-auto cursor-pointer'
+                  : ''
             }`}
           >
             {/* The dot: a solid core in the note's hue, ringed in white so it
@@ -190,7 +249,7 @@ export default function PinLayer({
             />
           </div>
 
-          {(caption || armed) && (
+          {(caption || armed) && !closed && (
             <>
               <span
                 aria-hidden
@@ -204,10 +263,29 @@ export default function PinLayer({
               />
               <div
                 style={cardStyle}
-                className="on-video-pop absolute w-max animate-fade-in"
+                onClick={onTogglePlay}
+                className={`on-video-pop group/pin pointer-events-auto absolute w-max animate-fade-in select-none ${
+                  onTogglePlay ? 'cursor-pointer' : ''
+                }`}
               >
-                <span className="on-video-pop__label">
+                <span className="on-video-pop__label justify-between">
                   {noteLabel(a.start, a.end)}
+                  {/* Hidden at rest, like every other secondary control here.
+                      It stays in the layout so revealing it can't reflow the
+                      card, and stays untouchable so the invisible target can't
+                      swallow a click meant for the picture. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      hide(a.id)
+                    }}
+                    aria-label="Hide this note — its dot stays on the picture"
+                    title="Hide this note — its dot stays"
+                    className="btn-icon on-video press pointer-events-none -my-1 -mr-1 opacity-0 transition-opacity duration-150 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/pin:pointer-events-auto group-hover/pin:opacity-100"
+                  >
+                    <X size={13} />
+                  </button>
                 </span>
                 <div className="on-video-pop__body">
                   {caption ? (
