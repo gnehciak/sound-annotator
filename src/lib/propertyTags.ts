@@ -280,8 +280,105 @@ for (const o of ALL) {
  * glossed forms — "Sforzando (sfz)", "Static (volume)" — which are menu labels
  * rather than anything a person types into a sentence.
  */
-const SUGGESTABLE = [...BY_VALUE.keys()]
-  .filter((v) => v.length > 1 && !v.includes('('))
+const CANONICAL = [...BY_VALUE.keys()].filter(
+  (v) => v.length > 1 && !v.includes('('),
+)
+
+// ---------------------------------------------------------------------------
+// The other forms of the word
+// ---------------------------------------------------------------------------
+//
+// A note says "the syncopation drives it" as readily as "syncopated", and the
+// bank happens to hold one and not the other — arbitrarily, since it also
+// holds both Hemiola and Hemiolic. So the regular English forms are generated
+// rather than listed, and the irregular ones (Italian plurals, abbreviations,
+// spelling variants) are the job of the Aliases column in Notion.
+//
+// **Only terms of art get inflected**, and that is the whole safety argument.
+// Deriving from every value would put "evening" in front of the reader as a
+// form of "Even", and "lighting" as a form of "Light" — words a sentence about
+// music uses in their ordinary sense constantly. A word already marked
+// unmistakable enough to tag itself (AUTO_INDEX) is unmistakable in its
+// inflections too; a word that is ordinary English in its base form is
+// ordinary English in all of them. The judgment call is one that has already
+// been made, so this reuses it rather than inventing a second list.
+//
+// Derived forms are for the *underline only*. Auto-tagging stays exact — the
+// input rule rewrites a sentence as you type, so a wrong guess there costs
+// real damage, while a wrong underline costs a dotted line you ignore. That is
+// the same asymmetry AUTO_TERMS and the suggestion layer already run on.
+
+const ACCENTLESS = (w: string) =>
+  w.normalize('NFD').replace(/\p{M}+/gu, '').normalize('NFC')
+
+/** Regular English (and Italian-plural) forms of one word. */
+function inflectWord(w: string): string[] {
+  const out: string[] = []
+  const add = (...xs: string[]) => out.push(...xs)
+
+  // Plurals.
+  if (/(s|x|z|ch|sh)$/.test(w)) add(w + 'es')
+  else if (/[^aeiou]y$/.test(w)) add(w.slice(0, -1) + 'ies')
+  else add(w + 's')
+  // Italian, both ways: ostinato/ostinati, glissandi/glissando.
+  if (w.endsWith('o')) add(w.slice(0, -1) + 'i')
+  if (w.endsWith('i')) add(w.slice(0, -1) + 'o')
+
+  // Verb forms. Consonant doubling (stopped, running) is deliberately not
+  // attempted — it needs stress rules, and guessing wrong invents a word.
+  if (w.endsWith('e')) add(w.slice(0, -1) + 'ed', w.slice(0, -1) + 'ing')
+  else if (!w.endsWith('ed')) add(w + 'ed', w + 'ing')
+
+  // Nominalisations and the adjective/noun pairs music writing lives on.
+  const nominal = w.replace(/at(e|ed|ing)$/, 'ation')
+  if (nominal !== w) add(nominal)
+  if (w.endsWith('ic')) add(w.slice(0, -2) + 'y', w + 'ally')
+  if (/[^aeiou]y$/.test(w)) add(w.slice(0, -1) + 'ic')
+  if (w.endsWith('al')) add(w + 'ity', w + 'ly')
+
+  // …and the same pairs read backwards, since which form the bank happens to
+  // hold is arbitrary: it lists Accented but not "accent", Imitation but not
+  // "imitates". Stripping a suffix can leave a non-word ("hemiol"), which is
+  // harmless — nobody types it, so it is an index key that never matches.
+  const bases: string[] = []
+  if (w.endsWith('ed')) bases.push(w.slice(0, -2), w.slice(0, -1))
+  if (w.endsWith('ing')) bases.push(w.slice(0, -3), w.slice(0, -3) + 'e')
+  if (w.endsWith('ion')) bases.push(w.slice(0, -3) + 'e')
+  if (w.endsWith('ic')) bases.push(w.slice(0, -2))
+  for (const b of bases) if (b.length > 2) add(b, b + 's', b + 'es')
+
+  return out
+}
+
+/** Every extra spelling one value should be recognised by. */
+function formsOf(value: string): string[] {
+  const v = value.toLowerCase()
+  const forms = new Set<string>()
+  // Inflect the last word only: "high register" pluralises its noun.
+  const head = v.slice(0, v.lastIndexOf(' ') + 1)
+  const tail = v.slice(head.length)
+  for (const f of inflectWord(tail)) forms.add(head + f)
+  // Punctuation the writer may or may not reach for.
+  if (v.includes('-')) forms.add(v.replace(/-/g, ' ')).add(v.replace(/-/g, ''))
+  const plain = ACCENTLESS(v)
+  if (plain !== v) forms.add(plain)
+  return [...forms]
+}
+
+/**
+ * A derived spelling → the option it stands for. Never shadows a canonical
+ * value (a real term always wins its own word), and first writer wins where
+ * two terms of art inflect onto the same string.
+ */
+const LOOSE_INDEX = new Map<string, PropertyOption>()
+for (const option of AUTO_INDEX.values()) {
+  for (const form of formsOf(option.value)) {
+    if (form.length < 2 || BY_VALUE.has(form) || LOOSE_INDEX.has(form)) continue
+    LOOSE_INDEX.set(form, option)
+  }
+}
+
+const SUGGESTABLE = [...CANONICAL, ...LOOSE_INDEX.keys()]
   // Longest first, so "high register" wins the position "register" would take.
   .sort((a, b) => b.length - a.length)
 
@@ -315,7 +412,9 @@ export function findTaggable(text: string): TaggableMatch[] {
   const out: TaggableMatch[] = []
   // matchAll clones the regex, so the shared `g` instance keeps no lastIndex.
   for (const m of text.matchAll(SUGGEST_RE)) {
-    const options = BY_VALUE.get(m[0].toLowerCase())
+    const key = m[0].toLowerCase()
+    const loose = LOOSE_INDEX.get(key)
+    const options = BY_VALUE.get(key) ?? (loose ? [loose] : undefined)
     if (!options) continue
     out.push({
       from: m.index,
