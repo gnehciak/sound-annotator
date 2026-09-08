@@ -22,23 +22,95 @@ export function colorForId(id: string): string {
 
 // The note/tag/element hues are tuned for a dark surface. As a FILL (spine,
 // dot, timecode background) they read fine on either theme, but as TEXT or a
-// 1px border on the white page their saturated mid-tones fail AA. Mix a
-// hue toward ink for the light theme only; leave it untouched on dark.
+// 1px border on the white page their saturated mid-tones fail AA.
 function clamp255(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)))
 }
 
+/**
+ * The hue a data colour wears as TEXT on the light page. It used to be a flat
+ * 55% mix toward ink, which cleared AA but spent far more darkness than the
+ * contrast needed and dragged every hue toward the same muddy brown — the
+ * chips read as dried blood and olive rather than as colour (2026-09-08).
+ *
+ * So: lift the saturation first (the white page washes chroma out, the way the
+ * black canvas eats it in the other direction), then darken *only as far as
+ * 4.5:1 demands* and stop — the same "walk until it clears, then leave it
+ * alone" shape as `hueOnDark`, run the other way. Yellow still ends up much
+ * darker than sky blue, because it has to; nothing ends up darker than it has
+ * to. Contrast is measured against the hue's own 14% wash over white (the
+ * `.chip` / `.prop-tag` ground), so the value is safe on the tinted chip and
+ * has margin to spare on plain paper.
+ */
 export function hueText(hex: string, theme: 'light' | 'dark'): string {
   if (theme !== 'light') return hex
-  const h = hex.replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16)
-  const g = parseInt(h.slice(2, 4), 16)
-  const b = parseInt(h.slice(4, 6), 16)
-  if ([r, g, b].some(Number.isNaN)) return hex
-  // Mix toward ink (22 22 24); tuned so the lightest hues (yellow, green) still
-  // clear AA as text on the white note page.
-  const k = 0.55
-  return `rgb(${clamp255(r + (22 - r) * k)} ${clamp255(g + (22 - g) * k)} ${clamp255(b + (24 - b) * k)})`
+  const rgb = parseHex(hex)
+  if (!rgb) return hex
+  const [h, s0, l0] = rgbToHsl(rgb)
+  // The ground the text actually sits on: the chip's own wash, not bare white.
+  const bg = luminance(...mix(rgb, [255, 255, 255], 0.14))
+  // Grey stays grey; a hue that has chroma gets more of it.
+  const s = s0 < 0.08 ? s0 : Math.min(1, s0 * 1.08 + 0.1)
+  let l = l0
+  let out = hslToRgb(h, s, l)
+  for (let i = 0; i < 100 && contrast(luminance(...out), bg) < 4.5; i++) {
+    l = Math.max(0, l - 0.01)
+    out = hslToRgb(h, s, l)
+  }
+  return `rgb(${out[0]} ${out[1]} ${out[2]})`
+}
+
+/** `a` mixed into `b` at `k` — sRGB, like CSS color-mix's default-ish path. */
+function mix(
+  a: [number, number, number],
+  b: [number, number, number],
+  k: number
+): [number, number, number] {
+  return [
+    clamp255(b[0] + (a[0] - b[0]) * k),
+    clamp255(b[1] + (a[1] - b[1]) * k),
+    clamp255(b[2] + (a[2] - b[2]) * k),
+  ]
+}
+
+function rgbToHsl([r, g, b]: [number, number, number]): [number, number, number] {
+  const rr = r / 255
+  const gg = g / 255
+  const bb = b / 255
+  const max = Math.max(rr, gg, bb)
+  const min = Math.min(rr, gg, bb)
+  const l = (max + min) / 2
+  const d = max - min
+  if (d === 0) return [0, 0, l]
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h: number
+  if (max === rr) h = ((gg - bb) / d + (gg < bb ? 6 : 0)) / 6
+  else if (max === gg) h = ((bb - rr) / d + 2) / 6
+  else h = ((rr - gg) / d + 4) / 6
+  return [h, s, l]
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  if (s === 0) {
+    const v = clamp255(l * 255)
+    return [v, v, v]
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  const channel = (t: number) => {
+    let x = t
+    if (x < 0) x += 1
+    if (x > 1) x -= 1
+    if (x < 1 / 6) return p + (q - p) * 6 * x
+    if (x < 1 / 2) return q
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6
+    return p
+  }
+  return [
+    clamp255(channel(h + 1 / 3) * 255),
+    clamp255(channel(h) * 255),
+    clamp255(channel(h - 1 / 3) * 255),
+  ]
 }
 
 /**

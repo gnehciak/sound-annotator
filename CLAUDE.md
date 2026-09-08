@@ -259,8 +259,8 @@ nothing, and lasts until the dot it leaves behind is clicked.
 The layer is **always dark, in both themes** — it sits on the picture, where the
 light page's surfaces mean nothing — so note hues on it go through
 `hueOnDark()` rather than `hueText()` (`src/lib/noteColors.ts`); the two are
-mirror images, one lifting a hue toward white for a dark box, the other mixing
-it toward ink for the white page.
+mirror images, one lifting a hue toward white until it clears AA on a dark box,
+the other saturating and darkening it until it clears AA on the white page.
 
 The trap to remember: **a cover image is a note image that isn't in the note
 HTML.** It lives under the same `users/{uid}/images/{projectId}/` prefix, so

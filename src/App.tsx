@@ -1418,23 +1418,6 @@ export default function App() {
     setFocusNoteId(ann.id)
   }
 
-  // Add a note at an explicit time (optional end → a range), then open it.
-  function addNoteAt(start: number, end?: number) {
-    if (!current) return
-    const s = Math.max(0, Math.floor(start))
-    const ann: Annotation = {
-      id: uid(),
-      start: s,
-      contentHtml: '',
-      blocks: [makeTextBlock('')],
-      createdAt: now(),
-    }
-    if (end != null) ann.end = Math.max(Math.floor(end), s + 1)
-    commitAnnotations(current.id, (anns) => [...anns, ann])
-    selectNote(ann.id)
-    setFocusNoteId(ann.id)
-  }
-
   function updateAnnotation(
     annId: string,
     patch: Partial<Annotation>,
@@ -2764,7 +2747,6 @@ export default function App() {
                     onMarkOut={markOut}
                     onCancelMark={() => setPendingIn(null)}
                     onAddNote={addAnnotationAtCurrent}
-                    onAddNoteAt={addNoteAt}
                   />
                 )}
                 <div
