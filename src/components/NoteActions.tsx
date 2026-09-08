@@ -12,15 +12,16 @@ interface Props {
 }
 
 // Note-creation actions, docked as a strip beneath the Notes header — that's
-// where adding a note reads as the natural next step. Mark start / Add note /
+// where adding a note reads as the natural next step. Mark start / Add /
 // Mark end sit in three equal columns (minmax(0,1fr)) so each keeps a fixed
 // width regardless of contents; the Start cancel (X) lives inside column 1, so
-// it eats into Start's own width rather than shifting Add note / Mark end.
+// it eats into Start's own width rather than shifting Add / Mark end.
 //
-// Add note is a plain button, not a menu: it adds at the current moment, and
-// the time it will use is printed on it. A note's time is editable in the note
-// itself, so a second way to type one here was a menu whose only item repeated
-// the button that opened it.
+// Add is a plain button, not a menu: it adds at the current moment, which the
+// transport is already showing — so the label carries neither the word "note"
+// (everything in this column is one) nor a clock that repeats the playhead.
+// A note's time is editable in the note itself, so a second way to type one
+// here was a menu whose only item repeated the button that opened it.
 export default function NoteActions({
   pendingIn,
   currentTime,
@@ -62,14 +63,12 @@ export default function NoteActions({
 
         <button
           onClick={onAddNote}
-          title="Add a note at the current moment (N)"
-          className="btn-signal press min-w-0 px-2"
+          title={`Add a note at the current moment, ${formatTime(currentTime)} (N)`}
+          aria-label="Add a note at the current moment"
+          className="btn-signal press min-w-0 gap-[5px] px-2 font-medium tracking-[0.08em]"
         >
           <Plus size={13} className="shrink-0" />
-          <span className="truncate">Add note</span>
-          <span className="shrink-0 tabular-nums tracking-[0.02em] opacity-75">
-            ({formatTime(currentTime)})
-          </span>
+          <span className="truncate">Add</span>
         </button>
 
         <button
