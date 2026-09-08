@@ -310,7 +310,11 @@ export const PROPERTY_TAG_PRINT_CSS = `
   .prop-tag {
     white-space: nowrap;
     border-radius: 3px;
-    padding: 0 2px;
+    padding: 0 3px;
+    margin: 0 -1px;
+    /* The same faint ground the tag wears in the light theme, so an exported
+       note looks like the note it was exported from. */
+    background: color-mix(in srgb, var(--hue, #9a9aa2) 13%, transparent);
     color: var(--hue-ink, #57534e);
     font-weight: 600;
     -webkit-print-color-adjust: exact;
