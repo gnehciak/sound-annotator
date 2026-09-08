@@ -303,6 +303,11 @@ function inflectWord(w: string): string[] {
   if (w.endsWith('ing')) bases.push(w.slice(0, -3), w.slice(0, -3) + 'e')
   if (w.endsWith('ion')) bases.push(w.slice(0, -3) + 'e')
   if (w.endsWith('ic')) bases.push(w.slice(0, -2))
+  // Singulars, for the terms the bank holds in the plural — Cymbals, Claves,
+  // Clusters, Slurs. "Bass" losing its s is junk nobody types, which is the
+  // usual harmless case.
+  if (w.endsWith('es')) bases.push(w.slice(0, -2))
+  if (w.endsWith('s')) bases.push(w.slice(0, -1))
   for (const b of bases) if (b.length > 2) add(b, b + 's', b + 'es')
 
   return out

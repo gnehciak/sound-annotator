@@ -433,7 +433,7 @@ strictest to loosest:
 1. **Typing the term.** An input rule on `PropertyTag` tags an unmistakable
    word the moment it ends, and Backspace puts the plain word straight back.
    Which words qualify is the **Auto-tag tick in Notion** (`AUTO_TERMS` in the
-   generated file): an allowlist on purpose, and a narrow one (149 of 434),
+   generated file): an allowlist on purpose, and a narrow one (263 of 615),
    because "even", "light", "clear" and "major" are ordinary English several
    times a paragraph and a chip must not land in the middle of one. Matching
    is case-insensitive, and the chip keeps the case the sentence used. Note
@@ -470,7 +470,7 @@ strictest to loosest:
    concept chips as the way in when you can't name the word yet.
 
 **The `@` menu narrows like an editor's completion list**, which is what the
-420-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads
+600-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads
 a leading run of words as a *scope* and matches the rest inside it, so
 "@timbre bright" is Bright within Timbre — and then, deliberately, every other
 word in Bright's field follows it down the list, because "what could I say
@@ -497,6 +497,16 @@ the one field whose options are a sequence rather than a list (ppp–fff, where
 alphabetical order would be musical nonsense). Everything else is a row someone
 edits without touching code. A field whose `Concept` the app doesn't know is
 reported rather than guessed at, and `--check` fails when the file is stale.
+
+**Performing media is browsed by family.** Instruments live in `media.strings`
+/ `.woodwind` / `.brass` / `.percussion` / `.keyboard` / `.voice`, so the
+dictionary groups them and `@brass tr` narrows to Trumpet and Trombone;
+`media.instrument` keeps the broad families and section names. Each concept
+also opens with an `Element name` field holding its own word — "texture",
+"tone colour", "instrumentation" — so a sentence can be tagged with the
+concept it is about, not only with a value inside it. Time signatures (4/4,
+7/8) sit in `duration.metre` and can only ever underline: the auto-tag input
+rule matches a word beginning with a letter.
 
 **Field ids and the `Auto-tag` tick are the two things to change carefully.**
 An id is stored on every chip ever written; the tick decides which words
