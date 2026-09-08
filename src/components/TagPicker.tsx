@@ -99,14 +99,15 @@ export default function TagPicker({ tags, projectTags = [], onChange }: Props) {
         aria-label="Add a tag"
         className="btn-ghost btn-sm press"
       >
+        {/* Once the note carries tags, the chips beside it say what this adds
+            to — so the word goes and the key stops crowding the row it
+            shares. */}
         {tags.length === 0 ? (
           <>
             <TagIcon size={11} /> Tag
           </>
         ) : (
-          <>
-            <Plus size={11} /> Tag
-          </>
+          <Plus size={11} />
         )}
       </button>
 

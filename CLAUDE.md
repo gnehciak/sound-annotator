@@ -399,13 +399,23 @@ flanked by − / +. The stepper moves *End* only, so trimming never loses the
 moment the note is cued to; ⇧ steps 5s, a held key repeats, and stepping under
 a second clears the end outright, which is how a range becomes a point note
 again (and takes `structure` with it, since a section brackets a span). The
-note's **record** — tags plus Section, Question and Bar — is a rail of
-`chip-outline` switches, each one's field revealed only when it is on; turning
-Bar off clears the value, so what the panel hides is never data. What the note
+note's **record** is the fixed set of `chip-outline` switches — Section,
+Question, Bar — each one's field revealed only when it is on; turning Bar off
+clears the value, so what the panel hides is never data. The tags that *label*
+the note ride the title bar instead (`PluginWindow`'s `meta` slot), beside its
+colour and its name, where the old metadata row had them. What the note
 puts **on the picture** is two objects rather than switches (the cover slot and
 the pin key, above). The note's colour and its delete button live in the host's
 title bar, which every presentation already pays for — `PluginWindow` takes
-them as `leading` / `actions`, and App supplies them.
+them as `leading` / `meta` / `actions`, and App supplies all three. That bar no
+longer repeats the note's span (the time rail is right under it); it grows
+rather than clips when the tags need a second line, since a tag the panel hides
+is a tag nobody knows is there; and the two presentations share **one** key
+rather than a two-button radio — it shows the view it will take you to, so
+there is nothing to read to work out which is on. The window's keys sit as one
+tight cluster with a single hairline fencing off the plugin's verbs: three
+icons spaced like three separate controls read as a scattering, and put the
+destructive one within a stray pixel of the others.
 
 **A note's properties live in its prose.** An **inline property tag** is a
 coloured token inside the note's own sentence (the concept itself is the
