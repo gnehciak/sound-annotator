@@ -1131,8 +1131,42 @@ html[data-armed] body::before {
   font-weight: 500;
   user-select: none;
 }
+/* Light mode only. On the near-black canvas a hue is already the brightest
+   thing in the line and needs no help; on the white page the same word is a
+   dark mark among dark marks, so the tag carries a faint ground of its own
+   hue — the .chip family's wash idiom, at a lower strength so the sentence
+   still reads as prose. The negative margin gives the ground room to breathe
+   without the tag pushing its own comma away. */
+[data-theme='light'] .prop-tag {
+  background: color-mix(in srgb, var(--hue) 13%, transparent);
+  padding: 0 0.16em;
+  margin: 0 -0.06em;
+  font-weight: 600;
+}
 .ProseMirror .prop-tag:hover {
   background: color-mix(in srgb, var(--hue) 18%, transparent);
+}
+[data-theme='light'] .ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 26%, transparent);
+}
+/* A word that names a concept but isn't a tag yet — the editor's squiggle, and
+   the same idea as the tag above: a hint you can act on, never a change made
+   for you. Faint at rest (the prose has to stay readable with a dozen of them
+   in it), and only under the pointer does it look clickable. Neutral rather
+   than hued, deliberately: the word has no concept yet — picking one is what
+   the card is for — and a coloured underline would claim it already had.
+   See components/propertySuggest.ts. */
+.ProseMirror .prop-suggest {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, rgb(var(--text-muted)) 55%, transparent);
+}
+.ProseMirror .prop-suggest:hover {
+  border-radius: 3px;
+  background: color-mix(in srgb, rgb(var(--accent)) 12%, transparent);
+  text-decoration-color: rgb(var(--accent-ink));
 }
 /* ProseMirror marks the lifted node while it's being dragged. */
 .ProseMirror .prop-tag.ProseMirror-selectednode {

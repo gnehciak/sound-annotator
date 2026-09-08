@@ -25,13 +25,13 @@ import {
   blocksOf,
   textHtmlOf,
   asTextData,
-  makeBlock,
   TEXT_BLOCK,
 } from '../lib/noteBlocks'
-import { getPlugin, addablePlugins } from '../lib/notePlugins'
+import { getPlugin } from '../lib/notePlugins'
 import { tagsOf } from '../lib/tags'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
+import ElementsDictionary from './ElementsDictionary'
 import NoteOverlayControls from './NoteOverlayControls'
 import TagPicker from './TagPicker'
 import Popover from './Popover'
@@ -128,11 +128,6 @@ export default function NoteInspector({
       { blocks: blocks.map((b) => (b.id === blockId ? { ...b, data } : b)) },
       { coalesceKey: `block:${blockId}` },
     )
-  }
-  const addBlock = (type: string) => {
-    const plugin = getPlugin(type)
-    if (!plugin) return
-    onUpdate({ blocks: [...blocks, makeBlock(type, plugin.createData())] })
   }
   const removeBlock = (blockId: string) =>
     onUpdate({ blocks: blocks.filter((b) => b.id !== blockId) })
@@ -337,11 +332,14 @@ export default function NoteInspector({
           )
         })}
 
-        {addablePlugins().length > 0 && (
-          <div className="border-t border-line px-[13px] py-2.5">
-            <AddPropertyMenu onAdd={addBlock} />
-          </div>
-        )}
+        {/* The vocabulary itself, at the foot of the note: search it, or open a
+            concept, and click a word to write it into the prose as a tag. This
+            is where "+ Property" used to add an empty grid. */}
+        <ElementsDictionary
+          onInsert={(field, value) =>
+            editorApiRef.current?.insertProperty(field, value)
+          }
+        />
       </div>
     </div>
   )
@@ -728,48 +726,5 @@ function TimeEndpoint({
         )}
       </Popover>
     </div>
-  )
-}
-
-/** "+ Property" menu — lists the addable plugins and adds the chosen block. */
-function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const btnRef = useRef<HTMLButtonElement>(null)
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
-      >
-        <Plus size={12} /> Property
-      </button>
-      <Popover
-        open={open}
-        anchorRef={btnRef}
-        onClose={() => setOpen(false)}
-        width={192}
-        className="origin-top-left py-1"
-      >
-        {addablePlugins().map((p) => {
-          const Icon = p.icon
-          return (
-            <button
-              key={p.type}
-              type="button"
-              onClick={() => {
-                onAdd(p.type)
-                setOpen(false)
-              }}
-              className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
-            >
-              <Icon size={13} className="shrink-0" /> {p.label}
-            </button>
-          )
-        })}
-      </Popover>
-    </>
   )
 }

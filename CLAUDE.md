@@ -266,8 +266,8 @@ nothing, and lasts until the dot it leaves behind is clicked.
 The layer is **always dark, in both themes** — it sits on the picture, where the
 light page's surfaces mean nothing — so note hues on it go through
 `hueOnDark()` rather than `hueText()` (`src/lib/noteColors.ts`); the two are
-mirror images, one lifting a hue toward white for a dark box, the other mixing
-it toward ink for the white page.
+mirror images, one lifting a hue toward white until it clears AA on a dark box,
+the other saturating and darkening it until it clears AA on the white page.
 
 The trap to remember: **a cover image is a note image that isn't in the note
 HTML.** It lives under the same `users/{uid}/images/{projectId}/` prefix, so
@@ -367,19 +367,46 @@ the pin key, above). The note's colour and its delete button live in the host's
 title bar, which every presentation already pays for — `PluginWindow` takes
 them as `leading` / `actions`, and App supplies them.
 
-**Note properties come in two shapes.** The `elements` *block*
-(`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects
-the whole concept grid into one panel under the note. **Inline property tags**
-put a single value in the prose instead — a coloured token that reads as part
-of the sentence (the concept itself is the tooltip, and a print-only suffix in
-the two PDFs), draggable anywhere in the text. Two ways in: the `@` menu, which
-still lists note cross-references below the properties so there is one trigger
-key rather than two (`src/components/noteMention.ts`), and **typing the term in
-ordinary prose** — an input rule on `PropertyTag` tags an unmistakable word the
-moment it ends, and Backspace puts the plain word straight back. Which words
-qualify is `AUTO_TERMS` in `lib/propertyTags.ts`: an allowlist on purpose, and
-a narrow one, because "even", "light", "clear" and "major" are ordinary English
-several times a paragraph and a chip must not land in the middle of one.
+**A note's properties live in its prose.** An **inline property tag** is a
+coloured token inside the note's own sentence (the concept itself is the
+tooltip, and a print-only suffix in the two PDFs), draggable anywhere in the
+text. The older `elements` *block* — a grid of dropdowns in a panel under the
+note — is no longer offered: the "+ Property" menu is gone and
+`notePlugins.ts` has no `addablePlugins`. `src/plugins/elements/` stays
+**registered** so notes that already carry a block still render, edit and can
+be removed; dropping the registration would take that data off the screen
+without deleting it, which is the one outcome worth avoiding.
+
+**Three ways a tag gets written**, and they are a deliberate ladder from
+strictest to loosest:
+
+1. **Typing the term.** An input rule on `PropertyTag` tags an unmistakable
+   word the moment it ends, and Backspace puts the plain word straight back.
+   Which words qualify is `AUTO_TERMS` in `lib/propertyTags.ts`: an allowlist
+   on purpose, and a narrow one (~140 of 434), because "even", "light",
+   "clear" and "major" are ordinary English several times a paragraph and a
+   chip must not land in the middle of one. Note what else it can't catch — an
+   input rule fires on the keystroke that *ends* the word, so a word with no
+   trailing character, a word finished with Enter, and **anything pasted** all
+   go untagged however unmistakable they are.
+2. **The underline** (`src/components/propertySuggest.ts`), which is what
+   catches all of that. A ProseMirror decoration marks every vocabulary word in
+   the text that isn't already a tag; clicking one opens a card
+   (`SuggestCard` in `AnnotationEditor.tsx`) offering the concept, or both
+   concepts where two fields share the word ("thin" is Timbre *and* Texture).
+   This side carries the **whole** vocabulary rather than an allowlist, and the
+   asymmetry with `AUTO_TERMS` is the point: being wrong here costs a dotted
+   line someone ignores, not a mangled sentence. Nothing is stored — the
+   underline is derived from the text on every keystroke and stops matching by
+   itself once the word becomes an atom. Editable surfaces only; a read-only
+   preview or view link shows the prose as written.
+3. **The `@` menu**, which still lists note cross-references below the
+   properties so there is one trigger key rather than two
+   (`src/components/noteMention.ts`), and the **dictionary** at the foot of the
+   inspector (`src/components/ElementsDictionary.tsx`) — the vocabulary made
+   browsable, standing where "+ Property" used to. It is search-first (through
+   `searchProperties`, so it ranks identically to the `@` menu) with the eight
+   concept chips as the way in when you can't name the word yet.
 
 **The `@` menu narrows like an editor's completion list**, which is what the
 420-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads

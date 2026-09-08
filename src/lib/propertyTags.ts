@@ -249,6 +249,107 @@ export function unmatchedAutoTerms(): string[] {
   return AUTO_TERMS.filter((t) => !ALL.some((o) => o.value === t))
 }
 
+// ---------------------------------------------------------------------------
+// Suggesting: the other 300 words, offered rather than applied
+// ---------------------------------------------------------------------------
+//
+// AUTO_TERMS is narrow on purpose, and it always will be — a word that tags
+// itself has to be one you would never type in its everyday sense, which rules
+// out "even", "thin", "warm" and most of the vocabulary. But those are exactly
+// the words a note about music is *made* of, and leaving them untagged because
+// auto-tagging them would be reckless gets the worst of both.
+//
+// So the rest of the vocabulary is underlined instead of converted (see
+// components/propertySuggest.ts): the note says "this word names a concept",
+// and one click makes it a tag. Being wrong costs a faint underline someone
+// ignores, so this list is the whole vocabulary rather than an allowlist —
+// the opposite call from AUTO_TERMS, for the opposite reason.
+
+/** Lowercased value → every option carrying it (a word can sit in two fields). */
+const BY_VALUE = new Map<string, PropertyOption[]>()
+for (const o of ALL) {
+  const k = o.value.toLowerCase()
+  const list = BY_VALUE.get(k)
+  if (list) list.push(o)
+  else BY_VALUE.set(k, [o])
+}
+
+/**
+ * Values worth underlining in prose. Single letters are out (a lone "f" is a
+ * word in a sentence far more often than it is a dynamic), and so are the
+ * glossed forms — "Sforzando (sfz)", "Static (volume)" — which are menu labels
+ * rather than anything a person types into a sentence.
+ */
+const SUGGESTABLE = [...BY_VALUE.keys()]
+  .filter((v) => v.length > 1 && !v.includes('('))
+  // Longest first, so "high register" wins the position "register" would take.
+  .sort((a, b) => b.length - a.length)
+
+/** Characters that make a match part of a longer word rather than its own. */
+const WORDISH = "\\p{L}\\p{M}\\p{N}'’-"
+
+const SUGGEST_RE = new RegExp(
+  `(?<![${WORDISH}])(?:${SUGGESTABLE.map((v) =>
+    v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  ).join('|')})(?![${WORDISH}])`,
+  'giu',
+)
+
+/** A run of prose that names a concept: where it is, and what it could become. */
+export interface TaggableMatch {
+  /** Offsets into the text that was scanned. */
+  from: number
+  to: number
+  /** The words as typed (which may differ in case from the vocabulary's). */
+  text: string
+  /** Every option that word names — more than one when two fields share it. */
+  options: PropertyOption[]
+}
+
+/**
+ * Vocabulary words inside a run of plain text, in order and non-overlapping.
+ * Case-insensitive, and matched at word boundaries so "even" in "evening" and
+ * "beat" in "off-beat" are left alone.
+ */
+export function findTaggable(text: string): TaggableMatch[] {
+  const out: TaggableMatch[] = []
+  // matchAll clones the regex, so the shared `g` instance keeps no lastIndex.
+  for (const m of text.matchAll(SUGGEST_RE)) {
+    const options = BY_VALUE.get(m[0].toLowerCase())
+    if (!options) continue
+    out.push({
+      from: m.index,
+      to: m.index + m[0].length,
+      text: m[0],
+      options,
+    })
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Browsing: the dictionary at the foot of a note
+// ---------------------------------------------------------------------------
+
+/** The vocabulary as a browsable tree — the eight concepts, then Layer. */
+export const VOCAB_CATEGORIES: {
+  id: string
+  label: string
+  color: string
+  fields: { id: string; label: string; options: string[] }[]
+}[] = [
+  ...ELEMENTS,
+  {
+    id: LAYER_FIELD,
+    label: 'Layer',
+    color: LAYERS[0].color,
+    fields: [{ id: LAYER_FIELD, label: 'Layer', options: LAYERS.map((l) => l.label) }],
+  },
+]
+
+/** How many words the dictionary holds — shown on its header. */
+export const VOCAB_SIZE = ALL.length
+
 /** Sibling values a chip can be switched to (empty for a custom tag). */
 export function optionsForField(field: string): string[] {
   if (field === LAYER_FIELD) return LAYERS.map((l) => l.label)
@@ -310,7 +411,11 @@ export const PROPERTY_TAG_PRINT_CSS = `
   .prop-tag {
     white-space: nowrap;
     border-radius: 3px;
-    padding: 0 2px;
+    padding: 0 3px;
+    margin: 0 -1px;
+    /* The same faint ground the tag wears in the light theme, so an exported
+       note looks like the note it was exported from. */
+    background: color-mix(in srgb, var(--hue, #9a9aa2) 13%, transparent);
     color: var(--hue-ink, #57534e);
     font-weight: 600;
     -webkit-print-color-adjust: exact;
