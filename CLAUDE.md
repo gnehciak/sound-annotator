@@ -149,13 +149,24 @@ the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Loca
 
 **Note properties come in two shapes.** The `elements` *block*
 (`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects
-the whole elements grid into one panel under the note. **Inline property tags**
-put a single value in the prose instead: type `@` in a note's text and the
-menu offers the flattened taxonomy (`src/lib/propertyTags.ts` — `@pitch` opens
-the category, `@rising` finds the one value, an unmatched word becomes a plain
-tag), then the pick lands as a hued chip you can drag anywhere in the sentence.
-The same `@` menu still lists note cross-references below the properties, so
-there is one trigger key, not two (`src/components/noteMention.ts`).
+the whole concept grid into one panel under the note. **Inline property tags**
+put a single value in the prose instead: type `@` in a note's text and the pick
+lands as a hued chip you can drag anywhere in the sentence. The same `@` menu
+still lists note cross-references below the properties, so there is one trigger
+key, not two (`src/components/noteMention.ts`).
+
+**The `@` menu narrows like an editor's completion list**, which is what the
+420-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads
+a leading run of words as a *scope* and matches the rest inside it, so
+"@timbre bright" is Bright within Timbre — and then, deliberately, every other
+word in Bright's field follows it down the list, because "what could I say
+instead of bright?" is the question the menu exists to answer. That needs
+`allowSpaces` on the suggestion, which would otherwise match `@` plus the whole
+paragraph; a four-word cap and a menu that *hides* itself when nothing matches
+are what bound it. Retuning the vocabulary is one array in
+`lib/musicElements.ts` — but **field ids there are stored data** (the keys of
+`ElementsData.fields`, the `data-field` of every chip), so relabel freely and
+rename ids never.
 
 The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
 `PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new

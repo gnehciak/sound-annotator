@@ -82,27 +82,96 @@ const ALL: PropertyOption[] = [
 ]
 
 /**
- * Values matching a "@" query, best-first. A query hits on the value, the field
- * label, or the category label — so "@rising" finds the one contour, while
- * "@pitch" opens the whole Pitch category, which is what makes a category name
- * a usable thing to type.
+ * Where a value matched the query. Lower sorts first; -1 means no match.
  */
-export function searchProperties(query: string, limit = 8): PropertyOption[] {
-  const q = query.trim().toLowerCase()
+function scoreValue(opt: PropertyOption, term: string): number {
+  const v = opt.value.toLowerCase()
+  if (v === term) return 0
+  if (v.startsWith(term)) return 1
+  // A later word of a multi-word value — "register" inside "high register".
+  if (v.includes(` ${term}`)) return 2
+  if (v.includes(term)) return 3
+  return -1
+}
+
+/** Same, for a value's field and category names — the coarser fallback. */
+function scoreLabel(opt: PropertyOption, term: string): number {
+  if (opt.fieldLabel.toLowerCase().includes(term)) return 4
+  if (opt.category.toLowerCase().includes(term)) return 5
+  return -1
+}
+
+/**
+ * The values a leading run of words narrows to, or null if it names nothing.
+ * Two characters is the floor, so "@p" still finds the dynamic rather than
+ * disappearing into the Pitch category.
+ */
+function scopeFor(head: string): PropertyOption[] | null {
+  const h = head.trim().toLowerCase()
+  if (h.length < 2) return null
+  const byFieldStart = ALL.filter((o) => o.fieldLabel.toLowerCase().startsWith(h))
+  if (byFieldStart.length) return byFieldStart
+  const byCategory = ALL.filter((o) => o.category.toLowerCase().startsWith(h))
+  if (byCategory.length) return byCategory
+  const byField = ALL.filter((o) => o.fieldLabel.toLowerCase().includes(h))
+  return byField.length ? byField : null
+}
+
+const ranked = (pool: PropertyOption[], term: string, score = scoreValue) =>
+  pool
+    .map((o) => ({ o, s: score(o, term) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => a.s - b.s)
+    .map((x) => x.o)
+
+/**
+ * Values matching a "@" query, best-first — and then, deliberately, the words
+ * you could have used instead.
+ *
+ * The menu narrows the way an editor's completion list does. A leading run of
+ * words that names a category or a field scopes the search, and what is left
+ * is matched inside that scope: "@timbre bright" is Bright *within* Timbre.
+ * Once a value is pinned, the rest of its field follows it down the list, so
+ * the answer to "what else could I say instead of bright?" is on screen
+ * without retyping — which is the whole point of the menu over free text.
+ *
+ * A query that names nothing at all returns nothing, and the caller hides the
+ * popup rather than parking an empty menu over the prose.
+ */
+export function searchProperties(query: string, limit = 10): PropertyOption[] {
+  const q = query.trim().toLowerCase().replace(/\s+/g, ' ')
   if (!q) return ALL.slice(0, limit)
-  const scored: { opt: PropertyOption; score: number }[] = []
-  for (const opt of ALL) {
-    const value = opt.value.toLowerCase()
-    let score = -1
-    if (value.startsWith(q)) score = 0
-    else if (value.includes(q)) score = 1
-    else if (opt.category.toLowerCase().startsWith(q)) score = 2
-    else if (opt.fieldLabel.toLowerCase().includes(q)) score = 3
-    else if (opt.category.toLowerCase().includes(q)) score = 4
-    if (score >= 0) scored.push({ opt, score })
+  const words = q.split(' ')
+
+  // Longest leading run of words that names a category or field wins the
+  // scope; the remainder is the term searched inside it.
+  let pool = ALL
+  let term = q
+  for (let take = words.length; take >= 1; take--) {
+    const scoped = scopeFor(words.slice(0, take).join(' '))
+    if (scoped) {
+      pool = scoped
+      term = words.slice(take).join(' ')
+      break
+    }
   }
-  scored.sort((a, b) => a.score - b.score)
-  return scored.slice(0, limit).map((s) => s.opt)
+
+  let hits: PropertyOption[]
+  if (!term) {
+    hits = pool // the query named a scope and nothing more — show all of it
+  } else {
+    hits = ranked(pool, term)
+    // Scoped but empty: the scope was a wrong guess, so widen back out.
+    if (!hits.length && pool !== ALL) hits = ranked(ALL, term)
+    // Still nothing: match the words against category and field names.
+    if (!hits.length) hits = ranked(ALL, term, scoreLabel)
+  }
+
+  const top = hits[0]
+  const alternatives = top
+    ? ALL.filter((o) => o.field === top.field && !hits.includes(o))
+    : []
+  return [...hits, ...alternatives].slice(0, limit)
 }
 
 /** Sibling values a chip can be switched to (empty for a custom tag). */
