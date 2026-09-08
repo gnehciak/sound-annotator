@@ -174,6 +174,81 @@ export function searchProperties(query: string, limit = 10): PropertyOption[] {
   return [...hits, ...alternatives].slice(0, limit)
 }
 
+/**
+ * Words that tag themselves as you type, with no "@" — the rest of the
+ * vocabulary stays a keystroke away behind the menu.
+ *
+ * This is an allowlist rather than a stoplist, and deliberately so: it holds
+ * only terms you would essentially never type in a music note in their
+ * everyday sense. "Legato", "hemiola" and "monophonic" can fire on sight;
+ * "even", "light", "full", "clear", "return" and "major" cannot, because a
+ * sentence about music uses those words as ordinary English several times a
+ * paragraph and a chip would land in the middle of one. Dynamic letters (p, f,
+ * ff…) are out for the same reason, only more so.
+ *
+ * Failing closed is the point — a term added to the taxonomy later does not
+ * start auto-firing until someone puts it here on purpose. Add a line to widen
+ * it; every entry must match a value in lib/musicElements.ts exactly (the
+ * index below silently drops any that does not).
+ */
+const AUTO_TERMS = [
+  // Performance markings and playing techniques — the Italian and the named.
+  'Accelerando', 'Allegro', 'Animando', 'Arco', 'Cantabile', 'Crescendo',
+  'Decrescendo', 'Delicatamente', 'Diminuendo', 'Dolce', 'Espressivo',
+  'Glissandi', 'Glissando', 'Grazioso', 'Legato', 'Leggierissimo', 'Leggiero',
+  'Lento', 'Maestoso', 'Marcato', 'Pizzicato', 'Rallentando', 'Ritardando',
+  'Ritenuto', 'Rubato', 'Semplice', 'Sfzp', 'Spiccato', 'Staccatissimo',
+  'Staccato', 'Tenuto', 'Tremolo', 'Trill', 'Vibrato',
+  // Pitch and harmony.
+  'Aeolian', 'Arpeggiated', 'Ascending', 'Augmented', 'Bitonal', 'Cadential',
+  'Cadenza', 'Chromatic', 'Chromaticism', 'Cluster-like', 'Clusters',
+  'Conjunct', 'Consonant', 'Descending', 'Diatonic', 'Diminished',
+  'Disjunct', 'Dissonance', 'Dissonant', 'Dorian', 'Drone', 'Florid',
+  'Imperfect', 'Mixolydian', 'Modal', 'Modality', 'Modulating', 'Pentatonic',
+  'Phrygian', 'Polytonal', 'Quartal', 'Scale-based', 'Scalic', 'Stepwise',
+  'Tessitura', 'Tonal', 'Triadic', 'Unresolved', 'Whole-tone',
+  // Duration.
+  'Anacrusis', 'Compound', 'Cross-rhythm', 'Dotted', 'Duple', 'Duplet',
+  'Hemiola', 'Hemiolic', 'Multimetric', 'Off-beat', 'Polyrhythm',
+  'Polyrhythmic', 'Quadruple', 'Quintuplet', 'Sextuplet', 'Syncopated',
+  'Triple', 'Triplet',
+  // Texture and structure.
+  'Antiphonal', 'Canon', 'Canonic', 'Contrapuntal', 'Counter-melody',
+  'Countermelody', 'Fugal', 'Fugue-like', 'Hocket', 'Homogenous',
+  'Homophonic', 'Imitation', 'Imitative', 'Monophonic', 'Ostinato',
+  'Polyphonic', 'Polyphony', 'Augmentation', 'Call-and-response', 'Climactic',
+  'Coda', 'Codetta', 'Diminution', 'Motivic', 'Question-and-answer',
+  'Sectional', 'Sequential', 'Through-composed',
+  // Timbre and expression that read as terms of art, not description.
+  'Accented', 'Arc-shaped', 'Bell-like', 'Chant-like', 'Dance-like',
+  'Echoey', 'Ethereal', 'Lilting', 'Lyrical', 'March-like', 'Mellow',
+  'Metallic', 'Nasal', 'Percussive', 'Slurred', 'Slurs', 'Terraced',
+  'Warlike',
+  // Performing media.
+  'Blowing', 'Bowing', 'Brass', 'Choir', 'Duet', 'Orchestra', 'Percussion',
+  'Plucking', 'Quartet', 'Quintet', 'Trio', 'Woodwind',
+]
+
+/** Lowercased auto-taggable word → the option it stands for. */
+const AUTO_INDEX = new Map<string, PropertyOption>()
+for (const term of AUTO_TERMS) {
+  const hit = ALL.find((o) => o.value === term)
+  if (hit) AUTO_INDEX.set(term.toLowerCase(), hit)
+}
+
+/**
+ * The option a just-typed word tags itself as, if any. Case-insensitive, so
+ * "monophonic" mid-sentence and "Monophonic" after a full stop both land.
+ */
+export function autoTagFor(word: string): PropertyOption | undefined {
+  return AUTO_INDEX.get(word.toLowerCase())
+}
+
+/** Auto-taggable terms that no longer match a value — a dev-time typo check. */
+export function unmatchedAutoTerms(): string[] {
+  return AUTO_TERMS.filter((t) => !ALL.some((o) => o.value === t))
+}
+
 /** Sibling values a chip can be switched to (empty for a custom tag). */
 export function optionsForField(field: string): string[] {
   if (field === LAYER_FIELD) return LAYERS.map((l) => l.label)
@@ -233,25 +308,22 @@ export function summarizePropertyTags(html: string): string {
  */
 export const PROPERTY_TAG_PRINT_CSS = `
   .prop-tag {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
     white-space: nowrap;
-    border: 1px solid var(--hue-ink, #57534e);
-    border-radius: 4px;
-    padding: 0 4px;
-    margin: 0 1px;
-    font-size: 11px;
+    border-radius: 3px;
+    padding: 0 2px;
+    color: var(--hue-ink, #57534e);
+    font-weight: 600;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .prop-tag-cat {
-    font: 600 8px/1.6 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--hue-ink, #57534e);
+  /* On screen the concept is a tooltip. Paper has no hover, and colour alone
+     means nothing without a legend, so print it after the value. */
+  .prop-tag[data-category]:not([data-category=''])::after {
+    content: ' (' attr(data-category) ')';
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
   }
-  .prop-tag-val { color: #241f1b; }
 `
 
 /** The AA-safe ink a chip's category label and border wear on white paper. */

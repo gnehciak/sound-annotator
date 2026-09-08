@@ -1,14 +1,17 @@
-// The inline property tag: a TipTap atom node that renders as a hued chip
-// sitting inside the note's prose. Inserted by typing "@" (see noteMention.ts),
-// draggable to anywhere else in the text, and clickable to swap its value.
+// The inline property tag: a TipTap atom node that renders as a hued token
+// sitting inside the note's prose — the value alone, coloured by its concept,
+// with the concept itself on hover. Two ways in: the "@" menu (noteMention.ts),
+// and typing an unmistakable term like "monophonic" or "legato" in ordinary
+// prose, which tags itself the moment the word ends (see the input rule below).
+// Draggable to anywhere else in the text, and clickable to swap its value.
 //
 // The node is `atom` + `draggable`, which is what gives it ProseMirror's own
 // drag-and-drop: grabbing the chip lifts it out of the paragraph and drops it
 // wherever the caret lands, without the surrounding text ever being selected.
 // The chip's editable React view lives in PropertyTagView.tsx.
-import { Node, mergeAttributes } from '@tiptap/core'
+import { InputRule, Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { describeField, hueFor, inkFor } from '../lib/propertyTags'
+import { autoTagFor, describeField, hueFor, inkFor } from '../lib/propertyTags'
 import PropertyTagView from './PropertyTagView'
 
 /**
@@ -27,6 +30,9 @@ function chipAttrs(field: string, value: string) {
     'data-property-tag': '',
     'data-field': field,
     'data-value': value,
+    // The concept is the tooltip on screen. On paper there is no hover, so the
+    // print stylesheet reads it back out of here — see PROPERTY_TAG_PRINT_CSS.
+    'data-category': category,
     class: 'prop-tag',
     style: `--hue: ${color}; --hue-ink: ${inkFor(field, value)}`,
     title: category ? `${category}: ${value}` : value,
@@ -63,15 +69,7 @@ export const PropertyTag = Node.create({
   renderHTML({ node, HTMLAttributes }) {
     const field = String(node.attrs.field ?? '')
     const value = String(node.attrs.value ?? '')
-    const { category } = describeField(field)
-    return [
-      'span',
-      mergeAttributes(HTMLAttributes, chipAttrs(field, value)),
-      ...(category
-        ? [['span', { class: 'prop-tag-cat' }, category] as const]
-        : []),
-      ['span', { class: 'prop-tag-val' }, value],
-    ]
+    return ['span', mergeAttributes(HTMLAttributes, chipAttrs(field, value)), value]
   },
 
   renderText({ node }) {
@@ -80,5 +78,46 @@ export const PropertyTag = Node.create({
 
   addNodeView() {
     return ReactNodeViewRenderer(PropertyTagView)
+  },
+
+  addInputRules() {
+    return [
+      new InputRule({
+        // The word just finished, plus the character that finished it. The
+        // lookbehind (rather than a captured prefix) is what makes a term
+        // directly after a chip work: ProseMirror renders the atom into the
+        // matched text as a "%leaf%" placeholder, and any non-letter counts as
+        // a boundary. Newline is deliberately not a terminator — the rule
+        // consumes the character it fires on, and re-inserting a newline is
+        // not the same as letting Enter split the block.
+        find: /(?<![\p{L}\p{M}'’-])([\p{L}][\p{L}\p{M}'’-]*)([\s.,;:!?)\]}"'”’])$/u,
+        handler: ({ range, match, chain }) => {
+          const hit = autoTagFor(match[1])
+          // Dispatching no steps means the rule did not apply and the text
+          // stands — the common case, since most words are just words.
+          if (!hit) return null
+          // ProseMirror suppresses the character that triggered a rule, so the
+          // terminator has to go back in behind the tag or it is eaten.
+          chain()
+            .insertContentAt({ from: range.from, to: range.to }, [
+              {
+                type: 'propertyTag',
+                attrs: { field: hit.field, value: hit.value },
+              },
+              { type: 'text', text: match[2] },
+            ])
+            .run()
+        },
+      }),
+    ]
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      // Backspace straight after an auto-tag puts the plain word back, the way
+      // it undoes any other input rule. Returns false when there is nothing to
+      // undo, so ordinary Backspace is untouched.
+      Backspace: () => this.editor.commands.undoInputRule(),
+    }
   },
 })

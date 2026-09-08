@@ -1,5 +1,7 @@
-// The editable face of an inline property tag — the chip you see in the note's
-// prose. The node itself (parse/serialise/drag) lives in propertyTag.ts.
+// The editable face of an inline property tag — the token you see in the
+// note's prose. It shows the value alone; the concept it belongs to is the
+// tooltip (and, on paper, a print-only suffix). The node itself
+// (parse/serialise/drag/auto-tag) lives in propertyTag.ts.
 import { useRef, useState } from 'react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { X } from 'lucide-react'
@@ -39,6 +41,7 @@ export default function PropertyTagView({
       data-field={field}
       data-value={value}
       title={category ? `${category}: ${value}` : value}
+      data-category={category || undefined}
       className="prop-tag"
       style={{
         ['--hue' as string]: color,
@@ -51,8 +54,7 @@ export default function PropertyTagView({
         setOpen((o) => !o)
       }}
     >
-      {category && <span className="prop-tag-cat">{category}</span>}
-      <span className="prop-tag-val">{value}</span>
+      {value}
       {editable && (
         <Popover
           open={open}

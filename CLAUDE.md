@@ -150,10 +150,16 @@ the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Loca
 **Note properties come in two shapes.** The `elements` *block*
 (`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects
 the whole concept grid into one panel under the note. **Inline property tags**
-put a single value in the prose instead: type `@` in a note's text and the pick
-lands as a hued chip you can drag anywhere in the sentence. The same `@` menu
-still lists note cross-references below the properties, so there is one trigger
-key, not two (`src/components/noteMention.ts`).
+put a single value in the prose instead — a coloured token that reads as part
+of the sentence (the concept itself is the tooltip, and a print-only suffix in
+the two PDFs), draggable anywhere in the text. Two ways in: the `@` menu, which
+still lists note cross-references below the properties so there is one trigger
+key rather than two (`src/components/noteMention.ts`), and **typing the term in
+ordinary prose** — an input rule on `PropertyTag` tags an unmistakable word the
+moment it ends, and Backspace puts the plain word straight back. Which words
+qualify is `AUTO_TERMS` in `lib/propertyTags.ts`: an allowlist on purpose, and
+a narrow one, because "even", "light", "clear" and "major" are ordinary English
+several times a paragraph and a chip must not land in the middle of one.
 
 **The `@` menu narrows like an editor's completion list**, which is what the
 420-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads
