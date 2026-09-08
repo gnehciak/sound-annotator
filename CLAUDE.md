@@ -359,13 +359,19 @@ flanked by − / +. The stepper moves *End* only, so trimming never loses the
 moment the note is cued to; ⇧ steps 5s, a held key repeats, and stepping under
 a second clears the end outright, which is how a range becomes a point note
 again (and takes `structure` with it, since a section brackets a span). The
-note's **record** — tags plus Section, Question and Bar — is a rail of
-`chip-outline` switches, each one's field revealed only when it is on; turning
-Bar off clears the value, so what the panel hides is never data. What the note
+note's **record** is two rails — the tags, then Section, Question and Bar as
+`chip-outline` switches — because the two are different jobs: tags are the
+note's own vocabulary and grow to any length, the switches are a fixed set.
+Each switch's field is revealed only when it is on, and turning Bar off clears
+the value, so what the panel hides is never data. What the note
 puts **on the picture** is two objects rather than switches (the cover slot and
 the pin key, above). The note's colour and its delete button live in the host's
 title bar, which every presentation already pays for — `PluginWindow` takes
-them as `leading` / `actions`, and App supplies them.
+them as `leading` / `actions`, and App supplies them. That bar no longer
+repeats the note's span (the time rail is right under it), and the two
+presentations share **one** key rather than a two-button radio: it shows the
+view it will take you to, so there is nothing to read to work out which is on,
+and one fewer icon sits beside the plugin's own destructive action.
 
 **A note's properties live in its prose.** An **inline property tag** is a
 coloured token inside the note's own sentence (the concept itself is the

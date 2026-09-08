@@ -6,8 +6,6 @@ export type WindowMode = 'dock' | 'modal'
 interface Props {
   /** Uppercase mono title, e.g. the plugin label. */
   title: string
-  /** Optional right-of-title detail, e.g. the note's timecode. */
-  subtitle?: string
   /**
    * Rendered before the title — the plugin's own identity mark, e.g. the
    * note's colour swatch. The title bar is the one row every presentation
@@ -41,7 +39,6 @@ interface Props {
  */
 export default function PluginWindow({
   title,
-  subtitle,
   leading,
   actions,
   mode,
@@ -69,30 +66,34 @@ export default function PluginWindow({
       <span className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
         {title}
       </span>
-      {subtitle && (
-        <span className="shrink-0 font-mono text-[11px] tabular-nums tracking-wider text-muted">
-          {subtitle}
-        </span>
-      )}
       <div className="flex-1" />
       {actions && (
         <>
           {actions}
-          <span className="mx-0.5 h-3.5 w-px bg-line" />
+          <span className="mx-1.5 h-3.5 w-px bg-line" />
         </>
       )}
-      <ModeButton
-        active={mode === 'dock'}
-        title="Dock to the side — keeps playback live"
-        onClick={() => onSetMode('dock')}
-        icon={<PanelRight size={14} />}
-      />
-      <ModeButton
-        active={mode === 'modal'}
-        title="Open as a focused window — pauses playback"
-        onClick={() => onSetMode('modal')}
-        icon={<Maximize2 size={13} />}
-      />
+      {/* One key for the two presentations, not a two-button radio: it shows
+          the view it will *take you to*, so there is no "which of these is
+          on?" to read at a glance — and one fewer icon beside the plugin's
+          own destructive action. */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={mode === 'modal'}
+        onClick={() => onSetMode(mode === 'dock' ? 'modal' : 'dock')}
+        title={
+          mode === 'dock'
+            ? 'Open as a focused window — pauses playback'
+            : 'Dock to the side — keeps playback live'
+        }
+        aria-label={
+          mode === 'dock' ? 'Open as a focused window' : 'Dock to the side'
+        }
+        className="btn-icon press"
+      >
+        {mode === 'dock' ? <Maximize2 size={13} /> : <PanelRight size={14} />}
+      </button>
       {onClose && (
         <>
           <span className="mx-0.5 h-3.5 w-px bg-line" />
@@ -140,31 +141,5 @@ export default function PluginWindow({
       {header}
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
-  )
-}
-
-function ModeButton({
-  active,
-  title,
-  onClick,
-  icon,
-}: {
-  active: boolean
-  title: string
-  onClick: () => void
-  icon: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-pressed={active}
-      className={`btn-icon press ${
-        active ? 'bg-raised text-fg' : 'text-muted hover:bg-raised hover:text-fg'
-      }`}
-    >
-      {icon}
-    </button>
   )
 }

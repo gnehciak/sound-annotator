@@ -202,9 +202,10 @@ export default function NoteInspector({
         />
       </div>
 
-      {/* ---- the record: what kind of note this is. Tags and the three
-              switches read as one rail of chips, and each switch's field
-              appears only once it's on. ---- */}
+      {/* ---- the record: what kind of note this is. Two rails, because the
+              two are different jobs: tags are the note's own vocabulary and
+              grow to any length, the three switches are a fixed set. Each
+              switch's field appears only once it's on. ---- */}
       <div className="flex flex-col gap-2 border-b border-line/60 px-[13px] py-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <TagPicker
@@ -212,7 +213,9 @@ export default function NoteInspector({
             projectTags={projectTags}
             onChange={(tags) => onUpdate({ tags })}
           />
-          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-line" />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
           <PropChip
             icon={Brackets}
             label="Section"

@@ -684,9 +684,6 @@ export default function App() {
   const showModal =
     !effectiveViewOnly && !!selectedNote && effectiveWindowMode === 'modal'
   const transportLocked = showModal
-  const inspectorSubtitle = selectedNote
-    ? noteLabel(selectedNote.start, selectedNote.end)
-    : undefined
   // The note's identity mark and its one destructive verb ride the inspector's
   // title bar — the row every presentation already pays for — rather than a
   // metadata row of their own inside the panel (PluginWindow `leading`/
@@ -2832,7 +2829,6 @@ export default function App() {
                   <div className="h-full w-[var(--inspector-w)]">
                     <PluginWindow
                       title="Note"
-                      subtitle={inspectorSubtitle}
                       leading={inspectorSwatch}
                       actions={inspectorActions}
                       mode="dock"
@@ -2891,7 +2887,6 @@ export default function App() {
       {showModal && selectedNote && (
         <PluginWindow
           title="Note"
-          subtitle={inspectorSubtitle}
           leading={inspectorSwatch}
           actions={inspectorActions}
           mode="modal"
