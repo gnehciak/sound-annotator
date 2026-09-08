@@ -7,7 +7,8 @@
     "dev": "vite",
     "dev:full": "vercel dev",
     "prebuild": "node scripts/sync-vocabulary.mjs --soft",
-    "build": "tsc -b && vite build",
+    "build": "npm run check:schema && tsc -b && vite build",
+    "check:schema": "node scripts/check-schema-doc.mjs",
     "lint": "eslint .",
     "sync:vocab": "node --env-file-if-exists=.env.local scripts/sync-vocabulary.mjs",
     "preview": "vite preview"
@@ -26,6 +27,7 @@
     "@vercel/blob": "^2.5.0",
     "@vercel/functions": "^3.7.5",
     "lucide-react": "^1.17.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "wavesurfer.js": "^7.12.7"

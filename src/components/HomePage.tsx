@@ -44,9 +44,16 @@ interface Props {
    *  filter them out of a search or a tally. */
   trashed: Project[]
   folders: Folder[]
-  /** Open folder (null = root library). Owned by App so it survives editor trips. */
+  /** Open folder (null = root library). Comes off the URL — App reads the
+   *  route — so a folder is a place the browser can go Back to. */
   openFolderId: string | null
   onOpenFolder: (id: string | null) => void
+  /** Your library, or the public Browse gallery. Also a route (`?browse=1`). */
+  homeTab: 'library' | 'browse'
+  onSwitchHomeTab: (tab: 'library' | 'browse') => void
+  /** The trash (`?trash=1`) — a destination beside the folders, not one of them. */
+  trashOpen: boolean
+  onOpenTrash: () => void
   onOpenTrack: (id: string) => void
   /** Creates in the open folder (App reads openFolderId) and opens the editor.
    *  Pass 'structure' for a song-structure board (the section timeline). */
@@ -105,18 +112,9 @@ const salutation = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-/** Which home view is on: your library, or the public Browse gallery. */
+/** Which home view is on: your library, or the public Browse gallery. Both are
+ *  routes now (App owns them); the sticky "last bench" lives there too. */
 type HomeView = 'library' | 'browse'
-
-const VIEW_KEY = 'sound-annotator:home-view'
-
-const loadView = (): HomeView => {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'browse' ? 'browse' : 'library'
-  } catch {
-    return 'library'
-  }
-}
 
 /**
  * Stagger helper for the dashboard cascade: base delay plus a per-index step,
@@ -149,6 +147,10 @@ export default function HomePage({
   folders,
   openFolderId,
   onOpenFolder,
+  homeTab: view,
+  onSwitchHomeTab: switchView,
+  trashOpen,
+  onOpenTrash,
   onOpenTrack,
   onCreateTrack,
   onDeleteTrack,
@@ -165,17 +167,6 @@ export default function HomePage({
 }: Props) {
   const theme = useResolvedTheme()
   const { user } = useAuth()
-  // Library vs the public Browse gallery. Sticky across visits — a teacher
-  // mid-lesson reopening the app lands back on whichever bench they left.
-  const [view, setView] = useState<HomeView>(loadView)
-  const switchView = (v: HomeView) => {
-    setView(v)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {
-      /* private mode — the view just won't stick */
-    }
-  }
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -190,14 +181,17 @@ export default function HomePage({
   const [cascading, setCascading] = useState(true)
   // The trash is a destination like a folder, but not a folder: App must never
   // see it as openFolderId, or a track created while it's open would be born
-  // into it. So it's local, and this key — not openFolderId alone — is what
-  // "which view am I in" means for the cascade and the remount below.
-  const [trashOpen, setTrashOpen] = useState(false)
+  // into it. It's its own route, and this key — not openFolderId alone — is
+  // what "which view am I in" means for the cascade and the remount below.
   const viewKey = trashOpen ? 'trash' : openFolderId ?? 'root'
   const [lastViewKey, setLastViewKey] = useState(viewKey)
   if (lastViewKey !== viewKey) {
     setLastViewKey(viewKey)
     setCascading(true)
+    // Arriving in the trash clears the search: the two fight over the same
+    // tile grid, and a stale query would hide the track you came to restore.
+    // Here rather than in the click handler, so Back into the trash does it too.
+    if (viewKey === 'trash') setQuery('')
   }
   useEffect(() => {
     // 1.2s covers header rise (~320ms) + tracks-heading delay (240ms) + 12-tile
@@ -206,19 +200,9 @@ export default function HomePage({
     return () => clearTimeout(t)
   }, [viewKey])
 
-  // Opening the trash clears the search: the two would otherwise fight over the
-  // same tile grid, and a stale query would hide the track you came to restore.
-  const openTrash = () => {
-    setQuery('')
-    setTrashOpen(true)
-  }
-  const leaveTrash = () => setTrashOpen(false)
-  // Any folder navigation leaves the trash — it's a sibling destination, not a
-  // layer on top of one.
-  const goToFolder = (id: string | null) => {
-    setTrashOpen(false)
-    onOpenFolder(id)
-  }
+  // Leaving the trash is just going to the library root — sibling destinations,
+  // not a layer on top of one, so the same navigation covers both.
+  const leaveTrash = () => onOpenFolder(null)
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -527,7 +511,7 @@ export default function HomePage({
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       enterDelay={cascading ? stagger(140, i) : '0ms'}
-                      onOpen={() => goToFolder(f.id)}
+                      onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
                         setRenamingId(null)
@@ -546,7 +530,7 @@ export default function HomePage({
                     enterDelay={
                       cascading ? stagger(140, folders.length) : '0ms'
                     }
-                    onOpen={openTrash}
+                    onOpen={onOpenTrash}
                     onDropTrack={onDeleteTrack}
                   />
                   <button
@@ -668,10 +652,54 @@ export default function HomePage({
 
 /* ---- import button --------------------------------------------------------- */
 
+/** Where the published track-file spec lives (public/track-schema.md). */
+const SCHEMA_PATH = '/track-schema.md'
+
 /**
- * "Import" — brings an exported track JSON back in through a hidden file
- * picker. Import runs async (audio/images are re-hosted), so the button shows
- * its own busy state; failures surface as an alert with the parser's message.
+ * One two-line row in a home-page menu: icon, title, and a line of detail
+ * under it. Shared by the Import and New-track menus so the two popovers read
+ * as one control.
+ */
+function MenuRow({
+  icon,
+  title,
+  detail,
+  onClick,
+}: {
+  icon: React.ReactNode
+  title: string
+  detail: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-raised"
+    >
+      <span className="mt-[1px] shrink-0 text-accentink/80">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[12.5px] font-semibold text-fg">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+          {detail}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/**
+ * "Import" — a two-way door onto the portable track JSON (see
+ * lib/projectJson.ts): choose a file to bring one in, or reach the published
+ * schema that describes what such a file looks like. The schema rows are the
+ * point of the menu: a teacher with a listening guide and no export to copy
+ * hands the link to an AI assistant and gets a file back, so the spec has to
+ * be findable from the same button that eats its output.
+ *
+ * Import runs async (audio/images are re-hosted), so the button shows its own
+ * busy state; failures surface as an alert with the parser's message.
  * `variant` picks the chrome: the quiet secondary next to "New track", or the
  * matching-size hero button for the first-run empty state.
  */
@@ -682,26 +710,66 @@ function ImportTrackButton({
   onImport: (file: File) => Promise<void>
   variant: 'header' | 'hero'
 }) {
-  const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  // null when idle; otherwise how far through a run of files we are. A single
+  // file is just a run of one, so there's no second code path for the common
+  // case — the label only mentions counts when there's more than one.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const busy = progress !== null
 
-  async function handleFile(file: File) {
-    setBusy(true)
+  /**
+   * Import every chosen file, one at a time. Sequential on purpose: each
+   * import re-uploads its images, and a whole folder of kits fired at once
+   * would open dozens of parallel uploads. One bad file doesn't stop the run
+   * — the failures are collected and reported together at the end, so
+   * importing 30 tracks never becomes 30 dialogs.
+   */
+  async function handleFiles(files: File[]) {
+    const failed: string[] = []
+    setProgress({ done: 0, total: files.length })
     try {
-      await onImport(file)
-    } catch (err) {
-      console.error('Import failed:', err)
-      const detail = err instanceof Error && err.message ? err.message : ''
-      alert(
-        detail
-          ? `Import failed — ${detail}`
-          : 'Import failed — check the file and try again.',
-      )
+      for (const [i, file] of files.entries()) {
+        try {
+          await onImport(file)
+        } catch (err) {
+          console.error('Import failed:', file.name, err)
+          const detail = err instanceof Error && err.message ? err.message : ''
+          failed.push(detail ? `${file.name} — ${detail}` : file.name)
+        }
+        setProgress({ done: i + 1, total: files.length })
+      }
     } finally {
-      setBusy(false)
+      setProgress(null)
       // Re-arm the picker so re-choosing the same file fires change again.
       if (inputRef.current) inputRef.current.value = ''
     }
+    if (failed.length > 0)
+      alert(
+        `${failed.length} of ${files.length} ${
+          files.length === 1 ? 'file' : 'files'
+        } couldn’t be imported:\n\n${failed.join('\n')}`,
+      )
+  }
+
+  // Handlers live in the component body, not inline in the rows below: a
+  // lambda handed to `row()` during render reads as render-phase ref access.
+  function chooseFile() {
+    setOpen(false)
+    inputRef.current?.click()
+  }
+
+  function openSchema() {
+    setOpen(false)
+    window.open(SCHEMA_PATH, '_blank', 'noopener')
+  }
+
+  async function copySchemaLink() {
+    await navigator.clipboard.writeText(`${window.location.origin}${SCHEMA_PATH}`)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
   }
 
   return (
@@ -710,19 +778,23 @@ function ImportTrackButton({
         ref={inputRef}
         type="file"
         accept=".json,application/json"
+        multiple
         className="hidden"
         aria-hidden
         tabIndex={-1}
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void handleFile(f)
+          const files = [...(e.target.files ?? [])]
+          if (files.length > 0) void handleFiles(files)
         }}
       />
       <button
+        ref={btnRef}
         type="button"
         disabled={busy}
-        onClick={() => inputRef.current?.click()}
-        title="Import a track from an exported JSON file"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Import tracks from JSON files, or read the file schema"
         className={`btn-ghost press shrink-0 disabled:cursor-wait ${
           variant === 'hero' ? 'px-4 py-2 text-[11px]' : ''
         }`}
@@ -733,9 +805,45 @@ function ImportTrackButton({
           <FileUp size={13} />
         )}
         <span className={variant === 'hero' ? '' : 'hidden sm:inline'}>
-          {busy ? 'Importing…' : 'Import'}
+          {!progress
+            ? 'Import'
+            : progress.total > 1
+              ? `Importing ${progress.done + 1}/${progress.total}…`
+              : 'Importing…'}
         </span>
+        <ChevronDown
+          size={11}
+          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
+      <Popover
+        open={open}
+        anchorRef={btnRef}
+        onClose={() => setOpen(false)}
+        width={280}
+      >
+        <div className="py-1">
+          <MenuRow
+            icon={<FileUp size={14} />}
+            title="Choose files…"
+            detail="Bring in tracks exported as JSON — one file or many."
+            onClick={chooseFile}
+          />
+          <div className="my-1 border-t border-line/60" />
+          <MenuRow
+            icon={<Braces size={14} />}
+            title="Track file schema"
+            detail="The spec an AI assistant needs to write one."
+            onClick={openSchema}
+          />
+          <MenuRow
+            icon={copied ? <Check size={14} /> : <Copy size={14} />}
+            title={copied ? 'Link copied' : 'Copy schema link'}
+            detail="Paste it to Claude with your listening guide."
+            onClick={() => void copySchemaLink()}
+          />
+        </div>
+      </Popover>
     </>
   )
 }
@@ -758,31 +866,10 @@ function NewTrackButton({
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
 
-  const row = (
-    icon: React.ReactNode,
-    title: string,
-    detail: string,
-    kind?: 'structure',
-  ) => (
-    <button
-      type="button"
-      onClick={() => {
-        setOpen(false)
-        onCreate(kind)
-      }}
-      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-raised"
-    >
-      <span className="mt-[1px] shrink-0 text-accentink/80">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-[12.5px] font-semibold text-fg">
-          {title}
-        </span>
-        <span className="mt-0.5 block text-[11px] leading-snug text-muted">
-          {detail}
-        </span>
-      </span>
-    </button>
-  )
+  function create(kind?: 'structure') {
+    setOpen(false)
+    onCreate(kind)
+  }
 
   return (
     <>
@@ -803,17 +890,18 @@ function NewTrackButton({
       </button>
       <Popover open={open} anchorRef={btnRef} onClose={() => setOpen(false)} width={252}>
         <div className="py-1">
-          {row(
-            <Pencil size={14} />,
-            'Annotated track',
-            'Timestamped rich-text notes that cue the player.',
-          )}
-          {row(
-            <Blocks size={14} />,
-            'Song structure',
-            'A visual map of a song’s sections — intro, verse, chorus…',
-            'structure',
-          )}
+          <MenuRow
+            icon={<Pencil size={14} />}
+            title="Annotated track"
+            detail="Timestamped rich-text notes that cue the player."
+            onClick={() => create()}
+          />
+          <MenuRow
+            icon={<Blocks size={14} />}
+            title="Song structure"
+            detail="A visual map of a song’s sections — intro, verse, chorus…"
+            onClick={() => create('structure')}
+          />
         </div>
       </Popover>
     </>
@@ -1326,14 +1414,20 @@ function TrackTile({
             exact) but stops being true while it's in there — the links 404 and
             the gallery card is gone. So the chips go quiet too, rather than
             promise a live link for a track nobody can reach. */}
-        {!trashed && p.published && (
+        {/* One link, so one chip: listed on Browse is the louder fact and
+            implies the link is live, so it stands in for "Shared" rather than
+            sitting beside it. */}
+        {!trashed && (p.published || p.shared) && (
           <span className="chip chip-signal">
-            <Globe size={10} /> Published
-          </span>
-        )}
-        {!trashed && p.shared && (
-          <span className="chip chip-signal">
-            <Eye size={10} /> Shared
+            {p.published ? (
+              <>
+                <Globe size={10} /> On Browse
+              </>
+            ) : (
+              <>
+                <Eye size={10} /> Link on
+              </>
+            )}
           </span>
         )}
         {folderName && (

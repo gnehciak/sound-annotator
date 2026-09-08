@@ -45,6 +45,7 @@ import {
   newGuestOwnerId,
   takeGuestCreateSlot,
 } from '../../_lib/guest.js'
+import { shareRoleFor } from '../../_lib/shares.js'
 import { json, err } from '../../_lib/respond.js'
 
 function idFrom(request: Request): string {
@@ -65,16 +66,38 @@ export async function GET(request: Request): Promise<Response> {
   // moment it's trashed and light up again on restore — trashing never touches
   // `shared` or `published`, so the way back is exact.
   const trashed = row.deleted_at != null
-  if (!trashed && (row.shared || row.editable_by_link || row.published))
-    return json(rowToProject(row, { withLock: true }))
   const uid = await getUid(request)
-  if (uid && row.owner_id === uid) return json(rowToProject(row, { withLock: true }))
+
+  // Signed out: the link is the whole story, and nothing below can apply — so
+  // a class of students costs neither a Clerk lookup nor a shares query.
+  if (!uid) {
+    if (!trashed && (row.shared || row.editable_by_link || row.published))
+      return json(rowToProject(row, { withLock: true }))
+    // Trashed reads as gone, not as forbidden: to a link holder the difference
+    // between "deleted" and "never existed" is nothing they can act on.
+    return trashed ? err(404, 'Not found') : err(403, 'Not shared')
+  }
+
+  if (row.owner_id === uid)
+    return json(rowToProject(row, { withLock: true, myRole: 'owner' }))
   // The admin console lists every project, so an admin must be able to open one
-  // that was never shared.
-  if (uid && (await isAdmin(uid))) return json(rowToProject(row, { withLock: true }))
-  // Trashed reads as gone, not as forbidden: to a link holder the difference
-  // between "deleted" and "never existed" is nothing they can act on.
-  return trashed ? err(404, 'Not found') : err(403, 'Not shared')
+  // that was never shared — including a trashed one, which the console's
+  // permanent delete has to be able to look at first.
+  if (trashed)
+    return (await isAdmin(uid))
+      ? json(rowToProject(row, { withLock: true }))
+      : err(404, 'Not found')
+
+  // Invited by email? That's an answer about this person, so it outranks the
+  // link: an editor invited to a view-only track must come back as an editor,
+  // not as one more anonymous reader.
+  const invited = await shareRoleFor(row.id, uid)
+  if (invited)
+    return json(rowToProject(row, { withLock: true, myRole: invited }))
+  if (row.shared || row.editable_by_link || row.published)
+    return json(rowToProject(row, { withLock: true }))
+  if (await isAdmin(uid)) return json(rowToProject(row, { withLock: true }))
+  return err(403, 'Not shared')
 }
 
 /** The claim a save carries to prove it holds the edit lock. The server
@@ -173,9 +196,23 @@ export async function PUT(request: Request): Promise<Response> {
   // manages the whole database, not just guest submissions.
   const admin = uid != null && (await isAdmin(uid))
   const isOwner = uid != null && (existing.owner_id === uid || admin)
+  // Invited by email (project_shares). An 'editor' invite carries exactly the
+  // link editor's rights, so it joins the same content-only branch below; a
+  // 'viewer' invite carries none and falls through to the 403, the same as a
+  // stranger. Only asked when the link doesn't already answer yes, so an
+  // ordinary link editor's autosave costs no extra lookups.
+  const invited =
+    isOwner || isGuest || existing.editable_by_link === true
+      ? null
+      : await shareRoleFor(existing.id, uid)
   // A guest with the right key stands in for the link editor: same content-only
   // rights, so the clipping below covers both without a second branch.
-  if (!isOwner && !isGuest && existing.editable_by_link !== true)
+  if (
+    !isOwner &&
+    !isGuest &&
+    existing.editable_by_link !== true &&
+    invited !== 'editor'
+  )
     return err(403, 'Not yours')
   if (!holds) return err(409, 'Another session is editing this project')
   if (
@@ -227,8 +264,14 @@ export async function PUT(request: Request): Promise<Response> {
   // Publishing (owner only). Flipping on stamps the byline + timestamp — the
   // Clerk lookup runs only on that transition, not on every save. Flipping
   // off delists immediately; the stale byline is harmless and invisible.
-  const published =
+  // Listing on Browse is a property of the view-only link, not a second gate:
+  // the gallery card opens the same ?view= URL. So the two flags are coerced
+  // into a coherent pair here — publishing turns the link on, and an off (or
+  // editable) link delists — rather than trusting a client to send both.
+  const wantPublished =
     'published' in body && isOwner ? body.published === true : existing.published
+  const published = wantPublished && !editableByLink
+  const linkOn = shared || published
   const nowPublishing = published && existing.published !== true
   const publishedAt = nowPublishing ? Date.now() : existing.published_at
   const publishedByName =
@@ -240,7 +283,7 @@ export async function PUT(request: Request): Promise<Response> {
       source = ${jsonb(source)}::jsonb,
       annotations = ${jsonb(annotations ?? [])}::jsonb,
       updated_at = ${updatedAt},
-      shared = ${shared},
+      shared = ${linkOn},
       editable_by_link = ${editableByLink},
       folder_id = ${folderId},
       settings = ${jsonb(settings)}::jsonb,
@@ -285,11 +328,18 @@ export async function DELETE(request: Request): Promise<Response> {
     // The console deletes live projects outright — the one caller allowed to
     // skip the trash, and it owns the "cannot be undone" confirm that says so.
     if (await isAdmin(uid)) {
+      const row = await getProjectRow(id)
+      if (row) await sql`DELETE FROM project_shares WHERE project_id = ${row.id}`
       await sql`DELETE FROM projects WHERE id = ${id} OR alias = ${id}`
       return json({ ok: true })
     }
     // An owner purges only out of their own trash: unreachable except through
     // it, so no stray call hard-deletes a track that was never deleted.
+    // Shares go first and by the row's REAL id: an alias must never reach a
+    // delete predicate, or the invite rows outlive the project they name.
+    const row = await getProjectRow(id)
+    if (row && row.owner_id === uid && row.deleted_at != null)
+      await sql`DELETE FROM project_shares WHERE project_id = ${row.id}`
     await sql`
       DELETE FROM projects
       WHERE (id = ${id} OR alias = ${id})

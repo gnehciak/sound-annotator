@@ -57,6 +57,32 @@ export async function isAdmin(uid: string): Promise<boolean> {
   }
 }
 
+/**
+ * The caller's primary email, lowercased — the identity per-person sharing is
+ * keyed on (see _lib/shares.ts).
+ *
+ * Memoized per lambda instance for a minute: this runs on foreign reads and on
+ * every autosave by an invited editor, and Clerk is a network hop away. A
+ * minute is short enough that a changed primary email takes effect while the
+ * teacher is still looking at the screen, and the cache is per-instance, so
+ * there is nothing to invalidate.
+ */
+const emailCache = new Map<string, { email: string | null; at: number }>()
+const EMAIL_TTL_MS = 60_000
+
+export async function getUserEmail(uid: string): Promise<string | null> {
+  const hit = emailCache.get(uid)
+  if (hit && Date.now() - hit.at < EMAIL_TTL_MS) return hit.email
+  try {
+    const u = await client().users.getUser(uid)
+    const email = u.primaryEmailAddress?.emailAddress?.toLowerCase() ?? null
+    emailCache.set(uid, { email, at: Date.now() })
+    return email
+  } catch {
+    return null
+  }
+}
+
 /** A user's display name, for the byline stamped when a project is published.
  *  Best-effort: a lookup failure publishes as "A teacher" rather than failing
  *  the save. */

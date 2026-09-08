@@ -15,16 +15,25 @@
 // settings keys holding primitives already pass through automatically. Bump
 // PROJECT_JSON_VERSION only for breaking shape changes (old files must keep
 // importing). See the note atop src/types.ts.
+//
+// The same change must add a row to public/track-schema.md, the published
+// spec people hand to an AI assistant to author a track file. That isn't a
+// courtesy: scripts/check-schema-doc.mjs runs first in `npm run build` and
+// fails the deploy when the doc and src/types.ts disagree.
 import type {
   Annotation,
   NoteBlock,
+  NoteOverlay,
   Project,
+  ProjectScore,
   ProjectSettings,
   ProjectSource,
+  ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
+import { sortTurns } from './score'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -149,6 +158,45 @@ function sanitizeBlocks(v: unknown): NoteBlock[] | undefined {
 }
 
 /** One note from the file, or null when it's beyond salvage (no valid start). */
+/**
+ * The note's on-video layer. `coverUrl` is kept as an ordinary string: an
+ * import lands through copySharedProject, which re-uploads the image under the
+ * importer's own storage (see lib/copyProject.ts) — so a file exported from
+ * another account arrives pointing at bytes that still exist, and stops doing
+ * so only if the original is deleted, exactly like an inline note image.
+ * A pin only means anything with both coordinates, so a half-written one is
+ * dropped rather than pinned to a frame corner.
+ */
+function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const o = v as Record<string, unknown>
+  const overlay: NoteOverlay = {}
+  const coverUrl = str(o.coverUrl)
+  if (coverUrl) overlay.coverUrl = coverUrl
+  if (o.coverFit === 'cover') overlay.coverFit = 'cover'
+  const coverX = num(o.coverX)
+  const coverY = num(o.coverY)
+  if (coverX != null) overlay.coverX = Math.min(1, Math.max(0, coverX))
+  if (coverY != null) overlay.coverY = Math.min(1, Math.max(0, coverY))
+  const pinX = num(o.pinX)
+  const pinY = num(o.pinY)
+  if (pinX != null && pinY != null) {
+    overlay.pinX = Math.min(1, Math.max(0, pinX))
+    overlay.pinY = Math.min(1, Math.max(0, pinY))
+    // What those fractions are *of*. Only meaningful alongside a pin, so it
+    // lives in here: an anchor on a note with no pin would be a setting for
+    // something that isn't there.
+    if (o.pinAnchor === 'score') {
+      overlay.pinAnchor = 'score'
+      const pinPage = num(o.pinPage)
+      if (pinPage != null && pinPage >= 1) overlay.pinPage = Math.round(pinPage)
+    }
+  }
+  const hold = num(o.hold)
+  if (hold != null && hold > 0) overlay.hold = hold
+  return Object.keys(overlay).length > 0 ? overlay : undefined
+}
+
 function sanitizeAnnotation(v: unknown): Annotation | null {
   if (!v || typeof v !== 'object') return null
   const a = v as Record<string, unknown>
@@ -180,6 +228,8 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   const lyrics = str(a.lyrics)
   if (lyrics) ann.lyrics = lyrics
   if (a.question === true) ann.question = true
+  const overlay = sanitizeOverlay(a.overlay)
+  if (overlay) ann.overlay = overlay
   const blocks = sanitizeBlocks(a.blocks)
   if (blocks) ann.blocks = blocks
   // Legacy exports (contentHtml only) get their text block here, like any read.
@@ -187,6 +237,73 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
 }
 
 const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
+const SCORE_MODES = new Set(['off', 'score', 'overlay'])
+const SCORE_FITS = new Set(['height', 'width'])
+
+/**
+ * The one settings key holding an object, so it needs its own pass — the
+ * lenient primitive sweep below drops anything nested. A score that names
+ * neither a Drive file nor a hosted URL can never load, so it is dropped
+ * whole rather than imported as a broken attachment.
+ *
+ * The URL of an uploaded score survives the trip deliberately: it is public
+ * (unguessable, like a note image), and copySharedProject re-uploads it under
+ * the importer's own path so the copy stops depending on the exporter's bytes.
+ */
+function sanitizeScore(v: unknown): ProjectScore | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const raw = v as Record<string, unknown>
+  const driveUrl = str(raw.driveUrl)
+  // As with a Drive source, re-derive the id from the link when the export is
+  // missing it — the id is what actually loads.
+  const driveFileId =
+    str(raw.driveFileId) ??
+    (driveUrl ? (parseDriveFileId(driveUrl) ?? undefined) : undefined)
+  const url = str(raw.url)
+  const kind = raw.kind === 'drive' || driveFileId ? 'drive' : 'blob'
+
+  const score: ProjectScore = { kind }
+  if (kind === 'drive') {
+    if (!driveFileId) return undefined
+    score.driveFileId = driveFileId
+    if (driveUrl) score.driveUrl = driveUrl
+  } else {
+    if (!url) return undefined
+    score.url = url
+    const fileName = str(raw.fileName)
+    if (fileName) score.fileName = fileName
+  }
+
+  const mode = str(raw.mode)
+  if (mode && SCORE_MODES.has(mode)) score.mode = mode as ProjectScore['mode']
+  const fit = str(raw.fit)
+  if (fit && SCORE_FITS.has(fit)) score.fit = fit as ProjectScore['fit']
+  const opacity = num(raw.opacity)
+  if (opacity != null) score.opacity = Math.min(1, Math.max(0.2, opacity))
+  if (raw.onTop === true) score.onTop = true
+  const turns = sanitizeTurns(raw.turns)
+  if (turns) score.turns = turns
+  return score
+}
+
+/**
+ * Page turns, re-sorted on the way in: every reader of the list assumes time
+ * order (the page lookup binary-searches it), and a hand-edited export is
+ * exactly where that would stop being true. Entries missing a usable time or
+ * page are dropped individually — one bad turn shouldn't cost the rest.
+ */
+function sanitizeTurns(v: unknown): ScoreTurn[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const turns: ScoreTurn[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const t = num((raw as Record<string, unknown>).t)
+    const page = num((raw as Record<string, unknown>).page)
+    if (t == null || t < 0 || page == null || page < 1) continue
+    turns.push({ t, page: Math.round(page) })
+  }
+  return turns.length > 0 ? sortTurns(turns) : undefined
+}
 
 /**
  * Settings pass through leniently: any key holding a primitive survives, so a
@@ -194,7 +311,8 @@ const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
  * open as a song-structure board — round-trips without this file having to
  * know it. Only `noteOrder` is checked against its enum (an unknown value
  * would silently break the notes-list sorting); everything non-primitive
- * (nested objects, arrays) is dropped.
+ * (nested objects, arrays) is dropped, which is why the score — the one
+ * object-valued key — gets an explicit pass of its own.
  */
 function sanitizeSettings(v: unknown): ProjectSettings | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
@@ -212,6 +330,8 @@ function sanitizeSettings(v: unknown): ProjectSettings | undefined {
     !NOTE_ORDERS.has(settings.noteOrder as string)
   )
     delete settings.noteOrder
+  const score = sanitizeScore((v as Record<string, unknown>).score)
+  if (score) settings.score = score
   return Object.keys(settings).length > 0
     ? (settings as ProjectSettings)
     : undefined

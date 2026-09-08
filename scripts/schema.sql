@@ -78,3 +78,27 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 
 CREATE INDEX IF NOT EXISTS folders_owner_idx ON folders (owner_id);
+
+-- Per-person sharing: who, besides the owner, may open a project and with what
+-- power. Keyed by EMAIL rather than uid, for the same reason ADMIN_EMAILS is —
+-- an invite is written before the person has necessarily signed in (and it
+-- survives the dev→production Clerk move, which mints new uids). Emails are
+-- stored lowercased; the API lowercases both sides of every comparison.
+--
+-- Roles: 'viewer' (open read-only, exactly as a view link) and 'editor' (write
+-- content, exactly as a link editor — never sharing, ownership or source).
+-- Absent row = no access, which is the default for everyone.
+--
+-- Rows are the project's, not the person's: they die with the project (the
+-- purge cron and DELETE ?purge=1 clear them) and ride the trash intact, so a
+-- restore puts the invite list back exactly as it left.
+CREATE TABLE IF NOT EXISTS project_shares (
+  project_id text NOT NULL,
+  email      text NOT NULL,
+  role       text NOT NULL DEFAULT 'viewer',
+  invited_at bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (project_id, email)
+);
+
+-- The lookup that runs on every foreign read: "what may this email do here?"
+CREATE INDEX IF NOT EXISTS project_shares_email_idx ON project_shares (email);

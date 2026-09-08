@@ -3,6 +3,14 @@
   "rewrites": [
     { "source": "/sso-callback", "destination": "/index.html" }
   ],
+  "headers": [
+    {
+      "source": "/track-schema.md",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    }
+  ],
   "crons": [
     { "path": "/api/cron/purge-trash", "schedule": "0 15 * * *" }
   ]

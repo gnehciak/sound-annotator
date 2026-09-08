@@ -142,25 +142,10 @@ export function saveVolume(v: number): void {
   }
 }
 
-// View-only (read-only) mode — a global workspace preference that hides every
-// editing affordance.
-const VIEW_ONLY_KEY = 'sound-annotator:view-only'
-
-export function loadViewOnly(): boolean {
-  try {
-    return localStorage.getItem(VIEW_ONLY_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function saveViewOnly(on: boolean): void {
-  try {
-    localStorage.setItem(VIEW_ONLY_KEY, on ? '1' : '0')
-  } catch {
-    /* ignore */
-  }
-}
+// View-only (read-only) mode is deliberately NOT persisted: it's a per-visit
+// mode owned by App state, so every track opens editable. It used to live here
+// under 'sound-annotator:view-only', which meant one presentation left every
+// later track — newly created ones included — silently read-only.
 
 // "Play once" mode lives on the project (see Project.settings) — it always
 // defaults off for new projects, no localStorage fallback. Point notes (no

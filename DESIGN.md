@@ -442,6 +442,48 @@ goes through `hueText()` (`src/lib/noteColors.ts`) so it stays AA in light.
 - **Level meter:** 16 thin segments in an inset well; the palette's meter hue
   low, signal mid, red (`--peak`) peak. Animates while playing, dim at rest.
 
+### The Stage Layer (on-video overlays)
+A note can take over the picture for its moment: a full-frame **cover image**
+standing in for the video (audio keeps playing), and/or a **pin** — a dot on
+the frame captioned with the note's own text. Both are drawn inside the 16:9
+frame beneath the transport (`src/components/VideoOverlays.tsx`).
+
+Chrome over video is **palette-blind** *and always dark*, whatever the mode —
+a themed pane would fight whatever frame sits behind it, and the light page's
+surfaces have no meaning on a picture. The note hue therefore arrives through
+`hueOnDark()` (`src/lib/noteColors.ts`), the dark-surface counterpart of
+`hueText()`: it lifts a hue toward white only until it clears AA on the box,
+so a custom note colour from the picker is as legible there as the eight data
+hues already are.
+
+The caption is `on-video-pop` (`src/index.css`) — the `.pop` family's job (dense
+floating glass, legible over live content) done in that palette-blind key, and
+shaped like the app's own instrument output rather than a callout: a silkscreen
+mono **timecode** label row in the note's hue, a hairline beneath it that exists
+only when a body follows, and the note's text clamped to three lines (a
+paragraph over the frame is a wall, not a caption — the note itself carries the
+rest). A 1px **leader** in the same hue runs from the dot into the box, so hue
+is doing what it does everywhere else here: linking two things, encoding
+identity. **No coloured edge bar** — a `border-left` in an accent colour is the
+generic alert costume this system exists to avoid, and it was tried and cut.
+The same box, label-only, carries transient on-frame hints.
+
+The box opens away from the nearer frame edge, is capped at the distance to the
+far one **and** at a 21rem measure, so it wraps inside the picture and never
+spans a lecture-hall screen; its label row is levelled with the dot so the
+leader runs straight in. The pin itself is a 10px dot in the note's hue, ringed
+white so it reads on any picture, over a breathing halo of the same hue at 30%.
+In the notes list a note that owns the frame wears an `ON VIDEO` outline chip in
+its own hue.
+
+**Closing a caption.** The label row is a title bar, so it carries a title
+bar's actions slot: a `btn-icon on-video` ✕, hidden at rest and revealed on
+hover or focus like every other secondary control here. It keeps its place in
+the layout (revealing it must not reflow the card) and stays untouchable while
+invisible, so it can't swallow a click meant for the picture. Closing leaves
+**the dot**, which is then the way back — a caption put away stays away, and
+nothing about it is written to the note.
+
 ### Note Rows (Signature Component)
 The note list is a flush cue list inside the notes pane, not a stack of
 cards. Each note is a full-width row separated by hairline dividers, with a

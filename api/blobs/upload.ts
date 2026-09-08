@@ -6,12 +6,14 @@
 // Two kinds of caller reach this route, and they are authorized differently:
 //
 //   • a signed-in teacher, resolved from their Clerk session, who may write
-//     note images and the ephemeral analysis audio AI section detection runs
-//     against (users/{uid}/analysis/{projectId} — deleted server-side once the
+//     note images, a PDF score (users/{uid}/scores/{projectId}), and the
+//     ephemeral analysis audio AI section detection runs against
+//     (users/{uid}/analysis/{projectId} — deleted server-side once the
 //     analysis finalizes; see api/projects/[id]/analyze.ts);
 //   • a guest student, who has no account and instead proves possession of one
 //     project's capability key. Their token is deliberately narrower: images
-//     only, into that one project's folder, smaller, and non-overwriting.
+//     only, into that one project's folder, smaller, and non-overwriting — a
+//     guest reaches a score by linking one in Drive, never by uploading.
 //
 // A guest's key can't ride in a header — @vercel/blob/client requests its
 // token with its own fetch and carries no custom headers (which is also why
@@ -43,6 +45,13 @@ const GUEST_MAX_BYTES = 8 * 1024 * 1024
 /** Guests may only send actual images — no arbitrary payloads. */
 const GUEST_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
+/**
+ * Ceiling for an uploaded score, mirroring MAX_SCORE_BYTES in src/lib/score.ts
+ * (which checks first, so this is the floor under a tampered client rather
+ * than the message a teacher normally sees). A typeset score is 1–5 MB.
+ */
+const SCORE_MAX_BYTES = 30 * 1024 * 1024
+
 export async function POST(request: Request): Promise<Response> {
   const uid = await getUid(request)
 
@@ -65,14 +74,25 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-/** The teacher's token: their whole images/ and analysis/ space. */
+/** The teacher's token: their whole images/, scores/ and analysis/ space. */
 function signedInToken(uid: string, pathname: string) {
+  // Scores are their own grant, not a looser images/ one: a PDF, a smaller
+  // ceiling than a media upload, and immutably cached like an image (each
+  // upload mints a fresh id, so a URL's bytes never change under a reader).
+  if (pathname.startsWith(`users/${uid}/scores/`))
+    return {
+      allowedContentTypes: ['application/pdf'],
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      maximumSizeInBytes: SCORE_MAX_BYTES,
+      cacheControlMaxAge: IMAGE_CACHE_SECONDS,
+    }
   if (
     !pathname.startsWith(`users/${uid}/images/`) &&
     !pathname.startsWith(`users/${uid}/analysis/`)
   )
     throw new Error(
-      'Only note images and analysis audio can be uploaded, under your own path',
+      'Only note images, scores and analysis audio can be uploaded, under your own path',
     )
   return {
     // Paths are already unique (audio: one object per project; images:

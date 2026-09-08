@@ -28,6 +28,7 @@ import { getPlugin, addablePlugins } from '../lib/notePlugins'
 import { tagsOf } from '../lib/tags'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
+import NoteOverlayControls from './NoteOverlayControls'
 import TagPicker from './TagPicker'
 import ColorPicker from './ColorPicker'
 import Popover from './Popover'
@@ -65,6 +66,17 @@ interface Props {
   ) => Promise<string>
   /** False for guests — see AnnotationEditor's `allowImages`. */
   allowImages?: boolean
+  /**
+   * Whether this project has a video frame to draw on — the note's cover image
+   * and pin controls (see NoteOverlayControls). False for audio tracks, whose
+   * waveform is the picture and must stay uncovered.
+   */
+  allowOverlays?: boolean
+  /** The score page on screen, when the track has a score (see the pin anchor
+   *  in NoteOverlayControls). Absent means there is no score to pin to. */
+  scorePage?: number
+  /** The track has a score, but it's switched off. */
+  scoreHidden?: boolean
 }
 
 /**
@@ -89,6 +101,9 @@ export default function NoteInspector({
   mentionItems,
   uploadImage,
   allowImages = true,
+  allowOverlays = false,
+  scorePage,
+  scoreHidden,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
@@ -284,6 +299,18 @@ export default function NoteInspector({
           className="field"
         />
       </div>
+
+      {/* What this note puts on the video while it's on screen — a cover image
+          and/or a pinned caption. Only where there's a frame to draw on. */}
+      {allowOverlays && (
+        <NoteOverlayControls
+          annotation={annotation}
+          onUpdate={onUpdate}
+          uploadImage={uploadImage}
+          scorePage={scorePage}
+          scoreHidden={scoreHidden}
+        />
+      )}
 
       {/* Content blocks: text editor inline, then each property plugin's editor.
           White "page" so pasted (white-bg) screenshots blend; on dark it's = ink. */}

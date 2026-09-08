@@ -8,6 +8,9 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
+import ScoreButton from './ScoreButton'
+import ScoreLayer, { ScoreFrame } from './ScoreLayer'
+import { scoreView as scoreViewOf, type ScoreView } from '../lib/score'
 import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
@@ -25,6 +28,7 @@ import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
+import VideoOverlays from './VideoOverlays'
 import Transport, { TransportHints } from './Transport'
 import TrackOverview from './TrackOverview'
 import AnnotationList from './AnnotationList'
@@ -60,7 +64,7 @@ import { exportAnswerSheetPdf } from '../lib/answerSheet'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
-import { canonicalizeProjectParam } from '../lib/nav'
+import { canonicalizeProjectParam, routeHref } from '../lib/nav'
 
 type Status = 'loading' | 'ready' | 'notfound'
 
@@ -96,6 +100,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  // Per-session score display, over whatever the owner saved (see below).
+  const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
+  const [scoreReload, setScoreReload] = useState(0)
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   // Resolved view prefs. State initializes from localStorage; on project load
@@ -494,6 +501,37 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the same StructureEditor the owner uses, in read-only mode.
   const isStructure = isStructureProject(project)
 
+  // The score the owner attached, if any. A reader can't change what the score
+  // *is* — no `onScore`, no `onUpload` — but they can decide how it sits over
+  // the picture for their own session, so the view is local state seeded from
+  // the owner's saved choice and never written back.
+  const score = project.settings?.score
+  const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
+  const scoreLayer =
+    score && scoreView.mode !== 'off' ? (
+      // A reader gets the following, never the timing of it: the turns are
+      // the owner's, like the notes.
+      <ScoreLayer
+        score={score}
+        view={scoreView}
+        reloadKey={scoreReload}
+        currentTime={currentTime}
+        onSeek={seek}
+        // A reader sees the score's pins where the owner put them, and moves
+        // nothing — no onMovePin, same as the frame's pins.
+        annotations={annotations}
+        readOnly
+      />
+    ) : null
+  const scoreButton = (
+    <ScoreButton
+      score={score}
+      view={scoreView}
+      onView={(patch) => setScoreOverride((o) => ({ ...o, ...patch }))}
+      onReload={() => setScoreReload((n) => n + 1)}
+    />
+  )
+
   // The transport, built once: it floats inside the video frame (PlayerPane's
   // `overlay` slot) or docks beneath an audio waveform.
   const transport = (
@@ -513,6 +551,23 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       onSetVolume={changeVolume}
       onToggleMute={toggleMute}
     />
+  )
+
+  /**
+   * The video frame's floating chrome: the notes' stage layer (cover images and
+   * pinned captions) with the transport painted on top. Read-only here — a
+   * viewer sees every pin exactly where the author aimed it, and moves none.
+   */
+  const videoOverlay = (
+    <>
+      <VideoOverlays
+        annotations={project.annotations}
+        currentTime={currentTime}
+        readOnly
+        onTogglePlay={() => (isPlaying ? pause() : play())}
+      />
+      {transport}
+    </>
   )
 
   return (
@@ -535,12 +590,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-fg">
           {project.title}
         </span>
-        {/* The owner set the link role to "Can edit": hand off to the full
-            editor (the Gate signs the visitor in; App then loads this track
-            by id and the edit lock serializes who edits). */}
-        {project.editableByLink && (
+        {/* The link says "can edit", or this signed-in visitor was invited as
+            an editor by email: hand off to the full editor (the Gate signs the
+            visitor in; App then loads this track by id and the edit lock
+            serializes who edits). */}
+        {(project.editableByLink || project.myRole === 'editor') && (
           <a
-            href={`${window.location.pathname}?track=${project.id}`}
+            href={routeHref({ page: 'track', id: project.id, key: null, admin: false })}
             title="Edit this track's notes — you'll be asked to sign in with Google"
             className="btn-signal press shrink-0"
           >
@@ -573,10 +629,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <TitleBar
               left="Player"
               right={sourceLabel(source)}
+              actions={scoreButton}
             />
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
               {hasPlayer ? (
                 <>
+                  {!isVideoSource(source) && scoreLayer && (
+                    <ScoreFrame>{scoreLayer}</ScoreFrame>
+                  )}
                   <div
                     ref={setPlayerArea}
                     className={
@@ -593,7 +653,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       playbackRate={playbackRate}
                       volume={muted ? 0 : volume}
                       readOnly
-                      overlay={isVideoSource(source) ? transport : undefined}
+                      overlay={isVideoSource(source) ? videoOverlay : undefined}
+                      score={isVideoSource(source) ? scoreLayer : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
                       onPlayingChange={handlePlaying}
@@ -669,10 +730,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <TitleBar
             left="Player"
             right={sourceLabel(source)}
+            actions={scoreButton}
           />
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
             {hasPlayer ? (
               <>
+                {!isVideoSource(source) && scoreLayer && (
+                  <ScoreFrame>{scoreLayer}</ScoreFrame>
+                )}
                 <div
                   ref={setPlayerArea}
                   className={
@@ -689,7 +754,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     playbackRate={playbackRate}
                     volume={muted ? 0 : volume}
                     readOnly
-                    overlay={isVideoSource(source) ? transport : undefined}
+                    overlay={isVideoSource(source) ? videoOverlay : undefined}
+                    score={isVideoSource(source) ? scoreLayer : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
                     onPlayingChange={handlePlaying}
@@ -699,8 +765,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   />
                 </div>
 
-                {!isVideoSource(source) && transport}
-                <TransportHints readOnly />
+                {/* Video: transport floats in the frame, hints go here.
+                    Audio docks the transport, which draws its own hints. */}
+                {isVideoSource(source) ? <TransportHints readOnly /> : transport}
               </>
             ) : (
               <div className="empty py-6 text-sm text-muted">

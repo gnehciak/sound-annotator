@@ -36,6 +36,7 @@ import ThemeToggle from './ThemeToggle'
 import HomeDot from './HomeDot'
 import Popover from './Popover'
 import BrowseGallery from './BrowseGallery'
+import { useRoute } from '../lib/nav'
 import { WaveArt } from './trackArt'
 
 /** What the panel's readout is saying — the instrument reading its input. */
@@ -43,6 +44,20 @@ type Status = 'idle' | 'ready' | 'working' | 'error'
 
 /** Scroll target for the hero's link down to the gallery. */
 const PUBLISHED_ID = 'published-tracks'
+
+/**
+ * Bring the published gallery into view. Smooth when someone clicked to go
+ * there; instant on arrival, where there's nothing to animate away from and a
+ * glide would only be a page moving under a visitor who hasn't read it yet.
+ */
+const scrollToPublished = (smooth = true) =>
+  document.getElementById(PUBLISHED_ID)?.scrollIntoView({
+    behavior:
+      smooth && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'smooth'
+        : 'auto',
+    block: 'start',
+  })
 
 /**
  * The two workspaces a track can open into — the same pair the signed-in
@@ -80,6 +95,20 @@ const KINDS: {
 
 export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
   const { pref, setPref, resolved, palette, setPalette } = useTheme()
+  // `?browse=1` used to be a gallery page of its own. It's the Browse route
+  // now, and signed out that route is this page — so honour what the link
+  // promised and open on the gallery rather than the paste field. One shot:
+  // scrolling again later would fight the visitor.
+  const browse = useRoute().page === 'browse'
+  useEffect(() => {
+    if (!browse) return
+    // Twice: once now against the gallery's skeleton, and once after it
+    // resolves — the real list is a different height, and the first landing
+    // would otherwise be off by however much it changed.
+    scrollToPublished(false)
+    const t = setTimeout(() => scrollToPublished(false), 400)
+    return () => clearTimeout(t)
+  }, [browse])
 
   return (
     <div className="flex h-full flex-col overflow-y-auto text-fg">
@@ -388,20 +417,12 @@ function Hero() {
             className="mt-3.5 flex animate-rise-in flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted"
             style={{ animationDelay: '180ms' }}
           >
-            {/* Scrolls to the gallery below rather than opening ?browse=1 —
-                that page is the same list, and sending someone away from the
+            {/* Scrolls to the gallery below rather than opening a page of its
+                own — this *is* that page, and sending someone away from the
                 paste field to see what's already under it is a dead end. */}
             <button
               type="button"
-              onClick={() =>
-                document.getElementById(PUBLISHED_ID)?.scrollIntoView({
-                  behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
-                    .matches
-                    ? 'auto'
-                    : 'smooth',
-                  block: 'start',
-                })
-              }
+              onClick={() => scrollToPublished()}
               className="press rounded text-fg underline decoration-line underline-offset-[3px] transition-colors hover:decoration-accent"
             >
               See published tracks
