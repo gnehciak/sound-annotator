@@ -1134,6 +1134,22 @@ html[data-armed] body::before {
 .ProseMirror .prop-tag:hover {
   background: color-mix(in srgb, var(--hue) 18%, transparent);
 }
+/* A word that names a concept but isn't a tag yet — the editor's squiggle, and
+   the same idea: a hint you can act on, never a change made for you. Faint at
+   rest (the prose has to stay readable with a dozen of them in it), and only
+   under the pointer does it look clickable. See components/propertySuggest.ts. */
+.ProseMirror .prop-suggest {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, rgb(var(--text-muted)) 55%, transparent);
+}
+.ProseMirror .prop-suggest:hover {
+  border-radius: 3px;
+  background: color-mix(in srgb, rgb(var(--accent)) 12%, transparent);
+  text-decoration-color: rgb(var(--accent-ink));
+}
 /* ProseMirror marks the lifted node while it's being dragged. */
 .ProseMirror .prop-tag.ProseMirror-selectednode {
   outline: 2px solid color-mix(in srgb, var(--hue) 70%, transparent);
