@@ -1,6 +1,13 @@
 // The inline property tag: a TipTap atom node that renders as a hued token
-// sitting inside the note's prose — the value alone, coloured by its concept,
-// with the concept itself on hover. Two ways in: the "@" menu (noteMention.ts),
+// sitting inside the note's prose — the word alone, coloured by its concept,
+// with the concept itself on hover.
+//
+// A chip carries two strings, and the distinction matters: `value` is the
+// vocabulary's own spelling and is the *data* (it is what search, the exports
+// and any future filter read), while `text` is the surface form as it was
+// actually written in the sentence. Typing "the texture is monophonic" must
+// not leave a capital M sitting mid-sentence, so the chip shows what you
+// wrote and files it under what it means. Two ways in: the "@" menu (noteMention.ts),
 // and typing an unmistakable term like "monophonic" or "legato" in ordinary
 // prose, which tags itself the moment the word ends (see the input rule below).
 // Draggable to anywhere else in the text, and clickable to swap its value.
@@ -23,13 +30,16 @@ import PropertyTagView from './PropertyTagView'
  * where the raw signal colour would fail AA (the print documents in
  * exportPdf.ts / answerSheet.ts have no React to run hueText for them).
  */
-function chipAttrs(field: string, value: string) {
+function chipAttrs(field: string, value: string, text: string) {
   const { category } = describeField(field)
   const color = hueFor(field, value)
   return {
     'data-property-tag': '',
     'data-field': field,
     'data-value': value,
+    // Only when the sentence spells it differently — an absent data-text means
+    // "the value is the spelling", which is every chip written before this.
+    ...(text && text !== value ? { 'data-text': text } : null),
     // The concept is the tooltip on screen. On paper there is no hover, so the
     // print stylesheet reads it back out of here — see PROPERTY_TAG_PRINT_CSS.
     'data-category': category,
@@ -59,6 +69,12 @@ export const PropertyTag = Node.create({
         parseHTML: (el) => el.getAttribute('data-value') ?? '',
         renderHTML: () => ({}),
       },
+      /** The surface form in this sentence; empty means "same as value". */
+      text: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-text') ?? '',
+        renderHTML: () => ({}),
+      },
     }
   },
 
@@ -69,11 +85,18 @@ export const PropertyTag = Node.create({
   renderHTML({ node, HTMLAttributes }) {
     const field = String(node.attrs.field ?? '')
     const value = String(node.attrs.value ?? '')
-    return ['span', mergeAttributes(HTMLAttributes, chipAttrs(field, value)), value]
+    const text = String(node.attrs.text ?? '')
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, chipAttrs(field, value, text)),
+      text || value,
+    ]
   },
 
+  // Plain-text serialisation is the prose, so it takes the surface form —
+  // copying a note out must not silently recapitalise its sentences.
   renderText({ node }) {
-    return String(node.attrs.value ?? '')
+    return String(node.attrs.text || node.attrs.value || '')
   },
 
   addNodeView() {
@@ -102,7 +125,8 @@ export const PropertyTag = Node.create({
             .insertContentAt({ from: range.from, to: range.to }, [
               {
                 type: 'propertyTag',
-                attrs: { field: hit.field, value: hit.value },
+                // match[1] is the word as typed — the chip keeps that spelling.
+                attrs: { field: hit.field, value: hit.value, text: match[1] },
               },
               { type: 'text', text: match[2] },
             ])

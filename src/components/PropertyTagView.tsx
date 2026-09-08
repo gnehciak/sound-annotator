@@ -26,6 +26,8 @@ export default function PropertyTagView({
 
   const field = String(node.attrs.field ?? '')
   const value = String(node.attrs.value ?? '')
+  // What the sentence says, which may differ from the vocabulary's spelling.
+  const text = String(node.attrs.text ?? '') || value
   const { category } = describeField(field)
   const color = hueFor(field, value)
   const options = optionsForField(field)
@@ -40,6 +42,7 @@ export default function PropertyTagView({
       data-property-tag=""
       data-field={field}
       data-value={value}
+      data-text={text !== value ? text : undefined}
       title={category ? `${category}: ${value}` : value}
       data-category={category || undefined}
       className="prop-tag"
@@ -54,7 +57,7 @@ export default function PropertyTagView({
         setOpen((o) => !o)
       }}
     >
-      {value}
+      {text}
       {editable && (
         <Popover
           open={open}
@@ -77,7 +80,9 @@ export default function PropertyTagView({
               // onClick, which would re-open the menu we just closed.
               onClick={(e) => {
                 e.stopPropagation()
-                updateAttributes({ value: opt })
+                // Picking a different word replaces the sentence's word too —
+                // the old surface form was a spelling of the *old* value.
+                updateAttributes({ value: opt, text: '' })
                 setOpen(false)
               }}
               data-active={opt === value || undefined}

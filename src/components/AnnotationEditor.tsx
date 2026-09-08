@@ -195,12 +195,21 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   })
   editorRef.current = editor
 
-  /** Replace a range (or just the caret) with a property tag. */
-  const putTag = (field: string, value: string, range?: { from: number; to: number }) => {
+  /**
+   * Replace a range (or just the caret) with a property tag. `text` is the word
+   * as the sentence spells it — passed when a word already on the page is being
+   * turned into a chip, so the prose keeps its own capitalisation.
+   */
+  const putTag = (
+    field: string,
+    value: string,
+    range?: { from: number; to: number },
+    text?: string,
+  ) => {
     const ed = editorRef.current
     if (!ed) return
     const chain = ed.chain().focus()
-    const node = { type: 'propertyTag', attrs: { field, value } }
+    const node = { type: 'propertyTag', attrs: { field, value, text: text ?? '' } }
     // Replacing a word leaves the spacing around it alone. Inserting at the
     // caret has to supply it: a trailing space the way the "@" menu does, and a
     // leading one unless there is already whitespace (or nothing) behind —
@@ -323,9 +332,9 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
         hit={suggestion}
         anchorRef={suggestAnchor}
         onClose={() => setSuggestion(null)}
-        onPick={(field, value, range) => {
+        onPick={(field, value, range, text) => {
           setSuggestion(null)
-          putTag(field, value, range)
+          putTag(field, value, range, text)
         }}
       />
     </div>
@@ -349,7 +358,12 @@ function SuggestCard({
   hit: SuggestHit | null
   anchorRef: RefObject<HTMLElement | null>
   onClose: () => void
-  onPick: (field: string, value: string, range: { from: number; to: number }) => void
+  onPick: (
+    field: string,
+    value: string,
+    range: { from: number; to: number },
+    text: string,
+  ) => void
 }) {
   const theme = useResolvedTheme()
   return (
@@ -367,7 +381,9 @@ function SuggestCard({
         <button
           key={opt.key}
           type="button"
-          onClick={() => onPick(opt.field, opt.value, { from: hit.from, to: hit.to })}
+          onClick={() =>
+            onPick(opt.field, opt.value, { from: hit.from, to: hit.to }, hit.text)
+          }
           title={`${opt.category} — ${opt.fieldLabel}`}
           className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
         >

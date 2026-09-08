@@ -13,136 +13,55 @@
 // button in the Notion page work: the button asks Vercel to rebuild, and the
 // rebuild is what actually reads Notion.
 //
-// **Notion owns the words. This file owns the shape.** Two columns carry the
-// vocabulary: **Category** is a field and **Term** is an option. (**Element**
-// is read only to make the unmapped report useful — the app's categories come
-// from CATEGORIES below, not from Notion, so renaming that column, as it was
-// from "Concept" to "Element", changes nothing here.) Everything else the app
-// needs is a judgment call that
-// does not belong in a word bank and is therefore configured below: which
-// concept a category lands in, what colour it wears (checked for AA contrast in
-// both themes), the field order, the lists the bank has no equivalent for, and
-// the split of the Italian markings by concept. Add a term in Notion and it
-// appears here on the next run; add a whole *category* in Notion and the run
-// tells you it is unmapped, because deciding where it goes is a person's job.
+// **The vocabulary is two related databases, and between them they own almost
+// everything.** "Vocabulary Fields" is the shape — one row per sub-list, with
+// the concept it belongs to, its stable field id, and its position. "Vocabulary
+// Terms" is the words — one row is exactly one word, spelled as the app shows
+// it, related to its field, ticked (or not) as a word that tags itself, and
+// carrying any alternative spellings prose should also be recognised by.
+//
+// That leaves this file with three things a word bank has no business holding:
+// which concepts exist and in what order, the eight hues (AA-verified in both
+// themes, and Notion's palette is ten named colours that cannot express
+// #f87171), and the one field whose options are a ladder rather than a list.
+// Everything else — every word, every field, every id, every ordering — is a
+// row someone can edit without touching code.
 //
 // Setup, once: create an internal integration at notion.so/my-integrations,
-// share the database page with it, and put the secret in .env.local as
+// share BOTH databases with it, and put the secret in .env.local as
 // NOTION_TOKEN. The token is read-only as far as this script is concerned — it
 // only ever queries.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-/** The "Concept vocabulary — HSC & Trial sample answers" database. */
-const DATABASE_ID = 'e8f0a61dca464649ab849a9eabd3f856'
+/** "Vocabulary Fields" — the shape: 46 rows, one per sub-list. */
+const FIELDS_DB = '09e753c4980f4550a201c00c855e504c'
+/** "Vocabulary Terms" — the words: one row is one word. */
+const TERMS_DB = '08652e466eb64fa090059c3095063bf9'
+
 const GENERATED = new URL('../src/lib/vocabulary.generated.ts', import.meta.url)
-const PROPERTY_TAGS = new URL('../src/lib/propertyTags.ts', import.meta.url)
 
 // ---------------------------------------------------------------------------
-// Shape. Category id, label, hue, then the fields in display order: app field
-// id, field label, and the Notion Category it draws its options from (null =
-// the list is ours, see OWN).
-//
-// Field ids are stored data — they are the keys of ElementsData.fields and the
-// `data-field` of every inline tag — so relabel freely and rename ids only
-// after checking the database says nothing stores them.
-const CATEGORIES = [
-  ['pitch', 'Pitch', '#f87171', [
-    ['pitch.contour', 'Melodic motion & contour', 'Melodic motion & contour'],
-    ['pitch.range', 'Range & register', 'Range & register'],
-    ['pitch.tonality', 'Tonality', 'Tonality'],
-    ['pitch.scale', 'Scale / mode type', 'Scale / mode type'],
-    ['pitch.harmony', 'Harmony & chord quality', 'Harmony & chord quality'],
-    ['pitch.consonance', 'Consonance / dissonance', 'Consonance / dissonance'],
-    ['pitch.cadence', 'Cadence type', 'Cadence type'],
-  ]],
-  ['duration', 'Duration', '#eab308', [
-    ['duration.tempo', 'Speed (tempo)', 'Speed (tempo)'],
-    ['duration.tempoChange', 'Tempo change', 'Tempo change'],
-    ['duration.drive', 'Drive / momentum', 'Drive / momentum'],
-    ['duration.steadiness', 'Steadiness / regularity', 'Steadiness / regularity'],
-    ['duration.syncopation', 'Irregularity / syncopation', 'Irregularity / syncopation'],
-    ['duration.metre', 'Metre & metre changes', 'Metre & metre changes'],
-    ['duration.values', 'Note-value character', 'Note-value character'],
-    ['duration.feel', 'Rhythmic feel & character', 'Rhythmic feel & character'],
-    ['duration.italian', 'Tempo & rhythmic terms (Italian)', 'Tempo & rhythmic terms (Italian)'],
-  ]],
-  ['dynamics', 'Dynamics', '#22c55e', [
-    ['dynamics.volume', 'Dynamic level', null],
-    ['dynamics.loudness', 'Loudness level', 'Loudness level'],
-    ['dynamics.change', 'Change in dynamics', 'Change in dynamics'],
-    ['dynamics.italian', 'Dynamic markings (Italian)', null],
-  ]],
-  ['expressive', 'Expression', '#84cc16', [
-    ['expressive.articulation', 'Articulation', 'Articulation'],
-    ['expressive.technique', 'Special playing techniques', 'Special playing techniques'],
-    ['expressive.phrasing', 'Phrasing & character', 'Phrasing & character'],
-    ['expressive.italian', 'Performance directions (Italian)', null],
-  ]],
-  ['media', 'Performing media', '#60a5fa', [
-    ['media.instrument', 'Instrument / section', null],
-    ['media.ensemble', 'Ensemble / forces', null],
-    ['media.production', 'Sound produced by', null],
-  ]],
-  ['timbre', 'Timbre', '#22d3ee', [
-    ['timbre.bright', 'Bright / brilliant', 'Bright / brilliant'],
-    ['timbre.warm', 'Warm / mellow / smooth', 'Warm / mellow / smooth'],
-    ['timbre.dark', 'Dark / dull / heavy', 'Dark / dull / heavy'],
-    ['timbre.harsh', 'Harsh / strident / forceful', 'Harsh / strident / forceful'],
-    ['timbre.material', 'Material / sound-source', 'Material / sound-source'],
-    ['timbre.mood', 'Mood / character', 'Mood / character'],
-    ['timbre.density', 'Density', 'Density (tone colour)'],
-  ]],
-  ['texture', 'Texture', '#a78bfa', [
-    ['texture.type', 'Texture type', 'Texture type (named)'],
-    ['texture.role', 'Layer role', null],
-    ['texture.layers', 'Layer relationship & count', 'Layer relationship & count'],
-    ['texture.density', 'Density', 'Density'],
-    ['texture.devices', 'Compositional-device textures', 'Compositional-device textures'],
-  ]],
-  ['structure', 'Structure', '#f97316', [
-    ['structure.phrase', 'Phrase & form shape', 'Phrase & form shape'],
-    ['structure.repetition', 'Repetition & recurring material', 'Repetition & recurring material'],
-    ['structure.development', 'Development of ideas', 'Development of ideas'],
-    ['structure.imitation', 'Imitative / canonic devices', 'Imitative / canonic devices'],
-    ['structure.contrast', 'Contrast / variety', 'Contrast / variety'],
-    ['structure.unity', 'Unity / cohesion', 'Unity / cohesion'],
-    ['structure.balance', 'Balance & symmetry', 'Balance & symmetry'],
-  ]],
+// The shape that isn't Notion's to hold.
+
+/** Concept id (stored data), its label, and its hue. Order is display order. */
+const CONCEPTS = [
+  ['pitch', 'Pitch', '#f87171'],
+  ['duration', 'Duration', '#eab308'],
+  ['dynamics', 'Dynamics', '#22c55e'],
+  ['expressive', 'Expression', '#84cc16'],
+  ['media', 'Performing media', '#60a5fa'],
+  ['timbre', 'Timbre', '#22d3ee'],
+  ['texture', 'Texture', '#a78bfa'],
+  ['structure', 'Structure', '#f97316'],
 ]
 
-// Lists the word bank has no equivalent for, because it is a bank of describing
-// words rather than a taxonomy of forces, a dynamic ladder, or a split of the
-// Italian markings by the concept they belong to. Edit these here.
-const OWN = {
-  'media.instrument': ['Brass', 'Guitar', 'Keyboard', 'Percussion', 'Strings', 'Synth / electronic', 'Voice', 'Woodwind'],
-  'media.ensemble': ['A cappella', 'Big band', 'Chamber ensemble', 'Choir', 'Concert band', 'Duet', 'Orchestra', 'Quartet', 'Quintet', 'Rock band', 'Solo', 'String orchestra', 'Trio', 'Vocal ensemble'],
-  'media.production': ['Blowing', 'Bowing', 'Electronic', 'Plucking', 'Singing', 'Striking'],
-  'texture.role': ['Accompaniment', 'Bass line', 'Counter-melody', 'Melody', 'Pad / drone', 'Rhythmic'],
+/**
+ * Fields whose options are a *ladder*, not a list — alphabetical order would
+ * be musical nonsense (f, ff, fff, mf, mp, p, pp, ppp). Everything else sorts
+ * by name, which is also how the app lists it.
+ */
+const LADDERS = {
   'dynamics.volume': ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'],
-  'dynamics.italian': ['Crescendo', 'Decrescendo', 'Diminuendo', 'Dynamic letter levels (ppp–ff)', 'Fortepiano (fp)', 'Sforzando (sfz)', 'Sfzp'],
-  'expressive.italian': ['‘Breathing’ marks', 'Ad libitum', 'Cantabile', 'Con forza', 'Con sordino (mute)', 'Delicatamente', 'Dolce', 'Espressivo', 'Grazioso', 'Leggierissimo', 'Leggiero', 'Semplice', 'Senza misura', 'Senza sordino', 'Senza vibrato', 'Sotto voce'],
-}
-
-// Notion categories the app deliberately does not draw from directly, so the
-// unmapped report stays quiet about them. The bank keeps every Italian marking
-// in one pile; the app splits it by concept into two OWN lists above, because
-// "@dolce" and "@cresc" belong in different places.
-const SPLIT_BY_HAND = new Set(['Performance directions (Italian)'])
-
-// A term the bank writes as alternatives ("slurred / slurs") becomes one option
-// each, so every word is its own tag and its own search hit. These few would
-// lose their noun if split that way, so they are spelled out.
-const SPLIT_OVERRIDES = {
-  'contrary / similar / parallel motion': ['Contrary motion', 'Similar motion', 'Parallel motion'],
-  'narrow / limited range': ['Narrow range', 'Limited range'],
-  'snap pizzicato / Bartok pizz.': ['Snap pizzicato', 'Bartók pizz.'],
-  'snap pizzicato / Bartók pizz.': ['Snap pizzicato', 'Bartók pizz.'],
-  'jete bowing': ['Jeté bowing'],
-  'jeté bowing': ['Jeté bowing'],
-  'dynamic letter levels (ppp-ff)': ['Dynamic letter levels (ppp–ff)'],
-  'dynamic letter levels (ppp–ff)': ['Dynamic letter levels (ppp–ff)'],
-  'ad libitum / senza misura / breathing marks': ['Ad libitum', 'Senza misura', '‘Breathing’ marks'],
-  'ad libitum / senza misura / ‘breathing’ marks': ['Ad libitum', 'Senza misura', '‘Breathing’ marks'],
 }
 
 // ---------------------------------------------------------------------------
@@ -150,42 +69,31 @@ const SPLIT_OVERRIDES = {
 const args = process.argv.slice(2)
 const check = args.includes('--check')
 const soft = args.includes('--soft')
+const fromIndex = args.indexOf('--from')
+const fromFile = fromIndex >= 0 ? args[fromIndex + 1] : null
 
 /** Give up without failing the caller — `--soft` only. */
 function bail(message) {
   console.warn(`vocabulary sync skipped: ${message}`)
   process.exit(0)
 }
-const fromIndex = args.indexOf('--from')
-const fromFile = fromIndex >= 0 ? args[fromIndex + 1] : null
 
-/** Every row of the database as `{ term, category, element }`. */
-async function fetchRows() {
-  const token = process.env.NOTION_TOKEN
-  if (!token) {
-    if (soft) bail('NOTION_TOKEN is not set — using the committed vocabulary')
-    console.error(
-      'NOTION_TOKEN is not set. Create an internal integration at\n' +
-        'https://www.notion.so/my-integrations, share the vocabulary database\n' +
-        'with it, and add NOTION_TOKEN=secret_… to .env.local.',
-    )
-    process.exit(1)
-  }
-  const rows = []
+const plain = (rich) => (rich ?? []).map((t) => t.plain_text).join('').trim()
+
+/** Every page of one database, following Notion's cursor. */
+async function queryAll(token, databaseId) {
+  const out = []
   let cursor
   do {
-    const res = await fetch(
-      `https://api.notion.com/v1/databases/${DATABASE_ID}/query`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Notion-Version': '2022-06-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
+    const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
       },
-    )
+      body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
+    })
     if (!res.ok) {
       const body = await res.text()
       if (soft) bail(`Notion ${res.status} — using the committed vocabulary`)
@@ -193,76 +101,105 @@ async function fetchRows() {
       process.exit(1)
     }
     const page = await res.json()
-    for (const r of page.results) {
-      const p = r.properties ?? {}
-      rows.push({
-        term: (p.Term?.title ?? []).map((t) => t.plain_text).join('').trim(),
-        category: p.Category?.select?.name ?? '',
-        // "Element" today, "Concept" before it was renamed. Read whichever
-        // is there: it is only used to label unmapped categories, so a future
-        // rename should cost a blank label, never a broken sync.
-        element: (p.Element ?? p.Concept)?.select?.name ?? '',
-      })
-    }
+    out.push(...page.results)
     cursor = page.has_more ? page.next_cursor : undefined
   } while (cursor)
-  return rows.filter((r) => r.term)
+  return out
 }
 
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+/** Both databases, normalised to the shape buildFile wants. */
+async function fetchRows() {
+  const token = process.env.NOTION_TOKEN
+  if (!token) {
+    if (soft) bail('NOTION_TOKEN is not set — using the committed vocabulary')
+    console.error(
+      'NOTION_TOKEN is not set. Create an internal integration at\n' +
+        'https://www.notion.so/my-integrations, share the two vocabulary\n' +
+        'databases with it, and add NOTION_TOKEN=secret_… to .env.local.',
+    )
+    process.exit(1)
+  }
 
-/** One bank term → the options it becomes. */
-function optionsFor(term) {
-  const t = term.trim()
-  return SPLIT_OVERRIDES[t] ?? t.split(' / ').map((part) => cap(part.trim()))
+  const rawFields = (await queryAll(token, FIELDS_DB))
+    .map((r) => {
+      const p = r.properties ?? {}
+      return {
+        pageId: r.id,
+        fieldId: plain(p['Field ID']?.rich_text),
+        label: plain(p.Field?.title),
+        concept: p.Concept?.select?.name ?? '',
+        order: p.Order?.number ?? Number.POSITIVE_INFINITY,
+      }
+    })
+    .filter((f) => f.fieldId && f.label)
+
+  const rawTerms = (await queryAll(token, TERMS_DB))
+    .map((r) => {
+      const p = r.properties ?? {}
+      return {
+        term: plain(p.Term?.title),
+        pageId: (p.Field?.relation ?? [])[0]?.id ?? '',
+        auto: p['Auto-tag']?.checkbox === true,
+        aliases: plain(p.Aliases?.rich_text),
+      }
+    })
+    .filter((t) => t.term && t.pageId)
+
+  // Resolve each term's relation to the field id it names, so everything
+  // downstream works in stored-data terms rather than Notion page ids.
+  const byPage = new Map(rawFields.map((f) => [f.pageId, f.fieldId]))
+  return {
+    fields: rawFields.map(({ pageId, ...f }) => f),
+    terms: rawTerms
+      .map((t) => ({ ...t, fieldId: byPage.get(t.pageId) ?? '' }))
+      .filter((t) => t.fieldId)
+      .map(({ pageId, ...t }) => t),
+  }
 }
 
 const quote = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
 
-function buildFile(rows) {
-  const byNotionCategory = new Map()
-  const elementOf = new Map()
-  for (const row of rows) {
-    if (!byNotionCategory.has(row.category)) byNotionCategory.set(row.category, [])
-    byNotionCategory.get(row.category).push(row.term)
-    if (row.element) elementOf.set(row.category, row.element)
+function buildFile({ fields, terms }) {
+  const byField = new Map()
+  for (const t of terms) {
+    if (!byField.has(t.fieldId)) byField.set(t.fieldId, [])
+    byField.get(t.fieldId).push(t)
   }
-  const mapped = new Set(
-    CATEGORIES.flatMap(([, , , fields]) => fields.map(([, , src]) => src).filter(Boolean)),
-  )
-  const unmapped = [...byNotionCategory.keys()]
-    .filter((c) => c && !mapped.has(c) && !SPLIT_BY_HAND.has(c))
-    .map((c) => (elementOf.get(c) ? `${c}  (Element: ${elementOf.get(c)})` : c))
+
+  const known = new Set(CONCEPTS.map(([, label]) => label))
+  const unmapped = [
+    ...new Set(fields.filter((f) => !known.has(f.concept)).map((f) => f.concept || '(none)')),
+  ]
 
   let body = ''
   let count = 0
-  for (const [id, label, color, fields] of CATEGORIES) {
+  const autoTerms = new Set()
+  const aliases = new Map()
+
+  for (const [id, label, color] of CONCEPTS) {
+    const mine = fields
+      .filter((f) => f.concept === label)
+      .sort((a, b) => a.order - b.order)
     body += `  {\n    id: ${quote(id)},\n    color: ${quote(color)},\n    label: ${quote(label)},\n    fields: [\n`
-    for (const [fieldId, fieldLabel, source] of fields) {
-      let options
-      if (source) {
-        const terms = byNotionCategory.get(source)
-        if (!terms) {
-          console.error(`Notion has no category "${source}" (for ${fieldId}).`)
-          process.exit(1)
-        }
-        options = []
-        for (const term of terms) {
-          for (const option of optionsFor(term)) {
-            if (!options.includes(option)) options.push(option)
-          }
-        }
-        options.sort((a, b) => a.localeCompare(b))
-      } else {
-        options = OWN[fieldId]
-        if (!options) {
-          console.error(`No OWN list for ${fieldId}.`)
-          process.exit(1)
+    for (const f of mine) {
+      const rows = byField.get(f.fieldId) ?? []
+      const ladder = LADDERS[f.fieldId]
+      const options = [...new Set(rows.map((r) => r.term))].sort(
+        ladder
+          ? (a, b) => ladder.indexOf(a) - ladder.indexOf(b)
+          : (a, b) => a.localeCompare(b),
+      )
+      for (const r of rows) {
+        if (r.auto) autoTerms.add(r.term)
+        for (const a of (r.aliases || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+          // First writer wins; a real term always keeps its own word.
+          const k = a.toLowerCase()
+          if (!aliases.has(k)) aliases.set(k, r.term)
         }
       }
       count += options.length
       const inline = `options: [${options.map(quote).join(', ')}],`
-      body += `      {\n        id: ${quote(fieldId)},\n        label: ${quote(fieldLabel)},\n`
+      body += `      {\n        id: ${quote(f.fieldId)},\n        label: ${quote(f.label)},\n`
       body +=
         inline.length <= 86
           ? `        ${inline}\n`
@@ -272,22 +209,56 @@ function buildFile(rows) {
     body += `    ],\n  },\n`
   }
 
+  const auto = [...autoTerms].sort((a, b) => a.localeCompare(b))
+  const aliasKeys = [...aliases.keys()]
+    .filter((k) => !autoTerms.has(k))
+    .sort((a, b) => a.localeCompare(b))
+
   const header = `// GENERATED FILE — do not edit by hand.
 //
-// The words come from the "Concept vocabulary — HSC & Trial sample answers"
-// database in Notion; the categories, colours, field order and the lists the
-// bank has no equivalent for come from scripts/sync-vocabulary.mjs. Change a
-// word in Notion, or the shape in that script, then run:
+// The vocabulary comes from two Notion databases under "Elements of Music —
+// Vocabulary": **Vocabulary Fields** (the shape — one row per sub-list, with
+// its concept, its stable field id and its position) and **Vocabulary Terms**
+// (the words — one row is one word, related to its field, ticked if it tags
+// itself, with any alternative spellings). The concepts, their order and the
+// eight hues come from scripts/sync-vocabulary.mjs. Change a word in Notion,
+// or the shape in that script, then run:
 //
 //   npm run sync:vocab
 //
-// See lib/musicElements.ts for what these feed, and lib/propertyTags.ts for
-// AUTO_TERMS, which is the one list that must be maintained alongside this one.
+// See lib/musicElements.ts for what ELEMENTS feeds, and lib/propertyTags.ts
+// for what AUTO_TERMS and ALIASES do.
 import type { ElementCategory } from './musicElements'
 
 export const ELEMENTS: ElementCategory[] = [
 `
-  return { source: header + body + ']\n', count, unmapped }
+
+  const tail =
+    '\n/**\n' +
+    ' * Words that tag themselves as you type — the Auto-tag tick in Notion.\n' +
+    ' * Only words nobody writes in their everyday sense belong here; "even",\n' +
+    ' * "light" and "major" are deliberately absent.\n' +
+    ' */\nexport const AUTO_TERMS: string[] = [\n' +
+    auto.map((t) => `  ${quote(t)},`).join('\n') +
+    '\n]\n\n/**\n' +
+    ' * Alternative spellings prose is recognised by, mapped to the word they\n' +
+    ' * stand for — the Aliases column. Irregular forms only: the regular\n' +
+    ' * English ones are generated in propertyTags.ts and need no row here.\n' +
+    ' */\nexport const ALIASES: Record<string, string> = {' +
+    (aliasKeys.length
+      ? '\n' + aliasKeys.map((k) => `  ${quote(k)}: ${quote(aliases.get(k))},`).join('\n') + '\n'
+      : '') +
+    '}\n'
+
+  return {
+    source: header + body + ']\n' + tail,
+    elements: body,
+    count,
+    auto: auto.length,
+    aliases: aliasKeys.length,
+    fields: fields.length,
+    unmapped,
+  }
 }
 
 let rows
@@ -297,15 +268,17 @@ try {
   if (soft) bail(`${e.message} — using the committed vocabulary`)
   throw e
 }
-if (rows.length === 0) {
+if (!rows.terms?.length || !rows.fields?.length) {
   // An empty pull is far more likely to be a permissions problem than a really
   // empty database, and writing it out would silently wipe the vocabulary.
   if (soft) bail('Notion returned no rows — using the committed vocabulary')
-  console.error('Notion returned no rows. Is the database shared with the integration?')
+  console.error(
+    'Notion returned no rows. Are BOTH vocabulary databases shared with the integration?',
+  )
   process.exit(1)
 }
 
-const { source, count, unmapped } = buildFile(rows)
+const built = buildFile(rows)
 
 let previous = ''
 try {
@@ -318,44 +291,33 @@ try {
 const values = (text) =>
   new Set([...text.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1]))
 const before = values(previous)
-const after = values(source)
+const after = values(built.source)
 const added = [...after].filter((v) => !before.has(v))
 const removed = [...before].filter((v) => !after.has(v))
 
-console.log(`${rows.length} terms in Notion → ${count} options across ${CATEGORIES.length} categories`)
+console.log(
+  `${rows.terms.length} terms across ${built.fields} fields in Notion → ` +
+    `${built.count} options in ${CONCEPTS.length} concepts, ` +
+    `${built.auto} auto-tagging, ${built.aliases} aliases`,
+)
 if (added.length) console.log(`  + ${added.join(', ')}`)
 if (removed.length) console.log(`  − ${removed.join(', ')}`)
 if (!added.length && !removed.length) console.log('  no change')
-if (unmapped.length) {
+if (built.unmapped.length) {
   console.log(
-    `\nNot in the app — add a field for each in CATEGORIES to include it:\n  ${unmapped.join('\n  ')}`,
-  )
-}
-
-// AUTO_TERMS (the words that tag themselves as you type) names values by hand,
-// so a word renamed or dropped in Notion can leave a dead entry behind. Say so
-// rather than letting it fail silently.
-const auto = readFileSync(PROPERTY_TAGS, 'utf8')
-  .slice(readFileSync(PROPERTY_TAGS, 'utf8').indexOf('const AUTO_TERMS = ['))
-const autoList = auto.slice(0, auto.indexOf('\n]'))
-const dead = [...autoList.matchAll(/'((?:[^'\\]|\\.)*)'/g)]
-  .map((m) => m[1])
-  .filter((term) => !after.has(term))
-if (dead.length) {
-  console.log(
-    `\nAUTO_TERMS in src/lib/propertyTags.ts names ${dead.length} word(s) the\n` +
-      `vocabulary no longer has — remove or rename them there:\n  ${dead.join(', ')}`,
+    `\nFields whose Concept the app doesn't know — fix the Concept in Notion,\n` +
+      `or add it to CONCEPTS here:\n  ${built.unmapped.join('\n  ')}`,
   )
 }
 
 if (check) {
-  if (source !== previous) {
+  if (built.source !== previous) {
     console.error('\nvocabulary.generated.ts is out of date — run npm run sync:vocab')
     process.exit(1)
   }
   process.exit(0)
 }
 
-if (source === previous) process.exit(0)
-writeFileSync(GENERATED, source)
+if (built.source === previous) process.exit(0)
+writeFileSync(GENERATED, built.source)
 console.log(`\nWrote ${GENERATED.pathname.split('/').pop()}.`)
