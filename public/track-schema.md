@@ -243,7 +243,7 @@ is fine; a hundred full-page scans in one file is not.
 | `noteOrder` | string | Default ordering of the notes list: `"timeline"`, `"auto"`, or `"live"`. Any other value is dropped. |
 | `overviewOpen` | boolean | Whether the overview timeline strip opens by default. |
 | `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
-| `score` | object | A PDF score laid over the video — see [§9](#9-score--the-printed-music-over-the-video). The one nested object settings accept. |
+| `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). The one nested object settings accept. |
 
 <!-- /fields -->
 
@@ -254,19 +254,21 @@ single exception, and it is validated field by field.
 
 ---
 
-## 8. `overlay` — putting a note on the video
+## 8. `overlay` — putting a note on the video or the score
 
-A note can take over the picture while it is on screen. Two independent pieces,
-either or both, on the note's `overlay` object:
+A note can take over the picture while it is on screen, and mark a place on the
+page of the score. Three independent pieces, any or all, on the note's
+`overlay` object:
 
 <!-- fields: NoteOverlay -->
 
 | field | type | notes |
 | --- | --- | --- |
-| `pinX` | number | Where the pin's dot sits across its anchor, `0`–`1` from the left. |
+| `pinX` | number | The **video pin**: where its dot sits across the picture, `0`–`1` from the left. |
 | `pinY` | number | And down it, `0`–`1` from the top. |
-| `pinAnchor` | string | What those fractions are *of*. Omit for the video frame; `"score"` anchors the pin to the PDF score's page instead — see below. |
-| `pinPage` | number | Which score page the pin lives on, 1-based. Only with `pinAnchor: "score"`; defaults to page 1. |
+| `scorePinX` | number | The **score pin**: where its dot sits across the drawn page of the score, `0`–`1` from the left — see below. |
+| `scorePinY` | number | And down the page, `0`–`1` from the top. |
+| `scorePinPage` | number | Which score page that pin lives on, 1-based. Defaults to page 1. |
 | `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
 | `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
 | `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
@@ -275,19 +277,26 @@ either or both, on the note's `overlay` object:
 
 <!-- /fields -->
 
-`pinX` and `pinY` only mean anything **together** — a pin with one of them is
-dropped rather than pinned to a corner.
+Each pin's two coordinates only mean anything **together** — a pin with one of
+them is dropped rather than pinned to a corner.
 
-**A pin can be aimed at the score instead of the picture.** With
-`pinAnchor: "score"` the fractions are of the *drawn page* of the track's PDF
-score (§9), not of the frame, so the pin holds its place in the music however
-the score is sized, refitted, expanded or scrolled. It draws only while the
-score is showing its `pinPage`: with the score off, or on another page, there
-is no page box for it to be a fraction of, and a dot floating over the video
-at those coordinates would mean nothing there. A pin with `pinAnchor: "score"`
-on a track that has no `settings.score` simply never appears. The dot is captioned with the note's own
-text, clamped to three lines on the frame, so a note that is also a pin wants a
-first sentence that reads on its own.
+**The two pins are independent.** One note may carry both: a dot on the picture
+at the moment something happens, and a dot on the bar it happens in. They are
+not two settings for one pin, so neither replaces the other.
+
+**The score pin is a fraction of the page, not of the frame.** `scorePinX` and
+`scorePinY` are measured against the *drawn page* of the track's PDF score
+(§9), so the pin holds its place in the music however the score is sized,
+refitted, expanded or scrolled. It draws only while the score view is showing
+its `scorePinPage`: on another page there is no page box for it to be a
+fraction of. A score pin on a track with no `settings.score` simply never
+appears. Either dot is captioned with the note's own text, clamped to three
+lines on the frame, so a note that is also a pin wants a first sentence that
+reads on its own.
+
+Files exported before the score got its own view carry a single pin with a
+`pinAnchor: "score"` switch instead. They still import: that pin lands on
+whichever of the two it named.
 
 **The cover is the `<img>` rule again.** A cover image is a note image: the app
 hosts the bytes, and a file can't bring its own. `coverUrl` is a link, so a URL
@@ -307,10 +316,11 @@ importing, which uploads them properly. A hand-written `overlay` is a pin.
 
 ---
 
-## 9. `score` — the printed music over the video
+## 9. `score` — the printed music
 
-A track can carry the score it is about: a PDF drawn over the picture, turning
-its own pages as the music plays. It lives on `settings.score`.
+A track can carry the score it is about: a PDF read in its own view of the
+player column, turning its own pages as the music plays. It lives on
+`settings.score`.
 
 | field | type | notes |
 | --- | --- | --- |
@@ -319,14 +329,21 @@ its own pages as the music plays. It lives on `settings.score`.
 | `driveUrl` | string | Drive only — the link it was pasted from. |
 | `url` | string | Hosted PDFs only. **You can't write this** — same rule as cover images. |
 | `fileName` | string | Hosted PDFs only; what the score menu calls it. |
-| `mode` | string | `"score"` (default) shows the page opaque, `"overlay"` dims it over the video, `"off"` hides it. |
-| `opacity` | number | `0.2`–`1`, overlay mode only. Defaults to `0.85`. |
-| `fit` | string | `"height"` (default) fits the whole page; `"width"` fills the frame width and scrolls. |
-| `onTop` | boolean | Paint the score in front of note covers and pins instead of behind them. Off by default. |
+| `mode` | string | Which view the column opens on: `"view"` (default) the score, `"off"` the player. |
+| `overVideo` | boolean | Also lay the score over the picture, dimmed, while the column is on the player. Off by default; video tracks only. |
+| `opacity` | number | `0.2`–`1`, only with `overVideo`. Defaults to `0.85`. |
+| `fit` | string | `"height"` (default) fits the whole page; `"width"` fills the width and scrolls. |
+| `onTop` | boolean | With `overVideo`, paint the score in front of note covers and pins instead of behind them. Off by default. |
 | `turns` | array | When the page turns — see below. |
+| `marks` | array | What is drawn on the pages — see below. |
 
 A score that names neither a `driveFileId` nor a `url` is dropped whole rather
 than imported as an attachment that can never load.
+
+Files written before the score got its own view use `mode: "score"` (the page
+opaque over the video) and `mode: "overlay"` (dimmed over it). Both still
+import: the first becomes the score view, the second the player view with
+`overVideo`.
 
 **Write a Drive link, not a hosted file.** `kind: "drive"` is the one you can
 author: point it at a PDF shared **Anyone with the link** and the track will
@@ -357,6 +374,35 @@ turn to page 2 means page 1 is what's read until then.
 Entries missing a usable `t` or `page` are dropped individually, and the list
 is re-sorted on import, so order in the file is a convenience rather than a
 requirement.
+
+### `marks` — what is drawn on the pages
+
+Highlights, boxes, circles, arrows and freehand ink, drawn on the score in the
+editor and carried with the track. Every coordinate is a **fraction of the
+page**, `0`–`1`, so a mark holds its place however the page is sized, refitted
+or expanded — the page box changes and the numbers don't.
+
+| field | type | notes |
+| --- | --- | --- |
+| `id` | string | Minted if absent. |
+| `page` | number | 1-based page this mark is drawn on. |
+| `kind` | string | `"highlight"`, `"box"`, `"ellipse"`, `"arrow"` or `"ink"`. Anything else is dropped — there is no honest default shape. |
+| `color` | string | CSS hex, e.g. `"#ff5252"`. |
+| `x`, `y` | number | The mark's top-left corner as page fractions. For an arrow, its **tail**. |
+| `w`, `h` | number | Its width and height as page fractions. For an arrow, the offset from tail to **head**, which may be negative. |
+| `weight` | number | Stroke weight, `1` (fine) to `3` (broad). Defaults to `2`. Ignored by `"highlight"`, whose breadth is its box. |
+| `points` | array | `"ink"` only — the stroke, flattened `[x0, y0, x1, y1, …]` in the same page fractions. Needs at least two points. |
+
+```json
+"marks": [
+  { "id": "m1", "page": 1, "kind": "highlight", "color": "#ffd633",
+    "x": 0.12, "y": 0.31, "w": 0.4, "h": 0.05 },
+  { "id": "m2", "page": 1, "kind": "arrow", "color": "#ff5252", "weight": 2,
+    "x": 0.6, "y": 0.2, "w": -0.12, "h": 0.09 }
+]
+```
+
+An import carries at most 2000 marks, and an ink stroke at most 2000 points.
 
 ---
 

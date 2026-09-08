@@ -211,41 +211,53 @@ the note open in the inspector is draggable, and only then does the layer take
 the pointer at all.
 
 **A pin is placed by dragging it out of the inspector** onto the picture — and
-where it lands decides what it is anchored to, because the thing you dropped it
-on *is* the answer. What you drag is the pin itself: a recessed round key in
+where it lands decides *which pin* it is, because the thing you dropped it on
+*is* the answer. What you drag is the pin itself: a recessed round key in
 the inspector holding the dot in the note's own hue, ringed white, exactly the
 object `PinLayer` draws out there (`NoteOverlayControls`). A press that never
 travels `DRAG_SLOP` is a click, which drops it dead centre — or takes a placed
-pin off again — so the key is still the on/off switch it replaced, and the
-arrows nudge a placed pin by 1% (5% with ⇧), the one path to a position that
-needs no pointer. `src/lib/pinTargets.ts` is a tiny registry the two drop
+pin off again; with two pins to choose between, a click means **the surface in
+view** (the column is showing the picture or the score, and that is the honest
+answer to which one you meant), and the arrows nudge that same one by 1% (5%
+with ⇧), the one path to a position that needs no pointer.
+`src/lib/pinTargets.ts` is a tiny registry the two drop
 boxes register themselves with (VideoOverlays the frame, ScoreLayer the drawn
 page), so the drag can ask what it is over without refs being threaded up
 through App and back down. Hit-testing is by rectangle rather than
 `elementFromPoint`, deliberately: both layers are `pointer-events: none` so
 they don't eat the player's clicks, and `elementFromPoint` skips exactly those.
-The score is tested first because its page sits *inside* the frame, so over the
-page both boxes contain the point and the page is the more specific answer.
+The score is tested first because its page can sit *inside* the frame (the
+`overVideo` overlay), so over the page both boxes contain the point and the
+page is the more specific answer.
 VideoOverlays therefore renders its (empty, inert) root even with nothing on
 it — the moment you most want to drop a pin is when the note has none.
 
-**A pin can be aimed at the score instead of the picture** (`pinAnchor:
-'score'` + `pinPage`). Its fractions are then of the *drawn page* of the PDF
-score, not of the frame, so it marks a place in the music and keeps it through
-every rescale, refit, expand and scroll — which is not arithmetic anyone
-maintains: the pin is a percentage inside the page box, and the page box is
-what resizes. That is why `ScoreLayer` wraps its canvas in a sized `relative`
-div, and why both kinds of pin are drawn by one `PinLayer` — every position in
-it is a percentage, so the same component serves two boxes. VideoOverlays
-draws `!isScorePin` and ScoreLayer draws the rest, filtered to the page on
-screen: a score pin whose page isn't up, or whose score is off, isn't drawn at
-all, because there is no page box for it to be a fraction of and a dot
-floating over the video at those coordinates would mean nothing there. The one
-thing `PinLayer` needs told is `spill`, since a caption's width cap is a
-percentage of its box — right for a wide frame, and a column of one-word lines
-on a portrait page. Cover images arrive by clicking the inspector's cover slot — a 16:9 well
-beside the pin key that echoes the frame's shape and *is* the thumbnail once
-set — *or* by dropping a file anywhere on that row, and every one is downscaled to 1600px
+**A note has two pins, not one with a switch** — `pinX`/`pinY` on the picture,
+`scorePinX`/`scorePinY`/`scorePinPage` on the drawn page of the score. They
+answer different questions (where on the screen, where in the music), so a note
+may carry one, the other, both or neither, and dropping one never disturbs the
+other. The score pin's fractions are of the *page box*, so it keeps its place
+through every rescale, refit, expand and scroll — which is not arithmetic
+anyone maintains: the pin is a percentage inside the page box, and the page box
+is what resizes. That is why `ScoreLayer` wraps its canvas in a sized
+`relative` div, and why both kinds are drawn by one `PinLayer` — every position
+in it is a percentage, so the same component serves two boxes. The choice of
+which pin belongs to which box is made once, in `framePins` / `scorePinsOn`
+(`src/lib/overlays.ts`), which hand `PinLayer` a `PlacedPin` — the note plus a
+position — so nothing downstream knows a note can have two. A score pin whose
+page isn't on screen isn't drawn at all: there is no page box for it to be a
+fraction of. The one thing `PinLayer` needs told is `spill`, since a caption's
+width cap is a percentage of its box — right for a wide frame, and a column of
+one-word lines on a portrait page.
+
+Notes written before the score view carried one pin plus a `pinAnchor: 'score'`
+switch. `withMigratedPins` converts that on read (in `toProject`, beside
+`withBlocks`) and the JSON importer does the same, so nothing downstream — and
+no old export or `?view=` link — has to know the shape ever existed.
+
+Cover images arrive by clicking the inspector's cover slot — a 16:9 well beside
+the pin key that echoes the frame's shape and *is* the thumbnail once set — *or*
+by dropping a file anywhere on that row, and every one is downscaled to 1600px
 and re-encoded before upload (`fileToScaledBlob` — WebP where the source can
 carry transparency, else JPEG at 0.85; measured 7× on a phone photo, 67× on a
 PNG screen grab). Both show over the note's window —
@@ -279,8 +291,8 @@ covers on the next project open. Anything else that walks a project's images
 must read it too.
 
 **PDF scores** (`src/lib/score.ts`, `src/components/ScoreLayer.tsx`): a track
-can carry the printed music, drawn over the picture so the page and the sound
-arrive together. It lives at `settings.score` — inside the existing jsonb, so
+can carry the printed music, read in **its own view of the player column** so
+the page and the sound arrive together. It lives at `settings.score` — inside the existing jsonb, so
 it needs no schema or API change and an owner *and* a guest can set it (both
 may write `settings`), exactly like the project `kind`.
 
@@ -307,25 +319,53 @@ onto one canvas and cancelling isn't instant, which a fast page-flip produces
 immediately. An `<iframe>` of the PDF would be free but exposes no page
 control, and turning the page is the whole feature.
 
-The layer sits between the picture and the transport (PlayerPane's `score`
-slot), so 'score' mode can be fully opaque with the transport still reachable;
-'overlay' drops the ground and dims the *page* instead.
+**The score is a view, not a layer.** `score.mode` is exactly the two states
+the column's view switch offers — `'off'` the player, `'view'` the score — and
+the score view is an opaque panel covering the whole player column
+(`placement="pane"`), where a portrait page gets the room a 16:9 frame never
+could and there is space at the foot for the drawing tools. It covers the
+player rather than replacing it: **the player stays mounted and keeps
+playing**, which is the point of reading along, and unmounting it would stop a
+YouTube iframe dead. So never make the switch conditional-render the player —
+it is a sibling `absolute inset-[0.875rem] z-30` panel over it, above the
+video's own floating transport, and it carries a transport of its own because
+it covers that one.
 
-**Three layers share the video frame**, and the score is the one that moves.
-Note covers and pins sit at `z-10` and the transport at `z-20`; the score
-paints at `z-[5]` — just under the covers — or at `z-[15]` when the score's
-`onTop` is set, and never above the transport whatever the setting. The order
-is a z-index rather than a position in the JSX so that flipping it doesn't
-remount the layer and re-fetch the PDF. Default off, because a note that takes
-over the picture is a deliberate interruption and the score is the steady
-background to the whole track; a track whose score is the point and whose
-covers are asides turns it on. An audio track's
-waveform is the picture and must stay uncovered, so its score takes its own
-frame above — the same rule the transport follows. A 16:9 frame is a poor
-window on a portrait page, hence the expand button: the same document and page
-drawn to the whole viewport through a **portal**, which is required rather
-than stylistic — `.glass` uses `backdrop-filter`, and that makes an ancestor
-the containing block for `position: fixed`.
+**Laying the score over the picture is a separate switch** (`score.overVideo`,
+`placement="frame"`) — the old overlay, kept because seeing the staves under
+the moving picture is its own thing the view can't do. Only there does the
+z-order matter: note covers and pins sit at `z-10` and the transport at `z-20`;
+the score paints at `z-[5]`, just under the covers, or at `z-[15]` when
+`onTop` is set, and never above the transport whatever the setting. That order
+is a z-index rather than a position in the JSX so flipping it doesn't remount
+the layer and re-fetch the PDF. Video tracks only — an audio track's waveform
+is the picture and must stay uncovered, and it has the score view like
+everything else. Legacy rows say `mode: 'score'` / `'overlay'`; `scoreView()`
+maps them onto the pair on read, and `sanitizeScore` does the same for
+imported files.
+
+Either placement can go **expanded**: the same document and page drawn to the
+whole viewport through a **portal**, which is required rather than stylistic —
+`.glass` uses `backdrop-filter`, and that makes an ancestor the containing
+block for `position: fixed`. The document is loaded once per placement and kept
+across the move, so expanding costs a re-render, never a re-fetch.
+
+**Drawing on the score** (`score.marks`, `src/components/ScoreMarks.tsx` +
+`ScoreToolbar.tsx`): highlights, boxes, circles, arrows and freehand ink, in
+`settings` with the rest of the score — so they belong to the *track*, and what
+the teacher draws is what the class opens. Every coordinate is a fraction of
+the page, like a score pin and for the same reason. Drawn in SVG at the page's
+own pixel size rather than through a 0→1 `viewBox`, which would stretch circles
+into ellipses and strokes into a different width along each axis. An arrow's
+`w`/`h` are signed (tail→head), which is why `normalize` skips it. Freehand
+points are dropped when closer than `INK_MIN_STEP` — a slow line emits hundreds
+a frame apart, and all of it would ride in the project's jsonb on every save
+from then on. The tools are offered in the pane and expanded but never in the
+video frame (no room to aim) nor while syncing page turns (every press there is
+meant to be a turn), and the surface is `pointer-events: none` with no tool
+armed so the page scrolls and pins still catch their own drags. Which tool is
+in your hand is *session* state, never saved: opening someone's shared score
+must not hand you their highlighter.
 
 **Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
 clip time — the same clock the notes use, so App's `setClip` shifts it along
@@ -470,7 +510,9 @@ change: add the field to the export envelope and the import sanitizer, or
 imported files silently lose it. Primitive-valued `settings` keys (including
 the project `kind`, e.g. song-structure boards) pass through automatically;
 object-valued ones do not — `score` is the only one so far, and it carries its
-own `sanitizeScore` pass. An uploaded score is also re-hosted by
+own `sanitizeScore` pass (which in turn sanitizes the `turns` and the `marks`,
+both of them lists of geometry a hand-written file could make enormous, hence
+the caps). An uploaded score is also re-hosted by
 `copySharedProject`, like a note image: a copy pointing at the original's blob
 would go blank the day that project is purged.
 Bump `PROJECT_JSON_VERSION` only on breaking shape changes.

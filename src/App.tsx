@@ -59,7 +59,7 @@ import {
   shiftTurns,
   type ScoreView,
 } from './lib/score'
-import type { ScoreTurn } from './types'
+import type { ScoreMark, ScoreTurn } from './types'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -80,7 +80,7 @@ import {
 import { useMediaQuery } from './lib/useMediaQuery'
 import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
-import { coverUrls, patchOverlay } from './lib/overlays'
+import { coverUrls, movePinPatch, patchOverlay } from './lib/overlays'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Eye,
@@ -113,7 +113,8 @@ import NoteActions from './components/NoteActions'
 import SourcePicker from './components/SourcePicker'
 import DetectSectionsButton from './components/DetectSectionsButton'
 import ScoreButton from './components/ScoreButton'
-import ScoreLayer, { ScoreFrame } from './components/ScoreLayer'
+import ScoreLayer from './components/ScoreLayer'
+import ScoreViewSwitch from './components/ScoreViewSwitch'
 import StemMixer from './components/StemMixer'
 import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
@@ -562,6 +563,21 @@ export default function App() {
     (patch: Partial<ScoreView>) => {
       setScoreOverride((o) => ({ ...o, ...patch }))
       if (score) patchProjectSettings({ score: { ...score, ...patch } })
+    },
+    [patchProjectSettings, score],
+  )
+
+  /**
+   * Save what has been drawn on the score. Written straight through rather
+   * than coalesced: a mark is committed once, on release, so each one is
+   * already a single deliberate act and belongs in its own undo step.
+   */
+  const changeMarks = useCallback(
+    (marks: ScoreMark[]) => {
+      if (!score) return
+      patchProjectSettings({
+        score: { ...score, marks: marks.length > 0 ? marks : undefined },
+      })
     },
     [patchProjectSettings, score],
   )
@@ -1474,13 +1490,19 @@ export default function App() {
    * VideoOverlays (one save per release, not per pointer move); a run of drags
    * on the same pin collapses into one undo step.
    */
-  function movePin(annId: string, x: number, y: number) {
-    const a = current?.annotations.find((n) => n.id === annId)
-    if (!a) return
-    updateAnnotation(annId, patchOverlay(a, { pinX: x, pinY: y }), {
-      coalesceKey: `pin:${annId}`,
-    })
+  function movePin(kind: 'frame' | 'score') {
+    return (annId: string, x: number, y: number) => {
+      const a = current?.annotations.find((n) => n.id === annId)
+      if (!a) return
+      updateAnnotation(annId, patchOverlay(a, movePinPatch(kind, x, y)), {
+        // Keyed by kind as well as note: a note's two pins are two things to
+        // aim, and dragging one shouldn't fold into the other's undo step.
+        coalesceKey: `pin:${kind}:${annId}`,
+      })
+    }
   }
+  const moveFramePin = movePin('frame')
+  const moveScorePin = movePin('score')
 
   /** Land a repositioned fill crop — same one-save-per-release deal as movePin. */
   function moveCover(annId: string, x: number, y: number) {
@@ -1910,18 +1932,26 @@ export default function App() {
     />
   )
 
-  // The score, built once: it lays over the video frame (PlayerPane's `score`
-  // slot) or takes its own frame above an audio waveform, which must stay
-  // uncovered — the same rule the transport follows.
-  const scoreLayer =
-    score && scoreView.mode !== 'off' ? (
+  /**
+   * The score, built once and placed twice over: as the column's own *view*
+   * (the ordinary case, `placement="pane"`, drawn over the player, which keeps
+   * playing behind it), or laid over the video frame when the track asks for
+   * that as well (`overVideo`).
+   *
+   * One builder for both because everything expensive about the layer — the
+   * fetched bytes, the opened document, the page it is on — belongs to the
+   * score and not to where it happens to be drawn.
+   */
+  const buildScoreLayer = (placement: 'pane' | 'frame') =>
+    score ? (
       <ScoreLayer
-        // Keyed to the track: the layer's own page, peek and expanded state
-        // belong to the score being read, and would otherwise open the next
-        // track's score on the last one's page.
-        key={currentId}
+        // Keyed to the track *and* the placement: the layer's own page, peek
+        // and expanded state belong to the score being read, and would
+        // otherwise open the next track's score on the last one's page.
+        key={`${currentId}:${placement}`}
         score={score}
         view={scoreView}
+        placement={placement}
         reloadKey={scoreReload}
         currentTime={currentTime}
         onSeek={seek}
@@ -1955,10 +1985,26 @@ export default function App() {
         annotations={current?.annotations}
         selectedId={selectedNoteId}
         readOnly={effectiveViewOnly}
-        onMovePin={movePin}
+        onMovePin={moveScorePin}
         onPageChange={setScorePage}
+        onMarks={canEditSettings ? changeMarks : undefined}
+        canDraw={canEditSettings}
       />
     ) : null
+
+  /** Player or score: only offered once there's a score to switch to. */
+  const scoreSwitch = score ? (
+    <ScoreViewSwitch
+      mode={scoreView.mode}
+      onMode={(mode) => changeScoreView({ mode })}
+    />
+  ) : null
+
+  /** The score as the column's view — the panel that covers the player. */
+  const scorePane = scoreView.mode === 'view' ? buildScoreLayer('pane') : null
+  /** The score laid over the picture, when the track asks for that as well. */
+  const scoreOverVideo =
+    scoreView.mode !== 'view' && scoreView.overVideo ? buildScoreLayer('frame') : null
 
   // Attaching is the track's business, so it follows the same rights as the
   // other settings: a reader gets the display knobs only (changeScoreView
@@ -1968,6 +2014,7 @@ export default function App() {
     <ScoreButton
       score={score}
       view={scoreView}
+      videoSource={isVideoSource(current.source)}
       onView={changeScoreView}
       onReload={() => setScoreReload((n) => n + 1)}
       onScore={canEditSettings ? changeScore : undefined}
@@ -1980,9 +2027,9 @@ export default function App() {
       onSync={
         canEditSettings && score
           ? () => {
-              // The workspace *is* the score at full screen, so a score that's
-              // currently hidden has to come back on to be timed.
-              if (scoreView.mode === 'off') changeScoreView({ mode: 'score' })
+              // The workspace *is* the score at full screen, so a score put
+              // away has to come back out to be timed.
+              if (scoreView.mode !== 'view') changeScoreView({ mode: 'view' })
               setSyncingScore(true)
             }
           : undefined
@@ -2008,7 +2055,7 @@ export default function App() {
         currentTime={currentTime}
         selectedId={selectedNoteId}
         readOnly={effectiveViewOnly}
-        onMovePin={movePin}
+        onMovePin={moveFramePin}
         onMoveCover={moveCover}
         onTogglePlay={() => (isPlaying ? pause() : play())}
       />
@@ -2415,10 +2462,11 @@ export default function App() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
               <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TitleBar
-                  left="Player"
+                  left={scoreView.mode === 'view' ? 'Score' : 'Player'}
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
                   actions={
                     <>
+                      {scoreSwitch}
                       {isVideoSource(current.source) && (
                         <a
                           href={sourceLinkUrl(current.source) ?? undefined}
@@ -2464,10 +2512,8 @@ export default function App() {
                     </>
                   }
                 />
-                <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
-                  {!isVideoSource(current.source) && scoreLayer && (
-                    <ScoreFrame>{scoreLayer}</ScoreFrame>
-                  )}
+                {/* `relative` for the score view, which covers this box. */}
+                <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
                   <div
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
@@ -2487,7 +2533,9 @@ export default function App() {
                           isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         score={
-                          isVideoSource(current.source) ? scoreLayer : undefined
+                          isVideoSource(current.source)
+                            ? (scoreOverVideo ?? undefined)
+                            : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2540,6 +2588,13 @@ export default function App() {
                     )}
                   </MiniTransport>
                   )}
+
+                  {/* The score view: the whole box, over the player rather
+                      than instead of it. Inset to the padding so it lands
+                      exactly where the picture was. */}
+                  {scorePane && (
+                    <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
+                  )}
                 </div>
               </div>
 
@@ -2588,10 +2643,11 @@ export default function App() {
                 className={`glass flex shrink-0 flex-col overflow-hidden ${splitVariant.player}`}
               >
                 <TitleBar
-                  left="Player"
+                  left={scoreView.mode === 'view' ? 'Score' : 'Player'}
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
                   actions={
                     <>
+                      {scoreSwitch}
                       {isVideoSource(current.source) && (
                         <a
                           href={sourceLinkUrl(current.source) ?? undefined}
@@ -2636,10 +2692,8 @@ export default function App() {
                     </>
                   }
                 />
-                <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
-                  {!isVideoSource(current.source) && scoreLayer && (
-                    <ScoreFrame>{scoreLayer}</ScoreFrame>
-                  )}
+                {/* `relative` for the score view, which covers this box. */}
+                <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
                   <div
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
@@ -2660,7 +2714,9 @@ export default function App() {
                           isVideoSource(current.source) ? videoOverlay : undefined
                         }
                         score={
-                          isVideoSource(current.source) ? scoreLayer : undefined
+                          isVideoSource(current.source)
+                            ? (scoreOverVideo ?? undefined)
+                            : undefined
                         }
                         onTime={handleTime}
                         onDuration={handleDuration}
@@ -2694,6 +2750,14 @@ export default function App() {
                       playbackRate={playbackRate}
                       onActiveChange={setStemActive}
                     />
+                  )}
+
+                  {/* The score view: the whole box, over the player rather
+                      than instead of it — the video keeps playing behind it,
+                      which is the point of reading along. Inset to the padding
+                      so it lands exactly where the picture was. */}
+                  {scorePane && (
+                    <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
                   )}
                 </div>
 

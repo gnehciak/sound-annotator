@@ -6,14 +6,18 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { X } from 'lucide-react'
-import type { Annotation } from '../types'
+
 import { noteLabel } from '../lib/format'
 import { colorForId, hueOnDark } from '../lib/noteColors'
-import { pinCaption } from '../lib/overlays'
+import { pinCaption, type PlacedPin } from '../lib/overlays'
 
 interface Props {
-  /** The pins to draw. The caller decides which ones belong to its box. */
-  pins: Annotation[]
+  /**
+   * The pins to draw, already placed. The caller picks which of a note's two
+   * pins belongs to its box (see `framePins` / `scorePinsOn`), so nothing in
+   * here has to know that a note can carry one of each.
+   */
+  pins: PlacedPin[]
   /** The note open in the inspector — the only one whose pin can be dragged. */
   selectedId?: string | null
   /** View-only (share links, foreign tracks): draw the pins, never move them. */
@@ -99,10 +103,8 @@ export default function PinLayer({
       return next
     })
 
-  const posOf = (a: Annotation) =>
-    drag?.id === a.id
-      ? { x: drag.x, y: drag.y }
-      : { x: a.overlay?.pinX ?? 0.5, y: a.overlay?.pinY ?? 0.5 }
+  const posOf = (pin: PlacedPin) =>
+    drag?.id === pin.note.id ? { x: drag.x, y: drag.y } : { x: pin.x, y: pin.y }
 
   const fractionAt = (clientX: number, clientY: number) => {
     const box = boxRef.current?.getBoundingClientRect()
@@ -113,14 +115,15 @@ export default function PinLayer({
     }
   }
 
-  const startPinDrag = (a: Annotation) => (e: ReactPointerEvent<HTMLElement>) => {
+  const startPinDrag = (pin: PlacedPin) => (e: ReactPointerEvent<HTMLElement>) => {
     dragMoved.current = false
+    const a = pin.note
     if (!editable || !onMovePin || a.id !== selectedId) return
     e.preventDefault()
     e.stopPropagation()
     capture(e)
     const at = fractionAt(e.clientX, e.clientY)
-    setDrag({ id: a.id, ...(at ?? posOf(a)) })
+    setDrag({ id: a.id, ...(at ?? posOf(pin)) })
   }
 
   const movePinDrag = (e: ReactPointerEvent<HTMLElement>) => {
@@ -140,7 +143,7 @@ export default function PinLayer({
 
   /** Arrow-key nudging — a pin needs it to reach an exact spot. */
   const nudge =
-    (a: Annotation, armed: boolean, at: { x: number; y: number }) =>
+    (a: { id: string }, armed: boolean, at: { x: number; y: number }) =>
     (e: ReactKeyboardEvent) => {
       const dir = ARROWS[e.key]
       if (!armed || !dir || !onMovePin) return
@@ -153,8 +156,9 @@ export default function PinLayer({
 
   return (
     <div ref={boxRef} className="pointer-events-none absolute inset-0">
-    {pins.map((a) => {
-      const { x, y } = posOf(a)
+    {pins.map((pin) => {
+      const a = pin.note
+      const { x, y } = posOf(pin)
       const hue = a.color ?? colorForId(a.id)
       // The layer is dark whatever the theme, so the hue takes the
       // dark-surface treatment even on the light page.
@@ -206,7 +210,7 @@ export default function PinLayer({
                   ? 'Drag to move — arrow keys nudge, Shift for bigger steps'
                   : undefined
             }
-            onPointerDown={startPinDrag(a)}
+            onPointerDown={startPinDrag(pin)}
             onPointerMove={movePinDrag}
             onPointerUp={endPinDrag}
             onPointerCancel={endPinDrag}

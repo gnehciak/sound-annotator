@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Loader2, Crosshair } from 'lucide-react'
+import { Image as ImageIcon, Loader2, Crosshair, X } from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -16,12 +16,12 @@ import {
   clampHold,
   coverPosition,
   hasCover,
-  hasPin,
+  hasScorePin,
+  hasVideoPin,
   hasOverlay,
   isFilled,
-  isScorePin,
   patchOverlay,
-  pinPageOf,
+  scorePinPageOf,
 } from '../lib/overlays'
 import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
 
@@ -141,37 +141,41 @@ export default function NoteOverlayControls({
   }
   const dropping = dragDepth > 0 && !!uploadImage
 
-  const pinned = hasPin(annotation)
+  const videoPinned = hasVideoPin(annotation)
+  const scorePinned = hasScorePin(annotation)
+  const pinned = videoPinned || scorePinned
   const covered = hasCover(annotation)
-  const pinnedToScore = isScorePin(annotation)
-  const pinPage = pinPageOf(annotation)
-
-  const removePin = () =>
-    patch({ pinX: undefined, pinY: undefined, pinAnchor: undefined, pinPage: undefined })
-  // A pin placed without aiming lands dead centre, where it's impossible to
-  // miss; dragging is how it gets aimed.
-  const centrePin = () => patch({ pinX: 0.5, pinY: 0.5 })
+  const pinPage = scorePinPageOf(annotation)
 
   /**
-   * Move the pin between the two things it can be a fraction of. The
-   * fractions themselves are kept: the frame and a page are different shapes,
-   * so nothing could carry the position across faithfully, and a pin that
-   * stays where its numbers say is easier to reason about than one that jumps
-   * somewhere computed. Dead centre stays dead centre.
+   * Which surface a click on the key means. A note has two pins now — one on
+   * the picture, one on the page — and the honest answer to "which one did you
+   * mean" is whichever you are looking at: the column is showing one or the
+   * other, and clicking the key puts a dot in the middle of *that*. Dragging
+   * still overrides it, because there the target is the answer.
    */
-  const anchorTo = (score: boolean) =>
+  const onScoreSurface = scorePage != null && !scoreHidden
+
+  const removeVideoPin = () => patch({ pinX: undefined, pinY: undefined })
+  const removeScorePin = () =>
+    patch({ scorePinX: undefined, scorePinY: undefined, scorePinPage: undefined })
+  // A pin placed without aiming lands dead centre, where it's impossible to
+  // miss; dragging is how it gets aimed.
+  const centrePin = () =>
     patch(
-      score
-        ? { pinAnchor: 'score', pinPage: scorePage ?? 1 }
-        : { pinAnchor: undefined, pinPage: undefined },
+      onScoreSurface
+        ? { scorePinX: 0.5, scorePinY: 0.5, scorePinPage: scorePage ?? 1 }
+        : { pinX: 0.5, pinY: 0.5 },
     )
 
   /**
    * Dragging the pin out of the key and onto the picture.
    *
-   * One gesture, two outcomes: where it lands decides what it is anchored to,
+   * One gesture, two outcomes: where it lands decides *which pin* it is,
    * because the thing you dropped it on *is* the answer — the score's page for
-   * a place in the music, the frame for a place on screen. That saves the
+   * a place in the music, the frame for a place on screen. The other pin is
+   * left exactly as it was: they are independent, and dropping one on the
+   * score is not a way to lose the one already aimed at the picture. That saves the
    * round trip of switching a pin on, hunting for the dot at dead centre, and
    * dragging it to where you meant in the first place.
    *
@@ -218,8 +222,11 @@ export default function NoteOverlayControls({
     if (!press) return
     // A press that never travelled is a click: place it centre, or take it off.
     if (!press.dragged) {
-      if (pinned) removePin()
-      else centrePin()
+      // Toggle the pin belonging to the surface in view, not "any pin": with
+      // two of them, one click clearing both would be a lot to undo.
+      if (!(onScoreSurface ? scorePinned : videoPinned)) centrePin()
+      else if (onScoreSurface) removeScorePin()
+      else removeVideoPin()
       return
     }
     const drop = pinTargetAt(e.clientX, e.clientY)
@@ -229,12 +236,11 @@ export default function NoteOverlayControls({
     patch(
       drop.kind === 'score'
         ? {
-            pinX: drop.x,
-            pinY: drop.y,
-            pinAnchor: 'score',
-            pinPage: drop.page ?? scorePage ?? 1,
+            scorePinX: drop.x,
+            scorePinY: drop.y,
+            scorePinPage: drop.page ?? scorePage ?? 1,
           }
-        : { pinX: drop.x, pinY: drop.y, pinAnchor: undefined, pinPage: undefined },
+        : { pinX: drop.x, pinY: drop.y },
     )
   }
 
@@ -247,15 +253,18 @@ export default function NoteOverlayControls({
   // path to a pin's position that doesn't need a pointer.
   const nudgePin = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
     const by = e.shiftKey ? 0.05 : 0.01
-    const at = { x: overlay.pinX ?? 0.5, y: overlay.pinY ?? 0.5 }
+    // Aims the pin on the surface in view, the same answer a click gives.
+    const onScore = onScoreSurface && scorePinned
+    const at = onScore
+      ? { x: overlay.scorePinX ?? 0.5, y: overlay.scorePinY ?? 0.5 }
+      : { x: overlay.pinX ?? 0.5, y: overlay.pinY ?? 0.5 }
     const move = (dx: number, dy: number) => {
       e.preventDefault()
-      patch({
-        pinX: Math.min(1, Math.max(0, at.x + dx)),
-        pinY: Math.min(1, Math.max(0, at.y + dy)),
-      })
+      const x = Math.min(1, Math.max(0, at.x + dx))
+      const y = Math.min(1, Math.max(0, at.y + dy))
+      patch(onScore ? { scorePinX: x, scorePinY: y } : { pinX: x, pinY: y })
     }
-    if (!pinned) return
+    if (!(onScore ? scorePinned : videoPinned)) return
     if (e.key === 'ArrowLeft') move(-by, 0)
     else if (e.key === 'ArrowRight') move(by, 0)
     else if (e.key === 'ArrowUp') move(0, -by)
@@ -263,17 +272,19 @@ export default function NoteOverlayControls({
   }
 
   // What the two objects add up to, said once, instead of a caption under each.
+  // Both pins in one phrase — the row answers "what does this note put on
+  // screen", and a note may well put something on each.
+  const where = [
+    videoPinned && 'the frame',
+    scorePinned && `page ${pinPage} of the score`,
+  ].filter((w): w is string => !!w)
   const stageLine = !pinned
     ? covered
       ? 'Cover set — drag the dot on to add a caption'
       : scorePage != null
         ? 'Drag the dot onto the picture, or onto the score’s page'
         : 'Drag the dot onto the picture'
-    : covered
-      ? `Cover set · pin ${pinnedToScore ? `on page ${pinPage}` : 'on the frame'}`
-      : pinnedToScore
-        ? `Pinned on page ${pinPage} of the score`
-        : 'Pinned on the frame'
+    : `${covered ? 'Cover set · pinned' : 'Pinned'} on ${where.join(' and on ')}`
 
   return (
     <div
@@ -446,45 +457,43 @@ export default function NoteOverlayControls({
             </div>
           )}
 
+          {/* One row per pin the note actually has — not a switch between
+              them. The two are independent: a note may point at a moment on
+              the picture *and* at the bar it happens in, and neither row is a
+              way to lose the other. */}
           {pinned && (
             <div className="flex flex-wrap items-center gap-2">
-              {/* What the pin's position is a fraction *of*. On the frame it
-                  holds a place on the picture; on the score it holds a place in
-                  the music, and rides every rescale, refit and scroll. */}
-              <div className="seg" role="group" aria-label="What the pin is anchored to">
+              {videoPinned && (
                 <button
                   type="button"
-                  onClick={() => anchorTo(false)}
-                  aria-pressed={!pinnedToScore}
-                  title="The pin holds its place on the picture"
-                  className="seg-item press"
+                  onClick={removeVideoPin}
+                  title="Take the pin off the picture"
+                  className="chip chip-outline press hover:border-danger/60 hover:text-danger"
                 >
-                  Frame
+                  On the frame
+                  <X size={10} />
                 </button>
+              )}
+              {scorePinned && (
                 <button
                   type="button"
-                  onClick={() => anchorTo(true)}
-                  aria-pressed={pinnedToScore}
-                  disabled={scorePage == null}
-                  title={
-                    scorePage == null
-                      ? 'Attach a PDF score to this track first'
-                      : 'The pin holds its place on the page, however the score is sized or moved'
-                  }
-                  className="seg-item press"
+                  onClick={removeScorePin}
+                  title="Take the pin off the score"
+                  className="chip chip-outline press hover:border-danger/60 hover:text-danger"
                 >
-                  Score
+                  On page {pinPage}
+                  <X size={10} />
                 </button>
-              </div>
-              {pinnedToScore && scoreHidden && (
+              )}
+              {scorePinned && scoreHidden && (
                 <span className="text-[11.5px] text-muted/80">
-                  The score is off, so it isn’t showing.
+                  The column is on the player, so it isn’t showing.
                 </span>
               )}
-              {pinnedToScore && scorePage != null && scorePage !== pinPage && (
+              {scorePinned && scorePage != null && scorePage !== pinPage && (
                 <button
                   type="button"
-                  onClick={() => patch({ pinPage: scorePage })}
+                  onClick={() => patch({ scorePinPage: scorePage })}
                   title={`The score is on page ${scorePage}`}
                   className="btn-ghost btn-sm press"
                 >

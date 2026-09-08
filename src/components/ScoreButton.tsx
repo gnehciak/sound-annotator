@@ -32,6 +32,7 @@ import {
 export default function ScoreButton({
   score,
   view,
+  videoSource,
   onView,
   onReload,
   onScore,
@@ -40,6 +41,8 @@ export default function ScoreButton({
 }: {
   score?: ProjectScore
   view: ScoreView
+  /** Whether there is a picture to lay the score over — video tracks only. */
+  videoSource?: boolean
   onView: (patch: Partial<ScoreView>) => void
   /** Re-fetch the bytes, past both caches — Drive scores change under us. */
   onReload: () => void
@@ -63,7 +66,7 @@ export default function ScoreButton({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title={score ? 'Score — how it sits over the picture' : 'Add a PDF score'}
+        title={score ? 'Score — where it shows, and how' : 'Add a PDF score'}
         aria-label={score ? 'Score options' : 'Add a PDF score'}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -72,7 +75,11 @@ export default function ScoreButton({
         }`}
       >
         <ScrollText size={12} />
-        {score ? 'Score' : 'Add score'}
+        {/* Once there's a score the column's view switch is already labelled
+            "Score" a few pixels away, and two of the word side by side reads
+            as one control cut in half. This one keeps the icon; the label is
+            only needed while it is the invitation to attach one. */}
+        {score ? null : 'Add score'}
       </button>
 
       <Popover
@@ -86,6 +93,7 @@ export default function ScoreButton({
           <ScoreSettings
             score={score}
             view={view}
+            videoSource={videoSource}
             onView={onView}
             onReload={() => {
               onReload()
@@ -118,13 +126,8 @@ export default function ScoreButton({
 // ---- attaching ------------------------------------------------------------
 
 const MODES: { value: ScoreMode; label: string; title: string }[] = [
-  { value: 'off', label: 'Off', title: 'Hide the score — just the video' },
-  { value: 'score', label: 'Score', title: 'The score over the picture' },
-  {
-    value: 'overlay',
-    label: 'Overlay',
-    title: 'The score turned down so the picture reads through it',
-  },
+  { value: 'off', label: 'Player', title: 'The player — the score is put away' },
+  { value: 'view', label: 'Score', title: 'The score, in its own view of this column' },
 ]
 
 const FITS: { value: ScoreFit; label: string; title: string }[] = [
@@ -253,6 +256,7 @@ function ScoreAttach({
 function ScoreSettings({
   score,
   view,
+  videoSource,
   onView,
   onReload,
   onScore,
@@ -261,6 +265,7 @@ function ScoreSettings({
 }: {
   score: ProjectScore
   view: ScoreView
+  videoSource?: boolean
   onView: (patch: Partial<ScoreView>) => void
   onReload: () => void
   onScore?: (next: ProjectScore | null) => void
@@ -292,8 +297,8 @@ function ScoreSettings({
       </div>
 
       <div>
-        <Label>Show</Label>
-        <div className="seg mt-1 grid grid-cols-3">
+        <Label>This column shows</Label>
+        <div className="seg mt-1 grid grid-cols-2">
           {MODES.map((m) => (
             <button
               key={m.value}
@@ -309,7 +314,26 @@ function ScoreSettings({
         </div>
       </div>
 
-      {view.mode === 'overlay' && (
+      {/* The old overlay, kept under its own switch. Seeing the staves over
+          the moving picture is its own thing, and the score view — which
+          replaces the picture — can't do it. Video tracks only: an audio
+          track's waveform is the picture and stays uncovered. */}
+      {videoSource && (
+        <button
+          type="button"
+          onClick={() => onView({ overVideo: !view.overVideo })}
+          aria-pressed={view.overVideo}
+          title="Lay the score over the video as well, dimmed, while this column is on the player"
+          className="flex w-full items-center justify-between gap-2 rounded px-0.5 py-1 text-left hover:bg-raised"
+        >
+          <span className={`text-[12px] ${view.overVideo ? 'text-fg' : 'text-muted'}`}>
+            Also over the video
+          </span>
+          <span className="switch" data-on={view.overVideo || undefined} />
+        </button>
+      )}
+
+      {videoSource && view.overVideo && (
         <label className="flex items-center gap-2">
           <span className="shrink-0 text-[11px] text-muted">Opacity</span>
           <input
@@ -327,7 +351,7 @@ function ScoreSettings({
         </label>
       )}
 
-      {view.mode !== 'off' && (
+      {videoSource && view.overVideo && (
         <button
           type="button"
           onClick={() => onView({ onTop: !view.onTop })}
@@ -344,7 +368,7 @@ function ScoreSettings({
         </button>
       )}
 
-      {view.mode !== 'off' && (
+      {(view.mode === 'view' || view.overVideo) && (
         <div>
           <Label>Fit</Label>
           <div className="seg mt-1 grid grid-cols-2">

@@ -15,7 +15,7 @@ import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
 import { hueText } from '../lib/noteColors'
-import { hasCover, hasOverlay, hasPin } from '../lib/overlays'
+import { hasCover, hasOverlay, hasScorePin, hasVideoPin } from '../lib/overlays'
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
@@ -343,18 +343,16 @@ export default function AnnotationItem({
           </span>
         )}
 
-        {/* Stage chip — this note takes over the video for its moment. One
-            chip for both pieces: it answers "does this note touch the
-            picture?", which is what you're scanning the list for. */}
+        {/* Stage chip — this note puts something on screen for its moment.
+            One chip however many pieces: the question the list is scanned for
+            is "does this note touch the picture or the page at all?", and the
+            tooltip is where the answer gets specific. It does say *which*
+            surface, though — a note that only marks the score has nothing to
+            do with the video, and a chip claiming otherwise sends you looking
+            in the wrong place. */}
         {hasOverlay(annotation) && (
           <span
-            title={
-              hasCover(annotation) && hasPin(annotation)
-                ? 'Shows a cover image and a pinned caption on the video'
-                : hasCover(annotation)
-                  ? 'Shows a cover image over the video'
-                  : 'Shows a pinned caption on the video'
-            }
+            title={stageTitle(annotation)}
             className="chip chip-outline"
             style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
           >
@@ -363,7 +361,7 @@ export default function AnnotationItem({
             ) : (
               <MapPin size={9} strokeWidth={2.4} className="shrink-0" />
             )}
-            On video
+            {stageChip(annotation)}
           </span>
         )}
 
@@ -498,3 +496,24 @@ export default function AnnotationItem({
   )
 }
 
+
+/**
+ * What the stage chip says this note puts on screen. One chip covers all
+ * three pieces — the question the list is being scanned for is "does this note
+ * touch the picture or the page at all?" — so the tooltip is where the answer
+ * gets specific.
+ */
+function stageChip(a: Annotation): string {
+  const onVideo = hasCover(a) || hasVideoPin(a)
+  if (onVideo && hasScorePin(a)) return 'On video + score'
+  return onVideo ? 'On video' : 'On score'
+}
+
+function stageTitle(a: Annotation): string {
+  const parts = [
+    hasCover(a) && 'a cover image over the video',
+    hasVideoPin(a) && 'a pinned caption on the video',
+    hasScorePin(a) && 'a pinned caption on the score',
+  ].filter((p): p is string => !!p)
+  return `Shows ${parts.join(' and ')}`
+}
