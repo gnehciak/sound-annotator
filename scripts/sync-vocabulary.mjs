@@ -13,9 +13,12 @@
 // button in the Notion page work: the button asks Vercel to rebuild, and the
 // rebuild is what actually reads Notion.
 //
-// **Notion owns the words. This file owns the shape.** The database has three
-// columns that matter — Concept, Category, Term — which is exactly a category,
-// a field and an option. Everything else the app needs is a judgment call that
+// **Notion owns the words. This file owns the shape.** Two columns carry the
+// vocabulary: **Category** is a field and **Term** is an option. (**Element**
+// is read only to make the unmapped report useful — the app's categories come
+// from CATEGORIES below, not from Notion, so renaming that column, as it was
+// from "Concept" to "Element", changes nothing here.) Everything else the app
+// needs is a judgment call that
 // does not belong in a word bank and is therefore configured below: which
 // concept a category lands in, what colour it wears (checked for AA contrast in
 // both themes), the field order, the lists the bank has no equivalent for, and
@@ -156,7 +159,7 @@ function bail(message) {
 const fromIndex = args.indexOf('--from')
 const fromFile = fromIndex >= 0 ? args[fromIndex + 1] : null
 
-/** Every row of the database as `{ term, category, concept }`. */
+/** Every row of the database as `{ term, category, element }`. */
 async function fetchRows() {
   const token = process.env.NOTION_TOKEN
   if (!token) {
@@ -195,7 +198,10 @@ async function fetchRows() {
       rows.push({
         term: (p.Term?.title ?? []).map((t) => t.plain_text).join('').trim(),
         category: p.Category?.select?.name ?? '',
-        concept: p.Concept?.select?.name ?? '',
+        // "Element" today, "Concept" before it was renamed. Read whichever
+        // is there: it is only used to label unmapped categories, so a future
+        // rename should cost a blank label, never a broken sync.
+        element: (p.Element ?? p.Concept)?.select?.name ?? '',
       })
     }
     cursor = page.has_more ? page.next_cursor : undefined
@@ -215,16 +221,18 @@ const quote = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
 
 function buildFile(rows) {
   const byNotionCategory = new Map()
+  const elementOf = new Map()
   for (const row of rows) {
     if (!byNotionCategory.has(row.category)) byNotionCategory.set(row.category, [])
     byNotionCategory.get(row.category).push(row.term)
+    if (row.element) elementOf.set(row.category, row.element)
   }
   const mapped = new Set(
     CATEGORIES.flatMap(([, , , fields]) => fields.map(([, , src]) => src).filter(Boolean)),
   )
-  const unmapped = [...byNotionCategory.keys()].filter(
-    (c) => c && !mapped.has(c) && !SPLIT_BY_HAND.has(c),
-  )
+  const unmapped = [...byNotionCategory.keys()]
+    .filter((c) => c && !mapped.has(c) && !SPLIT_BY_HAND.has(c))
+    .map((c) => (elementOf.get(c) ? `${c}  (Element: ${elementOf.get(c)})` : c))
 
   let body = ''
   let count = 0
