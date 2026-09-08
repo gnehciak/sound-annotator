@@ -28,20 +28,16 @@ import {
   TEXT_BLOCK,
 } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
-import { tagsOf } from '../lib/tags'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
 import ElementsDictionary from './ElementsDictionary'
 import NoteOverlayControls from './NoteOverlayControls'
-import TagPicker from './TagPicker'
 import Popover from './Popover'
 import type { MentionItem } from './MentionList'
 
 interface Props {
   annotation: Annotation
   color: string
-  /** Custom tags already used elsewhere in this project, offered for reuse. */
-  projectTags: string[]
   currentTime: number
   /** Track play state + rate, so the range bar smooths between time ticks. */
   isPlaying?: boolean
@@ -96,7 +92,6 @@ interface Props {
 export default function NoteInspector({
   annotation,
   color,
-  projectTags,
   currentTime,
   isPlaying = false,
   playbackRate = 1,
@@ -202,19 +197,10 @@ export default function NoteInspector({
         />
       </div>
 
-      {/* ---- the record: what kind of note this is. Two rails, because the
-              two are different jobs: tags are the note's own vocabulary and
-              grow to any length, the three switches are a fixed set. Each
-              switch's field appears only once it's on. ---- */}
+      {/* ---- the record: what kind of note this is. The tags that label it
+              live in the title bar with its colour; these are the fixed set
+              of switches, each one's field revealed only once it's on. ---- */}
       <div className="flex flex-col gap-2 border-b border-line/60 px-[13px] py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <TagPicker
-            tags={tagsOf(annotation)}
-            projectTags={projectTags}
-            onChange={(tags) => onUpdate({ tags })}
-          />
-        </div>
-
         <div className="flex flex-wrap items-center gap-1.5">
           <PropChip
             icon={Brackets}

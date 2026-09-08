@@ -134,6 +134,7 @@ import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
 import ColorPicker from './components/ColorPicker'
+import TagPicker from './components/TagPicker'
 import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
@@ -692,6 +693,16 @@ export default function App() {
     <ColorPicker
       color={selectedNote.color ?? colorForId(selectedNote.id)}
       onChange={(c) => updateAnnotation(selectedNote.id, { color: c })}
+    />
+  ) : undefined
+  // The note's tags label it, so they sit beside its name in the title bar —
+  // where the metadata row used to put them — rather than taking a rail of
+  // their own above the note's kind switches.
+  const inspectorTags = selectedNote ? (
+    <TagPicker
+      tags={tagsOf(selectedNote)}
+      projectTags={projectTags}
+      onChange={(tags) => updateAnnotation(selectedNote.id, { tags })}
     />
   ) : undefined
   const inspectorActions = selectedNote ? (
@@ -2830,6 +2841,7 @@ export default function App() {
                     <PluginWindow
                       title="Note"
                       leading={inspectorSwatch}
+                      meta={inspectorTags}
                       actions={inspectorActions}
                       mode="dock"
                       onSetMode={changeWindowMode}
@@ -2844,7 +2856,6 @@ export default function App() {
                           key={`${selectedNote.id}:${epoch}`}
                           annotation={selectedNote}
                           color={selectedNote.color ?? colorForId(selectedNote.id)}
-                          projectTags={projectTags}
                           currentTime={currentTime}
                           isPlaying={isPlaying}
                           playbackRate={playbackRate}
@@ -2888,6 +2899,7 @@ export default function App() {
         <PluginWindow
           title="Note"
           leading={inspectorSwatch}
+          meta={inspectorTags}
           actions={inspectorActions}
           mode="modal"
           onSetMode={changeWindowMode}
@@ -2897,7 +2909,6 @@ export default function App() {
             key={`${selectedNote.id}:${epoch}`}
             annotation={selectedNote}
             color={selectedNote.color ?? colorForId(selectedNote.id)}
-            projectTags={projectTags}
             currentTime={currentTime}
             isPlaying={isPlaying}
             playbackRate={playbackRate}
