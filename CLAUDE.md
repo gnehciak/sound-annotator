@@ -169,13 +169,25 @@ word in Bright's field follows it down the list, because "what could I say
 instead of bright?" is the question the menu exists to answer. That needs
 `allowSpaces` on the suggestion, which would otherwise match `@` plus the whole
 paragraph; a four-word cap and a menu that *hides* itself when nothing matches
-are what bound it. Retuning the vocabulary is one array in
-`lib/musicElements.ts` — eight categories hued to match the owner's concept nav
-(Dynamics/Expression and Performing media/Timbre are paired there, so each
-pair shares a colour family) — but **field ids there are stored data** (the
-keys of `ElementsData.fields`, the `data-field` of every chip), so relabel
-freely and rename an id only after checking the database says nothing stores
-it.
+are what bound it. **The vocabulary is synced from Notion, not hand-written.** The words live in
+the owner's "Concept vocabulary" database (HSC & Trial marking guidelines);
+`npm run sync:vocab` (`scripts/sync-vocabulary.mjs`) pulls them and rewrites
+`src/lib/vocabulary.generated.ts`, which is the only place `ELEMENTS` is
+defined — never edit it by hand. **Notion owns the words; the script owns the
+shape.** Its `CATEGORIES` config decides which concept a Notion category lands
+in, the field order, and the eight hues (matched to the owner's concept nav,
+where Dynamics/Expression and Performing media/Timbre are paired, so each pair
+shares a colour family — AA-verified in both themes). `OWN` holds the lists the
+bank has no equivalent for (performing media, the ppp–fff ladder, Layer role,
+and the Italian markings split by concept). A new *category* in Notion is
+reported as unmapped rather than guessed at. `--check` fails when the file is
+stale, and the run flags any `AUTO_TERMS` entry the vocabulary no longer has.
+Setup is one env var, `NOTION_TOKEN`, in `.env.local` only — nothing at runtime
+reaches Notion, so the app has no dependency on it.
+
+**Field ids are stored data** (the keys of `ElementsData.fields`, the
+`data-field` of every chip), so relabel freely and rename an id only after
+checking the database says nothing stores it.
 
 The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
 `PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new

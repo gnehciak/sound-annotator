@@ -8,6 +8,7 @@
     "dev:full": "vercel dev",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "sync:vocab": "node --env-file-if-exists=.env.local scripts/sync-vocabulary.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
