@@ -213,7 +213,7 @@ def build_units(path, max_img_bytes=300_000):
     # described one by one in recipes.py rather than by bending the heuristics,
     # which kept regressing the kits that already worked.
     recipe = recipes.find(path)
-    units = recipes.units(items, recipe, head) if recipe else split_units(items, works, kit)
+    units = recipes.units(items, recipe, head, doc) if recipe else split_units(items, works, kit)
 
     out = []
     for title, chunk in units:
@@ -272,6 +272,9 @@ def build_units(path, max_img_bytes=300_000):
             if it["kind"] == "image":
                 if cur is None or it["w"] < 60 or it["h"] < 18: continue
                 if img_budget[0] <= 0: continue
+                page_rect = doc[it["page"]].rect
+                if (it["w"] * it["h"]) > 0.55 * page_rect.width * page_rect.height:
+                    continue          # a scanned page, not a figure
                 uri, nb = png_data_uri(doc, it["page"], it["bbox"])
                 if nb <= max_img_bytes:
                     cur["contentHtml"] += f'<img src="{uri}">'

@@ -46,7 +46,78 @@ RECIPES = [
         "stop": re.compile(r'^About me:\s*$', re.I),
         "title": "{work}",
     },
+    {
+        # OCR'd scan. Its cover is display type that comes back as noise
+        # ("fae Se Ee er"), so the title is stated rather than read.
+        "match": re.compile(r'Kakadu Analysis', re.I),
+        "single": True,
+        "title": "Peter Sculthorpe: Kakadu — Analysis",
+    },
+    {
+        # OCR'd scan: a book of analyses from one Music Day, kept whole.
+        "match": re.compile(r'Paul Stanhope.*Book of analysis', re.I),
+        "single": True,
+        "title": "MLC Australian Music Day 2002: Book of Analyses",
+    },
+    {
+        # OCR'd scan. A suite: each movement gets a "Listening Outline", though
+        # the scan renders their separators inconsistently (colon, dash, none).
+        "match": re.compile(r'Out of the Blue', re.I),
+        "split": re.compile(r'^Listening Outline\s*[:\-–—]?\s*(.{0,50})$', re.I),
+        "answers_at": re.compile(r'^(?!x)x'),
+        "answers_split": re.compile(r'^(?!x)x'),
+        "stop": re.compile(r'^(?!x)x'),
+        "title": "Out of the Blue — {work}",
+    },
+    {
+        # Old SSO season books: several works, each with the same run of
+        # sections. The index names them, and each work's analysis is the split
+        # point — "Analysis" in the 2005/2009 books, "Listening Outline" in 2010.
+        "match": re.compile(r'SSO (Meet the Music )?(2005|2009|2010)', re.I),
+        "index_works": True,
+        "split": re.compile(r'^(Analysis|Listening Outline)\s*$', re.I),
+        "answers_at": re.compile(r'^(?!x)x'),
+        "answers_split": re.compile(r'^(?!x)x'),
+        "stop": re.compile(r'^(?!x)x'),
+        "title": "{work}",
+    },
 ]
+
+
+SECTION_WORD = re.compile(
+    r'^(Orchestration|Sound Excerpts|Background|Outcomes|Analysis|Activities|Answers'
+    r'|Listening Outline|Index|Contents|Page\s*\d+|\d+)\s*[.\s]*$', re.I)
+INDEX_JUNK = re.compile(r'^(CD Track|Track Listing|Compact Disc)', re.I)
+
+
+def works_from_index(doc):
+    """Work titles from an old SSO season index.
+
+    Every work is listed as its title (and, in the older books, its composer)
+    followed by the same run of section names. So each "Orchestration" line
+    marks a work, and the title is the text immediately above it that isn't
+    itself a section name or a page number.
+    """
+    for pno in range(min(8, len(doc))):
+        lines = [re.sub(r'\s+', ' ', l).strip() for l in doc[pno].get_text().split('\n')]
+        lines = [l for l in lines if l]
+        if not any(re.match(r'^Orchestration\s*$', l, re.I) for l in lines):
+            continue
+        works = []
+        for i, l in enumerate(lines):
+            if not re.match(r'^Orchestration\s*$', l, re.I):
+                continue
+            parts = []
+            for j in range(i - 1, max(-1, i - 4), -1):
+                t = lines[j]
+                if SECTION_WORD.match(t) or INDEX_JUNK.match(t) or len(t) < 3:
+                    break
+                parts.insert(0, t)
+            if parts:
+                works.append(" — ".join(parts[:2]) if len(parts) > 1 else parts[0])
+        if works:
+            return works
+    return []
 
 
 def find(path):
@@ -61,7 +132,7 @@ def squash(t):
     return re.sub(r'\s+', ' ', t).strip()
 
 
-def units(items, recipe, head):
+def units(items, recipe, head, doc=None):
     """(title, items) per track, following the recipe."""
     def txt(it):
         return squash(head(it["text"])) if it["kind"] == "text" else ""
@@ -80,6 +151,25 @@ def units(items, recipe, head):
     stop_i = next((i for i in range(ans_i, len(items))
                    if items[i]["kind"] == "text" and recipe["stop"].match(txt(items[i]))), len(items))
 
+    if recipe.get("index_works") and doc is not None:
+        idx = works_from_index(doc)
+        # Skip split points on the index page itself.
+        first_body = next((i for i, it in enumerate(items) if it["page"] > 0), 0)
+        pts = [i for i, it in enumerate(items)
+               if i > first_body and it["kind"] == "text"
+               and recipe["split"].match(squash(head(it["text"])))]
+        # The heading also appears inside a work's answers, so there are more
+        # split points than works. The index is authoritative about how many
+        # works there are: keep that many, and let the last run to the end.
+        if idx and len(pts) > len(idx):
+            pts = pts[:len(idx)]
+        out = []
+        for n, i in enumerate(pts):
+            end = pts[n + 1] if n + 1 < len(pts) else len(items)
+            title = idx[n] if n < len(idx) else f"Work {n + 1}"
+            out.append((recipe["title"].format(work=title), items[i:end]))
+        return out
+
     min_size = recipe.get("split_min_size", 0)
     starts = [(i, recipe["split"].match(txt(it)).group(1).strip())
               for i, it in enumerate(items[:ans_i])
@@ -90,6 +180,7 @@ def units(items, recipe, head):
 
     out = []
     for n, (i, work) in enumerate(starts):
+        work = work.strip(' :-–—') or f"Movement {n + 1}"
         end = starts[n + 1][0] if n + 1 < len(starts) else ans_i
         chunk = items[i:end]
         # bolt on this work's answers, where they exist
