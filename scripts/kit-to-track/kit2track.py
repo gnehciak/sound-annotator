@@ -226,7 +226,11 @@ def build(path, max_img_bytes=300_000):
                 if nums: cur["bar"] = bar_label(nums[0], nums[1] if len(nums) > 1 else None)
                 sections.append(cur); cur_kind = "section"; guide_n += 1
             elif m and m.group(3) and len(m.group(3)) > 3:
-                rest = [m.group(3).strip()] + (it["lines"][1:] if len(it["lines"]) > 1 else [])
+                # Strip the "Bar N" prefix off the FIRST line only. `s` is every
+                # line joined, so pasting m.group(3) in front of lines[1:] would
+                # repeat the whole tail of the paragraph.
+                first = re.sub(r'^Bars?\s+\d+\s*(?:[-–—]|to)?\s*\d*\s*', '', it["lines"][0]).strip()
+                rest = ([first] if first else []) + it["lines"][1:]
                 cur = add(bar=bar_label(m.group(1), m.group(2)), contentHtml=para_html(rest))
                 cur_kind = "entry"; guide_n += 1
             elif cur is not None and cur_kind in ("entry", "section"):
