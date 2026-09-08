@@ -285,8 +285,12 @@ Three light-specific rules, all WCAG-AA verified:
   holds ≥3:1 on white.
 - **The Hue-As-Data-Holds Rule.** The note/tag/element hues stay raw as
   **fills** in both themes; used as **text or a 1px border** on the white page
-  they are mixed toward ink for AA (`src/lib/noteColors.ts` → `hueText`). The
-  LED glow is dropped in light (a glow is a dark-screen affordance).
+  they go through `hueText` (`src/lib/noteColors.ts`), which lifts the
+  saturation and then darkens the hue *only as far as 4.5:1 demands* against
+  the chip's own 14% wash. Colour survives the light theme (2026-09-08 — the
+  old flat 55% mix toward ink cleared AA but turned every hue the same muddy
+  brown); yellow still lands darker than sky blue, because contrast says so.
+  The LED glow is dropped in light (a glow is a dark-screen affordance).
 
 ## 3. Typography
 

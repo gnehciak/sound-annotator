@@ -1131,8 +1131,23 @@ html[data-armed] body::before {
   font-weight: 500;
   user-select: none;
 }
+/* Light mode only. On the near-black canvas a hue is already the brightest
+   thing in the line and needs no help; on the white page the same word is a
+   dark mark among dark marks, so the tag carries a faint ground of its own
+   hue — the .chip family's wash idiom, at a lower strength so the sentence
+   still reads as prose. The negative margin gives the ground room to breathe
+   without the tag pushing its own comma away. */
+[data-theme='light'] .prop-tag {
+  background: color-mix(in srgb, var(--hue) 13%, transparent);
+  padding: 0 0.16em;
+  margin: 0 -0.06em;
+  font-weight: 600;
+}
 .ProseMirror .prop-tag:hover {
   background: color-mix(in srgb, var(--hue) 18%, transparent);
+}
+[data-theme='light'] .ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 26%, transparent);
 }
 /* ProseMirror marks the lifted node while it's being dragged. */
 .ProseMirror .prop-tag.ProseMirror-selectednode {
