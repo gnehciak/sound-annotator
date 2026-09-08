@@ -17,36 +17,51 @@ import {
   Minimize2,
   TriangleAlert,
 } from 'lucide-react'
-import type { Annotation, ProjectScore, ScoreTurn } from '../types'
+import type { Annotation, ProjectScore, ScoreMark, ScoreTurn } from '../types'
 import PinLayer from './PinLayer'
-import { isScorePin, pinPageOf, visibleLayer } from '../lib/overlays'
+import ScoreMarks, { type MarkStyle, type MarkTool } from './ScoreMarks'
+import ScoreToolbar from './ScoreToolbar'
+import { scorePinsOn } from '../lib/overlays'
 import { usePinTarget } from '../lib/pinTargets'
 import { openPdf, type LoadedPdf, type PageSize } from '../lib/pdf'
 import {
+  DEFAULT_MARK_WEIGHT,
   DEFAULT_TURN_LEAD,
+  MARK_COLORS,
+  marksOnPage,
   pageAt,
+  removeMark,
   scoreBytesUrl,
+  upsertMark,
   type ScoreView,
 } from '../lib/score'
 import ScoreSync from './ScoreSync'
 import { isTypingTarget } from '../lib/useHotkeys'
 
 /**
- * The score, drawn over the picture.
+ * The score: the printed music, drawn either as its own view of the player
+ * column or as a layer over the picture.
  *
- * It sits inside the video frame between the video and the transport, so the
- * transport stays reachable with the score at full opacity — which is the
- * default ('score' mode). 'overlay' mode is the same layer turned down until
- * the picture reads through it.
+ * **Pane** is the ordinary placement and the one the score is built for — the
+ * whole column, where a portrait page gets the room a 16:9 frame could never
+ * give it, and where there is space at the foot for the drawing tools. It sits
+ * over the player rather than replacing it: the video keeps playing behind the
+ * panel, which is the point — you switch to the score to *read along*, not to
+ * stop.
  *
- * A 16:9 frame is a poor shape for a portrait page, so the layer can also go
- * **expanded**: the same document, the same page, drawn to the whole viewport
- * through a portal. The portal matters — the panes are `.glass`, and a
- * backdrop-filter makes an ancestor the containing block for `position:
- * fixed`, so a fixed child of the frame would be trapped inside the pane.
+ * **Frame** is the same layer laid over the video (the score's `overVideo`
+ * switch), between the picture and the transport so the transport stays
+ * reachable at full opacity. Read-only: the page is a couple of hundred pixels
+ * wide there, which is no place to aim a highlighter.
  *
- * The document is loaded once here and kept across that move, so expanding
- * costs a re-render, never a re-fetch.
+ * Either way the layer can go **expanded**: the same document, the same page,
+ * drawn to the whole viewport through a portal. The portal matters — the panes
+ * are `.glass`, and a backdrop-filter makes an ancestor the containing block
+ * for `position: fixed`, so a fixed child of the pane would be trapped inside
+ * it.
+ *
+ * The document is loaded once here and kept across every one of those moves,
+ * so switching placement or expanding costs a re-render, never a re-fetch.
  *
  * Once the score carries page turns it follows the clock instead of the
  * reader — see the peek rule below.
@@ -54,6 +69,7 @@ import { isTypingTarget } from '../lib/useHotkeys'
 export default function ScoreLayer({
   score,
   view,
+  placement = 'frame',
   reloadKey = 0,
   currentTime,
   onSeek,
@@ -66,9 +82,17 @@ export default function ScoreLayer({
   readOnly,
   onMovePin,
   onPageChange,
+  onMarks,
+  canDraw = false,
 }: {
   score: ProjectScore
   view: ScoreView
+  /**
+   * Where this instance is drawn: its own view of the player column, or a
+   * layer over the video frame. Only the pane (and the expanded portal) can
+   * be drawn on.
+   */
+  placement?: 'pane' | 'frame'
   /** Bump to re-fetch the bytes — how "Reload score" beats the caches. */
   reloadKey?: number
   /** Clip time, so the page can follow the music. Omitted: no following. */
@@ -95,12 +119,30 @@ export default function ScoreLayer({
   onMovePin?: (id: string, x: number, y: number) => void
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
   onPageChange?: (page: number) => void
+  /** Save the drawn marks. Absent means nobody here may draw. */
+  onMarks?: (marks: ScoreMark[]) => void
+  /** Whether to offer the drawing tools at all (pane and expanded only). */
+  canDraw?: boolean
 }) {
   const pdf = useScorePdf(score, reloadKey)
   const [rawPage, setPage] = useState(1)
   const [rawExpanded, setExpanded] = useState(false)
   const [lead, setLead] = useState(DEFAULT_TURN_LEAD)
   const expanded = rawExpanded || syncing
+
+  // The drawing tools. All three are the reader's own session state, not the
+  // track's: which pen you last held is about you, and saving it would make
+  // opening someone's shared score hand you their highlighter.
+  const [tool, setTool] = useState<MarkTool>(null)
+  const [markStyle, setMarkStyle] = useState<MarkStyle>({
+    color: MARK_COLORS[0],
+    weight: DEFAULT_MARK_WEIGHT,
+  })
+  const [selectedMark, setSelectedMark] = useState<string | null>(null)
+  // Drawing needs a surface big enough to aim at, so the tools are offered in
+  // the pane and expanded but never in the video frame — and never while the
+  // sync workspace is up, where every press is meant to be a page turn.
+  const drawable = canDraw && !!onMarks && !syncing && (placement === 'pane' || expanded)
 
   // A shorter replacement (or a different score) must never leave the reader
   // parked on a page that no longer exists. Clamped as it is read rather than
@@ -146,11 +188,46 @@ export default function ScoreLayer({
     [pageCount],
   )
 
-  // Expanded, the score owns the arrow keys and Escape. Capture + preventDefault
-  // rather than a bubble listener: the app's global hotkeys sit on window too,
-  // and they skip an event that has already been handled (useHotkeys).
+  /** The marks on the page in front of the reader. */
+  const pageMarks = useMemo(
+    () => marksOnPage(score.marks, page),
+    [score.marks, page],
+  )
+
+
+  // What is actually armed, derived rather than reset in an effect. The tool
+  // is put down whenever drawing isn't possible (the layer left the pane, a
+  // sync pass started, the reader lost their edit rights) — a tool left live
+  // on a surface with no toolbar would take clicks with nothing on screen to
+  // explain why. And a selection is a selection *on a page*: turning past it
+  // must not leave the delete button armed over a mark nobody can see.
+  //
+  // Derived, so the reader's tool is still in their hand when they come back
+  // from the expanded view, which an effect that cleared it would have lost.
+  const activeTool: MarkTool = drawable ? tool : null
+  const activeMark =
+    drawable && pageMarks.some((m) => m.id === selectedMark) ? selectedMark : null
+
+  const commitMark = useCallback(
+    (mark: ScoreMark) => onMarks?.(upsertMark(score.marks, mark)),
+    [onMarks, score.marks],
+  )
+  const deleteMark = useCallback(() => {
+    if (!activeMark) return
+    onMarks?.(removeMark(score.marks, activeMark))
+    setSelectedMark(null)
+  }, [onMarks, score.marks, activeMark])
+
+  // Expanded, the score owns the arrow keys and Escape; with a tool armed it
+  // owns Escape and Delete wherever it is. Capture + preventDefault rather
+  // than a bubble listener: the app's global hotkeys sit on window too, and
+  // they skip an event that has already been handled (useHotkeys).
+  //
+  // The arrows are claimed only when expanded, deliberately. In the pane they
+  // are the app's own seek keys, and a reader following the music with ← and →
+  // would be startled to find them turning pages instead.
   useEffect(() => {
-    if (!expanded) return
+    if (!expanded && !drawable) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       // The same exemption useHotkeys makes, and for the same reason: the sync
@@ -158,18 +235,29 @@ export default function ScoreLayer({
       // is not a way out of the workspace.
       if (isTypingTarget(e.target)) return
       if (e.key === 'Escape') {
-        if (syncing) onSyncing?.(false)
-        else setExpanded(false)
-      }
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown') step(1)
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') step(-1)
+        // Putting the pen down first: with a tool armed that is what Escape
+        // most obviously undoes, and leaving the score entirely while still
+        // holding a highlighter is rarely what was meant.
+        if (activeTool !== null) {
+          setTool(null)
+          setSelectedMark(null)
+        } else if (syncing) onSyncing?.(false)
+        else if (expanded) setExpanded(false)
+        else return
+      } else if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        activeMark
+      )
+        deleteMark()
+      else if (expanded && (e.key === 'ArrowRight' || e.key === 'PageDown')) step(1)
+      else if (expanded && (e.key === 'ArrowLeft' || e.key === 'PageUp')) step(-1)
       else return
       e.preventDefault()
       e.stopPropagation()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [expanded, step, syncing, onSyncing])
+  }, [expanded, drawable, step, syncing, onSyncing, activeTool, activeMark, deleteMark])
 
   // The pins aimed at this page, under the same time-and-selection rule the
   // frame's pins follow. A score pin on another page simply isn't drawn: it is
@@ -177,9 +265,7 @@ export default function ScoreLayer({
   // video at those coordinates would put it somewhere that means nothing.
   const scorePins = useMemo(() => {
     if (!annotations?.length || currentTime == null) return []
-    return visibleLayer(annotations, currentTime, selectedId).pins.filter(
-      (a) => isScorePin(a) && pinPageOf(a) === page,
-    )
+    return scorePinsOn(annotations, page, currentTime, selectedId)
   }, [annotations, currentTime, selectedId, page])
 
   // Tell the host which page is up, so a pin dropped now lands on it.
@@ -192,7 +278,17 @@ export default function ScoreLayer({
   // hide its title and its last system under them, which on a score is exactly
   // the part you were reading. Expanded, only the band is in the way, unless
   // the transport has joined it at the foot for a sync pass.
-  const pad = !expanded ? 'pt-9 pb-12' : syncing ? 'pt-12 pb-14' : 'pt-12 pb-4'
+  const pad = !expanded
+    ? placement === 'pane'
+      ? drawable
+        ? 'pt-10 pb-24'
+        : 'pt-10 pb-12'
+      : 'pt-9 pb-12'
+    : syncing
+      ? 'pt-12 pb-14'
+      : drawable
+        ? 'pt-12 pb-16'
+        : 'pt-12 pb-4'
 
   const chrome = (
     <ScoreChrome
@@ -219,15 +315,31 @@ export default function ScoreLayer({
         page={page}
         fit={view.fit}
         pad={pad}
-        pins={
-          <PinLayer
-            pins={scorePins}
-            selectedId={selectedId}
-            readOnly={readOnly}
-            onMovePin={onMovePin}
-            spill
-          />
-        }
+        // Both layers live inside the page box, which is what makes their
+        // fractions hold through a rescale — the box resizes, the numbers
+        // don't. Marks are painted under the pins: a pin is a callout with
+        // words on it and has to stay readable over whatever is highlighted.
+        overlay={(size) => (
+          <>
+            <ScoreMarks
+              marks={pageMarks}
+              page={page}
+              size={size}
+              tool={activeTool}
+              style={markStyle}
+              selectedId={activeMark}
+              onSelect={setSelectedMark}
+              onCommit={commitMark}
+            />
+            <PinLayer
+              pins={scorePins}
+              selectedId={selectedId}
+              readOnly={readOnly}
+              onMovePin={onMovePin}
+              spill
+            />
+          </>
+        )}
       />
     ) : (
       <ScoreMessage tone="quiet" icon={<Loader2 size={18} className="animate-spin" />}>
@@ -235,12 +347,36 @@ export default function ScoreLayer({
       </ScoreMessage>
     )
 
+  // Lifted clear of the transport when there is one under it — the tools and
+  // the play button are both things a hand reaches for, and stacking them
+  // would put the pen where the scrub bar was a moment ago.
+  const toolbar = drawable ? (
+    <div
+      // Above the transport, not merely beside it: the transport's gradient
+      // is a tall invisible box reaching well past its controls, and at an
+      // equal z-index it swallows every click aimed at the tools.
+      className={`pointer-events-none absolute inset-x-0 z-30 ${
+        placement === 'pane' ? 'bottom-14' : 'bottom-3'
+      }`}
+    >
+      <ScoreToolbar
+        tool={activeTool}
+        onTool={setTool}
+        style={markStyle}
+        onStyle={setMarkStyle}
+        canDelete={!!activeMark}
+        onDelete={deleteMark}
+      />
+    </div>
+  ) : null
+
   if (expanded) {
     return createPortal(
       <div className="fixed inset-0 z-[80] flex animate-fade-in flex-col bg-ink/95 backdrop-blur-sm">
         <div className="relative min-h-0 flex-1">
           {surface}
           {chrome}
+          {toolbar}
           {/* Syncing needs the clock and the seek bar in reach of the page
               being timed; the overlay transport pins itself to the foot of
               this box, which is exactly where it's wanted. */}
@@ -265,11 +401,30 @@ export default function ScoreLayer({
     )
   }
 
-  // The two modes differ in one thing, but not the obvious one. 'score' paints
-  // an opaque ground and hides the picture — the page is what you are reading.
-  // 'overlay' drops the ground entirely and turns the *page* down, so the
-  // picture reads through the staves and around them; dimming a black ground
-  // as well would only make both halves murky.
+  // The score view: the whole player column, over the player rather than
+  // instead of it. The player stays mounted underneath and keeps playing —
+  // unmounting it would stop a YouTube iframe dead, and you switch to the
+  // score to read along with the music, not to silence it.
+  if (placement === 'pane') {
+    return (
+      <div className="absolute inset-0 animate-fade-in overflow-hidden rounded-lg bg-black">
+        {surface}
+        {chrome}
+        {toolbar}
+        {/* Its own transport, pinned to the foot of this panel. The view
+            covers the player, floating transport and all, and a score you
+            can't start or scrub is a picture of music rather than a way to
+            follow it. The overlay variant is the right one even on an audio
+            track: it pins itself to the foot of whatever box it's in, and
+            this box has a black ground for it to read against. */}
+        {transport}
+      </div>
+    )
+  }
+
+  // Over the picture (`overVideo`): the ground is dropped entirely and the
+  // *page* turned down, so the video reads through the staves and around them.
+  // Dimming a black ground as well would only make both halves murky.
   //
   // Three layers share this frame, and the score is the one that moves. Note
   // covers and pins (VideoOverlays) sit at z-10 and the transport at z-20, so
@@ -287,8 +442,8 @@ export default function ScoreLayer({
       // taller than the frame and has to take the pointer to be scrolled.
       className={`pointer-events-none absolute inset-0 transition-opacity duration-200 ease-instr ${
         view.onTop ? 'z-[15]' : 'z-[5]'
-      } ${view.mode === 'score' ? 'bg-black' : ''}`}
-      style={view.mode === 'overlay' ? { opacity: view.opacity } : undefined}
+      }`}
+      style={{ opacity: view.opacity }}
     >
       {surface}
       {chrome}
@@ -332,15 +487,19 @@ function ScoreSurface({
   page,
   fit,
   pad,
-  pins,
+  overlay,
 }: {
   pdf: LoadedPdf
   page: number
   fit: ScoreView['fit']
   /** Padding classes reserving room for the chrome over this surface. */
   pad: string
-  /** Drawn inside the page box, so it moves and scales with the page. */
-  pins?: ReactNode
+  /**
+   * Drawn inside the page box, so it moves and scales with the page. Given
+   * the page's pixel size, which the marks need: a shape stored in fractions
+   * has to be turned back into pixels to be drawn without distorting it.
+   */
+  overlay?: (size: PageSize) => ReactNode
 }) {
   const pageTarget = usePinTarget('score', page)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -425,7 +584,7 @@ function ScoreSurface({
               // theme has no say in how printed music reads.
               className="block h-full w-full bg-white shadow-[0_2px_24px_rgb(0_0_0/0.45)]"
             />
-            {drawn && pins}
+            {drawn && overlay?.(drawn)}
           </div>
         )}
       </div>

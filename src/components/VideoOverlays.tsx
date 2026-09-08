@@ -7,7 +7,7 @@ import {
 import { Move } from 'lucide-react'
 import type { Annotation } from '../types'
 import PinLayer from './PinLayer'
-import { coverPosition, isFilled, isScorePin, visibleLayer } from '../lib/overlays'
+import { coverPosition, isFilled, visibleLayer } from '../lib/overlays'
 import { usePinTarget } from '../lib/pinTargets'
 
 interface Props {
@@ -88,7 +88,6 @@ export default function VideoOverlays({
   const layer = visibleLayer(annotations, currentTime, selectedId)
   const coverUrl = layer.cover?.overlay?.coverUrl
   const cover = coverUrl && !broken.has(coverUrl) ? layer.cover : null
-  const pins = layer.pins.filter((a) => !isScorePin(a))
   const editable = !readOnly
 
   // A filled cover on the open note can be aimed; a contained one has no
@@ -221,7 +220,7 @@ export default function VideoOverlays({
           by ScoreLayer instead, inside the page box, so that it scales and
           scrolls with the page rather than sitting still on the picture. */}
       <PinLayer
-        pins={pins}
+        pins={layer.pins}
         selectedId={selectedId}
         readOnly={readOnly}
         onMovePin={onMovePin}

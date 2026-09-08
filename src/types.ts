@@ -58,22 +58,26 @@ export interface NoteBlock {
 }
 
 /**
- * What a note draws on top of the video while it's on screen — the note's
- * "stage layer". Two independent pieces, either or both:
+ * What a note puts on screen besides its own row — the note's "stage layer".
+ * Three independent pieces, any or all:
  *
  *  - a **cover**: a full-frame image that stands in for the picture (a score
  *    excerpt, a diagram, a photo) while the audio keeps playing underneath;
- *  - a **pin**: a dot placed somewhere on the frame, captioned with the note's
- *    own text — a callout pointing at what's happening there.
+ *  - a **video pin**: a dot placed somewhere on the frame, captioned with the
+ *    note's own text — a callout pointing at what's happening there;
+ *  - a **score pin**: the same callout aimed at a place on the page of the
+ *    track's PDF score, in the score view.
  *
- * Both ride the note's moment: they appear over the note's span
+ * All of them ride the note's moment: they appear over the note's span
  * (`start`→`end`), or for `hold` seconds from `start` when the note is a
  * single point. They also appear whenever the note is open in the inspector,
  * so you can compose one without scrubbing to its time.
  *
- * Video sources only (YouTube and Drive). An audio track's waveform *is* the
- * picture and must stay uncovered, so nothing here is offered there — the same
- * line `clipStart`/`clipEnd` draw (see ProjectSource).
+ * The cover and the video pin are video sources only (YouTube and Drive): an
+ * audio track's waveform *is* the picture and must stay uncovered, the same
+ * line `clipStart`/`clipEnd` draw (see ProjectSource). The score pin has no
+ * such restriction — the score is its own view, and an audio track has one
+ * just as a video track does.
  */
 export interface NoteOverlay {
   /**
@@ -100,33 +104,32 @@ export interface NoteOverlay {
   coverX?: number
   coverY?: number
   /**
-   * Pin position as fractions of whatever it is anchored to, 0–1 from the
-   * top-left. Both are set together or not at all — their absence is what
-   * "this note has no pin" means. Fractions rather than pixels so a pin holds
-   * its spot at every player size.
+   * The **video pin**: a position on the picture, as 0–1 fractions from its
+   * top-left. Both are set together or not at all — their absence is what "no
+   * pin on the video" means. Fractions rather than pixels so a pin holds its
+   * spot at every player size.
    */
   pinX?: number
   pinY?: number
   /**
-   * What `pinX`/`pinY` are fractions *of*. Absent — the default — means the
-   * video frame, so the pin sits at a fixed place on the picture whatever is
-   * playing behind it. `'score'` means the drawn page of the PDF score
-   * instead (see lib/score.ts): the pin then belongs to a place in the music
-   * rather than a place on screen, and it holds that place through every
-   * rescale, refit, expand and scroll of the page, because the fractions are
-   * of the page box and the page box is what moves.
+   * The **score pin**: the same idea aimed at the drawn page of the PDF score
+   * (see lib/score.ts), as 0–1 fractions *of the page box*. It marks a place
+   * in the music rather than a place on screen, and holds it through every
+   * rescale, refit, expand and scroll, because the page box is what moves and
+   * these numbers never do.
    *
-   * A score-anchored pin draws only while the score is showing `pinPage` —
-   * with the score turned off, or on another page, there is nothing for it to
-   * be a fraction of, and a pin floating over the video at a spot that means
-   * nothing there would be worse than no pin.
+   * Independent of the video pin, not an alternative to it: one note can point
+   * at a moment in the picture *and* at the bar it happens in. (Before the
+   * score got its own view they were one pin with a `pinAnchor` switch; that
+   * shape is migrated away on read — see `withMigratedPins` in lib/overlays.)
+   *
+   * A score pin draws only while the score view is showing `scorePinPage`:
+   * on another page there is no page box for it to be a fraction of.
    */
-  pinAnchor?: 'score'
-  /**
-   * Which page of the score the pin lives on, 1-based. Only meaningful with
-   * `pinAnchor: 'score'`; absent there means page 1.
-   */
-  pinPage?: number
+  scorePinX?: number
+  scorePinY?: number
+  /** Which page of the score the score pin lives on, 1-based; absent is 1. */
+  scorePinPage?: number
   /**
    * Seconds the layer stays up for a note with no `end`. Ignored on a note that
    * has a span — that span is the window. Defaults to OVERLAY_HOLD.
@@ -299,8 +302,62 @@ export interface Project {
   deletedAt?: number
 }
 
-/** How a score sits over the picture. */
-export type ScoreMode = 'off' | 'score' | 'overlay'
+/**
+ * Which view the player column is showing: the player, or the score.
+ *
+ * The score is a *view*, not a layer — its own panel over the whole column,
+ * where a portrait page gets the room a 16:9 frame could never give it and
+ * there is space for the drawing tools. Laying it over the picture as well is
+ * a separate switch (`ProjectScore.overVideo`), not a third mode here, so
+ * this enum stays exactly the two states the column's view switch offers.
+ *
+ * Legacy rows and exports carry `'score'` (opaque over the frame) and
+ * `'overlay'`; both are migrated on read — see `scoreView` in lib/score.ts.
+ */
+export type ScoreMode = 'off' | 'view'
+
+/** A pen mark drawn on the score: what shape it is. */
+export type ScoreMarkKind = 'highlight' | 'box' | 'ellipse' | 'arrow' | 'ink'
+
+/**
+ * One mark drawn on a page of the score — a highlighted bar, a circled
+ * chord, an arrow at an entry.
+ *
+ * Every number here is a **fraction of the drawn page**, 0–1, for the same
+ * reason a score pin's are: the page box is what changes size when the panel
+ * is resized, the fit is switched or the score is expanded, and a mark stored
+ * in fractions needs no arithmetic to survive any of it.
+ *
+ * Marks belong to the *track*, not to a reader — they live in `settings` with
+ * the rest of the score, so what the teacher draws is what the class opens.
+ */
+export interface ScoreMark {
+  id: string
+  /** 1-based page this mark is drawn on. */
+  page: number
+  kind: ScoreMarkKind
+  /** A key from lib/noteColors.ts — the same palette the notes use. */
+  color: string
+  /**
+   * The mark's box, as fractions of the page. For 'highlight', 'box' and
+   * 'ellipse' this is the shape itself. For 'arrow' it is tail → head, so
+   * `w`/`h` may be negative (an arrow pointing up and to the left). For 'ink'
+   * it is the bounding box of `points`, kept so hit-testing needs no sweep.
+   */
+  x: number
+  y: number
+  w: number
+  h: number
+  /**
+   * 'ink' only: the freehand stroke, flattened `[x0, y0, x1, y1, …]` in the
+   * same page fractions. Flat rather than `{x, y}[]` because this rides the
+   * project's jsonb — a stroke of 60 points is 120 numbers either way, and
+   * one array is a third of the bytes of 60 two-key objects.
+   */
+  points?: number[]
+  /** Stroke weight, 1 (fine) to 3 (broad). Absent is 2. */
+  weight?: number
+}
 
 /** Fit a page by its height (whole page, letterboxed) or its width (fills the
  *  frame, scrolls). */
@@ -325,7 +382,8 @@ export interface ScoreTurn {
 
 /**
  * A PDF score attached to a track — the printed music the recording is of,
- * shown over the video so the notes on the page and the sound arrive together.
+ * read in its own view beside the notes so the page and the sound arrive
+ * together (and, optionally, laid over the picture as well).
  *
  * Two ways in, and they are not equivalent. A `blob` score is bytes we host
  * (owner-only upload, `users/{uid}/scores/{projectId}/…`), fixed at the moment
@@ -357,24 +415,38 @@ export interface ProjectScore {
   url?: string
   /** The uploaded file's name, for the score menu. Uploads only. */
   fileName?: string
-  /** How the score shows by default — it travels with the project, so a
-   *  shared track opens the way its owner left it. A reader may override it
+  /** Which view the column opens on — it travels with the project, so a
+   *  shared track opens the way its owner left it. A reader may switch views
    *  for their own session without writing anything back. */
   mode?: ScoreMode
-  /** Overlay opacity, 0.2–1. Only meaningful in 'overlay' mode. */
+  /**
+   * Also lay the score over the picture, dimmed, while the column is on the
+   * *player* view — the old overlay behaviour, kept because seeing the staves
+   * move under the video is its own thing and the score view can't do it.
+   * Off by default. Ignored on an audio track, whose waveform is the picture
+   * and must stay uncovered.
+   */
+  overVideo?: boolean
+  /** Overlay opacity, 0.2–1. Only meaningful with `overVideo`. */
   opacity?: number
   /** Page fit. Defaults to 'height' — the whole page, letterboxed. */
   fit?: ScoreFit
   /**
-   * Whether the score paints in front of a note's cover image and pins
-   * (lib/overlays.ts) rather than behind them. Off by default, which is the
-   * order that reads: a note that takes over the picture is a deliberate
+   * Whether the overlaid score paints in front of a note's cover image and
+   * pins (lib/overlays.ts) rather than behind them. Off by default, which is
+   * the order that reads: a note that takes over the picture is a deliberate
    * interruption of it, and a score is the steady background to the whole
-   * track. Turn it on for a track whose score is the point and whose covers
-   * are asides. Either way the score stays *under* the transport — nothing is
-   * worth losing the play button for.
+   * track. Only meaningful with `overVideo` — in the score view nothing is
+   * competing for the space. Either way the score stays *under* the
+   * transport; nothing is worth losing the play button for.
    */
   onTop?: boolean
+  /**
+   * What has been drawn on the pages — highlights, boxes, arrows, ink. Absent
+   * or empty means a clean score. See ScoreMark; the tools are in the score
+   * view's toolbar, and anyone who may edit the track may draw.
+   */
+  marks?: ScoreMark[]
   /**
    * When the page turns, in clip seconds, ascending. Absent or empty means the
    * reader turns the pages by hand. Written by the Sync pages panel; shifted

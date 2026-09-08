@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import ScoreButton from './ScoreButton'
-import ScoreLayer, { ScoreFrame } from './ScoreLayer'
+import ScoreLayer from './ScoreLayer'
+import ScoreViewSwitch from './ScoreViewSwitch'
 import { scoreView as scoreViewOf, type ScoreView } from '../lib/score'
 import { backendReady } from '../lib/api'
 import { fetchSharedProject } from '../lib/projectStore'
@@ -507,30 +508,63 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the owner's saved choice and never written back.
   const score = project.settings?.score
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
-  const scoreLayer =
-    score && scoreView.mode !== 'off' ? (
-      // A reader gets the following, never the timing of it: the turns are
-      // the owner's, like the notes.
+  const buildScoreLayer = (placement: 'pane' | 'frame') =>
+    score ? (
+      // A reader gets the following, never the timing of it, and sees the
+      // marks and pins where the owner put them — the turns, the drawing and
+      // the pins are all the owner's, like the notes.
       <ScoreLayer
+        key={placement}
         score={score}
         view={scoreView}
+        placement={placement}
         reloadKey={scoreReload}
         currentTime={currentTime}
         onSeek={seek}
-        // A reader sees the score's pins where the owner put them, and moves
-        // nothing — no onMovePin, same as the frame's pins.
+        // The score view covers the player, floating transport and all, so it
+        // carries its own — the overlay variant, which pins itself to the foot
+        // of whatever box it is in. Always that variant, even on an audio
+        // track: the panel has a black ground for it to read against.
+        transport={
+          <Transport
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            playbackRate={playbackRate}
+            volume={volume}
+            muted={muted}
+            readOnly
+            overlay
+            onPlayPause={() => (isPlaying ? pause() : play())}
+            onSeek={seek}
+            onStep={step}
+            onSetRate={setPlaybackRate}
+            onSetVolume={changeVolume}
+            onToggleMute={toggleMute}
+          />
+        }
         annotations={annotations}
         readOnly
       />
     ) : null
+  const scorePane = scoreView.mode === 'view' ? buildScoreLayer('pane') : null
+  const scoreOverVideo =
+    scoreView.mode !== 'view' && scoreView.overVideo ? buildScoreLayer('frame') : null
   const scoreButton = (
     <ScoreButton
       score={score}
       view={scoreView}
+      videoSource={isVideoSource(source)}
       onView={(patch) => setScoreOverride((o) => ({ ...o, ...patch }))}
       onReload={() => setScoreReload((n) => n + 1)}
     />
   )
+  const scoreSwitch = score ? (
+    <ScoreViewSwitch
+      mode={scoreView.mode}
+      onMode={(mode) => setScoreOverride((o) => ({ ...o, mode }))}
+    />
+  ) : null
 
   // The transport, built once: it floats inside the video frame (PlayerPane's
   // `overlay` slot) or docks beneath an audio waveform.
@@ -627,16 +661,19 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
           <div className="glass flex min-h-0 flex-1 flex-col overflow-hidden">
             <TitleBar
-              left="Player"
+              left={scoreView.mode === 'view' ? 'Score' : 'Player'}
               right={sourceLabel(source)}
-              actions={scoreButton}
+              actions={
+                <>
+                  {scoreSwitch}
+                  {scoreButton}
+                </>
+              }
             />
-            <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+            {/* `relative` for the score view, which covers this box. */}
+            <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
               {hasPlayer ? (
                 <>
-                  {!isVideoSource(source) && scoreLayer && (
-                    <ScoreFrame>{scoreLayer}</ScoreFrame>
-                  )}
                   <div
                     ref={setPlayerArea}
                     className={
@@ -654,7 +691,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       volume={muted ? 0 : volume}
                       readOnly
                       overlay={isVideoSource(source) ? videoOverlay : undefined}
-                      score={isVideoSource(source) ? scoreLayer : undefined}
+                      score={isVideoSource(source) ? (scoreOverVideo ?? undefined) : undefined}
                       onTime={handleTime}
                       onDuration={handleDuration}
                       onPlayingChange={handlePlaying}
@@ -683,6 +720,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                   The audio for this track isn’t available, but its structure
                   is still mapped below.
                 </div>
+              )}
+
+              {scorePane && (
+                <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
               )}
             </div>
           </div>
@@ -728,16 +769,19 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           className={`glass flex shrink-0 flex-col overflow-hidden ${NOTES_SPLIT_660.player}`}
         >
           <TitleBar
-            left="Player"
+            left={scoreView.mode === 'view' ? 'Score' : 'Player'}
             right={sourceLabel(source)}
-            actions={scoreButton}
+            actions={
+              <>
+                {scoreSwitch}
+                {scoreButton}
+              </>
+            }
           />
-          <div className="flex min-h-0 flex-1 flex-col gap-3 p-3.5">
+          {/* `relative` for the score view, which covers this box. */}
+          <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
             {hasPlayer ? (
               <>
-                {!isVideoSource(source) && scoreLayer && (
-                  <ScoreFrame>{scoreLayer}</ScoreFrame>
-                )}
                 <div
                   ref={setPlayerArea}
                   className={
@@ -755,7 +799,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     volume={muted ? 0 : volume}
                     readOnly
                     overlay={isVideoSource(source) ? videoOverlay : undefined}
-                    score={isVideoSource(source) ? scoreLayer : undefined}
+                    score={isVideoSource(source) ? (scoreOverVideo ?? undefined) : undefined}
                     onTime={handleTime}
                     onDuration={handleDuration}
                     onPlayingChange={handlePlaying}
@@ -774,6 +818,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                 The audio for this track isn’t available, but the notes below are
                 still here.
               </div>
+            )}
+
+            {scorePane && (
+              <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
             )}
           </div>
 

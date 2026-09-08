@@ -20,6 +20,8 @@ import type {
   ProjectScore,
   ProjectSettings,
   ScoreFit,
+  ScoreMark,
+  ScoreMarkKind,
   ScoreMode,
   ScoreTurn,
 } from '../types'
@@ -174,25 +176,173 @@ export function shiftTurns(
   )
 }
 
+// ---- marks ----------------------------------------------------------------
+// What has been drawn on the pages. Every coordinate is a fraction of the
+// drawn page (see ScoreMark), so a mark needs no arithmetic to survive a
+// resize, a refit or the expand — the page box moves and the numbers don't.
+
+/** The tools, in the order the toolbar offers them. */
+export const MARK_KINDS: ScoreMarkKind[] = [
+  'highlight',
+  'box',
+  'ellipse',
+  'arrow',
+  'ink',
+]
+
+/** Stroke weight when a mark doesn't say. */
+export const DEFAULT_MARK_WEIGHT = 2
+
+/**
+ * The colours the toolbar offers. Drawn from the note palette so a mark and
+ * the note that discusses it can be told apart at a glance — but trimmed to
+ * the hues that survive being thinned to a 2px stroke on white paper.
+ */
+export const MARK_COLORS = [
+  '#ff5252',
+  '#ff9f2e',
+  '#ffd633',
+  '#3ddc74',
+  '#5aa8ff',
+  '#a06bff',
+]
+
+/** The marks drawn on one page, in the order they were made. */
+export function marksOnPage(
+  marks: ScoreMark[] | undefined,
+  page: number,
+): ScoreMark[] {
+  return (marks ?? []).filter((m) => m.page === page)
+}
+
+/** Add a mark, or replace the one that shares its id. */
+export function upsertMark(
+  marks: ScoreMark[] | undefined,
+  mark: ScoreMark,
+): ScoreMark[] {
+  const list = marks ?? []
+  const at = list.findIndex((m) => m.id === mark.id)
+  if (at === -1) return [...list, mark]
+  return list.map((m, i) => (i === at ? mark : m))
+}
+
+/** Drop one mark by id. */
+export function removeMark(
+  marks: ScoreMark[] | undefined,
+  id: string,
+): ScoreMark[] {
+  return (marks ?? []).filter((m) => m.id !== id)
+}
+
+/** Move a mark by a delta in page fractions, taking its stroke along. */
+export function moveMark(mark: ScoreMark, dx: number, dy: number): ScoreMark {
+  return {
+    ...mark,
+    x: mark.x + dx,
+    y: mark.y + dy,
+    ...(mark.points
+      ? {
+          points: mark.points.map((n, i) => n + (i % 2 === 0 ? dx : dy)),
+        }
+      : {}),
+  }
+}
+
+/**
+ * The mark under a point, or null — topmost first, so the thing most recently
+ * drawn is the thing you select, which is what "on top" has to mean.
+ *
+ * Everything is hit by its box rather than its outline. An outline hit would
+ * be truer for a thin arrow or an unfilled circle and much worse to use: the
+ * target would be two pixels wide on a page that is already small, and a
+ * near-miss would silently select nothing. `pad` widens the box by a fraction
+ * of the page so a mark drawn as a thin line is still catchable.
+ */
+export function markAt(
+  marks: ScoreMark[],
+  x: number,
+  y: number,
+  pad = 0.008,
+): ScoreMark | null {
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const m = marks[i]
+    const left = Math.min(m.x, m.x + m.w) - pad
+    const right = Math.max(m.x, m.x + m.w) + pad
+    const top = Math.min(m.y, m.y + m.h) - pad
+    const bottom = Math.max(m.y, m.y + m.h) + pad
+    if (x >= left && x <= right && y >= top && y <= bottom) return m
+  }
+  return null
+}
+
+/**
+ * The bounding box of a freehand stroke. Stored on the mark so hit-testing and
+ * dragging never have to walk the points.
+ */
+export function inkBounds(points: number[]): {
+  x: number
+  y: number
+  w: number
+  h: number
+} {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    minX = Math.min(minX, points[i])
+    maxX = Math.max(maxX, points[i])
+    minY = Math.min(minY, points[i + 1])
+    maxY = Math.max(maxY, points[i + 1])
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, w: 0, h: 0 }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+/**
+ * How far apart two samples of a freehand stroke have to be to both be kept,
+ * as a fraction of the page. A pointer emits a sample per frame, which on a
+ * slow careful line is hundreds of points a centimetre apart — indistinguishable
+ * once drawn, and all of it persisted in the project's jsonb on every save.
+ */
+export const INK_MIN_STEP = 0.004
+
 // ---- display knobs --------------------------------------------------------
 // Persisted on the score so a shared track opens the way its owner left it,
 // but a reader may still change them for their own session (see useScoreView).
 
-export const DEFAULT_SCORE_MODE: ScoreMode = 'score'
+/** A track with a score opens on it: the score is why the score is there. */
+export const DEFAULT_SCORE_MODE: ScoreMode = 'view'
 export const DEFAULT_SCORE_FIT: ScoreFit = 'height'
 
 export interface ScoreView {
   mode: ScoreMode
+  /** Lay the score over the picture too, while the column is on the player. */
+  overVideo: boolean
   opacity: number
   fit: ScoreFit
   /** Paint in front of note covers and pins rather than behind them. */
   onTop: boolean
 }
 
-/** The view a score opens in, with every default filled in. */
+/**
+ * The view a score opens in, with every default filled in — and with the two
+ * modes that predate the score view mapped onto it:
+ *
+ *   'score'   the score, opaque, inside the video frame  → the score view,
+ *             which is that idea with room to read it;
+ *   'overlay' the score dimmed over the picture          → the player view
+ *             with `overVideo`, which is the same thing under its own switch.
+ *
+ * Done on read rather than by a migration script because the stored value is
+ * a display preference in a jsonb blob: nothing breaks while a row still says
+ * `'overlay'`, and it says `'off'` or `'view'` the next time it's written.
+ */
 export function scoreView(score?: ProjectScore): ScoreView {
+  const stored = score?.mode as ScoreMode | 'score' | 'overlay' | undefined
   return {
-    mode: score?.mode ?? DEFAULT_SCORE_MODE,
+    mode: stored === 'overlay' ? 'off' : stored === 'score' ? 'view' : stored ?? DEFAULT_SCORE_MODE,
+    overVideo: stored === 'overlay' || score?.overVideo === true,
     opacity: clampOpacity(score?.opacity ?? DEFAULT_SCORE_OPACITY),
     fit: score?.fit ?? DEFAULT_SCORE_FIT,
     onTop: score?.onTop === true,

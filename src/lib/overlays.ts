@@ -34,24 +34,86 @@ export function coverPosition(a: Annotation): { x: number; y: number } {
   return { x: a.overlay?.coverX ?? 0.5, y: a.overlay?.coverY ?? 0.5 }
 }
 
-export const hasPin = (a: Annotation): boolean =>
+/** A pin on the video frame. */
+export const hasVideoPin = (a: Annotation): boolean =>
   a.overlay?.pinX != null && a.overlay?.pinY != null
 
 /**
- * Whether the pin is aimed at the score's page rather than the video frame.
- * The two are drawn by different components — the frame's by VideoOverlays,
- * the score's by ScoreLayer, inside the page box so it scales with the page —
- * so every consumer of a pin list has to pick a side.
+ * A pin on the score's page. Independent of the video pin — a note may carry
+ * one, the other, both or neither — because the two answer different
+ * questions: where on the picture, and where in the music.
  */
-export const isScorePin = (a: Annotation): boolean =>
-  hasPin(a) && a.overlay?.pinAnchor === 'score'
+export const hasScorePin = (a: Annotation): boolean =>
+  a.overlay?.scorePinX != null && a.overlay?.scorePinY != null
 
-/** The score page a pin lives on, 1-based; page 1 unless it says otherwise. */
-export const pinPageOf = (a: Annotation): number =>
-  Math.max(1, Math.round(a.overlay?.pinPage ?? 1))
+/** The score page a note's score pin lives on, 1-based; 1 unless it says. */
+export const scorePinPageOf = (a: Annotation): number =>
+  Math.max(1, Math.round(a.overlay?.scorePinPage ?? 1))
 
-/** True when the note puts anything at all on the picture. */
-export const hasOverlay = (a: Annotation): boolean => hasCover(a) || hasPin(a)
+/** True when the note puts anything at all on a picture or a page. */
+export const hasOverlay = (a: Annotation): boolean =>
+  hasCover(a) || hasVideoPin(a) || hasScorePin(a)
+
+/**
+ * A pin ready to draw: the note it belongs to and where it goes, as 0–1
+ * fractions of whichever box is drawing it.
+ *
+ * The two kinds of pin live in different fields and are drawn into different
+ * boxes (the frame by VideoOverlays, the page by ScoreLayer), but past the
+ * point of *choosing* the coordinates they are the same thing — which is what
+ * lets one PinLayer draw both. `framePins`/`scorePinsOn` are that choice.
+ */
+export interface PlacedPin {
+  note: Annotation
+  x: number
+  y: number
+}
+
+/**
+ * A patch that moves a pin of the given kind — the shape both drag handlers
+ * hand back, so neither has to know which fields the kind lives in.
+ */
+export function movePinPatch(
+  kind: 'frame' | 'score',
+  x: number,
+  y: number,
+): Partial<NoteOverlay> {
+  return kind === 'score' ? { scorePinX: x, scorePinY: y } : { pinX: x, pinY: y }
+}
+
+/**
+ * Migrate a note off the single-pin shape that predates the score view, where
+ * one pin carried a `pinAnchor: 'score'` switch instead of the two independent
+ * pins there are now. Applied wherever notes enter the app — the project
+ * loader and the JSON importer — so nothing downstream has to know the old
+ * shape existed.
+ *
+ * Returns the note untouched (not a copy) when there is nothing to migrate,
+ * which is every note written since.
+ */
+export function withMigratedPins(a: Annotation): Annotation {
+  const o = a.overlay as (NoteOverlay & LegacyPin) | undefined
+  if (!o || o.pinAnchor !== 'score') return a
+  const { pinPage, pinX, pinY, ...rest } = o
+  delete (rest as LegacyPin).pinAnchor
+  return {
+    ...a,
+    overlay: {
+      ...rest,
+      // A pin that *was* on the score becomes the score pin, keeping its
+      // fractions: they were always fractions of the page box.
+      ...(pinX != null && pinY != null
+        ? { scorePinX: pinX, scorePinY: pinY, scorePinPage: pinPage ?? 1 }
+        : {}),
+    },
+  }
+}
+
+/** The pre-score-view pin fields, read on migration and never written. */
+interface LegacyPin {
+  pinAnchor?: 'score'
+  pinPage?: number
+}
 
 /**
  * When the note's layer is on screen, in track seconds. A note with an end owns
@@ -89,7 +151,7 @@ function showing(
 
 /**
  * The layer to draw over the frame right now: at most one cover (the picture
- * can only be replaced once) plus every visible pin.
+ * can only be replaced once) plus every visible pin on the frame.
  *
  * Overlapping covers resolve to the one that started latest — the innermost of
  * a set of nested notes, which is the most specific thing the teacher aimed at
@@ -100,7 +162,7 @@ export function visibleLayer(
   annotations: Annotation[],
   t: number,
   selectedId?: string | null,
-): { cover: Annotation | null; pins: Annotation[] } {
+): { cover: Annotation | null; pins: PlacedPin[] } {
   const live = showing(annotations, t, selectedId)
   const covers = live.filter(hasCover)
   const selectedCover = covers.find((a) => a.id === selectedId)
@@ -110,7 +172,34 @@ export function visibleLayer(
       (best, a) => (best == null || a.start >= best.start ? a : best),
       null,
     )
-  return { cover, pins: live.filter(hasPin) }
+  return { cover, pins: framePins(live) }
+}
+
+/** The pins on the video frame, out of notes already known to be showing. */
+export function framePins(live: Annotation[]): PlacedPin[] {
+  return live
+    .filter(hasVideoPin)
+    .map((note) => ({ note, x: note.overlay!.pinX!, y: note.overlay!.pinY! }))
+}
+
+/**
+ * The score pins on one page, at time `t`. Pins on other pages are simply not
+ * drawn: they are fractions of a page box that isn't on screen, and there is
+ * nowhere honest to put them.
+ */
+export function scorePinsOn(
+  annotations: Annotation[],
+  page: number,
+  t: number,
+  selectedId?: string | null,
+): PlacedPin[] {
+  return showing(annotations, t, selectedId)
+    .filter((a) => hasScorePin(a) && scorePinPageOf(a) === page)
+    .map((note) => ({
+      note,
+      x: note.overlay!.scorePinX!,
+      y: note.overlay!.scorePinY!,
+    }))
 }
 
 /**

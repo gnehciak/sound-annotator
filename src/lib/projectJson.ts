@@ -28,12 +28,13 @@ import type {
   ProjectScore,
   ProjectSettings,
   ProjectSource,
+  ScoreMark,
   ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
-import { sortTurns } from './score'
+import { MARK_COLORS, MARK_KINDS, sortTurns } from './score'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -178,19 +179,25 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
   const coverY = num(o.coverY)
   if (coverX != null) overlay.coverX = Math.min(1, Math.max(0, coverX))
   if (coverY != null) overlay.coverY = Math.min(1, Math.max(0, coverY))
+  // The two pins are independent, and each needs both of its coordinates to
+  // mean anything — a half-written one is dropped rather than pinned to a
+  // corner. `pinAnchor` is the shape that predates the score view, where one
+  // pin carried a switch instead: a file written then still imports, its pin
+  // landing on whichever of the two it actually named.
+  const legacyScorePin = o.pinAnchor === 'score'
   const pinX = num(o.pinX)
   const pinY = num(o.pinY)
-  if (pinX != null && pinY != null) {
-    overlay.pinX = Math.min(1, Math.max(0, pinX))
-    overlay.pinY = Math.min(1, Math.max(0, pinY))
-    // What those fractions are *of*. Only meaningful alongside a pin, so it
-    // lives in here: an anchor on a note with no pin would be a setting for
-    // something that isn't there.
-    if (o.pinAnchor === 'score') {
-      overlay.pinAnchor = 'score'
-      const pinPage = num(o.pinPage)
-      if (pinPage != null && pinPage >= 1) overlay.pinPage = Math.round(pinPage)
-    }
+  if (pinX != null && pinY != null && !legacyScorePin) {
+    overlay.pinX = clamp01(pinX)
+    overlay.pinY = clamp01(pinY)
+  }
+  const scorePinX = num(o.scorePinX) ?? (legacyScorePin ? pinX : null)
+  const scorePinY = num(o.scorePinY) ?? (legacyScorePin ? pinY : null)
+  if (scorePinX != null && scorePinY != null) {
+    overlay.scorePinX = clamp01(scorePinX)
+    overlay.scorePinY = clamp01(scorePinY)
+    const page = num(o.scorePinPage) ?? (legacyScorePin ? num(o.pinPage) : null)
+    if (page != null && page >= 1) overlay.scorePinPage = Math.round(page)
   }
   const hold = num(o.hold)
   if (hold != null && hold > 0) overlay.hold = hold
@@ -274,8 +281,16 @@ function sanitizeScore(v: unknown): ProjectScore | undefined {
     if (fileName) score.fileName = fileName
   }
 
+  // 'score' and 'overlay' are the two display modes that predate the score
+  // view; both still arrive in files exported before it, and both mean
+  // something under the new pair of knobs — see `scoreView` in lib/score.ts.
   const mode = str(raw.mode)
-  if (mode && SCORE_MODES.has(mode)) score.mode = mode as ProjectScore['mode']
+  if (mode === 'score') score.mode = 'view'
+  else if (mode === 'overlay') {
+    score.mode = 'off'
+    score.overVideo = true
+  } else if (mode && SCORE_MODES.has(mode)) score.mode = mode as ProjectScore['mode']
+  if (raw.overVideo === true) score.overVideo = true
   const fit = str(raw.fit)
   if (fit && SCORE_FITS.has(fit)) score.fit = fit as ProjectScore['fit']
   const opacity = num(raw.opacity)
@@ -283,6 +298,8 @@ function sanitizeScore(v: unknown): ProjectScore | undefined {
   if (raw.onTop === true) score.onTop = true
   const turns = sanitizeTurns(raw.turns)
   if (turns) score.turns = turns
+  const marks = sanitizeMarks(raw.marks)
+  if (marks) score.marks = marks
   return score
 }
 
@@ -304,6 +321,81 @@ function sanitizeTurns(v: unknown): ScoreTurn[] | undefined {
   }
   return turns.length > 0 ? sortTurns(turns) : undefined
 }
+
+/**
+ * The marks drawn on the score. Every coordinate is a fraction of the page, so
+ * everything is clamped to 0–1 on the way in — except an arrow's `w`/`h`,
+ * which are a direction rather than a size and are allowed to be negative.
+ *
+ * A mark with an unknown kind is dropped rather than coerced: there is no
+ * honest default shape, and a highlight silently standing in for something
+ * else would be worse on the page than nothing.
+ */
+function sanitizeMarks(v: unknown): ScoreMark[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const marks: ScoreMark[] = []
+  for (const raw of v.slice(0, MAX_MARKS)) {
+    if (!raw || typeof raw !== 'object') continue
+    const m = raw as Record<string, unknown>
+    const kind = str(m.kind)
+    if (!kind || !MARK_KINDS.includes(kind as ScoreMark['kind'])) continue
+    const page = num(m.page)
+    const x = num(m.x)
+    const y = num(m.y)
+    const w = num(m.w)
+    const h = num(m.h)
+    if (page == null || page < 1 || x == null || y == null || w == null || h == null)
+      continue
+    const mark: ScoreMark = {
+      id: str(m.id) ?? newId(),
+      page: Math.round(page),
+      kind: kind as ScoreMark['kind'],
+      color: str(m.color) ?? MARK_COLORS[0],
+      x: clamp01(x),
+      y: clamp01(y),
+      // Signed for an arrow (tail → head); a size everywhere else.
+      w: kind === 'arrow' ? clampSigned(w) : clamp01(w),
+      h: kind === 'arrow' ? clampSigned(h) : clamp01(h),
+    }
+    const weight = num(m.weight)
+    if (weight != null) mark.weight = Math.min(3, Math.max(1, Math.round(weight)))
+    if (kind === 'ink') {
+      const points = sanitizePoints(m.points)
+      if (!points) continue
+      mark.points = points
+    }
+    marks.push(mark)
+  }
+  return marks.length > 0 ? marks : undefined
+}
+
+/** A freehand stroke: a flat, even-length list of 0–1 fractions. */
+function sanitizePoints(v: unknown): number[] | undefined {
+  if (!Array.isArray(v) || v.length < 4) return undefined
+  const points: number[] = []
+  for (const n of v.slice(0, MAX_INK_POINTS * 2)) {
+    const value = num(n)
+    if (value == null) return undefined
+    points.push(clamp01(value))
+  }
+  // An odd length means the pairs don't line up and every point after the gap
+  // would be drawn with the wrong axis — drop the trailing half-point.
+  if (points.length % 2 === 1) points.pop()
+  return points.length >= 4 ? points : undefined
+}
+
+/**
+ * Ceilings on what one import may carry onto a score. Both are far past any
+ * real markup (a heavily annotated page runs to a few dozen marks) and exist
+ * so a hand-written or generated file can't push megabytes of geometry into
+ * the project's jsonb, which every save from then on would carry.
+ */
+const MAX_MARKS = 2000
+const MAX_INK_POINTS = 2000
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+/** Signed, for the one place a fraction is a direction rather than a size. */
+const clampSigned = (n: number) => Math.min(1, Math.max(-1, n))
 
 /**
  * Settings pass through leniently: any key holding a primitive survives, so a
