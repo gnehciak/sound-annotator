@@ -1115,3 +1115,27 @@ html[data-armed] body::before {
 .note-mention:hover {
   background: rgb(var(--accent-ink) / 0.2);
 }
+
+/* Inline property tag — a concept value committed mid-sentence. Styled like a
+   token in a code editor: the value alone, coloured by its concept (`--hue`,
+   stamped by components/propertyTag.ts), with no chrome at rest so it sits in
+   the sentence rather than on top of it. Nothing between it and the next
+   character either, or every tag would push its own comma away. It resolves
+   into an object under the pointer — that is where the wash appears and the
+   concept name arrives as the tooltip. */
+.prop-tag {
+  white-space: nowrap;
+  padding: 0 0.04em;
+  border-radius: 3px;
+  color: var(--hue);
+  font-weight: 500;
+  user-select: none;
+}
+.ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 18%, transparent);
+}
+/* ProseMirror marks the lifted node while it's being dragged. */
+.ProseMirror .prop-tag.ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--hue) 70%, transparent);
+  outline-offset: 1px;
+}

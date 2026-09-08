@@ -103,7 +103,7 @@ pull` will read it back (both answer `""`), so never treat an empty read as
 where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
 which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
 proxy a query verb on `browse.ts` rather than routes of their own — and `/api`
-still sits at exactly 12 files. Keep that shape where it reads well (the verbs
+sits at 14 function files. Keep that shape where it reads well (the verbs
 are genuinely about the same resource), but a new endpoint no longer *has* to be
 folded into an existing function. If this ever drops back to Hobby, the symptom
 returns as a `patchBuild` failure
@@ -344,6 +344,72 @@ by roughly a constant, so the stamp goes in that much earlier. Note a live
 pass can't be run much faster than 2× on YouTube — the iframe API caps there
 (`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
 Chrome mutes them, and you need the audio to know where you are.
+
+**Note properties come in two shapes.** The `elements` *block*
+(`src/plugins/elements/`, the "+ Property" menu, `lib/notePlugins.ts`) collects
+the whole concept grid into one panel under the note. **Inline property tags**
+put a single value in the prose instead — a coloured token that reads as part
+of the sentence (the concept itself is the tooltip, and a print-only suffix in
+the two PDFs), draggable anywhere in the text. Two ways in: the `@` menu, which
+still lists note cross-references below the properties so there is one trigger
+key rather than two (`src/components/noteMention.ts`), and **typing the term in
+ordinary prose** — an input rule on `PropertyTag` tags an unmistakable word the
+moment it ends, and Backspace puts the plain word straight back. Which words
+qualify is `AUTO_TERMS` in `lib/propertyTags.ts`: an allowlist on purpose, and
+a narrow one, because "even", "light", "clear" and "major" are ordinary English
+several times a paragraph and a chip must not land in the middle of one.
+
+**The `@` menu narrows like an editor's completion list**, which is what the
+420-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads
+a leading run of words as a *scope* and matches the rest inside it, so
+"@timbre bright" is Bright within Timbre — and then, deliberately, every other
+word in Bright's field follows it down the list, because "what could I say
+instead of bright?" is the question the menu exists to answer. That needs
+`allowSpaces` on the suggestion, which would otherwise match `@` plus the whole
+paragraph; a four-word cap and a menu that *hides* itself when nothing matches
+are what bound it.
+
+**The vocabulary is synced from Notion, not hand-written.** The words live in
+the owner's "Concept vocabulary" database (HSC & Trial marking guidelines);
+`npm run sync:vocab` (`scripts/sync-vocabulary.mjs`) pulls them and rewrites
+`src/lib/vocabulary.generated.ts`, which is the only place `ELEMENTS` is
+defined — never edit it by hand. **Notion owns the words; the script owns the
+shape.** Its `CATEGORIES` config decides which concept a Notion category lands
+in, the field order, and the eight hues (matched to the owner's concept nav,
+where Dynamics/Expression and Performing media/Timbre are paired, so each pair
+shares a colour family — AA-verified in both themes). `OWN` holds the lists the
+bank has no equivalent for (performing media, the ppp–fff ladder, Layer role,
+and the Italian markings split by concept). A new *category* in Notion is
+reported as unmapped rather than guessed at. `--check` fails when the file is
+stale, and the run flags any `AUTO_TERMS` entry the vocabulary no longer has.
+**A button in the Notion page pushes it.** `npm run build` runs the sync first
+(the `prebuild` script, `--soft`), so the deploy reads Notion and the words ship
+inside the bundle; `POST|GET /api/sync-vocab?key=…` fires the project's Vercel
+deploy hook, and the Notion page's button block calls that. So the press costs a
+rebuild, not a runtime dependency: nothing in the running app ever reaches
+Notion, and an outage or a revoked token costs a stale word list rather than an
+empty `@` menu (`--soft` falls back to the committed file and never fails a
+build). Three env vars, all Vercel-side: `NOTION_TOKEN` (build), plus
+`VOCAB_SYNC_SECRET` and `VERCEL_DEPLOY_HOOK_URL` for the endpoint, which refuses
+to run unless both are set. The secret rides in the query string because a
+Notion webhook action sends no custom headers — the whole URL is the credential,
+like a guest link.
+
+**Field ids are stored data** (the keys of `ElementsData.fields`, the
+`data-field` of every chip), so relabel freely and rename an id only after
+checking the database says nothing stores it.
+
+The chip is a TipTap inline atom (`src/components/propertyTag.ts`, view in
+`PropertyTagView.tsx`) that lives **inside the note's rich-text HTML** — no new
+field on `Annotation`, so it needs no schema, no API whitelist entry and no
+line in `projectJson.ts`; it travels wherever `contentHtml` travels, and
+`propertyTagsInHtml()` reads the values back out structured. Its markup carries
+its own colours: `--hue` for fills on either theme, and `--hue-ink` (an
+`hueText`-darkened hue) for text on white paper, because the two print
+documents that inject note HTML raw — `lib/exportPdf.ts` and
+`lib/answerSheet.ts` — have no React to resolve a theme and share
+`PROPERTY_TAG_PRINT_CSS`. Add a category to `lib/musicElements.ts` and it
+appears in the `@` menu, the elements grid and both PDFs at once.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's

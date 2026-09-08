@@ -23,6 +23,7 @@ import { fileToScaledBlob, blobToDataUrl } from '../lib/image'
 import { ResizableImage } from './resizableImage'
 import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
 import { createMention } from './noteMention'
+import { PropertyTag } from './propertyTag'
 import type { MentionItem } from './MentionList'
 
 interface Props {
@@ -130,6 +131,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
       StarterKit.configure({ trailingNode: false }),
       ResizableImage.configure({ inline: false }),
       ImageUploadPlaceholder,
+      PropertyTag,
       createMention(mentionItems, noteId),
     ],
     content,
@@ -242,7 +244,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
             </span>
           ) : (
             <span className="ml-1 font-mono text-[10px] text-muted">
-              type @ to link a note
+              type @ to tag a property
             </span>
           )}
           <input
