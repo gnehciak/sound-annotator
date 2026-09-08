@@ -2,17 +2,11 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  Image as ImageIcon,
-  MapPin,
-  Trash2,
-  Loader2,
-  Crosshair,
-  GripVertical,
-} from 'lucide-react'
+import { Image as ImageIcon, Loader2, Crosshair } from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -33,6 +27,8 @@ import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
 
 interface Props {
   annotation: Annotation
+  /** The note's hue — the pin key shows the dot it actually places. */
+  color: string
   onUpdate: (
     patch: Partial<Annotation>,
     opts?: { mode?: 'text'; coalesceKey?: string },
@@ -60,16 +56,26 @@ interface Props {
  */
 const COVER_MAX_DIM = 1600
 
+/** How far the pointer has to travel before a press counts as a drag, not a click. */
+const DRAG_SLOP = 4
+
 /**
  * The note's stage controls: what it puts on the video while it's on screen —
  * a cover image standing in for the picture, and a pin dropped on the frame
  * that captions itself with the note's own text.
+ *
+ * Both are **objects, not switches**: a 16:9 cover slot that echoes the frame's
+ * shape, and the pin itself — the dot in the note's hue, in a recessed key you
+ * drag onto the picture. Where it lands is what it's anchored to, so placing
+ * and anchoring stay one gesture; a plain click drops it dead centre, and
+ * clicking a placed pin takes it off again.
  *
  * Video projects only; the host decides that (an audio track's waveform is the
  * picture and must stay uncovered) and simply doesn't render this.
  */
 export default function NoteOverlayControls({
   annotation,
+  color,
   onUpdate,
   uploadImage,
   scorePage,
@@ -135,18 +141,16 @@ export default function NoteOverlayControls({
   }
   const dropping = dragDepth > 0 && !!uploadImage
 
-  const togglePin = () => {
-    // A new pin lands dead centre, where it's impossible to miss; the frame is
-    // where it gets aimed (drag the dot).
-    patch(
-      hasPin(annotation)
-        ? { pinX: undefined, pinY: undefined, pinAnchor: undefined, pinPage: undefined }
-        : { pinX: 0.5, pinY: 0.5 },
-    )
-  }
-
+  const pinned = hasPin(annotation)
+  const covered = hasCover(annotation)
   const pinnedToScore = isScorePin(annotation)
   const pinPage = pinPageOf(annotation)
+
+  const removePin = () =>
+    patch({ pinX: undefined, pinY: undefined, pinAnchor: undefined, pinPage: undefined })
+  // A pin placed without aiming lands dead centre, where it's impossible to
+  // miss; dragging is how it gets aimed.
+  const centrePin = () => patch({ pinX: 0.5, pinY: 0.5 })
 
   /**
    * Move the pin between the two things it can be a fraction of. The
@@ -163,7 +167,7 @@ export default function NoteOverlayControls({
     )
 
   /**
-   * Dragging the pin out of the inspector and onto the picture.
+   * Dragging the pin out of the key and onto the picture.
    *
    * One gesture, two outcomes: where it lands decides what it is anchored to,
    * because the thing you dropped it on *is* the answer — the score's page for
@@ -181,25 +185,43 @@ export default function NoteOverlayControls({
     y: number
     over: PinDrop | null
   } | null>(null)
+  // Where the press started, and whether it has travelled far enough to be a
+  // drag. A press that never moves is a click, and toggles the pin instead.
+  const pressRef = useRef<{ x: number; y: number; dragged: boolean } | null>(null)
 
   const startPlacing = (e: ReactPointerEvent<HTMLElement>) => {
     e.preventDefault()
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
     } catch {
-      /* the drag still tracks while the pointer is over the handle */
+      /* the drag still tracks while the pointer is over the key */
     }
-    setPlacing({ x: e.clientX, y: e.clientY, over: pinTargetAt(e.clientX, e.clientY) })
+    pressRef.current = { x: e.clientX, y: e.clientY, dragged: false }
   }
 
   const movePlacing = (e: ReactPointerEvent<HTMLElement>) => {
-    if (!placing) return
+    const press = pressRef.current
+    if (!press) return
+    if (
+      !press.dragged &&
+      Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_SLOP
+    )
+      return
+    press.dragged = true
     setPlacing({ x: e.clientX, y: e.clientY, over: pinTargetAt(e.clientX, e.clientY) })
   }
 
   const endPlacing = (e: ReactPointerEvent<HTMLElement>) => {
-    if (!placing) return
+    const press = pressRef.current
+    pressRef.current = null
     setPlacing(null)
+    if (!press) return
+    // A press that never travelled is a click: place it centre, or take it off.
+    if (!press.dragged) {
+      if (pinned) removePin()
+      else centrePin()
+      return
+    }
     const drop = pinTargetAt(e.clientX, e.clientY)
     // Dropped on nothing: no pin, no change. A gesture that fizzles is better
     // than one that leaves a dot somewhere nobody aimed.
@@ -216,39 +238,158 @@ export default function NoteOverlayControls({
     )
   }
 
+  const cancelPlacing = () => {
+    pressRef.current = null
+    setPlacing(null)
+  }
+
+  // Keyboard: the key is a switch, and once placed the arrows aim it — the one
+  // path to a pin's position that doesn't need a pointer.
+  const nudgePin = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const by = e.shiftKey ? 0.05 : 0.01
+    const at = { x: overlay.pinX ?? 0.5, y: overlay.pinY ?? 0.5 }
+    const move = (dx: number, dy: number) => {
+      e.preventDefault()
+      patch({
+        pinX: Math.min(1, Math.max(0, at.x + dx)),
+        pinY: Math.min(1, Math.max(0, at.y + dy)),
+      })
+    }
+    if (!pinned) return
+    if (e.key === 'ArrowLeft') move(-by, 0)
+    else if (e.key === 'ArrowRight') move(by, 0)
+    else if (e.key === 'ArrowUp') move(0, -by)
+    else if (e.key === 'ArrowDown') move(0, by)
+  }
+
+  // What the two objects add up to, said once, instead of a caption under each.
+  const stageLine = !pinned
+    ? covered
+      ? 'Cover set — drag the dot on to add a caption'
+      : scorePage != null
+        ? 'Drag the dot onto the picture, or onto the score’s page'
+        : 'Drag the dot onto the picture'
+    : covered
+      ? `Cover set · pin ${pinnedToScore ? `on page ${pinPage}` : 'on the frame'}`
+      : pinnedToScore
+        ? `Pinned on page ${pinPage} of the score`
+        : 'Pinned on the frame'
+
   return (
     <div
       {...dropZone}
-      className={`relative flex flex-col gap-2 border-b px-[13px] py-2.5 transition-colors ${
+      className={`relative border-b transition-colors ${
         dropping ? 'border-accent/40 bg-accent/[0.06]' : 'border-line/60'
       }`}
     >
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-        On the video
-      </span>
-
-      {/* ---- cover image ---- */}
-      {hasCover(annotation) ? (
-        <div className="flex flex-col gap-2 rounded-md border border-line/70 p-2">
-          <div className="flex items-center gap-2.5">
+      {/* ---- the two objects ---- */}
+      <div className="flex items-center gap-2.5 px-[13px] py-2.5">
+        {/* The cover slot echoes the frame's shape: empty it's a dashed 16:9
+            well, set it *is* the picture. Clicking picks a file; dropping one
+            anywhere on this section does the same. */}
+        <button
+          type="button"
+          disabled={!uploadImage || busy}
+          onClick={() => fileRef.current?.click()}
+          title={
+            covered
+              ? 'Replace the cover image'
+              : 'Show an image over the video while this note is on screen — or drop one here'
+          }
+          aria-label={covered ? 'Replace cover image' : 'Add a cover image'}
+          className={`press grid h-[34px] w-[60px] shrink-0 place-items-center overflow-hidden rounded-md border text-muted transition-colors disabled:cursor-default disabled:opacity-50 ${
+            covered
+              ? 'border-line bg-black'
+              : 'border-dashed border-line-strong bg-inset hover:border-accent/70 hover:text-accentink'
+          }`}
+        >
+          {busy ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : covered ? (
             <img
               src={overlay.coverUrl}
-              alt="Cover"
+              alt=""
               style={
                 isFilled(annotation)
                   ? { objectPosition: `${crop.x * 100}% ${crop.y * 100}%` }
                   : undefined
               }
-              className={`h-11 w-[74px] shrink-0 rounded bg-black ${
+              className={`h-full w-full ${
                 isFilled(annotation) ? 'object-cover' : 'object-contain'
               }`}
             />
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-[11px] text-muted">
-                Covers the picture for this note
+          ) : (
+            <ImageIcon size={14} />
+          )}
+        </button>
+
+        {/* The pin, as the thing it places. Drag it onto the picture (or the
+            score's page); click to drop it centre, click again to take it off. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={pinned}
+          onPointerDown={startPlacing}
+          onPointerMove={movePlacing}
+          onPointerUp={endPlacing}
+          onPointerCancel={cancelPlacing}
+          onKeyDown={nudgePin}
+          title={
+            scorePage != null
+              ? 'Drag onto the video, or onto the score’s page — click to place it centre'
+              : 'Drag onto the video to place the pin — click to place it centre'
+          }
+          aria-label="Pin a caption on the picture"
+          className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing ${
+            placing
+              ? 'border-accent'
+              : pinned
+                ? 'border-line-strong'
+                : 'border-line hover:border-line-strong'
+          }`}
+        >
+          {/* The same dot PinLayer draws: a core in the note's hue ringed
+              white, over a breathing halo once it's actually out there. */}
+          <span className="relative grid h-[18px] w-[18px] place-items-center">
+            {pinned && (
+              <span className="absolute inset-0 rounded-full opacity-30">
+                <span
+                  className="block h-full w-full animate-now-pulse rounded-full"
+                  style={{ backgroundColor: color }}
+                />
               </span>
+            )}
+            <span
+              className="relative block h-2.5 w-2.5 rounded-full ring-2 ring-white/90"
+              style={{ backgroundColor: color }}
+            />
+          </span>
+        </button>
+
+        <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-muted">
+          {stageLine}
+        </span>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          void pickCover(e.target.files?.[0])
+          // Let the same file be chosen again after a removal.
+          e.target.value = ''
+        }}
+      />
+
+      {/* ---- what each object needs told, once it exists ---- */}
+      {(covered || pinned) && (
+        <div className="flex flex-col gap-2 px-[13px] pb-2.5">
+          {covered && (
+            <div className="flex flex-wrap items-center gap-2">
               <div
-                className="seg w-max"
+                className="seg"
                 role="group"
                 aria-label="How the cover fits the frame"
               >
@@ -261,7 +402,7 @@ export default function NoteOverlayControls({
                     title={
                       fit === 'contain'
                         ? 'Show the whole image, letterboxed'
-                        : 'Fill the frame, cropping the overflow — then drag the cover to aim the crop'
+                        : 'Fill the frame, cropping the overflow — then drag the cover on the video to aim the crop'
                     }
                     onClick={() =>
                       patch({ coverFit: fit === 'contain' ? undefined : 'cover' })
@@ -271,217 +412,119 @@ export default function NoteOverlayControls({
                   </button>
                 ))}
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                patch({
-                  coverUrl: undefined,
-                  coverFit: undefined,
-                  coverX: undefined,
-                  coverY: undefined,
-                })
-              }
-              title="Remove cover image"
-              aria-label="Remove cover image"
-              className="btn-icon press hover:text-danger"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-
-          {/* Filling crops, and which part it keeps is the teacher's call —
-              aimed on the frame itself, where the picture is. Only the way
-              back to centre needs a control here. */}
-          {isFilled(annotation) && (
-            <div className="flex items-center justify-between gap-2 border-t border-line/50 pt-1.5">
-              <span className="text-[11px] leading-snug text-muted/80">
-                Drag the cover on the video to aim the crop.
-              </span>
+              {/* Filling crops, and which part it keeps is aimed on the frame
+                  itself, where the picture is. Only the way back to centre
+                  needs a control here. */}
+              {isFilled(annotation) && (
+                <button
+                  type="button"
+                  disabled={!cropMoved}
+                  onClick={() => patch({ coverX: undefined, coverY: undefined })}
+                  title="Put the crop back in the middle"
+                  className="btn-ghost btn-sm press"
+                >
+                  <Crosshair size={11} />
+                  Centre
+                </button>
+              )}
+              <div className="flex-1" />
               <button
                 type="button"
-                disabled={!cropMoved}
-                onClick={() => patch({ coverX: undefined, coverY: undefined })}
-                title="Put the crop back in the middle"
-                className="btn-ghost btn-sm press shrink-0"
+                onClick={() =>
+                  patch({
+                    coverUrl: undefined,
+                    coverFit: undefined,
+                    coverX: undefined,
+                    coverY: undefined,
+                  })
+                }
+                title="Remove the cover image"
+                className="btn-ghost btn-sm press hover:border-danger/60 hover:text-danger"
               >
-                <Crosshair size={11} />
-                Centre
+                Remove cover
               </button>
             </div>
           )}
+
+          {pinned && (
+            <div className="flex flex-wrap items-center gap-2">
+              {/* What the pin's position is a fraction *of*. On the frame it
+                  holds a place on the picture; on the score it holds a place in
+                  the music, and rides every rescale, refit and scroll. */}
+              <div className="seg" role="group" aria-label="What the pin is anchored to">
+                <button
+                  type="button"
+                  onClick={() => anchorTo(false)}
+                  aria-pressed={!pinnedToScore}
+                  title="The pin holds its place on the picture"
+                  className="seg-item press"
+                >
+                  Frame
+                </button>
+                <button
+                  type="button"
+                  onClick={() => anchorTo(true)}
+                  aria-pressed={pinnedToScore}
+                  disabled={scorePage == null}
+                  title={
+                    scorePage == null
+                      ? 'Attach a PDF score to this track first'
+                      : 'The pin holds its place on the page, however the score is sized or moved'
+                  }
+                  className="seg-item press"
+                >
+                  Score
+                </button>
+              </div>
+              {pinnedToScore && scoreHidden && (
+                <span className="text-[11.5px] text-muted/80">
+                  The score is off, so it isn’t showing.
+                </span>
+              )}
+              {pinnedToScore && scorePage != null && scorePage !== pinPage && (
+                <button
+                  type="button"
+                  onClick={() => patch({ pinPage: scorePage })}
+                  title={`The score is on page ${scorePage}`}
+                  className="btn-ghost btn-sm press"
+                >
+                  <Crosshair size={11} />
+                  Move to page {scorePage}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* How long it stays up. Only a point note needs telling: a note with
+              an end already owns a span, and that span is the window. */}
+          {hasOverlay(annotation) && annotation.end == null && (
+            <label className="flex items-center gap-2 text-[12px] text-muted">
+              <span className="shrink-0">Stays up for</span>
+              <input
+                type="number"
+                min={HOLD_MIN}
+                max={HOLD_MAX}
+                step={1}
+                value={clampHold(overlay.hold)}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  patch({
+                    hold:
+                      Number.isFinite(v) && clampHold(v) !== OVERLAY_HOLD
+                        ? clampHold(v)
+                        : undefined,
+                  })
+                }}
+                aria-label="Seconds the overlay stays on screen"
+                className="field w-16 tabular-nums"
+              />
+              <span className="shrink-0">seconds</span>
+            </label>
+          )}
         </div>
-      ) : (
-        <button
-          type="button"
-          disabled={!uploadImage || busy}
-          onClick={() => fileRef.current?.click()}
-          title="Show an image over the video while this note is on screen"
-          className="press flex w-full items-center justify-between gap-2.5 rounded-md border border-dashed border-line/70 px-[11px] py-2 text-left transition-colors hover:border-line-strong disabled:cursor-default disabled:opacity-50"
-        >
-          <span className="flex items-center gap-2 text-[12.5px] text-muted">
-            {busy ? (
-              <Loader2 size={14} className="shrink-0 animate-spin" />
-            ) : (
-              <ImageIcon size={14} className="shrink-0" />
-            )}
-            {busy
-              ? `Uploading… ${Math.round((progress ?? 0) * 100)}%`
-              : 'Add a cover image'}
-          </span>
-          {!busy && (
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-muted/60">
-              or drop
-            </span>
-          )}
-        </button>
-      )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          void pickCover(e.target.files?.[0])
-          // Let the same file be chosen again after a removal.
-          e.target.value = ''
-        }}
-      />
-      {error && <p className="text-[11.5px] text-danger">{error}</p>}
-
-      {/* ---- pin ---- */}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={hasPin(annotation)}
-        onClick={togglePin}
-        title="Drop a dot on the video, captioned with this note's text"
-        className={`press flex w-full items-center justify-between gap-2.5 rounded-md border px-[11px] py-2 text-left transition-colors ${
-          hasPin(annotation)
-            ? 'border-accent/40 bg-accent/[0.06]'
-            : 'border-line/70 hover:border-line-strong'
-        }`}
-      >
-        <span
-          className={`flex items-center gap-2 text-[12.5px] ${
-            hasPin(annotation) ? 'text-fg' : 'text-muted'
-          }`}
-        >
-          <MapPin size={14} className="shrink-0" />
-          Pin a caption
-        </span>
-        <span className="switch" data-on={hasPin(annotation) || undefined} />
-      </button>
-
-      {/* Drag it where you want it. Placing and anchoring are the same motion:
-          the picture and the score's page are both drop boxes, and whichever
-          one catches it decides what the pin is a fraction of. */}
-      <button
-        type="button"
-        onPointerDown={startPlacing}
-        onPointerMove={movePlacing}
-        onPointerUp={endPlacing}
-        onPointerCancel={endPlacing}
-        title={
-          scorePage != null
-            ? 'Drag onto the video, or onto the score’s page to pin it to the music'
-            : 'Drag onto the video to place the pin'
-        }
-        className={`press flex w-full cursor-grab touch-none items-center gap-2 rounded-md border border-dashed px-[11px] py-1.5 text-left text-[11.5px] active:cursor-grabbing ${
-          placing
-            ? 'border-accent/60 bg-accent/[0.06] text-fg'
-            : 'border-line/70 text-muted hover:border-line-strong hover:text-fg'
-        }`}
-      >
-        <GripVertical size={13} className="shrink-0" />
-        {hasPin(annotation) ? 'Drag to re-place it' : 'Drag onto the video to place a pin'}
-      </button>
-
-      {hasPin(annotation) && (
-        <>
-          {/* What the pin's position is a fraction *of*. On the frame it holds
-              a place on the picture; on the score it holds a place in the
-              music, and rides every rescale, refit and scroll of the page. */}
-          <div className="seg grid grid-cols-2">
-            <button
-              type="button"
-              onClick={() => anchorTo(false)}
-              aria-pressed={!pinnedToScore}
-              title="The pin holds its place on the picture"
-              className="seg-item"
-            >
-              On the frame
-            </button>
-            <button
-              type="button"
-              onClick={() => anchorTo(true)}
-              aria-pressed={pinnedToScore}
-              disabled={scorePage == null}
-              title={
-                scorePage == null
-                  ? 'Attach a PDF score to this track first'
-                  : 'The pin holds its place on the page, however the score is sized or moved'
-              }
-              className="seg-item"
-            >
-              On the score
-            </button>
-          </div>
-          <p className="text-[11.5px] leading-relaxed text-muted/80">
-            {!pinnedToScore ? (
-              <>Drag the dot on the video to aim it. This note’s text is its caption.</>
-            ) : (
-              <>
-                Anchored to <strong className="font-semibold">page {pinPage}</strong> of
-                the score — drag it on the page to aim it.{' '}
-                {scoreHidden
-                  ? 'The score is switched off, so it isn’t showing.'
-                  : scorePage != null && scorePage !== pinPage
-                    ? `The score is on page ${scorePage}.`
-                    : ''}
-              </>
-            )}
-          </p>
-          {pinnedToScore && scorePage != null && scorePage !== pinPage && (
-            <button
-              type="button"
-              onClick={() => patch({ pinPage: scorePage })}
-              className="btn-ghost btn-sm press w-full justify-center"
-            >
-              <Crosshair size={12} />
-              Move it to page {scorePage}
-            </button>
-          )}
-        </>
       )}
 
-      {/* ---- how long it stays up ----
-          Only a point note needs telling: a note with an end already owns a
-          span, and that span is the window. */}
-      {hasOverlay(annotation) && annotation.end == null && (
-        <label className="flex items-center gap-2 text-[12.5px] text-muted">
-          <span className="shrink-0">Stays up for</span>
-          <input
-            type="number"
-            min={HOLD_MIN}
-            max={HOLD_MAX}
-            step={1}
-            value={clampHold(overlay.hold)}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              patch({
-                hold:
-                  Number.isFinite(v) && clampHold(v) !== OVERLAY_HOLD
-                    ? clampHold(v)
-                    : undefined,
-              })
-            }}
-            aria-label="Seconds the overlay stays on screen"
-            className="field w-20 tabular-nums"
-          />
-          <span className="shrink-0">seconds</span>
-        </label>
-      )}
+      {error && <p className="px-[13px] pb-2.5 text-[11.5px] text-danger">{error}</p>}
 
       {/* The ghost: what's under the cursor, and what dropping there means.
           Portalled to the body so no pane's overflow clips it on the way. */}
