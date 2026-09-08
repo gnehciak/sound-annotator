@@ -287,22 +287,48 @@ try {
   /* first run */
 }
 
-// Report the words that changed, since that is the whole point of a sync.
-const values = (text) =>
-  new Set([...text.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1]))
-const before = values(previous)
-const after = values(built.source)
-const added = [...after].filter((v) => !before.has(v))
-const removed = [...before].filter((v) => !after.has(v))
+// Report what changed, since that is the whole point of a sync — and report
+// the three lists *separately*. Diffing the file as one bag of quoted strings
+// misses a word being ticked or un-ticked, because every auto-tagging term is
+// already an ELEMENTS value: the bag is identical and the behaviour is not.
+const section = (text, marker) => {
+  const i = text.indexOf(marker)
+  if (i < 0) return new Set()
+  const end = text.indexOf('\n]', i) + 1 || text.indexOf('\n}', i) + 1
+  return new Set(
+    [...text.slice(i, end).matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1]),
+  )
+}
+const LISTS = [
+  ['', 'export const ELEMENTS'],
+  ['auto-tagging', 'export const AUTO_TERMS'],
+  ['aliases', 'export const ALIASES'],
+]
+const diffs = LISTS.map(([label, marker]) => {
+  const before = section(previous, marker)
+  const after = section(built.source, marker)
+  return {
+    label,
+    added: [...after].filter((v) => !before.has(v)),
+    removed: [...before].filter((v) => !after.has(v)),
+  }
+})
+const added = diffs[0].added
+const removed = diffs[0].removed
 
 console.log(
   `${rows.terms.length} terms across ${built.fields} fields in Notion → ` +
     `${built.count} options in ${CONCEPTS.length} concepts, ` +
     `${built.auto} auto-tagging, ${built.aliases} aliases`,
 )
-if (added.length) console.log(`  + ${added.join(', ')}`)
-if (removed.length) console.log(`  − ${removed.join(', ')}`)
-if (!added.length && !removed.length) console.log('  no change')
+let quiet = true
+for (const d of diffs) {
+  const tag = d.label ? ` ${d.label}` : ''
+  if (d.added.length) console.log(`  +${tag} ${d.added.join(', ')}`)
+  if (d.removed.length) console.log(`  −${tag} ${d.removed.join(', ')}`)
+  if (d.added.length || d.removed.length) quiet = false
+}
+if (quiet) console.log('  no change')
 if (built.unmapped.length) {
   console.log(
     `\nFields whose Concept the app doesn't know — fix the Concept in Notion,\n` +
