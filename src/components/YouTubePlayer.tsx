@@ -248,7 +248,6 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
         // title bar while letting a click pass through to our transport (pause).
         <div
           className="absolute inset-0"
-          title="Click to pause"
           onClick={() => playerRef.current?.pauseVideo?.()}
         />
       ) : !ready || buffering ? (

@@ -289,7 +289,6 @@ const DrivePlayer = forwardRef<PlayerHandle, Props>(function DrivePlayer(
         // so a click on the picture pauses.
         <div
           className="absolute inset-0"
-          title="Click to pause"
           onClick={() => videoRef.current?.pause()}
         />
       ) : !ready || buffering ? (
