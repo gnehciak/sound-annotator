@@ -314,12 +314,17 @@ Reading a note's own inline pictures that way is cross-origin — fine, since th
 Blob store answers `access-control-allow-origin: *`, but the request has to ask
 for CORS and a tainted canvas is caught rather than thrown.
 
-The frame draws **only for the note open in the inspector**, unlike a cover or
-a pin: it is an aiming tool, not something the class watches, and a permanently
-framed region on the page is what a box mark (`ScoreMarks`) already is. That is
-also why `hasOverlay` doesn't count it — that predicate decides who is on the
-stage — and why the notes list keeps the quote's own chip beside the picture:
-the picture shows the region, the chip names the page it came from.
+**Who the frame draws for depends on whether there is anything to aim**
+(`quotesOn`). To an editor it is an aiming tool, so only the note open in the
+inspector is framed: every other rectangle over the page being aimed at is in
+the way of it. To a *reader* — a `?view=` link, or any read-only score — there
+is nothing to aim, so a quote joins the pins on the stage under exactly their
+time rule, and the page shows the bars the note is about while the note is on.
+A frame that never goes away is what a box mark (`ScoreMarks`) is, which is why
+neither rule leaves one there. `hasOverlay` still doesn't count a quote — that
+predicate decides who is on the stage, and the frame is drawn from the quote
+itself — and the notes list still keeps the quote's own chip beside the
+picture: the picture shows the region, the chip names the page it came from.
 
 **The two exports write real files** — `lib/exportPdf.ts` (pdf-lib) and
 `lib/exportDocx.ts` (OOXML by hand, zipped with `fflate`) — rather than opening

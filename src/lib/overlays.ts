@@ -53,8 +53,9 @@ export const scorePinPageOf = (a: Annotation): number =>
 /**
  * True when the note puts anything on the *stage* — the picture or the page,
  * for its moment. Deliberately not counting a score quote: a quote is a
- * picture the note *carries*, framed on the page only while the note is open
- * so it can be aimed. It is not something the class watches.
+ * picture the note *carries*, and its frame on the page is drawn from the
+ * quote itself (`quotesOn`) rather than from this predicate, so a note whose
+ * only mark on the world is a quote never counts as having a layer.
  */
 export const hasOverlay = (a: Annotation): boolean =>
   hasCover(a) || hasVideoPin(a) || hasScorePin(a)
@@ -87,12 +88,6 @@ export const quotePageOf = (q: NoteQuote): number =>
  * The quote to draw on one page of the score, or null. The same choice
  * `scorePinsOn` makes for pins, and made in the same place: nothing downstream
  * has to know which page a quote is aimed at.
- *
- * Only the note open in the inspector, deliberately — unlike a cover or a pin,
- * a quote is not something the class watches, it is the picture the note
- * carries. A permanently framed region on the page is what the drawing tools'
- * box mark is for; leaving quotes off the stage keeps the two from looking
- * alike.
  */
 export function quoteOn(
   a: Annotation | null | undefined,
@@ -102,6 +97,40 @@ export function quoteOn(
   if (!q) return null
   if (page != null && quotePageOf(q) !== page) return null
   return q
+}
+
+/** A quote ready to draw: the note it belongs to and the rectangle it framed. */
+export interface PlacedQuote {
+  note: Annotation
+  quote: NoteQuote
+}
+
+/**
+ * The quotes to frame on one page at time `t` — the *reading* rule, as opposed
+ * to the aiming one.
+ *
+ * Where a note is being edited its own quote is the only one worth drawing:
+ * the frame is a tool for aiming, and every other rectangle on the page is in
+ * the way of it. A reader has nothing to aim, so the quote joins the pins on
+ * the stage under exactly their time rule — while the note is on, the page
+ * shows the bars it is about, which is what quoting them was for. Notes are
+ * still filtered by page for the pins' reason: a rectangle is a fraction of a
+ * page box, and there is nowhere honest to draw one whose page is not on
+ * screen.
+ */
+export function quotesOn(
+  annotations: Annotation[],
+  page: number,
+  t: number,
+  selectedId?: string | null,
+): PlacedQuote[] {
+  return annotations.flatMap((note) => {
+    const quote = quoteOn(note, page)
+    if (!quote) return []
+    if (note.id === selectedId) return [{ note, quote }]
+    const { from, to } = overlayWindow(note)
+    return t >= from && t <= to ? [{ note, quote }] : []
+  })
 }
 
 /**

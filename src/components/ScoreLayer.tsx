@@ -19,7 +19,7 @@ import QuoteFrame from './QuoteFrame'
 import ScoreMarks, { type MarkStyle, type MarkTool } from './ScoreMarks'
 import ScoreSurface from './ScoreSurface'
 import ScoreToolbar from './ScoreToolbar'
-import { quoteOn, scorePinsOn } from '../lib/overlays'
+import { quoteOn, quotesOn, scorePinsOn, type PlacedQuote } from '../lib/overlays'
 import { colorForId } from '../lib/noteColors'
 import { openPdf, type LoadedPdf } from '../lib/pdf'
 import {
@@ -339,15 +339,26 @@ export default function ScoreLayer({
     [annotations, currentTime, selectedId],
   )
 
-  /**
-   * The open note's score quote, when it is aimed at *this* page. Not held to
-   * the pins' time rule: a quote is the handout's business, not the stage's, so
-   * it shows whenever its note is open and never otherwise.
-   */
   const selectedNote = annotations?.find((a) => a.id === selectedId) ?? null
-  const quoteOnPage = useCallback(
-    (n: number) => quoteOn(selectedNote, n),
-    [selectedNote],
+  /**
+   * The score quotes framed on this page, and the rule differs by who is
+   * looking. Editing, it is the open note's alone: the frame is a tool for
+   * aiming, and every other note's rectangle over the page being aimed at is
+   * in the way of it. Reading, there is nothing to aim, so a quote joins the
+   * pins on the stage under exactly their time rule — while the note is on,
+   * the page shows the bars it is about, which is what quoting them was for.
+   */
+  const quotesOnPage = useCallback(
+    (n: number): PlacedQuote[] => {
+      if (!readOnly) {
+        const quote = quoteOn(selectedNote, n)
+        return quote && selectedNote ? [{ note: selectedNote, quote }] : []
+      }
+      return !annotations?.length
+        ? []
+        : quotesOn(annotations, n, currentTime ?? 0, selectedId)
+    },
+    [readOnly, selectedNote, annotations, currentTime, selectedId],
   )
 
   // What the page's menu offers, for the point it was opened on. Marks are
@@ -490,14 +501,15 @@ export default function ScoreLayer({
           onSelect={setSelectedMark}
           onCommit={commitMark}
         />
-        {selectedNote && quoteOnPage(n) && (
+        {quotesOnPage(n).map(({ note, quote }) => (
           <QuoteFrame
-            quote={quoteOnPage(n)!}
-            color={selectedNote.color ?? colorForId(selectedNote.id)}
+            key={note.id}
+            quote={quote}
+            color={note.color ?? colorForId(note.id)}
             readOnly={readOnly}
-            onChange={onQuote && ((q) => onQuote(selectedNote.id, q))}
+            onChange={onQuote && ((q) => onQuote(note.id, q))}
           />
-        )}
+        ))}
         <PinLayer
           pins={pinsOnPage(n)}
           selectedId={selectedId}
@@ -514,8 +526,7 @@ export default function ScoreLayer({
       activeMark,
       commitMark,
       pinsOnPage,
-      selectedNote,
-      quoteOnPage,
+      quotesOnPage,
       selectedId,
       readOnly,
       onMovePin,
