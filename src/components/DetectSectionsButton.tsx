@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { FileAudio, Loader2, Sparkles, X } from 'lucide-react'
 import {
   startSectionDetection,
@@ -229,12 +230,16 @@ function AnalysisAudioPrompt({
   const take = (file?: File | null) => {
     if (file && file.type.startsWith('audio/')) onFile(file)
   }
-  return (
+  // Portalled for the same reason the dictionary is: this button is mounted
+  // inside the player's `.glass` pane, and a backdrop-filter ancestor becomes
+  // the containing block for `position: fixed` — so `inset-0` would cover that
+  // column rather than the viewport.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Provide audio for section detection"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm p-6"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/70 backdrop-blur-sm p-6"
       onClick={onCancel}
     >
       <div
@@ -294,6 +299,7 @@ function AnalysisAudioPrompt({
           />
         </label>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
