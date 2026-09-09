@@ -113,10 +113,22 @@ export default function LandingPage({ onSignIn }: { onSignIn: () => void }) {
         <PublishedSection />
       </main>
 
+      {/* Google's brand verification checks that the privacy policy is linked
+          from the home page itself, not only from the OAuth consent screen —
+          so these two links are load-bearing, not decoration. They point at
+          static HTML (public/privacy.html) so a reviewer's fetch never has to
+          run our JavaScript. */}
       <footer className="border-t border-line/70 px-4 py-6 sm:px-6">
-        <p className="mx-auto max-w-[1180px] font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
-          Sound Annotator — time-anchored music annotation
-        </p>
+        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+          <p>Sound Annotator — time-anchored music annotation</p>
+          <span aria-hidden="true" className="text-line-strong">·</span>
+          <a href="/privacy.html" className="press rounded transition-colors hover:text-fg">
+            Privacy
+          </a>
+          <a href="/terms.html" className="press rounded transition-colors hover:text-fg">
+            Terms
+          </a>
+        </div>
       </footer>
     </div>
   )
