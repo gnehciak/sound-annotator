@@ -86,10 +86,21 @@ export interface DocRun {
   fill?: string
 }
 
+/** A picture pasted into the note itself, as the editor stored it. */
+export interface DocImage {
+  /** The hosted note-image URL; resolved to bytes at export (lib/quoteImages). */
+  src: string
+  /** The width the writer dragged it to, in CSS pixels. Absent means natural. */
+  width?: number
+  align?: 'left' | 'center' | 'right'
+}
+
 /** One line of prose: its runs, and what kind of line it is. */
 export interface DocBlock {
   runs: DocRun[]
-  kind: 'p' | 'heading' | 'quote'
+  kind: 'p' | 'heading' | 'quote' | 'image'
+  /** The picture, on an `image` block. Its `runs` are empty. */
+  image?: DocImage
   /**
    * A list item's bullet or number, drawn in the margin. Lists are rendered as
    * marked paragraphs rather than as real lists, deliberately: Word's are a
@@ -193,6 +204,36 @@ function tint(hex: string, amount = 0.13): string {
   return `#${out.toString(16).padStart(6, '0')}`
 }
 
+/** Read an `<img>` back into the shape the renderers want. */
+function imageOf(el: HTMLElement): DocImage {
+  const width = Number(el.getAttribute('width'))
+  const align = el.getAttribute('data-align')
+  return {
+    src: el.getAttribute('src') ?? '',
+    ...(Number.isFinite(width) && width > 0 ? { width } : {}),
+    ...(align === 'center' || align === 'right' ? { align } : {}),
+  }
+}
+
+/**
+ * Every note image a project's prose references — what the export has to fetch
+ * before it can draw anything. Distinct from `coverUrls`, which walks the
+ * *overlay*: this is the pictures that are in the writing.
+ */
+export function noteImageUrls(project: Project): string[] {
+  const seen = new Set<string>()
+  for (const note of project.annotations) {
+    const html = primaryTextHtml(note)
+    if (!html.includes('<img')) continue
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    for (const img of doc.querySelectorAll('img')) {
+      const src = img.getAttribute('src')
+      if (src) seen.add(src)
+    }
+  }
+  return [...seen]
+}
+
 /** Which block a tag name is, if any. */
 function blockKind(tag: string): DocBlock['kind'] | null {
   if (/^h[1-6]$/.test(tag)) return 'heading'
@@ -220,6 +261,8 @@ function richBlocks(html: string): DocBlock[] {
   if (!html) return []
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const out: DocBlock[] = []
+  // Images met inside a paragraph, flushed after it (see walkInline).
+  const pending: DocImage[] = []
 
   const walkInline = (node: Node, style: DocRun, into: DocRun[]): void => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -234,7 +277,13 @@ function richBlocks(html: string): DocBlock[] {
       into.push({ ...style, text: ' ' })
       return
     }
-    if (tag === 'img') return
+    // An image inside a paragraph (pasted content, or an older note) is held
+    // aside and emitted as its own block after the line it interrupted: a
+    // picture is not a word, and both renderers lay it out as a block anyway.
+    if (tag === 'img') {
+      pending.push(imageOf(el))
+      return
+    }
 
     // A chip is an atom: it has its own ground and ink and never inherits.
     if (el.hasAttribute('data-property-tag')) {
@@ -278,8 +327,17 @@ function richBlocks(html: string): DocBlock[] {
 
   const emit = (el: HTMLElement, kind: DocBlock['kind'], marker?: string) => {
     const runs: DocRun[] = []
+    pending.length = 0
     for (const child of Array.from(el.childNodes)) {
       walkInline(child, { text: '' }, runs)
+    }
+    // An image lifted out of the middle of a sentence leaves the spaces that
+    // were on either side of it, so a doubled gap is closed here rather than
+    // being left in the prose.
+    for (let i = 1; i < runs.length; i += 1) {
+      if (/\s$/.test(runs[i - 1].text) && /^\s/.test(runs[i].text)) {
+        runs[i] = { ...runs[i], text: runs[i].text.replace(/^\s+/, '') }
+      }
     }
     // Trim the ends of the line without disturbing the spaces inside it.
     while (runs.length && !runs[0].text.trim()) runs.shift()
@@ -290,6 +348,8 @@ function richBlocks(html: string): DocBlock[] {
       runs[last] = { ...runs[last], text: runs[last].text.replace(/\s+$/, '') }
       out.push({ runs, kind, ...(marker ? { marker } : {}) })
     }
+    for (const image of pending) out.push({ runs: [], kind: 'image', image })
+    pending.length = 0
   }
 
   const walkBlocks = (parent: ParentNode): void => {
@@ -307,6 +367,10 @@ function richBlocks(html: string): DocBlock[] {
         if (el.children.length) {
           for (const inner of Array.from(el.children)) emit(inner as HTMLElement, 'quote')
         } else emit(el, 'quote')
+        continue
+      }
+      if (tag === 'img') {
+        out.push({ runs: [], kind: 'image', image: imageOf(el) })
         continue
       }
       const kind = blockKind(tag)

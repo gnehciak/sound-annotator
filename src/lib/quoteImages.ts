@@ -28,6 +28,9 @@ import type { Annotation, Project } from '../types'
 import { openPdf } from './pdf'
 import { quoteOf, quotePageOf } from './overlays'
 import { scoreBytesUrl } from './score'
+// A type-only cycle back the other way (studyDoc takes QuoteImage), which is
+// erased at build; this direction is the real dependency.
+import { noteImageUrls } from './studyDoc'
 
 /**
  * How an export says where it has got to: a fraction of the way through, and
@@ -59,6 +62,15 @@ export interface QuoteImage {
 const QUOTE_TARGET_PX = 1100
 const QUOTE_MAX_PX = 1700
 
+/**
+ * How big a note's own inline picture is carried at.
+ *
+ * It was already downscaled to 1600px on upload, so this is a second bound for
+ * the document's sake: a note with a dozen screen grabs would otherwise put a
+ * dozen full-size photographs inside the file, base64'd.
+ */
+const NOTE_IMAGE_MAX_PX = 1200
+
 /** Bounds on the render scale, so a degenerate page size can't run away. */
 const MIN_SCALE = 0.5
 const MAX_SCALE = 8
@@ -75,18 +87,32 @@ const MAX_SCALE = 8
  */
 const COLLECT_TIMEOUT_MS = 20_000
 
+/** Everything an exported document has to draw, fetched and cropped. */
+export interface DocPictures {
+  /** Picture quotes, by the id of the note that aimed them. */
+  quotes: Map<string, QuoteImage>
+  /** The notes' own inline images, by the URL the prose references. */
+  images: Map<string, QuoteImage>
+}
+
 /**
- * Every note's quote, resolved to a picture, keyed by note id. Notes whose
- * quote can't be resolved are simply absent: an export that loses a picture is
- * worth far more than one that fails, or one that never arrives.
+ * Every picture a document needs: the quotes each note aimed, and the images
+ * its prose carries. Anything that can't be resolved is simply absent — an
+ * export that loses a picture is worth far more than one that fails, or one
+ * that never arrives.
+ *
+ * One pass for both, so there is one deadline and one progress arc rather than
+ * two rounds of waiting stacked end to end.
  */
-export async function collectQuoteImages(
+export async function collectPictures(
   project: Project,
   onProgress?: ProgressFn,
-): Promise<Map<string, QuoteImage>> {
+): Promise<DocPictures> {
   const out = new Map<string, QuoteImage>()
+  const images = new Map<string, QuoteImage>()
   const quoted = project.annotations.filter((a) => quoteOf(a))
-  if (quoted.length === 0) return out
+  const urls = noteImageUrls(project)
+  if (quoted.length === 0 && urls.length === 0) return { quotes: out, images }
 
   // Reported over 0→1 of *this* phase; the exporters scale it into their own,
   // since laying the document out is the short tail after this.
@@ -94,6 +120,7 @@ export async function collectQuoteImages(
   const work = Promise.all([
     addCoverQuotes(quoted, out),
     addScoreQuotes(project, quoted, out, report),
+    addNoteImages(urls, images),
   ])
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<void>((resolve) => {
@@ -106,7 +133,30 @@ export async function collectQuoteImages(
   // picture resolves, not at the end.
   await Promise.race([work, deadline])
   clearTimeout(timer)
-  return out
+  return { quotes: out, images }
+}
+
+/** The notes' own inline pictures, re-encoded so a document can embed them. */
+async function addNoteImages(
+  urls: string[],
+  out: Map<string, QuoteImage>,
+): Promise<void> {
+  await Promise.all(
+    urls.map(async (url) => {
+      const img = await loadImage(url)
+      if (!img) return
+      // The whole picture, not a crop — but through the same canvas, because a
+      // note image may be a PNG or a WebP and neither renderer takes those.
+      const picture = cropOf(
+        img,
+        img.naturalWidth,
+        img.naturalHeight,
+        { x: 0, y: 0, w: 1, h: 1 },
+        NOTE_IMAGE_MAX_PX,
+      )
+      if (picture) out.set(url, picture)
+    }),
+  )
 }
 
 /** Quotes aimed at the picture: a crop of the note's own cover image. */
@@ -206,12 +256,13 @@ function cropOf(
   sourceWidth: number,
   sourceHeight: number,
   q: { x: number; y: number; w: number; h: number },
+  maxPx = QUOTE_MAX_PX,
 ): QuoteImage | null {
   const sx = Math.round(q.x * sourceWidth)
   const sy = Math.round(q.y * sourceHeight)
   const sw = Math.max(1, Math.round(q.w * sourceWidth))
   const sh = Math.max(1, Math.round(q.h * sourceHeight))
-  const shrink = Math.min(1, QUOTE_MAX_PX / sw)
+  const shrink = Math.min(1, maxPx / sw)
   const out = document.createElement('canvas')
   out.width = Math.max(1, Math.round(sw * shrink))
   out.height = Math.max(1, Math.round(sh * shrink))

@@ -13,8 +13,9 @@
 // the zip, which is the one part worth not writing.
 import type { Project } from '../types'
 import {
-  collectQuoteImages,
+  collectPictures,
   quoteBytes,
+  type DocPictures,
   type ProgressFn,
   type QuoteImage,
 } from './quoteImages'
@@ -118,8 +119,26 @@ function run(text: string, style: RunStyle = {}): string {
   )}</w:t></w:r>`
 }
 
-/** One of the note's own lines, with every run's appearance kept. */
-function block(b: DocBlock, size?: number): string {
+/**
+ * One of the note's own lines, with every run's appearance kept — or, for an
+ * `image` block, the picture the prose carries.
+ */
+function block(
+  b: DocBlock,
+  pictures: Map<string, QuoteImage>,
+  place: (picture: QuoteImage, width?: number) => string,
+): string {
+  if (b.kind === 'image') {
+    const picture = b.image && pictures.get(b.image.src)
+    // A picture that couldn't be fetched leaves nothing behind: a broken frame
+    // in a handout is worse than a paragraph that reads without it.
+    if (!picture) return ''
+    const centre = b.image?.align === 'center' ? '<w:jc w:val="center"/>' : ''
+    return `<w:p><w:pPr>${centre}<w:spacing w:after="90"/></w:pPr>${place(
+      picture,
+      b.image?.width,
+    )}</w:p>`
+  }
   const runs = b.runs
     .map((r) =>
       run(r.text, {
@@ -130,7 +149,6 @@ function block(b: DocBlock, size?: number): string {
         mono: r.mono,
         color: r.color,
         fill: r.fill,
-        ...(size ? { size } : {}),
       }),
     )
     .join('')
@@ -160,9 +178,13 @@ function para(
   return `<w:p>${props ? `<w:pPr>${props}</w:pPr>` : ''}${content}</w:p>`
 }
 
-/** An inline picture, sized to the cell and referencing a relationship id. */
-function picture(quote: QuoteImage, id: number, rel: string): string {
-  let cx = Math.min(IMAGE_MAX_EMU, (quote.width / 96) * 914400)
+/**
+ * An inline picture, sized to the cell and referencing a relationship id.
+ * `wanted` is the width the writer dragged an image to, in CSS pixels; the
+ * cell is still the ceiling.
+ */
+function picture(quote: QuoteImage, id: number, rel: string, wanted?: number): string {
+  let cx = Math.min(IMAGE_MAX_EMU, ((wanted ?? quote.width) / 96) * 914400)
   let cy = (cx * quote.height) / quote.width
   if (cy > IMAGE_MAX_H_EMU) {
     cy = IMAGE_MAX_H_EMU
@@ -205,7 +227,11 @@ function table(widths: number[], rows: string[]): string {
 
 /** Build the .docx bytes for one document. Separate from saving it, so a test
  *  can have the bytes without a window. */
-export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint8Array> {
+export async function buildStudyDocx(
+  doc: StudyDoc,
+  title: string,
+  pictures: DocPictures = { quotes: new Map(), images: new Map() },
+): Promise<Uint8Array> {
   const { zipSync } = await import('fflate')
 
   // Each distinct picture becomes one part and one relationship. Keyed by the
@@ -223,6 +249,12 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
     media.set(quote.src, entry)
     return entry.rel
   }
+
+  // Picture ids have to be unique across the whole document, so they come from
+  // one counter rather than one per table.
+  let pictureId = 1
+  const place = (p: QuoteImage, width?: number) =>
+    picture(p, pictureId++, relOf(p), width)
 
   const body: string[] = []
   body.push(para(run(doc.title, { bold: true, size: 40 })))
@@ -258,7 +290,6 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
     body.push(table(widths, rows), para(''))
   }
 
-  let pictureId = 1
   for (const group of doc.groups) {
     body.push(
       para(
@@ -293,7 +324,7 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
       const example: string[] = []
       if (row.quote) {
         example.push(
-          para(picture(row.quote, pictureId++, relOf(row.quote)), { centre: true }),
+          para(place(row.quote), { centre: true }),
         )
         if (row.quoteFrom) {
           example.push(
@@ -320,7 +351,9 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
           ),
         )
       }
-      for (const line of row.analysis) analysis.push(block(line))
+      for (const line of row.analysis) {
+        analysis.push(block(line, pictures.images, place))
+      }
       if (!row.analysis.length) analysis.push(para(''))
       if (row.lyrics) {
         analysis.push(para(run(`“${row.lyrics}”`, { italic: true, color: '6E6555' })))
@@ -395,12 +428,16 @@ export async function exportProjectDocx(
     // Collecting the pictures is nearly all of the wall clock; writing the XML
     // is the short tail. There is no tab to show a bar in, so the button that
     // was pressed carries it.
-    const quotes = await collectQuoteImages(project, (v, label) =>
+    const pictures = await collectPictures(project, (v, label) =>
       onProgress?.(v * 0.85, label),
     )
     onProgress?.(0.88, 'Writing the document')
     const name = docName(project)
-    const bytes = await buildStudyDocx(buildStudyDoc(project, quotes), name)
+    const bytes = await buildStudyDocx(
+      buildStudyDoc(project, pictures.quotes),
+      name,
+      pictures,
+    )
     onProgress?.(1, 'Saving')
     openFile(bytes, DOCX_MIME, `${name}.docx`, null)
   } catch (err) {

@@ -13,8 +13,9 @@
 import type { PDFDocument, PDFFont, PDFImage, PDFPage, RGB } from 'pdf-lib'
 import type { Project } from '../types'
 import {
-  collectQuoteImages,
+  collectPictures,
   quoteBytes,
+  type DocPictures,
   type ProgressFn,
   type QuoteImage,
 } from './quoteImages'
@@ -332,6 +333,8 @@ interface Line {
   marker?: string
   /** A rule down the left, marking a quoted line. */
   rule?: boolean
+  /** A picture the note itself carries, drawn instead of text on this line. */
+  picture?: { image: PDFImage; width: number; height: number; offset: number }
 }
 
 /** Sizes for the kinds of block a note's prose can hold. */
@@ -339,7 +342,13 @@ const SIZE_HEADING = SIZE_BODY + 1.5
 const MARKER_INDENT = 12
 const QUOTE_INDENT = 9
 
-function analysisLines(row: StudyRow, fonts: Fonts, width: number): Line[] {
+async function analysisLines(
+  row: StudyRow,
+  fonts: Fonts,
+  width: number,
+  embed: (picture: QuoteImage) => Promise<PDFImage>,
+  pictures: Map<string, QuoteImage>,
+): Promise<Line[]> {
   const out: Line[] = []
   const add = (
     runs: DocRun[],
@@ -379,8 +388,44 @@ function analysisLines(row: StudyRow, fonts: Fonts, width: number): Line[] {
 
   const first = badges.length ? 6 : 0
   if (row.analysis.length) {
-    row.analysis.forEach((block, i) => {
+    for (const [i, block] of row.analysis.entries()) {
       const gap = i === 0 ? first : 3
+      if (block.kind === 'image') {
+        const picture = block.image && pictures.get(block.image.src)
+        // A picture that couldn't be fetched leaves nothing behind: a broken
+        // frame in a handout is worse than a paragraph that reads without it.
+        if (!picture) continue
+        // The width the writer dragged it to is CSS pixels, and a point is
+        // three quarters of one — the same conversion the .docx does via EMU.
+        const wanted = block.image?.width ? block.image.width * 0.75 : width
+        const cap = Math.min(width, wanted)
+        let w = cap
+        let h = (w * picture.height) / picture.width
+        if (h > IMAGE_MAX_H) {
+          h = IMAGE_MAX_H
+          w = (h * picture.width) / picture.height
+        }
+        out.push({
+          pieces: [],
+          size: h,
+          gap: out.length === 0 ? 0 : Math.max(gap, 5),
+          indent: 0,
+          picture: {
+            image: await embed(picture),
+            width: w,
+            height: h,
+            // Resolved here rather than at draw time, because this is the only
+            // place that knows how wide the column is.
+            offset:
+              block.image?.align === 'center'
+                ? Math.max(0, (width - w) / 2)
+                : block.image?.align === 'right'
+                  ? Math.max(0, width - w)
+                  : 0,
+          },
+        })
+        continue
+      }
       if (block.kind === 'heading') {
         add(
           block.runs.map((r) => ({ ...r, bold: true })),
@@ -399,7 +444,7 @@ function analysisLines(row: StudyRow, fonts: Fonts, width: number): Line[] {
       } else {
         add(block.runs, SIZE_BODY, gap)
       }
-    })
+    }
   } else {
     add([{ text: '—', color: '#6e6555' }], SIZE_BODY, first)
   }
@@ -415,6 +460,11 @@ function analysisLines(row: StudyRow, fonts: Fonts, width: number): Line[] {
 
 /** Draw one laid-out line at `x`, whose baseline sits `size` below `top`. */
 function drawLine(sheet: Sheet, line: Line, x: number, top: number, fonts: Fonts): void {
+  if (line.picture) {
+    const { image, width, height, offset } = line.picture
+    sheet.image(image, x + offset, top - height, width, height)
+    return
+  }
   const baseline = top - line.size
   if (line.rule) {
     sheet.rect(x, baseline - line.size * 0.25, 1.5, line.size * 1.3, RULE)
@@ -455,12 +505,23 @@ function drawLine(sheet: Sheet, line: Line, x: number, top: number, fonts: Fonts
   }
 }
 
+/**
+ * A picture is its own height plus its gap — no leading. Leading is the room a
+ * line of type needs above and below its baseline; paying it on an image just
+ * puts a third of a picture's height of nothing underneath it.
+ */
+const advance = (l: Line): number => l.size * (l.picture ? 1 : LEADING)
+
 const heightOf = (lines: Line[]): number =>
-  lines.reduce((h, l) => h + l.gap + l.size * LEADING, 0)
+  lines.reduce((h, l) => h + l.gap + advance(l), 0)
 
 /** Build the PDF bytes for one document. Separate from opening it, so a test
  *  (and any future server-side use) can have the bytes without a window. */
-export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8Array> {
+export async function buildStudyPdf(
+  doc: StudyDoc,
+  title: string,
+  pictures: DocPictures = { quotes: new Map(), images: new Map() },
+): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
   pdf.setTitle(title)
@@ -608,7 +669,7 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
     // nothing.
     const measured = []
     for (const row of group.rows) {
-      const lines = analysisLines(row, fonts, analysisInner)
+      const lines = await analysisLines(row, fonts, analysisInner, embed, pictures.images)
       const image = row.quote ? await embed(row.quote) : null
       const captionLines =
         image && row.quoteFrom
@@ -728,7 +789,7 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
       for (const line of m.lines) {
         ay -= line.gap
         drawLine(sheet, line, analysisX + CELL_PAD, ay, fonts)
-        ay -= line.size * LEADING
+        ay -= advance(line)
       }
 
       sheet.y = top
@@ -784,11 +845,15 @@ export async function exportProjectPdf(
   try {
     // Collecting the pictures is nearly all of the wall clock; laying the
     // document out is the short tail after it.
-    const quotes = await collectQuoteImages(project, (v, label) =>
+    const pictures = await collectPictures(project, (v, label) =>
       report(v * 0.85, label),
     )
     report(0.88, 'Laying out the document')
-    const bytes = await buildStudyPdf(buildStudyDoc(project, quotes), docName(project))
+    const bytes = await buildStudyPdf(
+      buildStudyDoc(project, pictures.quotes),
+      docName(project),
+      pictures,
+    )
     report(1, 'Opening the PDF')
     openFile(bytes, 'application/pdf', `${docName(project)}.pdf`, tab)
   } catch (err) {

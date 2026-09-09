@@ -333,14 +333,24 @@ spelled out after the value, because paper has no hover and a colour alone
 means nothing without a legend. The note's own hue rules its row, as it does
 everywhere else in the app.
 
-Two consequences worth knowing. The PDF needs **run-aware line breaking**: the
-appearance changes *inside* a line, so measuring a paragraph in one font wraps
-it in the wrong place — the more so since the chips are the widest thing in the
-prose. And lists are **marked paragraphs, not real lists** in both renderers:
-Word's are a numbering part of their own to keep in step, and a bullet that is
-simply there survives every copy-paste out of the file. Inline note *images*
-are the deliberate omission — what a document quotes is the picture quote,
-aimed on purpose.
+The note's **own inline images** come too, at the width they were dragged to
+(CSS pixels, so the PDF converts at ¾ to the point; the .docx goes through EMU
+and gets it for free). They are fetched and re-encoded to JPEG in the same pass
+as the quotes, since neither renderer takes a PNG or a WebP — hence
+`collectPictures`, which returns quotes keyed by note and images keyed by URL
+under one deadline and one progress arc. An image that can't be fetched leaves
+*nothing* behind: a broken frame in a handout is worse than a paragraph that
+reads without it.
+
+Three consequences worth knowing. The PDF needs **run-aware line breaking**:
+the appearance changes *inside* a line, so measuring a paragraph in one font
+wraps it in the wrong place — the more so since the chips are the widest thing
+in the prose. Lists are **marked paragraphs, not real lists** in both
+renderers: Word's are a numbering part of their own to keep in step, and a
+bullet that is simply there survives every copy-paste out of the file. And an
+image is a **block**, even where the editor left it mid-sentence — a picture is
+not a word, both renderers lay one out as a block anyway, and the spaces it
+leaves on either side are closed rather than printed.
 
 The analysis column is the note's own words and nothing else. The guide's
 *What / Why* prompts were tried and dropped: the app has nothing to put under

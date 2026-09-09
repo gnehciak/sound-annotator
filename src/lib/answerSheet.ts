@@ -18,7 +18,7 @@ import { countAnswered, questionsOf } from './questions'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
 import { publicId } from './ids'
 import { PROPERTY_TAG_PRINT_CSS } from './propertyTags'
-import { collectQuoteImages, type QuoteImage } from './quoteImages'
+import { collectPictures, type QuoteImage } from './quoteImages'
 
 /** Escape text for safe interpolation into HTML. */
 function esc(s: string): string {
@@ -360,7 +360,7 @@ export async function exportAnswerSheetPdf(
   tab.document.write(WAITING_HTML)
   tab.document.close()
 
-  const quotes = await collectQuoteImages(project)
+  const { quotes } = await collectPictures(project)
   const blob = new Blob([buildAnswerSheetHtml(project, input, quotes)], {
     type: 'text/html',
   })
