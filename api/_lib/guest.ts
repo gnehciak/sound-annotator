@@ -6,7 +6,7 @@
 // anyone edit rights (the same reason we don't store passwords in the clear).
 //
 // Guest rows are owned by `guest:<uuid>` — a synthetic owner that can never
-// collide with a Clerk uid (`user_…`), so every owner-scoped query in the API
+// collide with an account uid, so every owner-scoped query in the API
 // keeps ignoring them for free. A guest may only ever touch content fields;
 // sharing, publishing, and ownership stay out of reach (see
 // projects/[id]/index.ts).

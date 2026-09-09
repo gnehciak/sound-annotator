@@ -5,8 +5,9 @@ A web app for annotating music in the classroom. Load a **YouTube video** or an
 plus pasted or uploaded screenshots — that jump the player to the right moment
 when you click them.
 
-Accounts and sync run on **Vercel**: Google sign-in via Clerk, projects in
-Neon Postgres, audio and note images in Vercel Blob. The browser talks to
+Accounts and sync run on **Vercel**: **Sign in with Google** (our own OAuth
+client — no identity provider in between), projects in Neon Postgres, audio and
+note images in Vercel Blob. The browser talks to
 Vercel Functions in `/api`, which enforce all access control (owner-only
 data, unguessable-id share links, the one-editor-at-a-time lock).
 
@@ -32,9 +33,13 @@ or `vercel deploy --prod`.
   `api/projects/[id]/index.ts` (owner/link-editor rules + the edit lock),
   `api/projects/[id]/lock.ts` (claim/heartbeat/release),
   `api/blobs/*.ts` (uploads pinned to `users/{uid}/…`, 60 MB cap).
-- **Env vars** — provisioned by the Vercel integrations (Neon, Clerk, Blob);
-  `vercel env pull` refreshes `.env.local`. The client only ever sees
-  `VITE_CLERK_PUBLISHABLE_KEY`.
+- **Sign-in** — `api/auth/[action].ts` (OAuth 2.0 + PKCE straight to Google)
+  and `api/_lib/session.ts` (the signed, httpOnly session cookie). Accounts
+  live in the `users` table; `users.id` is what `owner_id` points at.
+- **Env vars** — provisioned by the Vercel integrations (Neon, Blob) plus the
+  Google OAuth client (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `AUTH_SECRET`); `vercel env pull` refreshes `.env.local`. Nothing auth-related
+  reaches the client bundle — the browser asks `GET /api/auth/me` who it is.
 
 ## How to use
 
@@ -57,8 +62,8 @@ src/
   types.ts                 Project / Annotation / PlayerHandle types
   App.tsx                  State + persistence orchestrator, sidebar, transport
   lib/
-    api.ts                 Fetch helper for /api (attaches the Clerk session token)
-    auth.tsx               Google sign-in via Clerk behind the app's useAuth()
+    api.ts                 Fetch helper for /api (the session rides as a cookie)
+    auth.tsx               Google sign-in behind the app's useAuth()
     youtube.ts             Parse video id from any YT URL + load the IFrame API
     format.ts              seconds -> "m:ss"
     image.ts               Downscale a pasted image to a small JPEG blob
@@ -82,7 +87,7 @@ src/
 
 **Persistence model**
 
-- **Vercel** backend, per user (Google sign-in via Clerk). The browser calls
+- **Vercel** backend, per user (Sign in with Google). The browser calls
   the `/api` Vercel Functions; they hold the only credentials to Neon/Blob.
 - Project metadata + note HTML → **Neon Postgres**, one row per project (notes
   inline in the `annotations` jsonb), saved debounced on change.

@@ -14,8 +14,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@clerk/backend": "^3.10.0",
-    "@clerk/clerk-react": "^5.61.8",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@neondatabase/serverless": "^1.1.0",
@@ -27,6 +25,7 @@
     "@vercel/blob": "^2.5.0",
     "@vercel/functions": "^3.7.5",
     "fflate": "^0.8.3",
+    "jose": "^6.2.12",
     "lucide-react": "^1.17.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",

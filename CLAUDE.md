@@ -24,10 +24,15 @@ still be shared **Anyone with the link** (the proxy holds no Drive
 credentials), the upstream URL needs `confirm=t` past ~100 MB, the proxy serves
 ~8 MB per request and only for ids a live project points at, and every play
 spends our own bandwidth. See `src/lib/drive.ts`. Vite + React 19 + TypeScript + Tailwind + TipTap +
-wavesurfer.js. Backed by Vercel: sign-in via Clerk's prebuilt card (Google *or*
-email + password, with verification and reset — themed from our tokens in
-`src/lib/clerkAppearance.ts`, which must hand Clerk hex: its JS color parser
-rejects the space-separated `rgb()` that `cssRgb` emits). Projects/notes in
+wavesurfer.js. Backed by Vercel: **Sign in with Google, and nothing else** —
+our own OAuth 2.0 + PKCE flow straight to Google (`api/auth/[action].ts`), with
+the session as an HS256 JWT in an httpOnly `SameSite=Lax` cookie
+(`api/_lib/session.ts`). There is no identity provider in front of it and no
+password anywhere: accounts are rows in the `users` table, and `users.id` is
+what every `owner_id` and Blob path points at. The client holds no auth
+config and cannot read the cookie — it asks `GET /api/auth/me` who it is —
+which is why `SameSite=Lax` is the CSRF defence and **no state-changing route
+in `/api` may ever be a GET**. Projects/notes in
 Neon Postgres (one row per project, notes inline in `annotations` jsonb),
 note images and uploaded scores in Vercel Blob
 (`users/{uid}/images/{projectId}/…` and `users/{uid}/scores/{projectId}/…` —
@@ -85,13 +90,13 @@ explicitly, never inferred from who is calling. `api/admin/projects.ts` lists
 live rows only.
 
 **Who the admin is: `ADMIN_EMAILS`**, a comma-separated allowlist checked
-server-side by `isAdmin` (`api/_lib/auth.ts`), by *email* so it survives the
-dev→production Clerk move that mints new uids. Unset means nobody, which is the
-right default for a role that can hard-delete other people's work. The console
+server-side by `isAdmin` (`api/_lib/auth.ts`), by *email* so it survives a
+change of uid — which has already earned its keep once, at the move off Clerk.
+Unset means nobody, which is the right default for a role that can hard-delete
+other people's work. The console
 (`?admin=1`) has two tabs, both 404 rather than 403 for everyone else:
 `api/admin/projects.ts` (every live project, guests included) and
-`api/admin/users.ts` (every Clerk account, with the project counts stitched on
-from Postgres — the only place the two stores are joined). Guests can never
+`api/admin/users.ts` (every account, with its project counts). Guests can never
 appear as users, so that endpoint reports them as a separate tally, and
 surfaces owner ids whose account is gone; both exist so the numbers on the two
 tabs reconcile instead of quietly disagreeing. **`ADMIN_EMAILS` is a
@@ -102,8 +107,9 @@ pull` will read it back (both answer `""`), so never treat an empty read as
 **The 12-function ceiling is gone — the team is on Pro (verified 2026-09-07),
 where "Functions Created per Deployment" is unlimited.** It bound us on Hobby,
 which is why restore/purge are query verbs on `[id]/index.ts` and the Drive byte
-proxy a query verb on `browse.ts` rather than routes of their own — and `/api`
-sits at 14 function files. Keep that shape where it reads well (the verbs
+proxy a query verb on `browse.ts` rather than routes of their own, and why
+sign-in is four actions dispatched off one `api/auth/[action].ts`. Keep that
+shape where it reads well (the verbs
 are genuinely about the same resource), but a new endpoint no longer *has* to be
 folded into an existing function. If this ever drops back to Hobby, the symptom
 returns as a `patchBuild` failure
@@ -196,10 +202,14 @@ in the address bar for the short form (`canonicalizeProjectParam`), which is
 why no redirect route was needed. Schema lives
 in `scripts/schema.sql` (apply with `node --env-file=.env.local
 scripts/apply-schema.mjs`). Config comes from the linked Vercel project:
-`vercel env pull` writes `.env.local` (client reads only
-`VITE_CLERK_PUBLISHABLE_KEY`; functions read `DATABASE_URL`,
-`CLERK_SECRET_KEY`, `BLOB_READ_WRITE_TOKEN`, and `REPLICATE_API_TOKEN` —
-the last powers AI song-section detection, `api/projects/[id]/analyze.ts`). Local dev with API:
+`vercel env pull` writes `.env.local` (the client bundle reads **nothing**;
+functions read `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`AUTH_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `REPLICATE_API_TOKEN` — the last
+powers AI song-section detection, `api/projects/[id]/analyze.ts`). The Google
+OAuth client is the one thing Vercel doesn't provision: it lives in Google
+Cloud console, and its registered redirect URI must match
+`{origin}/api/auth/callback` byte for byte (`AUTH_ORIGIN` overrides the origin
+when a deployment is reached on a hostname Google doesn't know). Local dev with API:
 `npm run dev:full` (vercel dev); UI-only: `npm run dev`.
 
 **Notes can take over the picture** (`src/lib/overlays.ts`,

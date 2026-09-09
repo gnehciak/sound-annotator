@@ -28,7 +28,7 @@ const when = (t: number | null) => (t ? new Date(t).toLocaleDateString() : '—'
  * Every account that has ever signed in, with how much of the library each
  * one owns.
  *
- * Accounts live in Clerk and projects live in Postgres, so this is the only
+ * Accounts and projects live in the same Postgres now, so this is the only
  * screen where the two are put side by side. Students never appear here: a
  * guest has no account, so their work is summarised as a tally underneath
  * rather than being silently dropped — otherwise the totals here would

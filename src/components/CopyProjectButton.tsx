@@ -8,7 +8,7 @@ import type { Project } from '../types'
  * "Make a copy" on the read-only share viewer: clones the shared project into
  * the visitor's own account (signing them in with Google first if needed),
  * then redirects into the full app, where the fresh copy opens. Sign-in is a
- * full-page redirect through Clerk, so the button plants `?copy=1` in the
+ * full-page redirect out to Google, so the button plants `?copy=1` in the
  * return URL and finishes the copy automatically once the visitor lands back
  * signed in.
  */
@@ -28,8 +28,8 @@ export default function CopyProjectButton({ project }: { project: Project }) {
         setLabel('Signing in…')
         const url = new URL(window.location.href)
         url.searchParams.set('copy', '1')
-        // Redirects away; Clerk brings the visitor back to `url` signed in,
-        // where the ?copy=1 effect below picks the copy back up.
+        // Redirects away; /api/auth/callback brings the visitor back to `url`
+        // signed in, where the ?copy=1 effect below picks the copy back up.
         await signInWithGoogleTo(url)
         return
       }

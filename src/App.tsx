@@ -819,7 +819,7 @@ export default function App() {
     hydratedRef.current = false
 
     // A guest owns exactly one project and has no library to list (GET
-    // /api/projects is Clerk-only by design — a guest owner id is not a
+    // /api/projects is account-only by design — a guest owner id is not a
     // secret, so it must never be a key to anything). Their project comes
     // straight off the URL, and they land in it rather than on a home screen
     // that would be empty by construction.

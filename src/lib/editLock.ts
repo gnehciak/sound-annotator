@@ -16,7 +16,7 @@
 // papers over. Lock-only writes are last-write-wins by design — a take-over
 // simply claims, and the loser's next poll flips its UI to read-only.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, ApiError, lastToken } from './api'
+import { api, ApiError } from './api'
 import { toProject } from './projectStore'
 import type { AppUser } from './auth'
 import type { Project } from '../types'
@@ -218,17 +218,15 @@ export function useEditLock(opts: {
     }, HEARTBEAT_MS)
 
     // Best-effort release when the tab goes away; the TTL covers crashes.
-    // Fired from pagehide, so it can't await a token — it rides the last one
-    // lib/api.ts saw (keepalive lets the request outlive the page).
+    // Fired from pagehide, so it can't await anything — but it doesn't need
+    // to: the session is a cookie, which the browser attaches itself, and
+    // keepalive lets the request outlive the page.
     const release = () => {
       if (stateRef.current !== 'mine') return
       void fetch(lockUrl, {
         method: 'POST',
         keepalive: true,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(lastToken ? { Authorization: `Bearer ${lastToken}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'release', sessionId: me.sessionId }),
       }).catch(() => {})
     }

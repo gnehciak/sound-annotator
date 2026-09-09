@@ -5,7 +5,7 @@
 //
 // Two kinds of caller reach this route, and they are authorized differently:
 //
-//   • a signed-in teacher, resolved from their Clerk session, who may write
+//   • a signed-in teacher, resolved from their session cookie, who may write
 //     note images, a PDF score (users/{uid}/scores/{projectId}), and the
 //     ephemeral analysis audio AI section detection runs against
 //     (users/{uid}/analysis/{projectId} — deleted server-side once the
@@ -16,10 +16,11 @@
 //     guest reaches a score by linking one in Drive, never by uploading.
 //
 // A guest's key can't ride in a header — @vercel/blob/client requests its
-// token with its own fetch and carries no custom headers (which is also why
-// the Clerk half reads the same-origin session cookie). So the key arrives in
-// `clientPayload`, the one channel the SDK does hand through, and is verified
-// here against the row's stored hash exactly as api/projects/[id] does it.
+// token with its own fetch and carries no custom headers (which is why the
+// signed-in half rides the same-origin session cookie instead). So the key
+// arrives in `clientPayload`, the one channel the SDK does hand through, and
+// is verified here against the row's stored hash exactly as
+// api/projects/[id] does it.
 //
 // A track's *listening* audio is a link the user pastes, not bytes we host
 // (see src/components/AudioUrlForm) — the legacy users/{uid}/audio/ objects

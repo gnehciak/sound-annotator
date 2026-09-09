@@ -79,6 +79,35 @@ CREATE TABLE IF NOT EXISTS folders (
 
 CREATE INDEX IF NOT EXISTS folders_owner_idx ON folders (owner_id);
 
+-- Accounts. Sound Annotator does its own Google sign-in (api/auth/[action].ts),
+-- so this table is the user directory that Clerk used to be — which is also
+-- what lets api/admin/users.ts answer from one store instead of stitching two.
+--
+-- `id` is the whole point of this table's shape. It is NOT a fresh key: for the
+-- four accounts that predate first-party auth it is the *Clerk* `user_…` id,
+-- seeded verbatim by scripts/migrate-clerk-users.mjs. That id is written into
+-- every projects.owner_id, every folders.owner_id, and every Blob path
+-- (users/{owner_id}/images/{projectId}/…), so minting new ids at the cutover
+-- would have orphaned 31 projects and stranded their images. Sign-in resolves a
+-- Google identity back to this id — by `google_sub` first, then by verified
+-- email — rather than the other way round. Accounts created since get a short
+-- id from api/_lib/ids.ts. Nothing parses either form; ids stay opaque.
+CREATE TABLE IF NOT EXISTS users (
+  id              text PRIMARY KEY,
+  -- Google's stable subject claim. The real join key: an address can change
+  -- hands, `sub` cannot. NULL only on a seeded row nobody has signed into yet.
+  google_sub      text UNIQUE,
+  email           text NOT NULL,
+  name            text,
+  image_url       text,
+  created_at      bigint NOT NULL DEFAULT 0,
+  last_sign_in_at bigint
+);
+
+-- Email is the fallback match at sign-in and the key ADMIN_EMAILS is checked
+-- against, both case-insensitively — so uniqueness has to be too.
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users (lower(email));
+
 -- Per-person sharing: who, besides the owner, may open a project and with what
 -- power. Keyed by EMAIL rather than uid, for the same reason ADMIN_EMAILS is —
 -- an invite is written before the person has necessarily signed in (and it

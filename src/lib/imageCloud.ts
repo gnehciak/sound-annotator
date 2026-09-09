@@ -1,7 +1,7 @@
 // Note images in Vercel Blob, one object per inserted image under the owner's
 // path:  users/{uid}/images/{projectId}/{imageId}.{ext}
 //
-// `uid` is whatever owns the project — a Clerk `user_…` id, or a guest's
+// `uid` is whatever owns the project — an account's `users.id`, or a guest's
 // synthetic `guest:<uuid>`. Guests upload too (their key authorizes it, see
 // uploadNoteImage below), and keeping them in the same shape means the
 // existing per-project teardown sweeps collect their images for free.
@@ -44,7 +44,7 @@ export async function uploadNoteImage(
       handleUploadUrl: '/api/blobs/upload',
       contentType: blob.type || 'image/jpeg',
       onUploadProgress: ({ percentage }) => onProgress?.(percentage / 100),
-      // A signed-in upload authenticates with the Clerk session cookie the
+      // A signed-in upload authenticates with the session cookie the
       // SDK's token request carries anyway. A guest has no session, so their
       // capability key rides here instead — `clientPayload` is the only
       // channel @vercel/blob/client hands to the token route, which verifies

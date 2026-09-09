@@ -69,7 +69,7 @@ export async function GET(request: Request): Promise<Response> {
   const uid = await getUid(request)
 
   // Signed out: the link is the whole story, and nothing below can apply — so
-  // a class of students costs neither a Clerk lookup nor a shares query.
+  // a class of students costs neither an account lookup nor a shares query.
   if (!uid) {
     if (!trashed && (row.shared || row.editable_by_link || row.published))
       return json(rowToProject(row, { withLock: true }))
@@ -108,7 +108,7 @@ interface Claim {
 }
 
 function claimFrom(body: Record<string, unknown>, uid: string): LockValue | null {
-  // `uid` is the caller's principal: a Clerk uid, or a guest project's
+  // `uid` is the caller's principal: an account uid, or a guest project's
   // synthetic `guest:<uuid>` owner. Either way it's server-supplied.
   const c = body.lock as Claim | null | undefined
   if (!c || typeof c.sessionId !== 'string') return null
@@ -177,7 +177,7 @@ export async function PUT(request: Request): Promise<Response> {
     return json({ ok: true })
   }
 
-  // Update. Resolve the caller to a principal: a Clerk uid, or the guest who
+  // Update. Resolve the caller to a principal: an account uid, or the guest who
   // holds this row's key. Anyone else is a stranger.
   const guestKey = uid ? null : guestKeyFrom(request)
   const isGuest =
@@ -262,7 +262,7 @@ export async function PUT(request: Request): Promise<Response> {
   const lock = stamped ?? existing.lock
 
   // Publishing (owner only). Flipping on stamps the byline + timestamp — the
-  // Clerk lookup runs only on that transition, not on every save. Flipping
+  // name lookup runs only on that transition, not on every save. Flipping
   // off delists immediately; the stale byline is harmless and invisible.
   // Listing on Browse is a property of the view-only link, not a second gate:
   // the gallery card opens the same ?view= URL. So the two flags are coerced

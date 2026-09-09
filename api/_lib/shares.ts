@@ -33,8 +33,8 @@ export interface ShareRow {
 export function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const e = raw.trim().toLowerCase()
-  // Deliberately loose: this is a lookup key we compare against Clerk's own
-  // verified address, never something we deliver mail to, so the only real
+  // Deliberately loose: this is a lookup key we compare against the verified
+  // address Google gave us, never something we deliver mail to, so the only real
   // requirement is that it can't be blank or a whole list smuggled into one
   // field. Rejecting valid-but-unusual addresses would lock people out for
   // the sake of a regex.
