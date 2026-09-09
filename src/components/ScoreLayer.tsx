@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  BringToFront,
   ChevronLeft,
   ChevronRight,
+  Copy,
   ListMusic,
   Loader2,
   MapPin,
   Maximize2,
   Minimize2,
+  SendToBack,
   Trash2,
   TriangleAlert,
   ZoomIn,
@@ -15,7 +18,7 @@ import {
 } from 'lucide-react'
 import type { Annotation, NoteQuote, ProjectScore, ScoreMark, ScoreTurn } from '../types'
 import PinLayer from './PinLayer'
-import QuoteFrame from './QuoteFrame'
+import QuoteFrame, { QuoteDrawSurface } from './QuoteFrame'
 import ScoreMarks, { type MarkStyle, type MarkTool } from './ScoreMarks'
 import ScoreSurface from './ScoreSurface'
 import ScoreToolbar from './ScoreToolbar'
@@ -31,9 +34,12 @@ import {
   ZOOM_STEP,
   clampZoom,
   addTurn,
+  duplicateMark,
+  lowerMark,
   markAt,
   marksOnPage,
   pageAt,
+  raiseMark,
   removeMark,
   scoreBytesUrl,
   upsertMark,
@@ -90,10 +96,17 @@ export default function ScoreLayer({
   readOnly,
   onMovePin,
   onQuote,
+  onQuoteDraw,
+  onCancelQuoteDraw,
+  drawingQuote = false,
   onPlayNote,
   onPageChange,
   onMarks,
   canDraw = false,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: {
   score: ProjectScore
   view: ScoreView
@@ -138,6 +151,18 @@ export default function ScoreLayer({
    */
   onQuote?: (id: string, index: number, quote: NoteQuote) => void
   /**
+   * A quote drawn on the page: the rectangle and which page it was drawn on.
+   * The host knows which note is being quoted and whether to disarm after.
+   */
+  onQuoteDraw?: (quote: NoteQuote) => void
+  /** Put the quote key down without drawing anything — what Escape means here. */
+  onCancelQuoteDraw?: () => void
+  /**
+   * Whether the quote key is armed — the reader is about to draw a rectangle,
+   * so the pages take the pointer under a crosshair and nothing else does.
+   */
+  drawingQuote?: boolean
+  /**
    * Play the track from a note's start — what a press on its quote does. A
    * quote is a region of the music, so pressing it asks to hear that music;
    * the host decides what "play from here" means, since it owns the transport.
@@ -149,6 +174,15 @@ export default function ScoreLayer({
   onMarks?: (marks: ScoreMark[]) => void
   /** Whether to offer the drawing tools at all (pane and expanded only). */
   canDraw?: boolean
+  /**
+   * The app's undo, offered in the drawing tools. Full screen this layer is a
+   * portal over everything, so the header's own buttons are out of reach at
+   * exactly the moment the reader is drawing.
+   */
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
 }) {
   const pdf = useScorePdf(score, reloadKey)
   const [rawPage, setPage] = useState(1)
@@ -265,7 +299,10 @@ export default function ScoreLayer({
   //
   // Derived, so the reader's tool is still in their hand when they come back
   // from the expanded view, which an effect that cleared it would have lost.
-  const activeTool: MarkTool = drawable ? tool : null
+  // Drawing a quote and holding a pen are the same pointer, so arming one puts
+  // the other down: two surfaces both claiming every press over the page is a
+  // gesture nobody can predict the meaning of.
+  const activeTool: MarkTool = drawable && !drawingQuote ? tool : null
   // A selection survives scrolling now — several pages are on screen at once,
   // so "still visible" is no longer the same question as "still on this page".
   // It only has to still exist.
@@ -284,6 +321,37 @@ export default function ScoreLayer({
     setSelectedMark(null)
   }, [onMarks, score.marks, activeMark])
 
+  /**
+   * The pen's colour and weight — and the selected mark's, when there is one.
+   * Picking a colour with something selected means "make *that* this colour":
+   * the alternative is deleting a mark and drawing it again to change its
+   * mind, which is the thing a selection is supposed to save you.
+   */
+  const restyle = useCallback(
+    (next: MarkStyle) => {
+      setMarkStyle(next)
+      const mark = (score.marks ?? []).find((m) => m.id === activeMark)
+      if (mark && onMarks)
+        onMarks(upsertMark(score.marks, { ...mark, color: next.color, weight: next.weight }))
+    },
+    [activeMark, onMarks, score.marks],
+  )
+  const raiseSelected = useCallback(() => {
+    if (activeMark) onMarks?.(raiseMark(score.marks, activeMark))
+  }, [activeMark, onMarks, score.marks])
+  const lowerSelected = useCallback(() => {
+    if (activeMark) onMarks?.(lowerMark(score.marks, activeMark))
+  }, [activeMark, onMarks, score.marks])
+  const duplicateSelected = useCallback(() => {
+    if (!activeMark) return
+    const made = duplicateMark(score.marks, activeMark)
+    if (!made) return
+    onMarks?.(made.marks)
+    // Select the copy, not the original: the copy is the one you are about to
+    // move, and it is sitting directly on top of what it was made from.
+    setSelectedMark(made.id)
+  }, [activeMark, onMarks, score.marks])
+
   // Expanded, the score owns Escape and the page keys; with a tool armed it
   // owns Escape and Delete wherever it is. Capture + preventDefault rather
   // than a bubble listener: the app's global hotkeys sit on window too, and
@@ -296,7 +364,7 @@ export default function ScoreLayer({
   // pane and "back one page" over the same score is a key nobody can trust.
   // Pages have PageUp/PageDown and the ‹ › buttons; the music has the arrows.
   useEffect(() => {
-    if (!expanded && !drawable) return
+    if (!expanded && !drawable && !drawingQuote) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       // The same exemption useHotkeys makes, and for the same reason: the sync
@@ -306,8 +374,10 @@ export default function ScoreLayer({
       if (e.key === 'Escape') {
         // Putting the pen down first: with a tool armed that is what Escape
         // most obviously undoes, and leaving the score entirely while still
-        // holding a highlighter is rarely what was meant.
-        if (activeTool !== null) {
+        // holding a highlighter is rarely what was meant. An armed quote key
+        // is the same thing one rung further in, so it goes first.
+        if (drawingQuote) onCancelQuoteDraw?.()
+        else if (activeTool !== null) {
           setTool(null)
           setSelectedMark(null)
         } else if (syncing) onSyncing?.(false)
@@ -326,7 +396,18 @@ export default function ScoreLayer({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [expanded, drawable, step, syncing, onSyncing, activeTool, activeMark, deleteMark])
+  }, [
+    expanded,
+    drawable,
+    drawingQuote,
+    onCancelQuoteDraw,
+    step,
+    syncing,
+    onSyncing,
+    activeTool,
+    activeMark,
+    deleteMark,
+  ])
 
   // ---- the page's context menu -------------------------------------------
   // Which page, and where on it, is answered by the pin drop-box registry
@@ -379,14 +460,42 @@ export default function ScoreLayer({
   const menuItems: ContextMenuItem[] = []
   if (menuOn) {
     const on = menuOn
+    // Everything that can be done to a mark, where the pointer already is —
+    // the toolbar's verbs need the mark selected first, and the reader who
+    // right-clicked one has already said which they mean.
     if (onMarks && menuMark) {
-      menuItems.push({
-        key: 'delete-mark',
-        label: 'Delete this mark',
-        icon: Trash2,
-        danger: true,
-        onSelect: () => onMarks(removeMark(score.marks, menuMark.id)),
-      })
+      menuItems.push(
+        {
+          key: 'raise-mark',
+          label: 'Bring to front',
+          icon: BringToFront,
+          onSelect: () => onMarks(raiseMark(score.marks, menuMark.id)),
+        },
+        {
+          key: 'lower-mark',
+          label: 'Send to back',
+          icon: SendToBack,
+          onSelect: () => onMarks(lowerMark(score.marks, menuMark.id)),
+        },
+        {
+          key: 'duplicate-mark',
+          label: 'Duplicate',
+          icon: Copy,
+          onSelect: () => {
+            const made = duplicateMark(score.marks, menuMark.id)
+            if (!made) return
+            onMarks(made.marks)
+            setSelectedMark(made.id)
+          },
+        },
+        {
+          key: 'delete-mark',
+          label: 'Delete this mark',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => onMarks(removeMark(score.marks, menuMark.id)),
+        },
+      )
     }
     if (onMovePin && !readOnly) {
       menuItems.push({
@@ -508,6 +617,15 @@ export default function ScoreLayer({
           onSelect={setSelectedMark}
           onCommit={commitMark}
         />
+        {/* Drawing a new quote: the page takes the pointer under a crosshair
+            until a rectangle is drawn or Escape puts the key down. Over the
+            frames and the marks, since it is the only thing being aimed. */}
+        {drawingQuote && selectedNote && onQuoteDraw && (
+          <QuoteDrawSurface
+            color={selectedNote.color ?? colorForId(selectedNote.id)}
+            onDraw={(rect) => onQuoteDraw({ on: 'score', page: n, ...rect })}
+          />
+        )}
         {quotesOnPage(n).map(({ note, quote, index }) => (
           <QuoteFrame
             key={`${note.id}:${index}`}
@@ -543,6 +661,9 @@ export default function ScoreLayer({
       pinsOnPage,
       quotesOnPage,
       selectedId,
+      selectedNote,
+      drawingQuote,
+      onQuoteDraw,
       readOnly,
       onMovePin,
       onQuote,
@@ -594,7 +715,27 @@ export default function ScoreLayer({
     />
   )
 
-  const toolbar = drawable ? (
+  /**
+   * While the quote key is armed the tools step aside for one line of
+   * instruction. Two toolbars claiming the same pointer would be a puzzle, and
+   * the crosshair on the page needs the one thing the cursor can't say: that
+   * this ends when you have drawn something, or when you press Escape.
+   */
+  const quoteHint =
+    drawingQuote && reading ? (
+      <div
+        className={`pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3 ${
+          footTransport ? 'bottom-16' : 'bottom-3'
+        }`}
+      >
+        <span className="glass-pop rounded-xl px-3 py-2 text-[12px] text-fg-strong">
+          Drag on the page to quote that region
+          <span className="ml-2 text-muted">Esc to cancel</span>
+        </span>
+      </div>
+    ) : null
+
+  const toolbar = drawingQuote ? null : drawable ? (
     <div
       // Floating, unlike the two strips that bracket the view: the tools are
       // the thing in your hand, not the panel's furniture, so the pill is only
@@ -611,9 +752,16 @@ export default function ScoreLayer({
         tool={activeTool}
         onTool={setTool}
         style={markStyle}
-        onStyle={setMarkStyle}
+        onStyle={restyle}
         canDelete={!!activeMark}
         onDelete={deleteMark}
+        onDuplicate={duplicateSelected}
+        onRaise={raiseSelected}
+        onLower={lowerSelected}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={onUndo}
+        onRedo={onRedo}
       />
     </div>
   ) : null
@@ -628,6 +776,7 @@ export default function ScoreLayer({
           {surface}
           {chrome}
           {toolbar}
+          {quoteHint}
           {pageMenu}
           {/* Full screen is the score with more room, not a stripped-down
               version of it: the tools, the pins and the transport all come
@@ -668,6 +817,7 @@ export default function ScoreLayer({
         {surface}
         {chrome}
         {toolbar}
+        {quoteHint}
         {pageMenu}
         {/* Its own transport, pinned to the foot of this panel. The view
             covers the player, floating transport and all, and a score you

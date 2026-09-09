@@ -1,11 +1,16 @@
 import {
   ArrowUpRight,
+  BringToFront,
   Circle,
+  Copy,
   Highlighter,
   MousePointer2,
   PenLine,
+  Redo2,
+  SendToBack,
   Square,
   Trash2,
+  Undo2,
 } from 'lucide-react'
 import type { ScoreMarkKind } from '../types'
 import { MARK_COLORS } from '../lib/score'
@@ -50,16 +55,39 @@ export default function ScoreToolbar({
   onStyle,
   canDelete,
   onDelete,
+  onDuplicate,
+  onRaise,
+  onLower,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: {
   tool: MarkTool
   onTool: (tool: MarkTool) => void
   style: MarkStyle
   onStyle: (style: MarkStyle) => void
-  /** A mark is selected and can be removed. */
+  /** A mark is selected: the verbs below act on it, and the colours restyle it. */
   canDelete: boolean
   onDelete: () => void
+  onDuplicate: () => void
+  /** Order is z-order — see `raiseMark` / `lowerMark` in lib/score. */
+  onRaise: () => void
+  onLower: () => void
+  /**
+   * The app's own undo, offered here as well as on ⌘Z.
+   *
+   * Full screen there is no other undo in sight — the header that carries one
+   * is behind the portal — and drawing is the one thing in this app where the
+   * next gesture is routinely "no, not like that".
+   */
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
 }) {
   const drawing = tool !== null && tool !== 'select'
+  const history = !!onUndo || !!onRedo
   return (
     <div className="flex justify-center px-3">
       <div className="glass-pop pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1 rounded-xl px-1.5 py-1.5">
@@ -134,9 +162,21 @@ export default function ScoreToolbar({
           </>
         )}
 
+        {/* What can be done to the mark in hand. Only while one is selected:
+            three verbs that always mean nothing are three things to read past
+            every time you pick up a highlighter. */}
         {canDelete && (
           <>
             <span className="mx-0.5 h-5 w-px shrink-0 bg-line/70" />
+            <ToolButton active={false} label="Bring to front" onClick={onRaise}>
+              <BringToFront size={14} />
+            </ToolButton>
+            <ToolButton active={false} label="Send to back" onClick={onLower}>
+              <SendToBack size={14} />
+            </ToolButton>
+            <ToolButton active={false} label="Duplicate" onClick={onDuplicate}>
+              <Copy size={14} />
+            </ToolButton>
             <button
               type="button"
               onClick={onDelete}
@@ -148,6 +188,28 @@ export default function ScoreToolbar({
             </button>
           </>
         )}
+
+        {history && (
+          <>
+            <span className="mx-0.5 h-5 w-px shrink-0 bg-line/70" />
+            <ToolButton
+              active={false}
+              label="Undo (⌘Z)"
+              disabled={!canUndo}
+              onClick={() => onUndo?.()}
+            >
+              <Undo2 size={14} />
+            </ToolButton>
+            <ToolButton
+              active={false}
+              label="Redo (⇧⌘Z)"
+              disabled={!canRedo}
+              onClick={() => onRedo?.()}
+            >
+              <Redo2 size={14} />
+            </ToolButton>
+          </>
+        )}
       </div>
     </div>
   )
@@ -157,21 +219,24 @@ function ToolButton({
   active,
   label,
   onClick,
+  disabled,
   children,
 }: {
   active: boolean
   label: string
   onClick: () => void
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
       aria-pressed={active}
-      className={`btn-icon press h-7 w-7 ${
+      className={`btn-icon press h-7 w-7 disabled:pointer-events-none disabled:opacity-35 ${
         active ? 'bg-accent text-accentink' : 'text-muted hover:text-fg-strong'
       }`}
     >

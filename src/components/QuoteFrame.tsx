@@ -262,3 +262,107 @@ export default function QuoteFrame({
     </div>
   )
 }
+
+/**
+ * The surface that **draws** a new quote: armed from the inspector's quote
+ * key, laid over one page of the score, and cursor-crosshair the whole time it
+ * is up.
+ *
+ * Drawing the rectangle beats dropping a default one and resizing it, for the
+ * reason every graphics program agrees on: the gesture that says *which bars*
+ * is the same gesture that says *where* and *how big*, and splitting it into a
+ * drop and two corner drags makes the reader do three things to say one.
+ *
+ * Kept beside QuoteFrame because the two are the same object at two moments —
+ * the rectangle being made, and the rectangle made — and they have to agree
+ * about what a quote's numbers mean.
+ */
+export function QuoteDrawSurface({
+  color,
+  onDraw,
+}: {
+  /** The note's hue: what is being drawn belongs to it, like its frame. */
+  color: string
+  /** A finished rectangle, in fractions of this page. Null while too small. */
+  onDraw: (quote: { x: number; y: number; w: number; h: number }) => void
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(
+    null,
+  )
+  const from = useRef<{ x: number; y: number } | null>(null)
+  const hue = hueText(color, 'light')
+
+  const at = (e: ReactPointerEvent) => {
+    const box = boxRef.current?.getBoundingClientRect()
+    if (!box || box.width === 0 || box.height === 0) return null
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - box.top) / box.height)),
+    }
+  }
+
+  const begin = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return
+    const p = at(e)
+    if (!p) return
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* the drag still tracks while the pointer is over the page */
+    }
+    from.current = p
+    setRect({ ...p, w: 0, h: 0 })
+  }
+
+  const move = (e: ReactPointerEvent) => {
+    const start = from.current
+    if (!start) return
+    const p = at(e)
+    if (!p) return
+    setRect({
+      x: Math.min(start.x, p.x),
+      y: Math.min(start.y, p.y),
+      w: Math.abs(p.x - start.x),
+      h: Math.abs(p.y - start.y),
+    })
+  }
+
+  const end = () => {
+    const drawn = rect
+    from.current = null
+    setRect(null)
+    // A click rather than a drag: nothing is drawn, and the surface stays
+    // armed. Committing a speck here would leave a quote of six pixels of
+    // paper somewhere the reader would have to hunt for to remove.
+    if (!drawn || drawn.w < MIN_QUOTE || drawn.h < MIN_QUOTE) return
+    onDraw(clampQuote({ on: 'score', ...drawn }))
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      onPointerDown={begin}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      className="pointer-events-auto absolute inset-0 z-10 cursor-crosshair touch-none"
+    >
+      {rect && (
+        <div
+          style={{
+            left: `${rect.x * 100}%`,
+            top: `${rect.y * 100}%`,
+            width: `${rect.w * 100}%`,
+            height: `${rect.h * 100}%`,
+            boxShadow: `inset 0 0 0 1.5px ${hue}`,
+            background: `${hue}14`,
+          }}
+          className="absolute rounded-[3px]"
+        />
+      )}
+    </div>
+  )
+}

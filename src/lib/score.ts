@@ -26,6 +26,7 @@ import type {
   ScoreTurn,
 } from '../types'
 import { driveViewUrl, looksLikeDriveLink, parseDriveFileId } from './drive'
+import { newId } from './ids'
 
 /**
  * Ceiling for an uploaded score, matched by the upload token server-side. A
@@ -226,6 +227,44 @@ export function upsertMark(
   return list.map((m, i) => (i === at ? mark : m))
 }
 
+/**
+ * Order **is** z-order: later in the list is nearer the reader, which is why a
+ * new mark is appended and why `markAt` walks backwards. These two are how a
+ * reader says so — a highlight drawn last over an arrow, or an arrow that has
+ * ended up under the wash it was meant to point at.
+ */
+export function raiseMark(marks: ScoreMark[] | undefined, id: string): ScoreMark[] {
+  const list = marks ?? []
+  const mark = list.find((m) => m.id === id)
+  return mark ? [...list.filter((m) => m.id !== id), mark] : list
+}
+
+export function lowerMark(marks: ScoreMark[] | undefined, id: string): ScoreMark[] {
+  const list = marks ?? []
+  const mark = list.find((m) => m.id === id)
+  return mark ? [mark, ...list.filter((m) => m.id !== id)] : list
+}
+
+/**
+ * Copy a mark, offset a little so the copy is visibly *a copy* rather than
+ * something that looks like nothing happened, and put it on top — which is
+ * where the thing you just made belongs. Returns the new list and the new id,
+ * since the caller wants to select what it just made.
+ */
+export function duplicateMark(
+  marks: ScoreMark[] | undefined,
+  id: string,
+): { marks: ScoreMark[]; id: string } | null {
+  const list = marks ?? []
+  const mark = list.find((m) => m.id === id)
+  if (!mark) return null
+  const copy = { ...moveMark(mark, DUPLICATE_OFFSET, DUPLICATE_OFFSET), id: newId() }
+  return { marks: [...list, copy], id: copy.id }
+}
+
+/** How far a duplicate sits from its original, as a fraction of the page. */
+const DUPLICATE_OFFSET = 0.02
+
 /** Drop one mark by id. */
 export function removeMark(
   marks: ScoreMark[] | undefined,
@@ -274,6 +313,74 @@ export function markAt(
   }
   return null
 }
+
+// ---- resizing --------------------------------------------------------------
+// A mark drawn a little too small is the ordinary case, and the only way to
+// fix one used to be to delete it and draw it again. These are the grips the
+// selected mark wears, in page fractions like everything else.
+
+/** Which grip is being dragged. Arrows have ends rather than corners. */
+export type MarkHandle = 'nw' | 'ne' | 'sw' | 'se' | 'tail' | 'head'
+
+/**
+ * The grips a mark offers, as page fractions.
+ *
+ * An arrow's are its two ends, because an arrow *is* a tail and a head — a
+ * corner grip on one would let you drag a box round it that means nothing.
+ * Freehand ink offers none: scaling a stroke would rewrite every one of its
+ * points, and a hand-drawn line redrawn is quicker than a hand-drawn line
+ * stretched.
+ */
+export function handlesOf(mark: ScoreMark): { id: MarkHandle; x: number; y: number }[] {
+  if (mark.kind === 'ink') return []
+  if (mark.kind === 'arrow')
+    return [
+      { id: 'tail', x: mark.x, y: mark.y },
+      { id: 'head', x: mark.x + mark.w, y: mark.y + mark.h },
+    ]
+  const [x0, x1] = [Math.min(mark.x, mark.x + mark.w), Math.max(mark.x, mark.x + mark.w)]
+  const [y0, y1] = [Math.min(mark.y, mark.y + mark.h), Math.max(mark.y, mark.y + mark.h)]
+  return [
+    { id: 'nw', x: x0, y: y0 },
+    { id: 'ne', x: x1, y: y0 },
+    { id: 'sw', x: x0, y: y1 },
+    { id: 'se', x: x1, y: y1 },
+  ]
+}
+
+/**
+ * The mark with one grip dragged to (x, y). The opposite corner stays put, so
+ * the two edges the pointer isn't touching don't move — the same rule the
+ * score quote's frame obeys, and the one people expect from every handle they
+ * have ever dragged.
+ */
+export function resizeMark(
+  mark: ScoreMark,
+  handle: MarkHandle,
+  x: number,
+  y: number,
+): ScoreMark {
+  if (handle === 'tail') return { ...mark, x, y, w: mark.x + mark.w - x, h: mark.y + mark.h - y }
+  if (handle === 'head') return { ...mark, w: x - mark.x, h: y - mark.y }
+  const x0 = Math.min(mark.x, mark.x + mark.w)
+  const x1 = Math.max(mark.x, mark.x + mark.w)
+  const y0 = Math.min(mark.y, mark.y + mark.h)
+  const y1 = Math.max(mark.y, mark.y + mark.h)
+  const left = handle === 'nw' || handle === 'sw' ? x : x0
+  const right = handle === 'ne' || handle === 'se' ? x : x1
+  const top = handle === 'nw' || handle === 'ne' ? y : y0
+  const bottom = handle === 'sw' || handle === 'se' ? y : y1
+  return {
+    ...mark,
+    x: Math.min(left, right),
+    y: Math.min(top, bottom),
+    w: Math.abs(right - left),
+    h: Math.abs(bottom - top),
+  }
+}
+
+/** How small a resized mark may get, as a fraction of the page. */
+export const MIN_MARK = 0.006
 
 /**
  * The bounding box of a freehand stroke. Stored on the mark so hit-testing and

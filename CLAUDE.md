@@ -382,6 +382,17 @@ up. Fractions of the page, like everything else aimed at one, and placed by the
 same gesture as the pin: a third key in the inspector row, dragged onto the
 page being quoted, then resized in place by its corners.
 
+**A quote is drawn, not dropped** (`QuoteDrawSurface`). Pressing the key arms a
+crosshair over the score — the key itself becomes one — and the next drag on a
+page *is* the rectangle. One gesture says which bars, where and how big;
+dropping a default-sized rectangle to be resized afterwards made the reader say
+the same thing three times. Arming takes the column to the score view, since a
+crosshair over the player is a promise the column can't keep, and it puts the
+pen down: two surfaces both claiming every press over the page is a gesture
+nobody can predict. Escape cancels, the tools step aside for the one line the
+cursor can't say, and dragging the key onto a page still drops one where it
+lands — the fast path for a rectangle you mean to nudge anyway.
+
 **A note carries several, as a gallery** — `overlay.quotes`, in the order they
 were placed, capped at `MAX_QUOTES` (8) and free to sit on different pages. A
 passage is often two places at once (the figure and the answer to it; the voice
@@ -875,6 +886,35 @@ meant to be a turn), and the surface is `pointer-events: none` with no tool
 armed so the page scrolls and pins still catch their own drags. Which tool is
 in your hand is *session* state, never saved: opening someone's shared score
 must not hand you their highlighter.
+
+**A mark can be edited, not only made and unmade.** The selected one wears
+**grips** (`handlesOf` / `resizeMark`, hit-tested in pixels per axis so the
+tolerance is the same either way on any page shape) — four corners, or an
+arrow's two ends, since an arrow *is* a tail and a head and a box round one
+would mean nothing. Ink offers none: scaling a stroke rewrites every point, and
+a hand-drawn line is quicker redrawn than stretched. The grips are tested
+*before* the mark, or every resize would be swallowed as a move. Picking a
+colour with a mark selected **restyles that mark** rather than only loading the
+pen, and the toolbar carries the three verbs a drawing needs — duplicate, and
+the two that rewrite z-order. A finished stroke stays *selected* with the pen
+still in your hand: the shape you have this second is the one most likely to be
+recoloured or taken off again.
+
+**Order is z-order** — later in the list is nearer the reader, which is what
+`markAt` walks backwards through and what `raiseMark` / `lowerMark` rewrite. The
+same verbs are on a mark's right-click menu, where the pointer has already said
+which mark it means.
+
+**Drawing is undoable.** It wasn't: marks and page turns went through
+`patchProjectSettings`, App's *raw* setter, so a page of highlighter was the one
+thing in the app ⌘Z could not touch. They go through `commitProjectSettings`
+now — the same primitive the notes use, one step per mark (each is committed
+once, on release) and coalesced for the turns, where a held key walks one along
+the clock. Display state stays raw and deliberately outside history: a ⌘Z after
+switching the column to the score should not put the player back. The tools
+carry Undo/Redo buttons of their own, because full screen this layer is a portal
+over everything and the header's buttons are out of reach at exactly the moment
+someone is drawing.
 
 **Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
 clip time — the same clock the notes use, so App's `setClip` shifts it along

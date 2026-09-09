@@ -87,7 +87,13 @@ import {
 import { useMediaQuery } from './lib/useMediaQuery'
 import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
-import { coverUrls, movePinPatch, patchOverlay, withQuoteAt } from './lib/overlays'
+import {
+  coverUrls,
+  movePinPatch,
+  patchOverlay,
+  withQuoteAdded,
+  withQuoteAt,
+} from './lib/overlays'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Eye,
@@ -537,6 +543,36 @@ export default function App() {
     },
     [canEditSettings, current, setProjects],
   )
+  /**
+   * The undoable half of the same write.
+   *
+   * Display state — which view the column is on, how a list is sorted — is not
+   * an edit and has no business in the undo stack: a ⌘Z after switching to the
+   * score would put the player back rather than taking back what you drew.
+   * What is *drawn on the track* is an edit like any other, and until this
+   * existed a page of highlighter was the one thing in the app ⌘Z could not
+   * touch.
+   */
+  const commitProjectSettings = useCallback(
+    (
+      patch: Partial<NonNullable<Project['settings']>>,
+      opts?: { coalesceKey?: string },
+    ) => {
+      if (!canEditSettings || !current) return
+      const id = current.id
+      commit(
+        (ps) =>
+          ps.map((p) =>
+            p.id === id
+              ? { ...p, settings: { ...p.settings, ...patch }, updatedAt: now() }
+              : p,
+          ),
+        opts,
+      )
+    },
+    [canEditSettings, current, commit],
+  )
+
   const setPlayOnce = useCallback(
     (on: boolean) => {
       setUserPlayOnce(on)
@@ -596,6 +632,9 @@ export default function App() {
     }
     void playerBoxRef.current?.requestFullscreen?.().catch(() => {})
   }, [])
+  // Whether the quote key is armed. Session state, like which pen is in your
+  // hand: it is a gesture in progress, not something the track remembers.
+  const [drawingQuote, setDrawingQuote] = useState(false)
   // The score page on screen, reported up by the layer. A pin anchored to the
   // score has to land on a page, and this is which one.
   const [scorePage, setScorePage] = useState(1)
@@ -626,18 +665,18 @@ export default function App() {
   )
 
   /**
-   * Save what has been drawn on the score. Written straight through rather
-   * than coalesced: a mark is committed once, on release, so each one is
+   * Save what has been drawn on the score — undoable, and uncoalesced: a mark
+   * is committed once, on release (a stroke, a move, a resize), so each is
    * already a single deliberate act and belongs in its own undo step.
    */
   const changeMarks = useCallback(
     (marks: ScoreMark[]) => {
       if (!score) return
-      patchProjectSettings({
+      commitProjectSettings({
         score: { ...score, marks: marks.length > 0 ? marks : undefined },
       })
     },
-    [patchProjectSettings, score],
+    [commitProjectSettings, score],
   )
 
   /**
@@ -697,13 +736,17 @@ export default function App() {
     [canEditSettings, patchProjectSettings],
   )
 
-  /** Retime the page turns (the sync workspace's only write). */
+  /**
+   * Retime the page turns (the sync workspace's only write). Coalesced by the
+   * turn being nudged, so holding a key to walk one turn along the clock is
+   * one undo step rather than forty.
+   */
   const changeTurns = useCallback(
     (turns: ScoreTurn[]) => {
       if (!score) return
-      patchProjectSettings({ score: { ...score, turns } })
+      commitProjectSettings({ score: { ...score, turns } }, { coalesceKey: 'turns' })
     },
-    [patchProjectSettings, score],
+    [commitProjectSettings, score],
   )
 
   /**
@@ -1757,6 +1800,31 @@ export default function App() {
    * movePin, and the same coalescing, so nudging a rectangle into place is one
    * undo step rather than thirty.
    */
+  /**
+   * Arm the quote key: the next drag on a page of the score draws the
+   * rectangle, under a crosshair, instead of dropping a default-sized one to
+   * be resized afterwards.
+   *
+   * Arming also *takes you to the score*, since a crosshair over the player is
+   * a promise the column can't keep. That is a display change, so it goes
+   * through the same session override a reader gets — it is not an edit and
+   * has no business in the undo stack.
+   */
+  function armQuoteDraw(on: boolean) {
+    setDrawingQuote(on)
+    if (on && score && scoreView.mode !== 'view') changeScoreView({ mode: 'view' })
+  }
+
+  /** A rectangle drawn on the page, for the note the inspector has open. */
+  function addDrawnQuote(quote: NoteQuote) {
+    const a = selectedNoteId
+      ? current?.annotations.find((n) => n.id === selectedNoteId)
+      : null
+    setDrawingQuote(false)
+    if (!a) return
+    updateAnnotation(a.id, patchOverlay(a, { quotes: withQuoteAdded(a, quote) }))
+  }
+
   function moveQuote(annId: string, index: number, quote: NoteQuote) {
     const a = current?.annotations.find((n) => n.id === annId)
     if (!a) return
@@ -2351,10 +2419,20 @@ export default function App() {
         readOnly={effectiveViewOnly}
         onMovePin={moveScorePin}
         onQuote={moveQuote}
+        onQuoteDraw={addDrawnQuote}
+        onCancelQuoteDraw={() => setDrawingQuote(false)}
+        // Armed only while there is a note to quote *into*: closing the
+        // inspector with the key still armed would leave a crosshair over the
+        // page with nowhere for the rectangle to go.
+        drawingQuote={drawingQuote && !effectiveViewOnly && !!selectedNoteId}
         onPlayNote={playFromNote}
         onPageChange={setScorePage}
         onMarks={canEditSettings ? changeMarks : undefined}
         canDraw={canEditSettings}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
       />
     ) : null
 
@@ -3406,6 +3484,8 @@ export default function App() {
                           allowOverlays={isVideoSource(current.source)}
                           scorePage={score ? scorePage : undefined}
                           scoreHidden={!!score && scoreView.mode === 'off'}
+                          drawingQuote={drawingQuote}
+                          onDrawQuote={armQuoteDraw}
                           editorApiRef={inspectorApiRef}
                         />
                       ) : (

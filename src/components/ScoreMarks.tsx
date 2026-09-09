@@ -7,9 +7,13 @@ import type { ScoreMark, ScoreMarkKind } from '../types'
 import {
   DEFAULT_MARK_WEIGHT,
   INK_MIN_STEP,
+  MIN_MARK,
+  handlesOf,
   inkBounds,
   markAt,
   moveMark,
+  resizeMark,
+  type MarkHandle,
 } from '../lib/score'
 import { newId } from '../lib/ids'
 
@@ -79,6 +83,27 @@ export default function ScoreMarks({
     from: { x: number; y: number }
     to: { x: number; y: number }
   } | null>(null)
+  // A grip being dragged, and the mark as it looks under it. Same deal as a
+  // move: local until release, one undo step for the whole gesture.
+  const [sizing, setSizing] = useState<{ handle: MarkHandle; mark: ScoreMark } | null>(
+    null,
+  )
+  // What the pointer is over with the select tool in hand, so the cursor can
+  // say what a press would do before it is pressed.
+  const [hover, setHover] = useState<'mark' | MarkHandle | null>(null)
+
+  const selected = marks.find((m) => m.id === selectedId) ?? null
+  // The grips, in fractions. A grip is caught by a box in *pixels* — the same
+  // few pixels either way whatever the page's aspect ratio — so the tolerance
+  // is converted per axis rather than being one fraction for both.
+  const grips = selectedId && tool === 'select' && selected ? handlesOf(selected) : []
+  const gripAt = (x: number, y: number): MarkHandle | null => {
+    const padX = GRIP_HIT_PX / Math.max(1, size.width)
+    const padY = GRIP_HIT_PX / Math.max(1, size.height)
+    for (const g of grips)
+      if (Math.abs(x - g.x) <= padX && Math.abs(y - g.y) <= padY) return g.id
+    return null
+  }
 
   const fractionAt = (e: ReactPointerEvent) => {
     const box = boxRef.current?.getBoundingClientRect()
@@ -102,13 +127,19 @@ export default function ScoreMarks({
     }
 
     if (tool === 'select') {
+      // A grip first: it sits on the mark's own edge, so hit-testing the mark
+      // first would swallow every resize as a move.
+      const grip = selected && gripAt(at.x, at.y)
+      if (grip && selected) {
+        setSizing({ handle: grip, mark: selected })
+        return
+      }
       const hit = markAt(marks, at.x, at.y)
       onSelect(hit?.id ?? null)
       if (hit) setDrag({ id: hit.id, from: at, to: at })
       return
     }
 
-    onSelect(null)
     setDraft({
       id: newId(),
       page,
@@ -124,9 +155,22 @@ export default function ScoreMarks({
   }
 
   const onPointerMove = (e: ReactPointerEvent) => {
-    if (!draft && !drag) return
+    if (!draft && !drag && !sizing) {
+      // Nothing in progress: report what is under the pointer so the cursor
+      // can promise the gesture. Only the select tool has anything to say —
+      // the drawing tools are a crosshair everywhere.
+      if (tool !== 'select') return
+      const at = fractionAt(e)
+      if (!at) return
+      setHover(gripAt(at.x, at.y) ?? (markAt(marks, at.x, at.y) ? 'mark' : null))
+      return
+    }
     const at = fractionAt(e)
     if (!at) return
+    if (sizing) {
+      setSizing({ ...sizing, mark: resizeMark(sizing.mark, sizing.handle, at.x, at.y) })
+      return
+    }
     if (drag) {
       setDrag({ ...drag, to: at })
       return
@@ -153,6 +197,24 @@ export default function ScoreMarks({
     } catch {
       /* ignore */
     }
+    if (sizing) {
+      const { mark } = sizing
+      setSizing(null)
+      // A grip pressed and released without travelling is not a resize, and a
+      // shape dragged inside out to nothing is a shape nobody can catch again.
+      const tiny =
+        mark.kind !== 'arrow' &&
+        Math.abs(mark.w) < MIN_MARK &&
+        Math.abs(mark.h) < MIN_MARK
+      const same =
+        selected &&
+        mark.x === selected.x &&
+        mark.y === selected.y &&
+        mark.w === selected.w &&
+        mark.h === selected.h
+      if (!tiny && !same) onCommit(mark)
+      return
+    }
     if (drag) {
       const mark = marks.find((m) => m.id === drag.id)
       const dx = drag.to.x - drag.from.x
@@ -172,7 +234,14 @@ export default function ScoreMarks({
         ? (draft.points?.length ?? 0) < 4
         : Math.abs(draft.w) < 0.01 && Math.abs(draft.h) < 0.01
     if (tiny) return
-    onCommit(draft.kind === 'ink' ? draft : normalize(draft))
+    const made = draft.kind === 'ink' ? draft : normalize(draft)
+    onCommit(made)
+    // Leave what was just drawn selected. The pen stays in your hand — a
+    // teacher marking a page draws several — but the thing you have this
+    // second is the thing you most likely want to recolour or take off again,
+    // and having to arm the arrow and go back and find it is the long way to
+    // "no, not like that".
+    onSelect(made.id)
   }
 
   const dragOffset =
@@ -190,7 +259,7 @@ export default function ScoreMarks({
       className={`absolute inset-0 ${
         tool
           ? `pointer-events-auto touch-none ${
-              tool === 'select' ? 'cursor-pointer' : 'cursor-crosshair'
+              tool === 'select' ? selectCursor(sizing?.handle ?? hover) : 'cursor-crosshair'
             }`
           : 'pointer-events-none'
       }`}
@@ -202,19 +271,40 @@ export default function ScoreMarks({
         className="absolute inset-0 overflow-visible"
         aria-hidden
       >
+        {/* In list order, which *is* z-order: later is nearer the reader.
+            That is what `markAt` walks backwards through, and what the
+            bring-to-front and send-to-back verbs rewrite. */}
         {marks.map((m) => (
           <Mark
             key={m.id}
             mark={
-              dragOffset && m.id === drag?.id
-                ? moveMark(m, dragOffset.dx, dragOffset.dy)
-                : m
+              sizing && m.id === selectedId
+                ? sizing.mark
+                : dragOffset && m.id === drag?.id
+                  ? moveMark(m, dragOffset.dx, dragOffset.dy)
+                  : m
             }
             size={size}
             selected={m.id === selectedId}
           />
         ))}
         {draft && <Mark mark={draft} size={size} selected={false} />}
+
+        {/* The grips, drawn last so they sit over every mark — including the
+            one they belong to, whose own outline they straddle. */}
+        {(sizing ? handlesOf(sizing.mark) : grips).map((g) => (
+          <rect
+            key={g.id}
+            x={g.x * size.width - GRIP_PX / 2}
+            y={g.y * size.height - GRIP_PX / 2}
+            width={GRIP_PX}
+            height={GRIP_PX}
+            rx={2}
+            fill="#fff"
+            stroke={selected?.color ?? '#000'}
+            strokeWidth={1.5}
+          />
+        ))}
       </svg>
     </div>
   )
@@ -384,3 +474,26 @@ function pointsToPixels(
 }
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
+
+/** How big a grip is drawn, and how close the pointer has to get to catch it. */
+const GRIP_PX = 8
+const GRIP_HIT_PX = 9
+
+/** What the select tool's cursor promises for what is under it. */
+function selectCursor(over: 'mark' | MarkHandle | null): string {
+  switch (over) {
+    case 'nw':
+    case 'se':
+      return 'cursor-nwse-resize'
+    case 'ne':
+    case 'sw':
+      return 'cursor-nesw-resize'
+    case 'tail':
+    case 'head':
+      return 'cursor-grab'
+    case 'mark':
+      return 'cursor-move'
+    default:
+      return 'cursor-default'
+  }
+}
