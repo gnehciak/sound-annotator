@@ -59,7 +59,7 @@ import {
   shiftTurns,
   type ScoreView,
 } from './lib/score'
-import type { ScoreMark, ScoreTurn } from './types'
+import type { NoteQuote, ScoreMark, ScoreTurn } from './types'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -1512,6 +1512,19 @@ export default function App() {
   const moveFramePin = movePin('frame')
   const moveScorePin = movePin('score')
 
+  /**
+   * Land a moved or resized picture quote — same one-save-per-release deal as
+   * movePin, and the same coalescing, so nudging a rectangle into place is one
+   * undo step rather than thirty.
+   */
+  function moveQuote(annId: string, quote: NoteQuote) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    updateAnnotation(annId, patchOverlay(a, { quote }), {
+      coalesceKey: `quote:${annId}`,
+    })
+  }
+
   /** Land a repositioned fill crop — same one-save-per-release deal as movePin. */
   function moveCover(annId: string, x: number, y: number) {
     const a = current?.annotations.find((n) => n.id === annId)
@@ -1978,6 +1991,7 @@ export default function App() {
             muted={muted}
             readOnly={effectiveViewOnly}
             overlay
+            chrome="glass"
             onPlayPause={() => (isPlaying ? pause() : play())}
             onSeek={seek}
             onStep={step}
@@ -1994,6 +2008,7 @@ export default function App() {
         selectedId={selectedNoteId}
         readOnly={effectiveViewOnly}
         onMovePin={moveScorePin}
+        onQuote={moveQuote}
         onPageChange={setScorePage}
         onMarks={canEditSettings ? changeMarks : undefined}
         canDraw={canEditSettings}
@@ -2065,6 +2080,7 @@ export default function App() {
         readOnly={effectiveViewOnly}
         onMovePin={moveFramePin}
         onMoveCover={moveCover}
+        onQuote={moveQuote}
         onTogglePlay={() => (isPlaying ? pause() : play())}
       />
       {transport}
@@ -2472,9 +2488,9 @@ export default function App() {
                 <TitleBar
                   left={scoreView.mode === 'view' ? 'Score' : 'Player'}
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
+                  center={scoreSwitch}
                   actions={
                     <>
-                      {scoreSwitch}
                       {isVideoSource(current.source) && (
                         <a
                           href={sourceLinkUrl(current.source) ?? undefined}
@@ -2598,10 +2614,10 @@ export default function App() {
                   )}
 
                   {/* The score view: the whole box, over the player rather
-                      than instead of it. Inset to the padding so it lands
-                      exactly where the picture was. */}
+                      than instead of it. Edge to edge of the column, so the
+                      score is the panel rather than a card inside one. */}
                   {scorePane && (
-                    <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
+                    <div className="absolute inset-0 z-30">{scorePane}</div>
                   )}
                 </div>
               </div>
@@ -2653,9 +2669,9 @@ export default function App() {
                 <TitleBar
                   left={scoreView.mode === 'view' ? 'Score' : 'Player'}
                   right={isVideoSource(current.source) ? undefined : 'Audio'}
+                  center={scoreSwitch}
                   actions={
                     <>
-                      {scoreSwitch}
                       {isVideoSource(current.source) && (
                         <a
                           href={sourceLinkUrl(current.source) ?? undefined}
@@ -2671,32 +2687,11 @@ export default function App() {
                         </a>
                       )}
                       {scoreButton}
-                      {/* Detection is admin-only (each press is a paid
-                          Replicate run plus ~130 MB of stems): audio tracks
-                          need their cloud URL; YouTube tracks prompt for a
-                          one-shot analysis upload inside the button. Hiding it
-                          is courtesy — the endpoint 404s regardless. */}
-                      {user &&
-                        isAdmin &&
-                        !isGuest &&
-                        !effectiveViewOnly &&
-                        !isForeign &&
-                        (isVideoSource(current.source) ||
-                          current.source.audioUrl) && (
-                          <DetectSectionsButton
-                            key={current.id}
-                            projectId={current.id}
-                            uploadAnalysisAudio={(file, onProgress) =>
-                              uploadAnalysisAudio(
-                                user.uid,
-                                current.id,
-                                file,
-                                onProgress,
-                              )
-                            }
-                            onSections={applyDetectedSections}
-                          />
-                        )}
+                      {/* No section detection here. What it produces is a
+                          span-per-section timeline, which *is* the
+                          song-structure board — on a listening guide it would
+                          bury the teacher's own notes under a dozen machine
+                          ones. The button lives on that board instead. */}
                     </>
                   }
                 />
@@ -2762,10 +2757,10 @@ export default function App() {
 
                   {/* The score view: the whole box, over the player rather
                       than instead of it — the video keeps playing behind it,
-                      which is the point of reading along. Inset to the padding
-                      so it lands exactly where the picture was. */}
+                      which is the point of reading along. Edge to edge of the
+                      column: the score *is* the panel, not a card inside one. */}
                   {scorePane && (
-                    <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
+                    <div className="absolute inset-0 z-30">{scorePane}</div>
                   )}
                 </div>
 

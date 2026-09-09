@@ -491,6 +491,17 @@ html[data-armed] body::before {
     border: 1px solid var(--glass-ring);
     box-shadow: var(--glass-shadow), var(--glass-hi);
   }
+  /* A full-width bar of the floating material, pinned to an edge of a
+     scrolling surface — the score view's chrome. The same substance as
+     .glass-pop, minus its drop shadow: a strip that spans a whole edge sits on
+     a hairline, not a halo, and a halo the width of the panel is the thing
+     that made the score's chrome read as damage on the page. Callers add the
+     edge (border-b at the head, border-t at the foot). */
+  .glass-strip {
+    background-color: var(--pop);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+  }
   /* The transport console: a recessed well (the glow lives under the video). */
   .well {
     @apply rounded-lg border border-line/70 bg-inset;

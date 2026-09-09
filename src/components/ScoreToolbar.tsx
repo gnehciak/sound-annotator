@@ -33,6 +33,11 @@ const WEIGHTS = [
  * top and because a hand drawing on the page comes from below it — the same
  * reason a pen tray is at the bottom of a whiteboard.
  *
+ * A floating pill, unlike the page nav and the transport that bracket the
+ * view: those are the panel's own furniture and belong to its edges, while
+ * this is the thing in your hand. It sits over the page, only as wide as the
+ * tools in it, and lets the music show either side.
+ *
  * "Read" (no tool) is a first-class state, not the absence of one: with a tool
  * armed the surface takes every pointer event, so there has to be somewhere
  * obvious to put the pen down before the page can be scrolled or a pin
@@ -56,8 +61,8 @@ export default function ScoreToolbar({
 }) {
   const drawing = tool !== null && tool !== 'select'
   return (
-    <div className="pointer-events-auto flex justify-center px-3">
-      <div className="glass-pop flex max-w-full flex-wrap items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 shadow-lg">
+    <div className="flex justify-center px-3">
+      <div className="glass-pop pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1 rounded-xl px-1.5 py-1.5">
         <ToolButton
           active={tool === 'select' || tool === null}
           label={tool === null ? 'Reading — pick a tool to draw' : 'Select and move marks'}

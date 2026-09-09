@@ -144,7 +144,10 @@ is now **admin-only** (owner *and* `ADMIN_EMAILS`), because each press is a paid
 Replicate run plus ~130 MB of stem WAVs. It answers 404 to everyone else, guests
 and ordinary owners alike, and App hides the button behind `useIsAdmin()`
 (`src/lib/admin.ts`) — a display hint fetched from
-`/api/admin/projects?whoami=1`, never the security. Their project is born `shared`, so the `?view=`
+`/api/admin/projects?whoami=1`, never the security. It is also **only offered on
+the song-structure board**: what it produces is a span per section, which *is*
+that board, and on a listening guide it would bury the teacher's own notes
+under a dozen machine ones. Their project is born `shared`, so the `?view=`
 link they hand in is the existing read-only viewer.
 
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
@@ -220,9 +223,10 @@ pin off again; with two pins to choose between, a click means **the surface in
 view** (the column is showing the picture or the score, and that is the honest
 answer to which one you meant), and the arrows nudge that same one by 1% (5%
 with ⇧), the one path to a position that needs no pointer.
-`src/lib/pinTargets.ts` is a tiny registry the two drop
-boxes register themselves with (VideoOverlays the frame, ScoreLayer the drawn
-page), so the drag can ask what it is over without refs being threaded up
+`src/lib/pinTargets.ts` is a tiny registry the drop
+boxes register themselves with (VideoOverlays the frame, each drawn page of
+the score its own box — several are on screen at once now that the score
+scrolls), so the drag can ask what it is over without refs being threaded up
 through App and back down. Hit-testing is by rectangle rather than
 `elementFromPoint`, deliberately: both layers are `pointer-events: none` so
 they don't eat the player's clicks, and `elementFromPoint` skips exactly those.
@@ -254,6 +258,104 @@ Notes written before the score view carried one pin plus a `pinAnchor: 'score'`
 switch. `withMigratedPins` converts that on read (in `toProject`, beside
 `withBlocks`) and the JSON importer does the same, so nothing downstream — and
 no old export or `?view=` link — has to know the shape ever existed.
+
+**A picture quote is a rectangle, never an image** (`overlay.quote`,
+`components/QuoteFrame.tsx`, `lib/quoteImages.ts`). Where a pin says *where*, a
+quote says *what the note is about*: a region of the picture or of a page of the
+score, which the exported documents reproduce as a cropped picture beside the
+note's text — so a handout carries the bars it is discussing instead of a
+timecode the reader has to go and look up. Fractions of its surface, like
+everything else aimed at a page, and placed by the same gesture as the pin:
+a third key in the inspector row, dragged onto whatever is being quoted, then
+resized in place by its corners. One per note, because a note about two places
+is two notes.
+
+Storing a rectangle rather than an image is the whole design, and it buys
+three things: a quote costs no upload, it adds **nothing** to the blob sweeps or
+to `copyProject` (the two places a stored image would have to be taught about),
+and a Drive score whose file gains a new engraving quotes the new engraving on
+the next export. The pixels are found again at export time — a score quote is
+cut out of a page pdf.js rasterises for it, at a scale chosen from the crop so
+a narrow rectangle is drawn bigger. The cost is the one asymmetry: a quote of
+the *picture* crops the note's **cover**, because a cover is the only still of
+the frame this app can read — a YouTube player is a cross-origin iframe and its
+pixels are unreachable to page JS at any moment, on any browser — so a video
+quote on a note with no cover draws on screen and prints nothing, which the
+inspector says out loud. Every crop comes back as a **JPEG** — the consumers
+are a PDF and a .docx, and both want bytes rather than a styled window — which
+means reading a cover's pixels cross-origin: fine, since the Blob store answers
+`access-control-allow-origin: *`, but the request has to ask for CORS and a
+tainted canvas is caught rather than thrown. `collectQuoteImages` also runs
+under a deadline, because a score is fetched over the network and an export
+that waits forever on a Drive file nobody shares any more is
+indistinguishable from a broken one.
+
+The frame draws **only for the note open in the inspector**, unlike a cover or
+a pin: it is an aiming tool for the handout, not something the class watches,
+and a permanently framed region on the page is what a box mark
+(`ScoreMarks`) already is. That is also why `hasOverlay` doesn't count it —
+that predicate decides who is on the stage — and why the notes list gives a
+quote its own chip rather than folding it into the stage one.
+
+**The two exports write real files** — `lib/exportPdf.ts` (pdf-lib) and
+`lib/exportDocx.ts` (OOXML by hand, zipped with `fflate`) — rather than opening
+an HTML report with a "Save as PDF" button on it, which put a page between the
+press and the document and left the result at the mercy of whatever the print
+dialog was last set to. Both render **one model**, `lib/studyDoc.ts`. Every
+decision about what the document *says* belongs in that model; the two
+renderers know only about pages and columns, or about paragraphs and tables,
+and the one thing they must never disagree on is the content.
+
+The shape is the marking-guide grid a music teacher works in, **carrying this
+app's own structure** rather than a blank template's. *Where* is the first
+column, because a timecode is this app's primary coordinate — a study note
+nobody can find in the recording is half a note — with the bar or rehearsal
+mark under it. *Example* is the picture quote, captioned with where it was cut
+from. The grouping is the app's own vocabulary: a note is filed under its first
+inline property tag (`Timbre / Bright`), the same concept list the `@` menu
+offers, with `Ungrouped` last. Above all of it, **structure notes get their own
+table and come out of the grid entirely** — a note that brackets a span *is*
+the song-structure board, and printed among the elements it would read as one
+more observation instead of the frame the others sit inside. What is left over
+rides as a strapline over the analysis: whether the note is a question, its
+tags, and the concepts it names.
+
+The analysis column is the note's own words and nothing else. The guide's
+*What / Why* prompts were tried and dropped: the app has nothing to put under
+either, so they printed as two labels around one paragraph and a gap —
+scaffolding for writing that had already been done. The .docx is still where
+the rest gets written, and a heading nobody asked for was not what made that
+possible.
+
+Three more things to know. **A PDF standard font can only carry cp1252**, and pdf-lib *throws* on anything else
+rather than dropping it, so `encodable()` strips what it can't draw — one
+pasted emoji would otherwise fail the entire export (the .docx has no such
+limit and keeps them). **Rows are measured before any of them is drawn**, so a
+group heading and its column headings are only placed where the first row can
+follow them; taking the leading gap *after* the fit check rather than as part
+of it is exactly how an orphaned heading ends up at the foot of a page. And
+**the PDF's tab is opened before the document is built**, since a score has to
+be fetched and rasterised first and a `window.open` on the far side of an
+`await` has lost the user gesture pop-up blockers look for; a blocked pop-up
+falls back to a download, which needs no such permission. The .docx is always a
+download — no browser renders Word.
+
+**Both report progress, and both waits are real.** Rasterising a quoted page at
+print resolution is seconds each, so `collectQuoteImages` takes a `ProgressFn`
+and names the page it is on; the PDF's waiting tab draws it as a bar, and
+`ExportProgressButton` draws the same thing as a rule along the foot of the
+button that was pressed — which is the *only* progress the .docx has, since it
+never opens a tab. A spinner would say "something is happening"; what this
+question needs answered is "is it stuck".
+
+That last one is not hypothetical, and the reason is worth keeping. **pdf.js's
+on-screen render path waits on `requestAnimationFrame`, which a browser does
+not fire in a tab that isn't visible** — so a render started in the page that
+has just opened a tab in front of itself never finishes. `lib/pdf.ts` takes
+`RenderOptions.offscreen`, which switches to pdf.js's print intent and
+schedules on a microtask instead; anything drawing into a file must set it, and
+anything drawing for the reader must not (throttling a hidden reader is a
+feature there).
 
 Cover images arrive by clicking the inspector's cover slot — a 16:9 well beside
 the pin key that echoes the frame's shape and *is* the thumbnail once set — *or*
@@ -314,10 +416,13 @@ images-only), fixed at upload time.
 
 Rendering is pdf.js (`src/lib/pdf.ts`, the only file that knows it exists),
 lazily imported so a track without a score never pays for the ~430 KB chunk or
-its worker. Renders are serialized through a chain: pdf.js refuses two renders
-onto one canvas and cancelling isn't instant, which a fast page-flip produces
-immediately. An `<iframe>` of the PDF would be free but exposes no page
-control, and turning the page is the whole feature.
+its worker. Renders are serialized **per canvas**: pdf.js refuses two renders
+onto one canvas and cancelling isn't instant, which a zoom or a resize storm
+produces immediately — but the stack below is a canvas per page, and those
+don't contend, so one chain for the whole document would make scrolling past a
+page cancel the page before it and leave a trail of blanks. An `<iframe>` of
+the PDF would be free but exposes no page control, and turning the page is the
+whole feature.
 
 **The score is a view, not a layer.** `score.mode` is exactly the two states
 the column's view switch offers — `'off'` the player, `'view'` the score — and
@@ -327,9 +432,35 @@ could and there is space at the foot for the drawing tools. It covers the
 player rather than replacing it: **the player stays mounted and keeps
 playing**, which is the point of reading along, and unmounting it would stop a
 YouTube iframe dead. So never make the switch conditional-render the player —
-it is a sibling `absolute inset-[0.875rem] z-30` panel over it, above the
-video's own floating transport, and it carries a transport of its own because
-it covers that one.
+it is a sibling `absolute inset-0 z-30` panel over it, above the video's own
+floating transport, and it carries a transport of its own because it covers
+that one. Edge to edge of the column, deliberately: inset inside the pane's
+padding it read as a card inside a panel inside a pane, which is one frame too
+many for something that *is* the panel's content.
+
+**Chrome over the score is the app's own material, not video chrome.** The two
+placements dress identically-shaped controls differently, and the rule is what
+is *behind* them: over the picture they are white glyphs on a gradient,
+palette-blind, because what is behind is anything at all; over the score they
+are the app's own material with theme-aware glyphs, because what is behind is a
+page and a black band across white paper reads as damage rather than as a
+control surface.
+
+Two shapes there, and the split is what the control *is*. The page nav and the
+transport are the panel's furniture, so they are full-width `.glass-strip` bars
+pinned to its edges — `.glass-strip` being the `.glass-pop` material minus its
+drop shadow, since a bar spanning a whole edge sits on a hairline, not a halo.
+Being opaque bars they take the pointer across their full width, or a click on
+an empty half falls through and draws on the page behind. The drawing tools are
+the thing in your hand rather than furniture, so they stay a floating
+`.glass-pop` pill only as wide as the tools, inert outside itself — the music
+shows either side of it and the page beside it is still the page. `ScoreChrome` takes a `tone`, `Transport` takes a `chrome` — and the
+trap in the second is that the overlay bar had white hardcoded in half a dozen
+places (the clock, the separator, the duration, the speed, the volume), each of
+which simply vanishes on the light theme's near-white glass. The score's ground
+is `bg-ink`, the canvas token, so a page is white paper on the app's own
+surface in both themes; the page itself gets a hairline ring and a shallow
+shadow, the lift a raised surface gets, not the deep halo of floating material.
 
 **Laying the score over the picture is a separate switch** (`score.overVideo`,
 `placement="frame"`) — the old overlay, kept because seeing the staves under
@@ -344,11 +475,69 @@ everything else. Legacy rows say `mode: 'score'` / `'overlay'`; `scoreView()`
 maps them onto the pair on read, and `sanitizeScore` does the same for
 imported files.
 
-Either placement can go **expanded**: the same document and page drawn to the
-whole viewport through a **portal**, which is required rather than stylistic —
+Either placement can go **expanded**: the same document drawn to the whole
+viewport through a **portal**, which is required rather than stylistic —
 `.glass` uses `backdrop-filter`, and that makes an ancestor the containing
 block for `position: fixed`. The document is loaded once per placement and kept
-across the move, so expanding costs a re-render, never a re-fetch.
+across the move, so expanding costs a re-render, never a re-fetch. Expanded is
+the score with *more room*, not a stripped-down version of it: the drawing
+tools, the pins and the transport all come along, and `footTransport` is the
+one rule behind that — this layer carries a transport wherever it covers the
+player's own (its view, or full screen) and never in the video frame, where the
+player already has one a few pixels away.
+
+**The document scrolls; it is not a page at a time** (`ScoreSurface.tsx`).
+Every page is stacked in one scroller, because that is how music is read — a
+system runs off the foot of one page and onto the head of the next, and a
+reader at the turn needs to see both. It is also what makes a page turn a
+*scroll* rather than a cut: the next page is already there, below, and
+following the music animates to it (`behavior: 'smooth'`, honouring
+`prefers-reduced-motion`).
+
+Three things that shape the implementation. **Every page's box is reserved from
+its intrinsic size** (`pdf.pageSize`, which reads the page dictionary without
+rasterising) before anything is drawn, so a fifty-page score has an honest
+scrollbar on the first frame; only pages within `RENDER_MARGIN` of the viewport
+are actually rasterised, and the rest are white paper of the right shape.
+**Which pages to draw is derived from the scroll position**, and from a
+*quantised* one (`SCROLL_BAND`): this component renders a page tree and nothing
+in the app is auto-memoised, so re-rendering on every scroll event made the
+very scroll that caused it stutter. Overlays (marks, pins) mount only on pages
+that are actually drawn, for the same reason.
+
+Two rules keep the scroll position and the followed page from fighting. **A
+scroll this component started must not be read back as the reader choosing a
+page** — a smooth scroll fires dozens of scroll events over as many pages — so
+`settleAuto` suppresses reporting until the scroll settles (`scrollend`, with a
+timer fallback) and then *reconciles*; suppressing without reconciling silently
+loses a scroll the reader made mid-animation. And **the reader's own scroll
+claims the page before the host hears about it** (`lastTarget` in
+`reportPage`), or the two chase each other: you scroll into a page, it is
+reported, it comes back down as the page to show, and the view snaps to its top
+edge under your hands.
+
+**Zoom is deferred at the raster, immediate at the layout.** A pinch is a
+stream of events; re-rasterising per tick queues a pdf.js render per tick and
+turns the gesture into a slideshow. The boxes resize at once and the browser
+stretches the bitmap it has; the sharp redraw lands `ZOOM_SETTLE_MS` after the
+gesture stops. `MAX_CANVAS_PIXELS` in lib/pdf.ts is the other half — zoom
+multiplies the raster, and a page magnified far enough would otherwise hold
+tens of megabytes of canvas each, with three of them in the window.
+
+**Scrolling to a page is turning to it**, so a reader who scrolls away from the
+music takes exactly the same peek the ‹ › buttons take (`showUserPage`), and it
+expires at the next turn like any other.
+
+**Zoom is a multiplier on the fitted size** (`MIN_ZOOM`–`MAX_ZOOM` in
+lib/score.ts), and it is the reader's, never the track's — the same call as
+which pen is in their hand. A trackpad pinch reaches the page as a `wheel`
+event with `ctrlKey` set (there is no pinch event on the desktop web, and the
+browser zooms the whole *page* if we don't take it, which is why that listener
+is non-passive); touch is a real two-finger gesture tracked through pointer
+events. Both zoom about the pointer, which needs the scroll offset corrected
+in a layout effect *after* the relayout — the new scroll extent doesn't exist
+until the pages have been re-sized. Changing the fit resets the zoom, since
+"fit" that shows a corner of a page is not a fit.
 
 **Drawing on the score** (`score.marks`, `src/components/ScoreMarks.tsx` +
 `ScoreToolbar.tsx`): highlights, boxes, circles, arrows and freehand ink, in
@@ -546,11 +735,12 @@ field on `Annotation`, so it needs no schema, no API whitelist entry and no
 line in `projectJson.ts`; it travels wherever `contentHtml` travels, and
 `propertyTagsInHtml()` reads the values back out structured. Its markup carries
 its own colours: `--hue` for fills on either theme, and `--hue-ink` (an
-`hueText`-darkened hue) for text on white paper, because the two print
-documents that inject note HTML raw — `lib/exportPdf.ts` and
-`lib/answerSheet.ts` — have no React to resolve a theme and share
-`PROPERTY_TAG_PRINT_CSS`. Add a category to `lib/musicElements.ts` and it
-appears in the `@` menu, the elements grid and both PDFs at once.
+`hueText`-darkened hue) for text on white paper, because `lib/answerSheet.ts`
+injects note HTML raw into a printed sheet with no React around it to resolve a
+theme, and reads `PROPERTY_TAG_PRINT_CSS`. The study-notes exports read the
+tags *structured* instead (`propertyTagsInHtml`), which is what files each note
+under its element. Add a category to `lib/musicElements.ts` and it appears in
+the `@` menu, the elements grid, the answer sheet and both exports at once.
 
 **JSON import/export** (`src/lib/projectJson.ts`): tracks round-trip through a
 versioned portable JSON envelope (exports live in the editor header's

@@ -15,11 +15,11 @@ import {
   RotateCw,
   TriangleAlert,
   X,
-  FileDown,
   Braces,
 } from 'lucide-react'
 import type { Project, ProjectShare } from '../types'
-import { exportProjectPdf } from '../lib/exportPdf'
+import ExportPdfButton from './ExportPdfButton'
+import ExportDocxButton from './ExportDocxButton'
 import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
 import { publicId } from '../lib/ids'
@@ -745,19 +745,11 @@ export default function ShareExportMenu({
           >
             <Label>Export</Label>
             <span className="flex-1" />
-            {canPdf && (
-              <button
-                type="button"
-                onClick={() => {
-                  close()
-                  exportProjectPdf(project)
-                }}
-                title="Export this track's notes to a PDF (opens in a new tab)"
-                className="btn-ghost btn-sm press"
-              >
-                <FileDown size={12} /> PDF
-              </button>
-            )}
+            {/* These two stay put while they work — the menu is not closed
+                under them, because the bar they carry is the only progress the
+                Word export has, and the PDF's own tab is behind this one. */}
+            {canPdf && <ExportPdfButton project={project} small />}
+            {canPdf && <ExportDocxButton project={project} small />}
             <button
               type="button"
               onClick={() => {

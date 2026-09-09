@@ -131,10 +131,58 @@ export interface NoteOverlay {
   /** Which page of the score the score pin lives on, 1-based; absent is 1. */
   scorePinPage?: number
   /**
+   * The **picture quote**: a rectangle framing part of the picture or of a
+   * score page, which the two print documents reproduce as a cropped image
+   * above the note's text. See NoteQuote.
+   */
+  quote?: NoteQuote
+  /**
    * Seconds the layer stays up for a note with no `end`. Ignored on a note that
    * has a span — that span is the window. Defaults to OVERLAY_HOLD.
    */
   hold?: number
+}
+
+/**
+ * A **picture quote**: the region of a surface a note is quoting, so that
+ * printing the note prints the music (or the moment) it is about, rather than
+ * a timecode the reader has to go and look up.
+ *
+ * Stored as a rectangle, never as an image. The pixels are re-derived at
+ * export time from something the project already owns — the PDF score's page,
+ * or the note's own cover image — which is what keeps a quote free: no upload,
+ * no second copy of the bytes to garbage-collect or re-host when the project
+ * is copied, and a Drive score that gains a new engraving quotes the *new*
+ * engraving on the next export.
+ *
+ * That is also the one limit worth knowing. A quote on the picture crops the
+ * note's **cover**, because a cover is the only still of the frame the app can
+ * read: a YouTube iframe is cross-origin and its pixels are unreachable to
+ * page JS at any moment, on any browser. So a video quote on a note with no
+ * cover draws on screen and prints nothing.
+ *
+ * One per note, deliberately: a quote is what the note is *about*, and a note
+ * that is about two places is two notes.
+ */
+export interface NoteQuote {
+  /**
+   * Which surface the rectangle is measured against: `'video'` the 16:9 frame
+   * (and so the note's cover, which fills it), `'score'` one drawn page of the
+   * PDF score.
+   */
+  on: 'video' | 'score'
+  /** Which score page, 1-based. Score quotes only; absent is page 1. */
+  page?: number
+  /**
+   * The rectangle, as 0–1 fractions of that surface: `x`/`y` its top-left
+   * corner, `w`/`h` its size. Fractions rather than pixels for the same reason
+   * the pins are — the box resizes at every fit, zoom and scroll, and these
+   * numbers never do.
+   */
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 export interface Annotation {

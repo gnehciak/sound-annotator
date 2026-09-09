@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Loader2, Crosshair, X } from 'lucide-react'
+import { Image as ImageIcon, Loader2, Crosshair, Quote, X } from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -21,6 +21,9 @@ import {
   hasOverlay,
   isFilled,
   patchOverlay,
+  quoteAt,
+  quoteOf,
+  quotePageOf,
   scorePinPageOf,
 } from '../lib/overlays'
 import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
@@ -58,6 +61,13 @@ const COVER_MAX_DIM = 1600
 
 /** How far the pointer has to travel before a press counts as a drag, not a click. */
 const DRAG_SLOP = 4
+
+/**
+ * What a key in this row is carrying. Both are dragged onto a surface and both
+ * read the answer off what they land on, so they share one gesture — only what
+ * gets written at the end of it differs.
+ */
+type Placeable = 'pin' | 'quote'
 
 /**
  * The note's stage controls: what it puts on the video while it's on screen —
@@ -141,6 +151,7 @@ export default function NoteOverlayControls({
   }
   const dropping = dragDepth > 0 && !!uploadImage
 
+  const quoted = quoteOf(annotation)
   const videoPinned = hasVideoPin(annotation)
   const scorePinned = hasScorePin(annotation)
   const pinned = videoPinned || scorePinned
@@ -185,22 +196,31 @@ export default function NoteOverlayControls({
    * entirely. lib/pinTargets.ts does the hit-testing by geometry.
    */
   const [placing, setPlacing] = useState<{
+    what: Placeable
     x: number
     y: number
     over: PinDrop | null
   } | null>(null)
-  // Where the press started, and whether it has travelled far enough to be a
-  // drag. A press that never moves is a click, and toggles the pin instead.
-  const pressRef = useRef<{ x: number; y: number; dragged: boolean } | null>(null)
+  // Where the press started, what it is carrying, and whether it has travelled
+  // far enough to be a drag. A press that never moves is a click, and toggles
+  // the thing instead.
+  const pressRef = useRef<{
+    what: Placeable
+    x: number
+    y: number
+    dragged: boolean
+  } | null>(null)
 
-  const startPlacing = (e: ReactPointerEvent<HTMLElement>) => {
+  // Event first, so the JSX never *calls* this during render: a factory
+  // invoked there would put the ref write below in the render phase.
+  const startPlacing = (what: Placeable, e: ReactPointerEvent<HTMLElement>) => {
     e.preventDefault()
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
     } catch {
       /* the drag still tracks while the pointer is over the key */
     }
-    pressRef.current = { x: e.clientX, y: e.clientY, dragged: false }
+    pressRef.current = { what, x: e.clientX, y: e.clientY, dragged: false }
   }
 
   const movePlacing = (e: ReactPointerEvent<HTMLElement>) => {
@@ -212,7 +232,12 @@ export default function NoteOverlayControls({
     )
       return
     press.dragged = true
-    setPlacing({ x: e.clientX, y: e.clientY, over: pinTargetAt(e.clientX, e.clientY) })
+    setPlacing({
+      what: press.what,
+      x: e.clientX,
+      y: e.clientY,
+      over: pinTargetAt(e.clientX, e.clientY),
+    })
   }
 
   const endPlacing = (e: ReactPointerEvent<HTMLElement>) => {
@@ -222,6 +247,21 @@ export default function NoteOverlayControls({
     if (!press) return
     // A press that never travelled is a click: place it centre, or take it off.
     if (!press.dragged) {
+      if (press.what === 'quote') {
+        // One quote per note, so this really is a toggle: what is on screen is
+        // the surface it lands on, the same answer a click on the pin gives.
+        patch({
+          quote: quoted
+            ? undefined
+            : quoteAt(
+                onScoreSurface ? 'score' : 'video',
+                0.5,
+                0.5,
+                scorePage ?? 1,
+              ),
+        })
+        return
+      }
       // Toggle the pin belonging to the surface in view, not "any pin": with
       // two of them, one click clearing both would be a lot to undo.
       if (!(onScoreSurface ? scorePinned : videoPinned)) centrePin()
@@ -230,9 +270,20 @@ export default function NoteOverlayControls({
       return
     }
     const drop = pinTargetAt(e.clientX, e.clientY)
-    // Dropped on nothing: no pin, no change. A gesture that fizzles is better
-    // than one that leaves a dot somewhere nobody aimed.
+    // Dropped on nothing: no change. A gesture that fizzles is better than one
+    // that leaves something somewhere nobody aimed.
     if (!drop) return
+    if (press.what === 'quote') {
+      patch({
+        quote: quoteAt(
+          drop.kind === 'score' ? 'score' : 'video',
+          drop.x,
+          drop.y,
+          drop.page ?? scorePage ?? 1,
+        ),
+      })
+      return
+    }
     patch(
       drop.kind === 'score'
         ? {
@@ -340,7 +391,7 @@ export default function NoteOverlayControls({
           type="button"
           role="switch"
           aria-checked={pinned}
-          onPointerDown={startPlacing}
+          onPointerDown={(e) => startPlacing('pin', e)}
           onPointerMove={movePlacing}
           onPointerUp={endPlacing}
           onPointerCancel={cancelPlacing}
@@ -377,6 +428,40 @@ export default function NoteOverlayControls({
           </span>
         </button>
 
+        {/* The picture quote, as the thing it places: an empty frame with its
+            corners, dragged onto whatever the note is quoting. Same gesture as
+            the pin — where it lands is the answer — because it is the same
+            question asked about a region instead of a point. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!quoted}
+          onPointerDown={(e) => startPlacing('quote', e)}
+          onPointerMove={movePlacing}
+          onPointerUp={endPlacing}
+          onPointerCancel={cancelPlacing}
+          title={
+            scorePage != null
+              ? 'Drag onto the score’s page (or the video) to quote that region in the printed notes'
+              : 'Drag onto the picture to quote that region in the printed notes'
+          }
+          aria-label="Quote a region as a picture"
+          className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing ${
+            placing?.what === 'quote'
+              ? 'border-accent'
+              : quoted
+                ? 'border-line-strong'
+                : 'border-line hover:border-line-strong'
+          }`}
+        >
+          <span
+            style={{ borderColor: quoted ? color : undefined }}
+            className={`block h-[15px] w-[18px] rounded-[3px] border-[1.5px] ${
+              quoted ? '' : 'border-dashed border-muted'
+            }`}
+          />
+        </button>
+
         <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-muted">
           {stageLine}
         </span>
@@ -395,7 +480,7 @@ export default function NoteOverlayControls({
       />
 
       {/* ---- what each object needs told, once it exists ---- */}
-      {(covered || pinned) && (
+      {(covered || pinned || quoted) && (
         <div className="flex flex-col gap-2 px-[13px] pb-2.5">
           {covered && (
             <div className="flex flex-wrap items-center gap-2">
@@ -504,6 +589,47 @@ export default function NoteOverlayControls({
             </div>
           )}
 
+          {/* The quote, once it exists: where it is aimed, and — on the
+              picture — whether there is a still for it to crop at all. */}
+          {quoted && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => patch({ quote: undefined })}
+                title="Stop quoting that region"
+                className="chip chip-outline press hover:border-danger/60 hover:text-danger"
+              >
+                <Quote size={10} />
+                {quoted.on === 'score'
+                  ? `Quoting page ${quotePageOf(quoted)}`
+                  : 'Quoting the picture'}
+                <X size={10} />
+              </button>
+              {quoted.on === 'score' &&
+                scorePage != null &&
+                scorePage !== quotePageOf(quoted) && (
+                  <button
+                    type="button"
+                    onClick={() => patch({ quote: { ...quoted, page: scorePage } })}
+                    title={`The score is on page ${scorePage}`}
+                    className="btn-ghost btn-sm press"
+                  >
+                    <Crosshair size={11} />
+                    Move to page {scorePage}
+                  </button>
+                )}
+              {/* The one thing a quote of the picture can't do by itself. A
+                  YouTube frame's pixels are unreachable to page JS, so what
+                  prints is a crop of the note's cover — and without a cover
+                  there is nothing to crop. */}
+              {quoted.on === 'video' && !covered && (
+                <span className="text-[11.5px] text-muted/80">
+                  Needs a cover image to print — set one above.
+                </span>
+              )}
+            </div>
+          )}
+
           {/* How long it stays up. Only a point note needs telling: a note with
               an end already owns a span, and that span is the window. */}
           {hasOverlay(annotation) && annotation.end == null && (
@@ -545,9 +671,13 @@ export default function NoteOverlayControls({
           >
             <span className="on-video-pop__label whitespace-nowrap rounded-full bg-ink/90 px-2 py-1 text-[11px] text-white shadow-lg ring-1 ring-white/15">
               {placing.over?.kind === 'score'
-                ? `Pin to the score — page ${placing.over.page ?? 1}`
+                ? placing.what === 'quote'
+                  ? `Quote page ${placing.over.page ?? 1}`
+                  : `Pin to the score — page ${placing.over.page ?? 1}`
                 : placing.over?.kind === 'frame'
-                  ? 'Pin to the picture'
+                  ? placing.what === 'quote'
+                    ? 'Quote the picture'
+                    : 'Pin to the picture'
                   : 'Drop it on the video'}
             </span>
           </div>,

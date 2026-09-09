@@ -24,58 +24,60 @@ export interface PinDrop {
 }
 
 interface Registration {
+  kind: PinTargetKind
   el: HTMLElement
   page: () => number | undefined
 }
 
 /**
- * One registration per kind. There is only ever one video frame and one drawn
- * page on screen at a time — the expanded score replaces the in-frame one
- * rather than adding a second — so a map keyed by kind is the whole story, and
- * a later registration replacing an earlier one is the correct behaviour when
- * the layer remounts (into the fullscreen portal, say).
+ * Every registered box, in registration order.
+ *
+ * A list rather than one entry per kind, because the score scrolls: several
+ * pages of it are on screen at once, each its own drop box with its own page
+ * number, and "the score page" stopped being a single thing. The video frame
+ * is still only ever one — the expanded score replaces the in-frame layer
+ * rather than adding a second — but nothing here needs to know that.
  */
-const targets = new Map<PinTargetKind, Registration>()
+const targets = new Set<Registration>()
 
-/** Register `el` as the drop box for `kind`; returns the unregister. */
+/** Register `el` as a drop box of `kind`; returns the unregister. */
 export function registerPinTarget(
   kind: PinTargetKind,
   el: HTMLElement,
   page: () => number | undefined,
 ): () => void {
-  const registration = { el, page }
-  targets.set(kind, registration)
-  return () => {
-    // Only clear it if nothing else has claimed the kind since — a remount
-    // registers the new element before React detaches the old one.
-    if (targets.get(kind) === registration) targets.delete(kind)
-  }
+  const registration = { kind, el, page }
+  targets.add(registration)
+  return () => targets.delete(registration)
 }
 
 /**
- * What's under the pointer, or null. The score is tested first because its
- * page sits *inside* the frame: over the page, both boxes contain the point,
- * and the page is the more specific answer — which is also what makes "drop it
- * on the music" and "drop it on the picture" one gesture with two outcomes.
+ * What's under the pointer, or null. Score pages are tested before the frame
+ * because a page can sit *inside* it (the `overVideo` overlay): there both
+ * boxes contain the point, and the page is the more specific answer — which is
+ * also what makes "drop it on the music" and "drop it on the picture" one
+ * gesture with two outcomes. Pages can't overlap each other, so within a kind
+ * the first box containing the point is the only one that does.
  */
 export function pinTargetAt(clientX: number, clientY: number): PinDrop | null {
   for (const kind of ['score', 'frame'] as const) {
-    const target = targets.get(kind)
-    if (!target?.el.isConnected) continue
-    const box = target.el.getBoundingClientRect()
-    if (box.width < 1 || box.height < 1) continue
-    if (
-      clientX < box.left ||
-      clientX > box.right ||
-      clientY < box.top ||
-      clientY > box.bottom
-    )
-      continue
-    return {
-      kind,
-      x: clamp01((clientX - box.left) / box.width),
-      y: clamp01((clientY - box.top) / box.height),
-      ...(kind === 'score' ? { page: target.page() } : {}),
+    for (const target of targets) {
+      if (target.kind !== kind || !target.el.isConnected) continue
+      const box = target.el.getBoundingClientRect()
+      if (box.width < 1 || box.height < 1) continue
+      if (
+        clientX < box.left ||
+        clientX > box.right ||
+        clientY < box.top ||
+        clientY > box.bottom
+      )
+        continue
+      return {
+        kind,
+        x: clamp01((clientX - box.left) / box.width),
+        y: clamp01((clientY - box.top) / box.height),
+        ...(kind === 'score' ? { page: target.page() } : {}),
+      }
     }
   }
   return null
