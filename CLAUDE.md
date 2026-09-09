@@ -320,6 +320,38 @@ more observation instead of the frame the others sit inside. What is left over
 rides as a strapline over the analysis: whether the note is a question, its
 tags, and the concepts it names.
 
+The analysis column is the note's own words **as they were written**. A note
+is composed in a rich-text editor, and flattening it to a string on the way out
+loses exactly the part the writer used to mean something — the emphasis, and
+the coloured chips that say which concept a word is. So `studyDoc` carries
+`DocRun`s (bold / italic / underline / strike / code, ink and ground) inside
+`DocBlock`s (paragraph, heading, quote, list item), and each renderer maps a
+run onto its own idea of a styled span: pdf-lib picks a face and paints a
+ground, Word gets a `w:rPr`. The chips keep the appearance the app's own print
+stylesheet gives them — the hue at 13% over white, AA-safe ink, and the concept
+spelled out after the value, because paper has no hover and a colour alone
+means nothing without a legend. The note's own hue rules its row, as it does
+everywhere else in the app.
+
+The note's **own inline images** come too, at the width they were dragged to
+(CSS pixels, so the PDF converts at ¾ to the point; the .docx goes through EMU
+and gets it for free). They are fetched and re-encoded to JPEG in the same pass
+as the quotes, since neither renderer takes a PNG or a WebP — hence
+`collectPictures`, which returns quotes keyed by note and images keyed by URL
+under one deadline and one progress arc. An image that can't be fetched leaves
+*nothing* behind: a broken frame in a handout is worse than a paragraph that
+reads without it.
+
+Three consequences worth knowing. The PDF needs **run-aware line breaking**:
+the appearance changes *inside* a line, so measuring a paragraph in one font
+wraps it in the wrong place — the more so since the chips are the widest thing
+in the prose. Lists are **marked paragraphs, not real lists** in both
+renderers: Word's are a numbering part of their own to keep in step, and a
+bullet that is simply there survives every copy-paste out of the file. And an
+image is a **block**, even where the editor left it mid-sentence — a picture is
+not a word, both renderers lay one out as a block anyway, and the spaces it
+leaves on either side are closed rather than printed.
+
 The analysis column is the note's own words and nothing else. The guide's
 *What / Why* prompts were tried and dropped: the app has nothing to put under
 either, so they printed as two labels around one paragraph and a gap —
