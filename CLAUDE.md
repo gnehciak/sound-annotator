@@ -632,12 +632,20 @@ offers a Follow chip for going back at once. The sync workspace suspends
 following entirely: the page on screen is the one being timed and must not
 move under the person timing it.
 
-Timing them is one button. Press play and hit **Turn here** at each turn and
-you've made a live pass; pause, scrub, and hit it and you've placed one turn
-by hand — which is also how a wrong one is fixed, since nobody should replay
-eight minutes to move page 12. The **lead offset** (default 0.3 s) is what
+Timing them is one button — or one key. Press play and hit **Turn here** (or
+**`T`**, the same press, since a live pass is run with a hand on the keyboard
+rather than hunting for a button between turns) at each turn and you've made a
+live pass; pause, scrub, and hit it and you've placed one turn by hand — which
+is also how a wrong one is fixed, since nobody should replay eight minutes to
+move page 12. The **lead offset** (default 0.3 s) is what
 makes the live pass usable: the press always lands after the moment it marks,
-by roughly a constant, so the stamp goes in that much earlier. Note a live
+by roughly a constant, so the stamp goes in that much earlier. The workspace
+stands **beside** the page rather than along its foot: a strip had to wrap its
+turns, and a fifty-page score wrapped them into five rows that pushed the music
+off the top of the screen exactly while it was being timed. A column holds one
+turn per line, scrolls on its own and takes its width off room a portrait page
+had spare — and stacks under the page only when the screen is too narrow for
+that (`sm:`). Note a live
 pass can't be run much faster than 2× on YouTube — the iframe API caps there
 (`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
 Chrome mutes them, and you need the audio to know where you are.
