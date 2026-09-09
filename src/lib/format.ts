@@ -61,3 +61,13 @@ export function parseTime(input: string): number | null {
   if (n.length === 2) return n[0] * 60 + n[1]
   return n[0] * 3600 + n[1] * 60 + n[2]
 }
+
+/**
+ * A timecode with tenths — for the page-turn moments, where the lead offset is
+ * a sub-second thing and rounding to the second would hide it.
+ */
+export function formatTenths(seconds: number): string {
+  const safe = Math.max(0, seconds)
+  const whole = Math.floor(safe)
+  return `${formatTime(whole)}.${Math.floor((safe - whole) * 10)}`
+}

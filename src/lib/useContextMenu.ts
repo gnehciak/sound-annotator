@@ -40,6 +40,13 @@ export function useContextMenu() {
   useEffect(() => clearPress, [clearPress])
 
   const close = useCallback(() => setPoint(null), [])
+  /**
+   * Open at a point directly. For surfaces that must decide *whether* this
+   * click has a menu at all before taking the event — the score, where only a
+   * right-click actually over a page has anything to offer and the ground
+   * around it should keep the browser's own menu.
+   */
+  const openAt = useCallback((x: number, y: number) => setPoint({ x, y }), [])
 
   const handlers = {
     onContextMenu: (e: ReactMouseEvent) => {
@@ -73,5 +80,5 @@ export function useContextMenu() {
     onPointerCancel: clearPress,
   }
 
-  return { point, close, handlers }
+  return { point, close, openAt, handlers }
 }

@@ -1,10 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ZoomIn, ZoomOut, Crosshair, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  ZoomIn,
+  ZoomOut,
+  Crosshair,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  ChevronFirst,
+  ChevronLast,
+  Scissors,
+} from 'lucide-react'
 import type { Annotation } from '../types'
 import { colorForId, hueText } from '../lib/noteColors'
 import { formatTime, noteLabel, notePreview } from '../lib/format'
 import { loadOverviewZoom, saveOverviewZoom, type OverviewZoom } from '../lib/storage'
 import { useResolvedTheme } from '../lib/theme'
+import { useContextMenu } from '../lib/useContextMenu'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu'
 
 interface Props {
   annotations: Annotation[]
@@ -21,6 +33,22 @@ interface Props {
   onSeek: (t: number) => void
   /** Jump to a note and scroll it into view in the notes list. */
   onSeekNote: (id: string) => void
+  /**
+   * The strip's context menu (right-click / long press). Every verb here takes
+   * the moment *under the pointer* rather than the playhead — which is the
+   * whole reason to have one on a map of the track. All absent in the
+   * read-only presentations.
+   */
+  onAddNoteAt?: (t: number) => void
+  /** Mark a section start at this moment (the I key, aimed). */
+  onMarkInAt?: (t: number) => void
+  /** Close the pending section here, creating the note (the O key, aimed). */
+  onMarkOutAt?: (t: number) => void
+  /** A section start is pending — `onMarkOutAt` has something to close. */
+  pendingIn?: number | null
+  /** Trim the clip window to this moment. Video sources only. */
+  onTrimStartAt?: (t: number) => void
+  onTrimEndAt?: (t: number) => void
   className?: string
 }
 
@@ -113,6 +141,12 @@ export default function TrackOverview({
   onToggleOpen,
   onSeek,
   onSeekNote,
+  onAddNoteAt,
+  onMarkInAt,
+  onMarkOutAt,
+  pendingIn = null,
+  onTrimStartAt,
+  onTrimEndAt,
   className = '',
 }: Props) {
   const theme = useResolvedTheme()
@@ -346,6 +380,81 @@ export default function TrackOverview({
 
   const hoverNote = hover ? placed.find((p) => p.id === hover.id) : null
 
+  // ---- the strip's context menu ------------------------------------------
+  // Everything here is addressed to the moment under the pointer, which is
+  // what the strip is for: a time you can see and point at, but would
+  // otherwise have to seek to first. The time is captured when the menu opens
+  // — the playhead may well move while it's up.
+  const menu = useContextMenu()
+  const [menuAt, setMenuAt] = useState<number | null>(null)
+  const hasMenu = !!(onAddNoteAt || onMarkInAt || onTrimStartAt)
+  const openMenu = (e: React.MouseEvent) => {
+    const vp = viewportRef.current
+    if (!ready || !vp) return
+    const contentX = vp.scrollLeft + (e.clientX - vp.getBoundingClientRect().left)
+    setMenuAt(clamp((contentX - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
+    menu.handlers.onContextMenu(e)
+  }
+  const menuItems: ContextMenuItem[] = []
+  if (menuAt != null) {
+    const at = menuAt
+    const stamp = formatTime(at)
+    if (onAddNoteAt) {
+      menuItems.push({
+        key: 'add',
+        label: 'Add note here',
+        icon: Plus,
+        hint: stamp,
+        onSelect: () => onAddNoteAt(at),
+      })
+    }
+    if (onMarkInAt) {
+      menuItems.push({
+        key: 'in',
+        label: 'Section starts here',
+        icon: ChevronFirst,
+        hint: stamp,
+        onSelect: () => onMarkInAt(at),
+      })
+    }
+    if (onMarkOutAt) {
+      menuItems.push({
+        key: 'out',
+        label: 'Section ends here',
+        icon: ChevronLast,
+        hint: pendingIn != null ? `from ${formatTime(pendingIn)}` : undefined,
+        disabled: pendingIn == null || at <= pendingIn,
+        disabledTitle:
+          pendingIn == null
+            ? 'Mark where the section starts first'
+            : 'A section has to end after it starts',
+        onSelect: () => onMarkOutAt(at),
+      })
+    }
+    if (onTrimStartAt) {
+      menuItems.push({
+        key: 'trim-start',
+        label: 'Trim the start to here',
+        icon: Scissors,
+        hint: stamp,
+        separated: menuItems.length > 0,
+        onSelect: () => onTrimStartAt(at),
+      })
+    }
+    if (onTrimEndAt) {
+      menuItems.push({
+        key: 'trim-end',
+        label: 'Trim the end to here',
+        icon: Scissors,
+        hint: stamp,
+        onSelect: () => onTrimEndAt(at),
+      })
+    }
+    // No zoom item: the header's −/FIT/+ is always on screen a few pixels
+    // away. What the menu is for is the verbs that have no control anywhere —
+    // the ones addressed to the moment under the pointer.
+  }
+
 
   return (
     <section
@@ -442,7 +551,12 @@ export default function TrackOverview({
         ) : !ready ? (
           <Hint>Load the track to map its notes along the timeline.</Hint>
         ) : (
-          <div className="relative h-full cursor-pointer" style={{ width: contentW }} onClick={scrub}>
+          <div
+            className="relative h-full cursor-pointer"
+            style={{ width: contentW }}
+            onClick={scrub}
+            {...(hasMenu ? { ...menu.handlers, onContextMenu: openMenu } : null)}
+          >
             {/* time axis: spine line */}
             <div
               className="absolute h-px bg-line"
@@ -612,6 +726,15 @@ export default function TrackOverview({
 
        </div>
       </div>
+
+      {hasMenu && (
+        <ContextMenu
+          point={menu.point}
+          items={menuItems}
+          onClose={menu.close}
+          label={menuAt != null ? `Timeline at ${formatTime(menuAt)}` : 'Timeline'}
+        />
+      )}
 
       {/* hover preview popover — floats just above the timeline strip at the flag */}
       {hover && hoverNote && (

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Minus, Plus, Trash2, X } from 'lucide-react'
 import type { ScoreTurn } from '../types'
-import { formatTime } from '../lib/format'
+import { formatTenths, formatTime } from '../lib/format'
 import { addTurn, nudgeTurn, removeTurn } from '../lib/score'
 
 /**
@@ -19,12 +19,6 @@ import { addTurn, nudgeTurn, removeTurn } from '../lib/score'
  * much earlier. Raising it until the turns feel right is one number, not
  * twenty nudges.
  */
-/** A timecode with tenths — a lead offset is a sub-second thing. */
-function tenths(seconds: number): string {
-  const whole = Math.floor(Math.max(0, seconds))
-  return `${formatTime(whole)}.${Math.floor((Math.max(0, seconds) - whole) * 10)}`
-}
-
 export default function ScoreSync({
   turns,
   page,
@@ -98,7 +92,7 @@ export default function ScoreSync({
           disabled={!canTurn}
           title={
             canTurn
-              ? `Mark page ${next} as starting here (${tenths(at)}), lead included`
+              ? `Mark page ${next} as starting here (${formatTenths(at)}), lead included`
               : 'The last page has nowhere to turn to'
           }
           className="btn-signal btn-sm press shrink-0 disabled:pointer-events-none disabled:opacity-40"
@@ -114,7 +108,7 @@ export default function ScoreSync({
           title="Where a turn would land right now"
           className="chip chip-time shrink-0 font-mono text-[11px] tabular-nums"
         >
-          {tenths(at)}
+          {formatTenths(at)}
         </span>
 
         <label

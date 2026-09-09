@@ -27,6 +27,8 @@ import type { Folder, Project } from '../types'
 import { formatRelativeTime } from '../lib/format'
 import { downloadProjectJson } from '../lib/projectJson'
 import { colorForId, hueText } from '../lib/noteColors'
+import { useContextMenu } from '../lib/useContextMenu'
+import ContextMenu from './ContextMenu'
 import { isStructureProject } from '../lib/sections'
 import { isVideoSource, sourceLabel, sourceLinkUrl, sourceThumbUrl } from '../lib/source'
 import { useResolvedTheme, type ResolvedTheme } from '../lib/theme'
@@ -938,6 +940,7 @@ function FolderTile({
   onDropTrack: (trackId: string) => void
 }) {
   const [over, setOver] = useState(false)
+  const menu = useContextMenu()
   // Esc cancels the rename, but the input's unmount still fires blur — the
   // flag keeps that trailing blur from committing anyway.
   const cancelledRef = useRef(false)
@@ -945,9 +948,24 @@ function FolderTile({
   const hue = colorForId(folder.id)
   const hueInk = hueText(hue, theme)
 
+  // Deleting never deletes tracks — they fall back to the library. Asked here
+  // rather than in the bin button, so the menu's item asks the same question.
+  const confirmDelete = () => {
+    if (
+      tracks === 0 ||
+      confirm(
+        `Delete folder “${folder.name}”? Its ${tracks} ${
+          tracks === 1 ? 'track moves' : 'tracks move'
+        } back to the library.`,
+      )
+    )
+      onDelete()
+  }
+
   return (
     <div
       onClick={() => !renaming && onOpen()}
+      {...(renaming ? null : menu.handlers)}
       onDragOver={(e) => {
         if (!hasTrack(e)) return
         e.preventDefault()
@@ -1026,6 +1044,26 @@ function FolderTile({
         </p>
       </div>
       {!renaming && (
+        <ContextMenu
+          point={menu.point}
+          items={[
+            { key: 'open', label: 'Open folder', icon: FolderIcon, onSelect: onOpen },
+            { key: 'rename', label: 'Rename…', icon: Pencil, onSelect: onStartRename },
+            {
+              key: 'delete',
+              label: 'Delete folder',
+              icon: Trash2,
+              danger: true,
+              separated: true,
+              onSelect: confirmDelete,
+            },
+          ]}
+          onClose={menu.close}
+          label={`Folder ${folder.name}`}
+        />
+      )}
+
+      {!renaming && (
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
           <button
             type="button"
@@ -1043,16 +1081,7 @@ function FolderTile({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              // Deleting never deletes tracks — they fall back to the library.
-              if (
-                tracks === 0 ||
-                confirm(
-                  `Delete folder “${folder.name}”? Its ${tracks} ${
-                    tracks === 1 ? 'track moves' : 'tracks move'
-                  } back to the library.`,
-                )
-              )
-                onDelete()
+              confirmDelete()
             }}
             title="Delete folder (its tracks move back to the library)"
             aria-label={`Delete folder ${folder.name}`}
@@ -1266,9 +1295,22 @@ function TrackTile({
   // generated waveform mark, like audio tracks.
   const thumbUrl = sourceThumbUrl(p.source)
   const [thumbBroken, setThumbBroken] = useState(false)
+  // A library tile's right-click opens its own "…" menu (below); a trashed
+  // one has no such menu — its two verbs are buttons — so it gets a small
+  // context menu of exactly those two.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const trashMenu = useContextMenu()
   return (
     <div
       draggable={!trashed}
+      {...(trashed
+        ? trashMenu.handlers
+        : {
+            onContextMenu: (e: React.MouseEvent) => {
+              e.preventDefault()
+              setMenuOpen(true)
+            },
+          })}
       onDragStart={
         trashed
           ? undefined
@@ -1343,6 +1385,31 @@ function TrackTile({
           /* Always visible, unlike the library tile's hover-revealed menu: in
              the trash the actions are the only reason the tile is on screen. */
           <div className="flex shrink-0 items-center gap-0.5">
+            <ContextMenu
+              point={trashMenu.point}
+              items={[
+                ...(onRestore
+                  ? [
+                      {
+                        key: 'restore',
+                        label: 'Put back in the library',
+                        icon: Undo2,
+                        onSelect: onRestore,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'purge',
+                  label: 'Delete forever',
+                  icon: Trash2,
+                  danger: true,
+                  separated: !!onRestore,
+                  onSelect: onDelete,
+                },
+              ]}
+              onClose={trashMenu.close}
+              label={`Trashed track ${p.title}`}
+            />
             <button
               type="button"
               onClick={onRestore}
@@ -1367,6 +1434,8 @@ function TrackTile({
             <TrackActionsMenu
               project={p}
               folders={folders}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
               onCopy={onCopy}
               onShare={onShare}
               onMove={onMove}
@@ -1460,6 +1529,8 @@ function TrackTile({
 function TrackActionsMenu({
   project: p,
   folders,
+  open,
+  onOpenChange,
   onCopy,
   onShare,
   onMove,
@@ -1467,12 +1538,20 @@ function TrackActionsMenu({
 }: {
   project: Project
   folders: Folder[]
+  /**
+   * Controlled by the tile, so a right-click anywhere on the card opens this
+   * same menu — the tile has exactly one set of actions and they already live
+   * here, complete with their inline "Copying…" and "Move to" rows. A generic
+   * context menu would be a second, poorer copy of it.
+   */
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onCopy: () => Promise<void>
   onShare: () => void
   onMove: (folderId: string | null) => void
   onDelete: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const setOpen = onOpenChange
   // Async-action lifecycle for the two rows that show inline feedback. `busy`
   // is the action currently running; `done` is the one that just finished and
   // is briefly displaying its check before the menu closes.
@@ -1572,7 +1651,7 @@ function TrackActionsMenu({
         type="button"
         onClick={(e) => {
           e.stopPropagation()
-          setOpen((o) => !o)
+          setOpen(!open)
         }}
         aria-expanded={open}
         title="More actions"
