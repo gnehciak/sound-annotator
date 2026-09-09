@@ -645,7 +645,16 @@ turns, and a fifty-page score wrapped them into five rows that pushed the music
 off the top of the screen exactly while it was being timed. A column holds one
 turn per line, scrolls on its own and takes its width off room a portrait page
 had spare — and stacks under the page only when the screen is too narrow for
-that (`sm:`). Note a live
+that (`sm:`). A turn's ±0.5 s and delete controls ride **in** its row at a
+fixed row height, so selecting one moves nothing under the pointer, and a
+click on a turn always selects and seeks rather than toggling: clicking it
+again is "take me back there", which is how you check a nudge landed.
+
+**The arrows are the transport's everywhere, including full screen.** They were
+the page keys there, which read well until you time a pass: what you are
+steering is the recording, and a key meaning "back five seconds" in the pane
+and "back one page" over the same score is one nobody can trust. Pages keep
+PageUp/PageDown and the ‹ › buttons. Note a live
 pass can't be run much faster than 2× on YouTube — the iframe API caps there
 (`Transport`'s `RATES` already does) — while Drive and audio reach 4× before
 Chrome mutes them, and you need the audio to know where you are.
