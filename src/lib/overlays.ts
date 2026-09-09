@@ -160,8 +160,18 @@ export function movePinPatch(
   kind: 'frame' | 'score',
   x: number,
   y: number,
+  /**
+   * Which page of the score the pin now sits on. Only ever passed when the
+   * gesture actually says — dropping one onto a page from its own menu.
+   * Dragging a pin inside its page box doesn't move it between pages, and
+   * writing the page anyway would let a stale "current page" overwrite a pin's
+   * own.
+   */
+  page?: number,
 ): Partial<NoteOverlay> {
-  return kind === 'score' ? { scorePinX: x, scorePinY: y } : { pinX: x, pinY: y }
+  return kind === 'score'
+    ? { scorePinX: x, scorePinY: y, ...(page != null ? { scorePinPage: page } : {}) }
+    : { pinX: x, pinY: y }
 }
 
 /**

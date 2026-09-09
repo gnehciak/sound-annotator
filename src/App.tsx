@@ -71,7 +71,7 @@ import {
 } from './lib/source'
 import { copySharedProject } from './lib/copyProject'
 import { parseProjectJson } from './lib/projectJson'
-import { makeTextBlock } from './lib/noteBlocks'
+import { blocksOf, makeTextBlock } from './lib/noteBlocks'
 import {
   sectionsToAnnotations,
   AI_SECTION_PREFIX,
@@ -134,6 +134,7 @@ import SettingsModal from './components/SettingsModal'
 import ShortcutsOverlay from './components/ShortcutsOverlay'
 import PluginWindow, { type WindowMode } from './components/PluginWindow'
 import NoteInspector from './components/NoteInspector'
+import type { AnnotationEditorHandle } from './components/AnnotationEditor'
 import ColorPicker from './components/ColorPicker'
 import TagPicker from './components/TagPicker'
 import StructureEditor from './components/structure/StructureEditor'
@@ -259,6 +260,10 @@ export default function App() {
   // Id of a just-created note that should grab focus (and scroll into view) so
   // the user can start typing immediately. Cleared once the note handles it.
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null)
+  // The open note's body editor, so the app can write into it from outside —
+  // see insertNoteReference. Filled by whichever inspector is mounted (docked
+  // or modal), cleared when it unmounts.
+  const inspectorApiRef = useRef<AnnotationEditorHandle | null>(null)
   const [notesPad, setNotesPad] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   // The resizable player|notes split (notes-fixed / player-flex; persisted).
@@ -1450,9 +1455,9 @@ export default function App() {
   }
 
   // ---- annotation mutations ---------------------------------------------
-  function addAnnotationAtCurrent() {
+  /** Add an empty note at a moment, open it, and drop the caret in it. */
+  function addAnnotationAt(t: number) {
     if (!current) return
-    const t = playerRef.current?.getCurrentTime?.() ?? currentTime
     const ann: Annotation = {
       id: uid(),
       start: Math.max(0, Math.floor(t)),
@@ -1463,6 +1468,49 @@ export default function App() {
     commitAnnotations(current.id, (anns) => [...anns, ann])
     selectNote(ann.id)
     setFocusNoteId(ann.id)
+  }
+
+  function addAnnotationAtCurrent() {
+    addAnnotationAt(playerRef.current?.getCurrentTime?.() ?? currentTime)
+  }
+
+  /**
+   * Copy a note whole — its text, its record, and what it puts on the picture.
+   * Block ids are reminted (two notes must never share one) and everything the
+   * copy could later edit in place is cloned, so the two drift apart from the
+   * first keystroke rather than sharing an object. The copy sits directly under
+   * its original in a same-time group: `order` is only a tiebreaker, so half a
+   * step is a position, and the next manual reorder renumbers the group anyway.
+   */
+  function duplicateAnnotation(annId: string) {
+    if (!current) return
+    const a = current.annotations.find((n) => n.id === annId)
+    if (!a) return
+    const copy: Annotation = {
+      ...a,
+      id: uid(),
+      createdAt: now(),
+      blocks: blocksOf(a).map((b) => ({ ...b, id: uid() })),
+      tags: a.tags ? [...a.tags] : undefined,
+      order: a.order != null ? a.order + 0.5 : undefined,
+      overlay: a.overlay
+        ? { ...a.overlay, quote: a.overlay.quote ? { ...a.overlay.quote } : undefined }
+        : undefined,
+    }
+    commitAnnotations(current.id, (anns) => [...anns, copy])
+    selectNote(copy.id)
+  }
+
+  /**
+   * Write a cross-reference to a note into whichever note is open in the
+   * inspector — the "@" menu's insertion, reached from the other end: you can
+   * see the note you want to name, in the list, and it is not the one you are
+   * typing in.
+   */
+  function insertNoteReference(annId: string) {
+    const a = current?.annotations.find((n) => n.id === annId)
+    if (!a) return
+    inspectorApiRef.current?.insertNoteRef(a.id, noteLabel(a.start, a.end))
   }
 
   function updateAnnotation(
@@ -1499,10 +1547,10 @@ export default function App() {
    * on the same pin collapses into one undo step.
    */
   function movePin(kind: 'frame' | 'score') {
-    return (annId: string, x: number, y: number) => {
+    return (annId: string, x: number, y: number, page?: number) => {
       const a = current?.annotations.find((n) => n.id === annId)
       if (!a) return
-      updateAnnotation(annId, patchOverlay(a, movePinPatch(kind, x, y)), {
+      updateAnnotation(annId, patchOverlay(a, movePinPatch(kind, x, y, page)), {
         // Keyed by kind as well as note: a note's two pins are two things to
         // aim, and dragging one shouldn't fold into the other's undo step.
         coalesceKey: `pin:${kind}:${annId}`,
@@ -1740,18 +1788,54 @@ export default function App() {
     })
   }
 
-  function markIn() {
-    const t = playerRef.current?.getCurrentTime?.() ?? currentTime
+  // The pair take an explicit moment; `markIn` / `markOut` are the same two
+  // aimed at the playhead, which is what the I / O keys and the Notes strip
+  // mean. The timeline's menu marks the time under the pointer instead — the
+  // whole point of aiming at a map of the track.
+  //
+  // They stay separate functions rather than one with an optional argument:
+  // the arg-less pair are passed straight to onClick, which would otherwise
+  // hand them a MouseEvent to use as a timecode.
+  function markInAt(t: number) {
     setPendingIn((prev) =>
       prev != null && Math.abs(prev - t) < 0.4 ? null : Math.max(0, t),
     )
   }
+  function markIn() {
+    markInAt(playerRef.current?.getCurrentTime?.() ?? currentTime)
+  }
 
-  function markOut() {
+  function markOutAt(t: number) {
     if (pendingIn == null) return
-    const t = playerRef.current?.getCurrentTime?.() ?? currentTime
     createRange(uid(), pendingIn, t)
     setPendingIn(null)
+  }
+  function markOut() {
+    markOutAt(playerRef.current?.getCurrentTime?.() ?? currentTime)
+  }
+
+  /**
+   * Trim the clip window to a moment on the timeline strip. The strip runs on
+   * *clip* time, like the notes, while a clip bound is a moment in the source
+   * video — so the offset goes back on before it is stored, and setClip slides
+   * the notes to match. Refused rather than clamped when it would invert the
+   * window: a clip with no time in it is not a trim anyone asked for.
+   */
+  function trimClipAt(edge: 'start' | 'end', at: number) {
+    const src = current?.source
+    if (!src || !isVideoSource(src)) return
+    // Whole seconds, like every other clip bound: the fields are typed in
+    // seconds and read back in seconds, and a pointer aimed at a strip where
+    // one pixel is nearly half a second has no business storing fifteen
+    // decimal places into the row.
+    const t = Math.round((src.clipStart ?? 0) + at)
+    if (edge === 'start') {
+      if (src.clipEnd != null && t >= src.clipEnd) return
+      setClip({ start: t || undefined, end: src.clipEnd })
+    } else {
+      if (t <= (src.clipStart ?? 0)) return
+      setClip({ start: src.clipStart, end: t })
+    }
   }
 
   // Seek to the note before/after the playhead (and scroll it into view).
@@ -2778,6 +2862,24 @@ export default function App() {
                     onToggleOpen={toggleOverview}
                     onSeek={seek}
                     onSeekNote={seekToNote}
+                    onAddNoteAt={effectiveViewOnly ? undefined : addAnnotationAt}
+                    onMarkInAt={
+                      effectiveViewOnly || isStructure ? undefined : markInAt
+                    }
+                    onMarkOutAt={
+                      effectiveViewOnly || isStructure ? undefined : markOutAt
+                    }
+                    pendingIn={pendingIn}
+                    onTrimStartAt={
+                      canEditSettings && isVideoSource(current.source)
+                        ? (t) => trimClipAt('start', t)
+                        : undefined
+                    }
+                    onTrimEndAt={
+                      canEditSettings && isVideoSource(current.source)
+                        ? (t) => trimClipAt('end', t)
+                        : undefined
+                    }
                   />
                 </div>
               </div>
@@ -2861,6 +2963,10 @@ export default function App() {
                     passageId={passageId}
                     playOnce={playOnce}
                     onReorder={reorderAnnotations}
+                    onAddNoteAt={addAnnotationAt}
+                    onReference={insertNoteReference}
+                    onDuplicate={duplicateAnnotation}
+                    onDelete={deleteAnnotation}
                     onSeekNote={seekToNote}
                     mentionItems={getMentionItems}
                     questionNumbers={qNumbers}
@@ -2931,6 +3037,7 @@ export default function App() {
                           allowOverlays={isVideoSource(current.source)}
                           scorePage={score ? scorePage : undefined}
                           scoreHidden={!!score && scoreView.mode === 'off'}
+                          editorApiRef={inspectorApiRef}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -2982,6 +3089,7 @@ export default function App() {
             allowOverlays={isVideoSource(current?.source)}
             scorePage={score ? scorePage : undefined}
             scoreHidden={!!score && scoreView.mode === 'off'}
+            editorApiRef={inspectorApiRef}
           />
         </PluginWindow>
       )}

@@ -9,9 +9,13 @@ import {
   Image as ImageIcon,
   MapPin,
   Quote,
+  Plus,
+  AtSign,
+  Copy,
+  Trash2,
 } from 'lucide-react'
 import type { Annotation } from '../types'
-import { noteLabel } from '../lib/format'
+import { formatTime, noteLabel } from '../lib/format'
 import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
@@ -27,6 +31,8 @@ import {
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu'
+import { useContextMenu } from '../lib/useContextMenu'
 import type { MentionItem } from './MentionList'
 
 interface Props {
@@ -50,6 +56,18 @@ interface Props {
   canMoveDown?: boolean
   onMoveUp?: () => void
   onMoveDown?: () => void
+  /**
+   * The context menu (right-click, or a long press on a touch screen). Every
+   * item is an edit, so they're all absent in the read-only presentations.
+   */
+  onAddNoteAt?: (t: number) => void
+  /** Write a reference to this note into the note open in the inspector. */
+  onReference?: () => void
+  /** There is somewhere to write it: another note is open in the inspector.
+   *  False greys the item and says why, rather than dropping it. */
+  canReference?: boolean
+  onDuplicate?: () => void
+  onDelete?: () => void
   /** Seek (and pin) to this note's moment — the timecode button. */
   onPlay: () => void
   /**
@@ -97,6 +115,11 @@ export default function AnnotationItem({
   canMoveDown = false,
   onMoveUp,
   onMoveDown,
+  onAddNoteAt,
+  onReference,
+  canReference = false,
+  onDuplicate,
+  onDelete,
   onPlay,
   onPlayPassage,
   passageArmed = false,
@@ -159,9 +182,53 @@ export default function AnnotationItem({
   // carry opacity-50, which a fade-in would fight, so they just appear.
   const [enterAnim] = useState(() => active || selected)
 
+  // ---- context menu ------------------------------------------------------
+  // Note it deliberately does *not* select the note: opening it would swap the
+  // inspector to this note, and "Reference this note" would then have nowhere
+  // left to write — the note you are writing in is the one you right-clicked.
+  const menu = useContextMenu()
+  const hasMenu = !readOnly && !!(onAddNoteAt || onDuplicate || onDelete)
+  const menuItems: ContextMenuItem[] = []
+  if (onAddNoteAt) {
+    menuItems.push({
+      key: 'add',
+      label: 'Add note here',
+      icon: Plus,
+      hint: formatTime(annotation.start),
+      onSelect: () => onAddNoteAt(annotation.start),
+    })
+  }
+  if (onReference) {
+    menuItems.push({
+      key: 'reference',
+      label: 'Reference this note',
+      icon: AtSign,
+      disabled: !canReference,
+      disabledTitle: selected
+        ? 'This is the note you’re writing in'
+        : 'Open a note first — the reference is written into it',
+      onSelect: onReference,
+    })
+  }
+  if (onDuplicate) {
+    menuItems.push({ key: 'duplicate', label: 'Duplicate note', icon: Copy, onSelect: onDuplicate })
+  }
+  if (onDelete) {
+    menuItems.push({
+      key: 'delete',
+      label: 'Delete note',
+      icon: Trash2,
+      danger: true,
+      separated: menuItems.length > 0,
+      onSelect: onDelete,
+    })
+  }
+
   // Clicking a @-mention seeks to that note; handle on mousedown so the row's
-  // click (select / seek) can skip it and avoid a double action.
+  // click (select / seek) can skip it and avoid a double action. Left button
+  // only — a right-click is opening the menu, not following the link.
   const handleMouseDown = (e: MouseEvent) => {
+    if (e.button !== 0) return
     const mention = (e.target as HTMLElement).closest('[data-type="mention"]')
     if (!mention) return
     e.preventDefault()
@@ -170,6 +237,11 @@ export default function AnnotationItem({
   }
   const handleClick = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-type="mention"]')) return
+    // A long press opens the menu and then releases, which a touch screen
+    // reports as a click: don't select the note out from under the menu that
+    // press just asked for (and never on the note the menu is about — see the
+    // reference item).
+    if (menu.point) return
     if (readOnly) onPlay()
     else onSelect?.(e.metaKey || e.ctrlKey)
   }
@@ -177,10 +249,12 @@ export default function AnnotationItem({
   const focused = active || selected
 
   return (
+    <>
     <div
       id={`note-${annotation.id}`}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
+      {...(hasMenu ? menu.handlers : null)}
       aria-selected={selected || undefined}
       className={`group relative cursor-pointer transition duration-200 ${
         enterAnim ? 'animate-note-in' : ''
@@ -515,6 +589,16 @@ export default function AnnotationItem({
         </div>
       )}
     </div>
+
+    {hasMenu && (
+      <ContextMenu
+        point={menu.point}
+        items={menuItems}
+        onClose={menu.close}
+        label={`Note at ${label}`}
+      />
+    )}
+    </>
   )
 }
 

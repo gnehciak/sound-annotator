@@ -5,6 +5,7 @@ import {
   useState,
   type ComponentType,
   type MouseEvent,
+  type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
@@ -75,6 +76,13 @@ interface Props {
   scorePage?: number
   /** The track has a score, but it's switched off. */
   scoreHidden?: boolean
+  /**
+   * Mirror of the body editor's imperative handle, so the host can write into
+   * the open note from outside it — a note's context menu offering to
+   * reference it in whatever note is being written (see App's
+   * `insertNoteReference`). Held by the host, filled in here.
+   */
+  editorApiRef?: MutableRefObject<AnnotationEditorHandle | null>
 }
 
 /**
@@ -106,9 +114,16 @@ export default function NoteInspector({
   allowOverlays = false,
   scorePage,
   scoreHidden,
+  editorApiRef,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
-  const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
+  const ownApiRef = useRef<AnnotationEditorHandle | null>(null)
+  // One ref callback feeding two holders: this component's own (focus, the
+  // dictionary's tag insertion) and the host's, when it asked for one.
+  const setEditorApi = (api: AnnotationEditorHandle | null) => {
+    ownApiRef.current = api
+    if (editorApiRef) editorApiRef.current = api
+  }
 
   const updateTextBlock = (blockId: string, html: string) => {
     const next = blocks.map((b) =>
@@ -160,7 +175,7 @@ export default function NoteInspector({
   useEffect(() => {
     if (!autoFocus) return
     const raf = requestAnimationFrame(() => {
-      editorApiRef.current?.focus()
+      ownApiRef.current?.focus()
       onFocusHandled?.()
     })
     return () => cancelAnimationFrame(raf)
@@ -279,7 +294,7 @@ export default function NoteInspector({
             return (
               <AnnotationEditor
                 key={block.id}
-                ref={editorApiRef}
+                ref={setEditorApi}
                 noteId={annotation.id}
                 mentionItems={mentionItems}
                 uploadImage={uploadImage}
@@ -326,7 +341,7 @@ export default function NoteInspector({
             is where "+ Property" used to add an empty grid. */}
         <ElementsDictionary
           onInsert={(field, value) =>
-            editorApiRef.current?.insertProperty(field, value)
+            ownApiRef.current?.insertProperty(field, value)
           }
         />
       </div>

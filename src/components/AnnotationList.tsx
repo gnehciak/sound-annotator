@@ -42,6 +42,14 @@ interface Props {
   playOnce?: boolean
   /** Persist a new top-to-bottom order for a group of same-time notes. */
   onReorder?: (orderedIds: string[]) => void
+  /**
+   * The note context menu (right-click / long press). Supplied together in the
+   * editor and left off everywhere read-only — each one is an edit.
+   */
+  onAddNoteAt?: (t: number) => void
+  onReference?: (id: string) => void
+  onDuplicate?: (id: string) => void
+  onDelete?: (id: string) => void
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
   /** Question numbering (note id → 1-based Q number) for the Q chips. */
@@ -72,6 +80,10 @@ export default function AnnotationList({
   passageId,
   playOnce = false,
   onReorder,
+  onAddNoteAt,
+  onReference,
+  onDuplicate,
+  onDelete,
   onSeekNote,
   mentionItems,
   questionNumbers,
@@ -395,6 +407,13 @@ export default function AnnotationList({
           playOnce={playOnce}
           passageArmed={passageId === a.id}
           onSeek={onSeek}
+          onAddNoteAt={onAddNoteAt}
+          onReference={onReference ? () => onReference(a.id) : undefined}
+          // Referencing needs somewhere to write: another note open in the
+          // inspector. Its own note is excluded — a note that cites itself.
+          canReference={!!selectedId && selectedId !== a.id}
+          onDuplicate={onDuplicate ? () => onDuplicate(a.id) : undefined}
+          onDelete={onDelete ? () => onDelete(a.id) : undefined}
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
           questionNumber={questionNumbers?.get(a.id)}

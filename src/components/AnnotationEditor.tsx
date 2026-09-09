@@ -69,6 +69,13 @@ export interface AnnotationEditorHandle {
   focus: () => void
   /** Insert a property tag at the caret — the dictionary's way in. */
   insertProperty: (field: string, value: string) => void
+  /**
+   * Insert a cross-reference to another note at the caret — the same atom the
+   * "@" menu writes, reached instead from that note's own context menu (which
+   * is the way round it happens when the note you want to name is the one you
+   * are looking at in the list).
+   */
+  insertNoteRef: (id: string, label: string) => void
 }
 
 const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function AnnotationEditor(
@@ -196,6 +203,28 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
   editorRef.current = editor
 
   /**
+   * Drop an inline atom at the caret with the spacing prose needs around it —
+   * a trailing space the way the "@" menu does, and a leading one unless there
+   * is already whitespace (or nothing) behind. Without it two atoms picked in
+   * a row run together into what reads as a single word.
+   */
+  const putAtCaret = (node: { type: string; attrs: Record<string, unknown> }) => {
+    const ed = editorRef.current
+    if (!ed) return
+    const before = ed.state.selection.$from.nodeBefore
+    const spaced = !before || (before.isText && /\s$/.test(before.text ?? ''))
+    ed
+      .chain()
+      .focus()
+      .insertContent([
+        ...(spaced ? [] : [{ type: 'text', text: ' ' }]),
+        node,
+        { type: 'text', text: ' ' },
+      ])
+      .run()
+  }
+
+  /**
    * Replace a range (or just the caret) with a property tag. `text` is the word
    * as the sentence spells it — passed when a word already on the page is being
    * turned into a chip, so the prose keeps its own capitalisation.
@@ -210,23 +239,14 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     if (!ed) return
     const chain = ed.chain().focus()
     const node = { type: 'propertyTag', attrs: { field, value, text: text ?? '' } }
-    // Replacing a word leaves the spacing around it alone. Inserting at the
-    // caret has to supply it: a trailing space the way the "@" menu does, and a
-    // leading one unless there is already whitespace (or nothing) behind —
-    // otherwise two tags picked in a row from the dictionary run together into
-    // what reads as a single word.
+    // Replacing a word leaves the spacing around it alone; inserting at the
+    // caret has to supply it (see putAtCaret).
     if (range) {
       chain.insertContentAt(range, node)
+      chain.run()
     } else {
-      const before = ed.state.selection.$from.nodeBefore
-      const spaced = !before || (before.isText && /\s$/.test(before.text ?? ''))
-      chain.insertContent([
-        ...(spaced ? [] : [{ type: 'text', text: ' ' }]),
-        node,
-        { type: 'text', text: ' ' },
-      ])
+      putAtCaret(node)
     }
-    chain.run()
   }
 
   useImperativeHandle(
@@ -234,6 +254,7 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     () => ({
       focus: () => editorRef.current?.commands.focus('end'),
       insertProperty: (field, value) => putTag(field, value),
+      insertNoteRef: (id, label) => putAtCaret({ type: 'mention', attrs: { id, label } }),
     }),
     [],
   )

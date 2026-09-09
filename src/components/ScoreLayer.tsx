@@ -5,8 +5,10 @@ import {
   ChevronRight,
   ListMusic,
   Loader2,
+  MapPin,
   Maximize2,
   Minimize2,
+  Trash2,
   TriangleAlert,
   ZoomIn,
   ZoomOut,
@@ -28,6 +30,8 @@ import {
   MIN_ZOOM,
   ZOOM_STEP,
   clampZoom,
+  addTurn,
+  markAt,
   marksOnPage,
   pageAt,
   removeMark,
@@ -36,7 +40,11 @@ import {
   type ScoreView,
 } from '../lib/score'
 import ScoreSync from './ScoreSync'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu'
 import { isTypingTarget } from '../lib/useHotkeys'
+import { useContextMenu } from '../lib/useContextMenu'
+import { pinTargetAt } from '../lib/pinTargets'
+import { formatTenths, noteLabel } from '../lib/format'
 
 /**
  * The score: the printed music, drawn either as its own view of the player
@@ -117,7 +125,12 @@ export default function ScoreLayer({
   /** The note open in the inspector — the only pin that can be dragged. */
   selectedId?: string | null
   readOnly?: boolean
-  onMovePin?: (id: string, x: number, y: number) => void
+  /**
+   * Move a pin, or place one: the page is passed when the caller knows which
+   * page it landed on — dragging a pin inside its own page box doesn't change
+   * it, but dropping one from the page's context menu does.
+   */
+  onMovePin?: (id: string, x: number, y: number, page?: number) => void
   /** Commit a moved or resized picture quote, in fractions of the page box. */
   onQuote?: (id: string, quote: NoteQuote) => void
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
@@ -295,6 +308,25 @@ export default function ScoreLayer({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [expanded, drawable, step, syncing, onSyncing, activeTool, activeMark, deleteMark])
 
+  // ---- the page's context menu -------------------------------------------
+  // Which page, and where on it, is answered by the pin drop-box registry
+  // (lib/pinTargets) rather than by threading refs out of ScoreSurface: every
+  // drawn page already registers itself there as the thing a pin is aimed at,
+  // and "which page is this point on" is the same question. A right-click that
+  // isn't over a page — the ground around it, the chrome — is left to the
+  // browser's own menu rather than answered with an empty one.
+  const menu = useContextMenu()
+  const [menuOn, setMenuOn] = useState<{ page: number; x: number; y: number } | null>(
+    null,
+  )
+  const openMenu = (e: React.MouseEvent) => {
+    const drop = pinTargetAt(e.clientX, e.clientY)
+    if (!drop || drop.kind !== 'score' || drop.page == null) return
+    e.preventDefault()
+    setMenuOn({ page: drop.page, x: drop.x, y: drop.y })
+    menu.openAt(e.clientX, e.clientY)
+  }
+
   // The pins aimed at this page, under the same time-and-selection rule the
   // frame's pins follow. A score pin on another page simply isn't drawn: it is
   // a fraction of a page box that isn't on screen, and floating it over the
@@ -317,6 +349,64 @@ export default function ScoreLayer({
     (n: number) => quoteOn(selectedNote, 'score', n),
     [selectedNote],
   )
+
+  // What the page's menu offers, for the point it was opened on. Marks are
+  // hit-tested here rather than by arming the select tool first — pointing at
+  // a highlight and saying "not that one" is the one thing the drawing tools
+  // make you set up for.
+  const menuMark = menuOn
+    ? markAt(marksOnPage(score.marks, menuOn.page), menuOn.x, menuOn.y)
+    : null
+  const menuItems: ContextMenuItem[] = []
+  if (menuOn) {
+    const on = menuOn
+    if (onMarks && menuMark) {
+      menuItems.push({
+        key: 'delete-mark',
+        label: 'Delete this mark',
+        icon: Trash2,
+        danger: true,
+        onSelect: () => onMarks(removeMark(score.marks, menuMark.id)),
+      })
+    }
+    if (onMovePin && !readOnly) {
+      menuItems.push({
+        key: 'pin',
+        label: 'Pin the open note here',
+        icon: MapPin,
+        hint: selectedNote ? noteLabel(selectedNote.start, selectedNote.end) : undefined,
+        disabled: !selectedNote,
+        disabledTitle: 'Open a note first — the pin belongs to one',
+        onSelect: () =>
+          selectedNote && onMovePin(selectedNote.id, on.x, on.y, on.page),
+      })
+    }
+    // Only in the sync workspace. Outside it a stray turn would quietly put
+    // the score under the clock for everyone who opens the track — and the
+    // workspace is where you can see the turns you are making. Inside it the
+    // menu says something the button can't: the button always means "the next
+    // page", this means the page you are pointing at.
+    if (syncing && onTurns && currentTime != null) {
+      menuItems.push({
+        key: 'turn',
+        label: `Turn to page ${on.page} here`,
+        icon: ListMusic,
+        hint: formatTenths(Math.max(0, currentTime - lead)),
+        separated: menuItems.length > 0,
+        onSelect: () =>
+          onTurns(addTurn(score.turns, Math.max(0, currentTime - lead), on.page)),
+      })
+    }
+    if (!syncing) {
+      menuItems.push({
+        key: 'expand',
+        label: expanded ? 'Leave full screen' : 'Full screen',
+        icon: expanded ? Minimize2 : Maximize2,
+        separated: menuItems.length > 0,
+        onSelect: () => setExpanded(!expanded),
+      })
+    }
+  }
 
   // Tell the host which page is up, so a pin dropped now lands on it.
   useEffect(() => {
@@ -468,6 +558,15 @@ export default function ScoreLayer({
   // Lifted clear of the transport when there is one under it — the tools and
   // the play button are both things a hand reaches for, and stacking them
   // would put the pen where the scrub bar was a moment ago.
+  const pageMenu = (
+    <ContextMenu
+      point={menu.point}
+      items={menuItems}
+      onClose={menu.close}
+      label={menuOn ? `Page ${menuOn.page} of the score` : 'Score'}
+    />
+  )
+
   const toolbar = drawable ? (
     <div
       // Floating, unlike the two strips that bracket the view: the tools are
@@ -495,10 +594,11 @@ export default function ScoreLayer({
   if (expanded) {
     return createPortal(
       <div className="fixed inset-0 z-[80] flex animate-fade-in flex-col bg-ink/95 backdrop-blur-sm">
-        <div className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1" onContextMenu={openMenu}>
           {surface}
           {chrome}
           {toolbar}
+          {pageMenu}
           {/* Full screen is the score with more room, not a stripped-down
               version of it: the tools, the pins and the transport all come
               along. The overlay transport pins itself to the foot of this box,
@@ -531,10 +631,14 @@ export default function ScoreLayer({
   // score to read along with the music, not to silence it.
   if (placement === 'pane') {
     return (
-      <div className="absolute inset-0 animate-fade-in overflow-hidden bg-ink">
+      <div
+        className="absolute inset-0 animate-fade-in overflow-hidden bg-ink"
+        onContextMenu={openMenu}
+      >
         {surface}
         {chrome}
         {toolbar}
+        {pageMenu}
         {/* Its own transport, pinned to the foot of this panel. The view
             covers the player, floating transport and all, and a score you
             can't start or scrub is a picture of music rather than a way to
