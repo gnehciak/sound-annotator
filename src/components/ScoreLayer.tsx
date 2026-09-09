@@ -267,21 +267,24 @@ export default function ScoreLayer({
     setSelectedMark(null)
   }, [onMarks, score.marks, activeMark])
 
-  // Expanded, the score owns the arrow keys and Escape; with a tool armed it
+  // Expanded, the score owns Escape and the page keys; with a tool armed it
   // owns Escape and Delete wherever it is. Capture + preventDefault rather
   // than a bubble listener: the app's global hotkeys sit on window too, and
   // they skip an event that has already been handled (useHotkeys).
   //
-  // The arrows are claimed only when expanded, deliberately. In the pane they
-  // are the app's own seek keys, and a reader following the music with ← and →
-  // would be startled to find them turning pages instead.
+  // **The arrows are the transport's, everywhere — including full screen.**
+  // They were the page keys here, which read well until you time a sync pass:
+  // the thing you are actually steering is the recording, ← and → are how this
+  // app has always seeked it, and a key that means "back five seconds" in the
+  // pane and "back one page" over the same score is a key nobody can trust.
+  // Pages have PageUp/PageDown and the ‹ › buttons; the music has the arrows.
   useEffect(() => {
     if (!expanded && !drawable) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       // The same exemption useHotkeys makes, and for the same reason: the sync
-      // panel has a text field in it, where ← and → move the caret and Escape
-      // is not a way out of the workspace.
+      // panel has a text field in it, where Escape is not a way out of the
+      // workspace and the digits are being typed rather than aimed.
       if (isTypingTarget(e.target)) return
       if (e.key === 'Escape') {
         // Putting the pen down first: with a tool armed that is what Escape
@@ -298,8 +301,8 @@ export default function ScoreLayer({
         activeMark
       )
         deleteMark()
-      else if (expanded && (e.key === 'ArrowRight' || e.key === 'PageDown')) step(1)
-      else if (expanded && (e.key === 'ArrowLeft' || e.key === 'PageUp')) step(-1)
+      else if (expanded && e.key === 'PageDown') step(1)
+      else if (expanded && e.key === 'PageUp') step(-1)
       else return
       e.preventDefault()
       e.stopPropagation()
@@ -770,7 +773,7 @@ function ScoreChrome({
         onClick={() => onStep(-1)}
         disabled={busy || page <= 1}
         aria-label="Previous page"
-        title={expanded ? 'Previous page (←)' : 'Previous page'}
+        title={expanded ? 'Previous page (Page Up)' : 'Previous page'}
         className={btn}
       >
         <ChevronLeft size={16} />
@@ -787,7 +790,7 @@ function ScoreChrome({
         onClick={() => onStep(1)}
         disabled={busy || page >= pageCount}
         aria-label="Next page"
-        title={expanded ? 'Next page (→)' : 'Next page'}
+        title={expanded ? 'Next page (Page Down)' : 'Next page'}
         className={btn}
       >
         <ChevronRight size={16} />

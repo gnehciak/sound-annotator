@@ -214,27 +214,38 @@ export default function ScoreSync({
             pause, scrub to the moment, and press it there.
           </p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul>
             {turns.map((turn, i) => {
               const key = `${turn.t}-${turn.page}`
               const sel = i === selected
               return (
-                <li key={key}>
+                <li
+                  key={key}
+                  // One fixed-height row whichever state it is in. The retiming
+                  // controls used to open a second line under the selected
+                  // turn, which moved every row below it the moment you clicked
+                  // — so the turn you were about to nudge had walked off under
+                  // the pointer. They ride *in* the row now and the row keeps
+                  // its height, so selecting one moves nothing.
+                  className={`flex h-8 items-center gap-1 rounded pl-2 pr-1 ${
+                    sel ? 'bg-rowsel text-fg' : 'text-muted hover:bg-raised hover:text-fg'
+                  }`}
+                >
                   <button
                     type="button"
                     ref={added === key ? addedRef : undefined}
                     onClick={() => {
                       onSeek(turn.t)
                       onPage(turn.page)
-                      setSelected(sel ? null : i)
+                      // Selecting, never toggling: clicking a turn again is
+                      // "take me back there", which is the whole way you check
+                      // a nudge landed — and a click that put the controls away
+                      // made every second listen cost a third click.
+                      setSelected(i)
                     }}
                     aria-pressed={sel}
                     title={`Page ${turn.page} from ${formatTime(turn.t)} — click to hear it`}
-                    className={`press flex w-full items-center gap-2 px-2 py-1.5 text-left ${
-                      sel
-                        ? 'rounded-t bg-rowsel text-fg'
-                        : 'rounded text-muted hover:bg-raised hover:text-fg'
-                    }`}
+                    className="press flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
                   >
                     <span className="w-9 shrink-0 font-mono text-[10px] uppercase tracking-[0.14em]">
                       p{turn.page}
@@ -245,16 +256,16 @@ export default function ScoreSync({
                   </button>
 
                   {/* The retiming controls belong to the selected turn, so they
-                      sit under it rather than in a corner of the panel: which
+                      sit in its row rather than in a corner of the panel: which
                       turn a nudge moves is then the row it is drawn inside. */}
                   {sel && (
-                    <div className="flex items-center gap-1 rounded-b bg-rowsel px-2 pb-1.5 pt-0.5">
+                    <>
                       <button
                         type="button"
                         onClick={() => nudge(-0.5)}
                         title="Half a second earlier"
                         aria-label="Move this turn half a second earlier"
-                        className="btn-icon press"
+                        className="btn-icon press h-6 w-6"
                       >
                         <Minus size={12} />
                       </button>
@@ -263,22 +274,20 @@ export default function ScoreSync({
                         onClick={() => nudge(0.5)}
                         title="Half a second later"
                         aria-label="Move this turn half a second later"
-                        className="btn-icon press"
+                        className="btn-icon press h-6 w-6"
                       >
                         <Plus size={12} />
                       </button>
-                      <span className="text-[10px] text-muted">±0.5s</span>
-                      <span className="flex-1" />
                       <button
                         type="button"
                         onClick={() => act(removeTurn(turns, selected))}
                         title="Delete this turn"
                         aria-label="Delete this turn"
-                        className="btn-icon press text-danger"
+                        className="btn-icon press h-6 w-6 text-danger"
                       >
                         <Trash2 size={12} />
                       </button>
-                    </div>
+                    </>
                   )}
                 </li>
               )
