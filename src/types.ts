@@ -131,12 +131,16 @@ export interface NoteOverlay {
   /** Which page of the score the score pin lives on, 1-based; absent is 1. */
   scorePinPage?: number
   /**
-   * The **score quote**: a rectangle framing part of a page of the PDF score,
-   * which the note carries as a picture — on its row in the list, in the
-   * inspector, and as a cropped image beside its text in the two print
-   * documents. See NoteQuote.
+   * The **score quotes**: rectangles framing parts of the PDF score, which the
+   * note carries as pictures — a gallery on its row in the list, in the
+   * inspector, and beside its text in the two print documents. In the order
+   * they were placed, which is the order they are shown in. See NoteQuote.
+   *
+   * Notes written before a note could quote more than one place carry a single
+   * `quote` instead; `withMigratedOverlay` (lib/overlays) folds it in here on
+   * read, so nothing downstream has to know that shape existed.
    */
-  quote?: NoteQuote
+  quotes?: NoteQuote[]
   /**
    * Seconds the layer stays up for a note with no `end`. Ignored on a note that
    * has a span — that span is the window. Defaults to OVERLAY_HOLD.
@@ -162,8 +166,13 @@ export interface NoteOverlay {
  * a still that most notes don't have. A quote on a note written then is
  * dropped on read (`withMigratedOverlay` in lib/overlays).
  *
- * One per note, deliberately: a quote is what the note is *about*, and a note
- * that is about two places is two notes.
+ * A note may carry several. A passage is often two places at once — the
+ * figure and the answer to it, the voice and what the accompaniment is doing
+ * under it — and splitting that into two notes files the same observation
+ * twice and cues them to two moments. They ride as a gallery: side by side on
+ * the note's row, and stacked down the Example column of the printed
+ * documents, in the order they were placed. `MAX_QUOTES` (lib/overlays) is
+ * where that stops being a gallery and starts being a scrapbook.
  */
 export interface NoteQuote {
   /**

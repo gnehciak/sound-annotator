@@ -25,14 +25,14 @@ import {
   hasOverlay,
   hasScorePin,
   hasVideoPin,
-  quoteOf,
   quotePageOf,
+  quotesOf,
 } from '../lib/overlays'
-import { useQuotePreview } from '../lib/quotePreview'
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
 import ContextMenu, { type ContextMenuItem } from './ContextMenu'
+import QuoteGallery from './QuoteGallery'
 import { useContextMenu } from '../lib/useContextMenu'
 import type { MentionItem } from './MentionList'
 
@@ -138,7 +138,7 @@ export default function AnnotationItem({
   // card's cover — which is what it is to the reader, the one thing on the row
   // that shows the music instead of describing it. Null until it is drawn, and
   // for a track whose score can't be read.
-  const quotePreview = useQuotePreview(quoteOf(annotation))
+  const quotes = quotesOf(annotation)
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const tags = tagsOf(annotation)
   // Drop the body preview entirely on empty notes — TipTap serializes a blank
@@ -330,27 +330,20 @@ export default function AnnotationItem({
         style={{ background: color }}
       />
 
-      {/* The quote, as the note's cover. Inside the row's own gutters rather
-          than bled to its edges, so the spine and the progress bar keep the
-          strip they own — a picture under either of them would read as damage
-          to the picture. White ground because a page of a score is white in
-          both themes. */}
-      {quotePreview && (
+      {/* The quotes, as the note's cover — a gallery when there are several.
+          Inside the row's own gutters rather than bled to its edges, so the
+          spine and the progress bar keep the strip they own: a picture under
+          either of them would read as damage to the picture. */}
+      {quotes.length > 0 && (
         <div className="pl-3 pr-2 pt-3">
-          <div className="overflow-hidden rounded-md bg-white ring-1 ring-line">
-            <img
-              src={quotePreview.src}
-              alt={`The quoted region of page ${quotePageOf(quoteOf(annotation)!)} of the score`}
-              className="mx-auto max-h-[176px] w-auto max-w-full object-contain"
-            />
-          </div>
+          <QuoteGallery quotes={quotes} />
         </div>
       )}
 
       {/* header */}
       <div
         className={`flex items-center gap-1.5 pl-3 pr-2 ${
-          quotePreview ? 'pt-2' : 'pt-3'
+          quotes.length > 0 ? 'pt-2' : 'pt-3'
         } ${hasBody ? 'pb-1' : 'pb-3'}`}
       >
         {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
@@ -480,13 +473,13 @@ export default function AnnotationItem({
             this note touch the picture", but "which music is this note
             about". It stays even with the picture above: the picture shows
             the region, the chip names the page it came from. */}
-        {quoteOf(annotation) && (
+        {quotes.length > 0 && (
           <span
             title={quoteTitle(annotation)}
             className="chip chip-outline chip-neutral"
           >
             <Quote size={9} strokeWidth={2.4} className="shrink-0" />
-            Quote
+            {quotes.length > 1 ? `${quotes.length} quotes` : 'Quote'}
           </span>
         )}
 
@@ -644,10 +637,17 @@ function stageChip(a: Annotation): string {
   return onVideo ? 'On video' : 'On score'
 }
 
-/** What the quote chip says on hover: which page of the score it was cut from. */
+/** What the quote chip says on hover: which pages of the score it was cut from. */
 function quoteTitle(a: Annotation): string {
-  const q = quoteOf(a)
-  return q ? `This note quotes page ${quotePageOf(q)} of the score` : ''
+  // The pages, in order, said once each — three quotes off one page is "page
+  // 4", not "pages 4, 4 and 4".
+  const pages = [...new Set(quotesOf(a).map(quotePageOf))]
+  if (pages.length === 0) return ''
+  const list =
+    pages.length === 1
+      ? `page ${pages[0]}`
+      : `pages ${pages.slice(0, -1).join(', ')} and ${pages[pages.length - 1]}`
+  return `This note quotes ${list} of the score`
 }
 
 function stageTitle(a: Annotation): string {

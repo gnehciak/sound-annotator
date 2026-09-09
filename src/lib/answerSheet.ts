@@ -62,7 +62,7 @@ function questionBlock(
   note: Annotation,
   number: number,
   answerText: string,
-  quote?: QuoteImage,
+  quotes: QuoteImage[] = [],
 ): string {
   const color = note.color ?? colorForId(note.id)
   const prompt = primaryTextHtml(note)
@@ -76,7 +76,7 @@ function questionBlock(
       )}</span>
       ${bar ? `<span class="q-bar">${esc(bar)}</span>` : ''}
     </div>
-    ${quote ? `<img class="pq" src="${quote.src}" alt="" />` : ''}
+    ${quotes.map((q) => `<img class="pq" src="${q.src}" alt="" />`).join('')}
     ${htmlHasContent(prompt) ? `<div class="rich">${prompt}</div>` : ''}
     ${
       answered
@@ -265,7 +265,7 @@ const STYLES = `
 export function buildAnswerSheetHtml(
   project: Project,
   input: AnswerSheetInput,
-  quotes: Map<string, QuoteImage> = new Map(),
+  quotes: Map<string, QuoteImage[]> = new Map(),
 ): string {
   const questions = questionsOf(project.annotations)
   const answered = countAnswered(questions, input.answers)

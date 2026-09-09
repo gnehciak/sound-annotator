@@ -53,9 +53,9 @@ export const scorePinPageOf = (a: Annotation): number =>
 /**
  * True when the note puts anything on the *stage* — the picture or the page,
  * for its moment. Deliberately not counting a score quote: a quote is a
- * picture the note *carries*, and its frame on the page is drawn from the
- * quote itself (`quotesOn`) rather than from this predicate, so a note whose
- * only mark on the world is a quote never counts as having a layer.
+ * picture the note *carries*, and its frames on the page are drawn from the
+ * quotes themselves (`quotesOn`) rather than from this predicate, so a note
+ * whose only mark on the world is a quote never counts as having a layer.
  */
 export const hasOverlay = (a: Annotation): boolean =>
   hasCover(a) || hasVideoPin(a) || hasScorePin(a)
@@ -77,60 +77,81 @@ export const MIN_QUOTE = 0.05
 export const DEFAULT_QUOTE_W = 0.36
 export const DEFAULT_QUOTE_H = 0.24
 
-/** The note's quote, if it has one. */
-export const quoteOf = (a: Annotation): NoteQuote | undefined => a.overlay?.quote
+/**
+ * How many quotes one note may carry. A gallery of a few is a passage seen
+ * from two or three angles; a dozen is a scrapbook, and every one of them
+ * rides in the project's jsonb on every save and is rasterised again on every
+ * export.
+ */
+export const MAX_QUOTES = 8
+
+/** The note's quotes, in the order they were placed. Empty when it has none. */
+export const quotesOf = (a: Annotation): NoteQuote[] => a.overlay?.quotes ?? []
+
+/** True when the note quotes the score at all. */
+export const hasQuote = (a: Annotation): boolean => quotesOf(a).length > 0
 
 /** The page a score quote sits on, 1-based; 1 unless it says. */
 export const quotePageOf = (q: NoteQuote): number =>
   Math.max(1, Math.round(q.page ?? 1))
 
-/**
- * The quote to draw on one page of the score, or null. The same choice
- * `scorePinsOn` makes for pins, and made in the same place: nothing downstream
- * has to know which page a quote is aimed at.
- */
-export function quoteOn(
-  a: Annotation | null | undefined,
-  page?: number,
-): NoteQuote | null {
-  const q = a && quoteOf(a)
-  if (!q) return null
-  if (page != null && quotePageOf(q) !== page) return null
-  return q
-}
+/** A note's quotes on one page, in order. */
+export const quotesOfPage = (a: Annotation, page: number): NoteQuote[] =>
+  quotesOf(a).filter((q) => quotePageOf(q) === page)
 
-/** A quote ready to draw: the note it belongs to and the rectangle it framed. */
+/**
+ * A quote ready to draw: the rectangle, the note it belongs to, and which of
+ * that note's quotes it is — the index, because moving one has to say which
+ * one moved.
+ */
 export interface PlacedQuote {
   note: Annotation
   quote: NoteQuote
+  index: number
 }
 
 /**
- * The quotes to frame on one page at time `t` — the *reading* rule, as opposed
- * to the aiming one.
+ * Every quote framed on one page of the score.
  *
- * Where a note is being edited its own quote is the only one worth drawing:
- * the frame is a tool for aiming, and every other rectangle on the page is in
- * the way of it. A reader has nothing to aim, so the quote joins the pins on
- * the stage under exactly their time rule — while the note is on, the page
- * shows the bars it is about, which is what quoting them was for. Notes are
- * still filtered by page for the pins' reason: a rectangle is a fraction of a
- * page box, and there is nowhere honest to draw one whose page is not on
- * screen.
+ * **Not time-bound, unlike the video's own layer.** A cover or a pin on the
+ * picture is something the class watches at a moment, and a picture is one
+ * surface that a note takes over for its window. The score is not: it is a
+ * document being read, its marks are all there at once, and a rectangle that
+ * appeared and vanished as the music passed would be unfindable exactly when
+ * someone went looking for it. So the page shows everything aimed at it, and
+ * the clock decides nothing here.
+ *
+ * Still filtered by page: a rectangle is a fraction of a page box, and there
+ * is nowhere honest to draw one whose page is not on screen.
  */
-export function quotesOn(
-  annotations: Annotation[],
-  page: number,
-  t: number,
-  selectedId?: string | null,
-): PlacedQuote[] {
-  return annotations.flatMap((note) => {
-    const quote = quoteOn(note, page)
-    if (!quote) return []
-    if (note.id === selectedId) return [{ note, quote }]
-    const { from, to } = overlayWindow(note)
-    return t >= from && t <= to ? [{ note, quote }] : []
-  })
+export function quotesOn(annotations: Annotation[], page: number): PlacedQuote[] {
+  return annotations.flatMap((note) =>
+    quotesOf(note).flatMap((quote, index) =>
+      quotePageOf(quote) === page ? [{ note, quote, index }] : [],
+    ),
+  )
+}
+
+/** Replace one of a note's quotes, by index. Out of range leaves them alone. */
+export function withQuoteAt(
+  a: Annotation,
+  index: number,
+  quote: NoteQuote,
+): NoteQuote[] {
+  const list = quotesOf(a)
+  if (index < 0 || index >= list.length) return list
+  return list.map((q, i) => (i === index ? quote : q))
+}
+
+/** Drop one of a note's quotes, by index. */
+export function withoutQuoteAt(a: Annotation, index: number): NoteQuote[] {
+  return quotesOf(a).filter((_, i) => i !== index)
+}
+
+/** Add one, up to `MAX_QUOTES`. At the cap the note keeps what it has. */
+export function withQuoteAdded(a: Annotation, quote: NoteQuote): NoteQuote[] {
+  const list = quotesOf(a)
+  return list.length >= MAX_QUOTES ? list : [...list, quote]
 }
 
 /**
@@ -209,27 +230,36 @@ export function movePinPatch(
  *  • the **single pin** that predates the score view, which carried a
  *    `pinAnchor: 'score'` switch instead of the two independent pins there
  *    are now;
- *  • a **quote of the picture**, from when a quote could be aimed at the
- *    frame. It is dropped rather than moved: its fractions are of a 16:9
- *    frame and mean nothing on a portrait page, and what it cropped — the
- *    note's cover image — was never the music. See NoteQuote in ../types.
+ *  • the **single quote**, from before a note could quote more than one place.
+ *    It becomes the first of `quotes`. A quote of the *picture* (from when the
+ *    frame was a surface a quote could be aimed at) is dropped instead: its
+ *    fractions are of a 16:9 frame and mean nothing on a portrait page, and
+ *    what it cropped — the note's cover image — was never the music. See
+ *    NoteQuote in ../types.
  *
  * Returns the note untouched (not a copy) when there is nothing to migrate,
  * which is every note written since.
  */
 export function withMigratedOverlay(a: Annotation): Annotation {
-  const o = a.overlay as (NoteOverlay & LegacyPin) | undefined
+  const o = a.overlay as (NoteOverlay & LegacyOverlay) | undefined
   if (!o) return a
-  // Read `on` through the older, wider type: today's says `'score'` and only
-  // a file (or a row) written before it can say anything else.
-  if (o.quote && (o.quote as { on?: string }).on !== 'score') {
-    const kept = { ...o }
-    delete kept.quote
-    return withMigratedOverlay({ ...a, overlay: kept })
+  if (o.quote) {
+    const { quote, ...kept } = o
+    // Read `on` through the older, wider type: today's says `'score'` and only
+    // a file (or a row) written before it can say anything else. A quote of
+    // the picture is dropped here rather than carried as an unusable one.
+    const quotes =
+      (quote as { on?: string }).on === 'score'
+        ? [...(o.quotes ?? []), quote].slice(0, MAX_QUOTES)
+        : o.quotes
+    return withMigratedOverlay({
+      ...a,
+      overlay: { ...kept, ...(quotes?.length ? { quotes } : {}) },
+    })
   }
   if (o.pinAnchor !== 'score') return a
   const { pinPage, pinX, pinY, ...rest } = o
-  delete (rest as LegacyPin).pinAnchor
+  delete (rest as LegacyOverlay).pinAnchor
   return {
     ...a,
     overlay: {
@@ -243,10 +273,12 @@ export function withMigratedOverlay(a: Annotation): Annotation {
   }
 }
 
-/** The pre-score-view pin fields, read on migration and never written. */
-interface LegacyPin {
+/** The overlay fields earlier versions wrote, read on migration and never written. */
+interface LegacyOverlay {
   pinAnchor?: 'score'
   pinPage?: number
+  /** The one quote a note could carry before it could carry several. */
+  quote?: NoteQuote
 }
 
 /**
@@ -317,17 +349,19 @@ export function framePins(live: Annotation[]): PlacedPin[] {
 }
 
 /**
- * The score pins on one page, at time `t`. Pins on other pages are simply not
- * drawn: they are fractions of a page box that isn't on screen, and there is
- * nowhere honest to put them.
+ * The score pins on one page — every one aimed at it, whatever the clock says.
+ *
+ * The same rule as the quotes, for the same reason: the score is a document
+ * being read rather than a stage, so what is marked on a page is marked on it,
+ * and a dot that came and went with the music would be missing from the page
+ * precisely when someone turned back to it. The picture keeps its time
+ * window (`visibleLayer`), because there one note at a time takes it over.
+ *
+ * Pins on other pages are simply not drawn: they are fractions of a page box
+ * that isn't on screen, and there is nowhere honest to put them.
  */
-export function scorePinsOn(
-  annotations: Annotation[],
-  page: number,
-  t: number,
-  selectedId?: string | null,
-): PlacedPin[] {
-  return showing(annotations, t, selectedId)
+export function scorePinsOn(annotations: Annotation[], page: number): PlacedPin[] {
+  return annotations
     .filter((a) => hasScorePin(a) && scorePinPageOf(a) === page)
     .map((note) => ({
       note,
@@ -362,9 +396,12 @@ export function patchOverlay(
 ): { overlay: NoteOverlay | undefined } {
   const merged: NoteOverlay = { ...a.overlay, ...next }
   // Prune the keys the caller cleared, so a removed cover doesn't leave
-  // `{coverUrl: undefined}` behind to be persisted as a null in jsonb.
+  // `{coverUrl: undefined}` behind to be persisted as a null in jsonb — and an
+  // emptied gallery doesn't leave `{quotes: []}`, which would keep the note
+  // looking quoted to anything that only checks whether the key is there.
   for (const k of Object.keys(merged) as (keyof NoteOverlay)[]) {
-    if (merged[k] == null) delete merged[k]
+    const v = merged[k]
+    if (v == null || (Array.isArray(v) && v.length === 0)) delete merged[k]
   }
   return { overlay: Object.keys(merged).length > 0 ? merged : undefined }
 }

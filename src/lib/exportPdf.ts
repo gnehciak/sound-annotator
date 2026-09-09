@@ -25,7 +25,6 @@ import {
   buildStudyDoc,
   docName,
   EXAMPLE_HEADING,
-  GROUP_PREFIX,
   SECTION_COLS,
   SECTIONS_HEADING,
   WHERE_HEADING,
@@ -58,6 +57,19 @@ const CELL_PAD = 7
  * quotation wants either way.
  */
 const IMAGE_MAX_H = 150
+
+/**
+ * How tall the whole Example column may be on one row, in points.
+ *
+ * A note can quote several places, and each picture capped on its own would
+ * let three of them tower over a page. The stack is scaled to fit this
+ * instead, so a gallery costs the row more room than one picture but never a
+ * page of it — the analysis beside it is what the reader came for.
+ */
+const EXAMPLES_MAX_H = 320
+
+/** The gap between stacked pictures, and between one and its caption. */
+const IMAGE_GAP = 6
 
 /**
  * The least of a row worth leaving at the foot of a page — about four lines.
@@ -709,157 +721,167 @@ export async function buildStudyPdf(
     sheet.y -= 6
   }
 
-  for (const group of doc.groups) {
-    const heading = encodable(`${GROUP_PREFIX} — ${group.label}`)
-    const headingH = SIZE_GROUP * LEADING + 6
-    const headerH = SIZE_HEAD * LEADING + CELL_PAD * 2
+  const headerH = SIZE_HEAD * LEADING + CELL_PAD * 2
 
-    // Every row is measured (and its picture embedded) before any of them is
-    // drawn, so the table's first row can be taken into account when deciding
-    // where the heading goes. Without that, a heading and its column headings
-    // land at the foot of a page and the rows they belong to start on the next
-    // one — an orphan the reader has to scroll past to find out it meant
-    // nothing.
-    const measured = []
-    for (const row of group.rows) {
-      const lines = await analysisLines(row, fonts, analysisInner, embed, pictures.images)
-      const image = row.quote ? await embed(row.quote) : null
-      const captionLines =
-        image && row.quoteFrom
-          ? wrap(encodable(row.quoteFrom), fonts.italic, SIZE_SMALL, exampleInner)
-          : []
-      const whereLines = row.where.flatMap((line, i) =>
-        (i === 0
-          ? foldSpan(encodable(line), fonts.bold, SIZE_BODY, whereInner)
-          : wrap(encodable(line), fonts.body, SIZE_BODY, whereInner)
-        ).map((text) => ({ text, bold: i === 0 })),
-      )
-      let imageW = exampleInner
-      let imageH = row.quote ? (exampleInner * row.quote.height) / row.quote.width : 0
-      if (row.quote && imageH > IMAGE_MAX_H) {
-        imageH = IMAGE_MAX_H
-        imageW = (IMAGE_MAX_H * row.quote.width) / row.quote.height
+  // Every row is measured (and its pictures embedded) before any of them is
+  // drawn, so the table's first row can be taken into account when deciding
+  // where the column headings go. Without that, the headings land at the
+  // foot of a page and the rows they belong to start on the next one — an
+  // orphan the reader has to scroll past to find out it meant nothing.
+  const measured = []
+  for (const row of doc.rows) {
+    const lines = await analysisLines(row, fonts, analysisInner, embed, pictures.images)
+    const whereLines = row.where.flatMap((line, i) =>
+      (i === 0
+        ? foldSpan(encodable(line), fonts.bold, SIZE_BODY, whereInner)
+        : wrap(encodable(line), fonts.body, SIZE_BODY, whereInner)
+      ).map((text) => ({ text, bold: i === 0 })),
+    )
+
+    // The Example column: every quote the note placed, stacked, each with
+    // its own caption. Measured at its natural size first, then the whole
+    // stack scaled down together if it overruns — scaling each picture on
+    // its own would print a gallery at three different magnifications, and
+    // two systems off the same page would stop being comparable.
+    const examples = []
+    for (const example of row.examples) {
+      const image = await embed(example.image)
+      const captionLines = example.from
+        ? wrap(encodable(example.from), fonts.italic, SIZE_SMALL, exampleInner)
+        : []
+      let w = exampleInner
+      let h = (exampleInner * example.image.height) / example.image.width
+      if (h > IMAGE_MAX_H) {
+        h = IMAGE_MAX_H
+        w = (IMAGE_MAX_H * example.image.width) / example.image.height
       }
-      // The *head* is everything that cannot be split and so rides the first
-      // slice of the row: the Where cell and the Example picture, both of them
-      // top-aligned and neither more than a couple of inches tall.
-      const headH = Math.max(
-        imageH +
-          (image && captionLines.length ? 5 : 0) +
-          captionLines.length * SIZE_SMALL * LEADING,
-        whereLines.length * SIZE_BODY * LEADING,
+      examples.push({ image, captionLines, w, h })
+    }
+    const captionsH = examples.reduce(
+      (sum, e) => sum + (e.captionLines.length ? IMAGE_GAP - 1 : 0) +
+        e.captionLines.length * SIZE_SMALL * LEADING,
+      0,
+    )
+    const picturesH = examples.reduce((sum, e) => sum + e.h, 0)
+    const gapsH = Math.max(0, examples.length - 1) * IMAGE_GAP
+    const overrun = picturesH + captionsH + gapsH
+    if (overrun > EXAMPLES_MAX_H && picturesH > 0) {
+      // Only the pictures shrink; the captions are type, and 6pt italic
+      // scaled to 4 is a caption nobody can read under a picture nobody
+      // needed that badly.
+      const room = Math.max(1, EXAMPLES_MAX_H - captionsH - gapsH)
+      const shrink = room / picturesH
+      for (const e of examples) {
+        e.w *= shrink
+        e.h *= shrink
+      }
+    }
+    const exampleH =
+      examples.reduce((sum, e) => sum + e.h, 0) + captionsH + gapsH
+
+    // The *head* is everything that cannot be split and so rides the first
+    // slice of the row: the Where cell and the Example stack, both of them
+    // top-aligned.
+    const headH = Math.max(exampleH, whereLines.length * SIZE_BODY * LEADING)
+    const rowH = Math.max(Math.max(heightOf(lines), headH) + CELL_PAD * 2, 34)
+    measured.push({ lines, examples, whereLines, headH, rowH, color: row.color })
+  }
+  if (measured.length === 0) return pdf.save()
+
+  const startTable = () => drawHeader()
+  // Room a fresh page leaves for rows, once the column headings have been
+  // drawn on it. Nothing taller than this can be asked to fit anywhere,
+  // which is what keeps the checks below from breaking to a page that is no
+  // roomier than the one being left.
+  const full = PAGE_H - MARGIN * 2 - headerH
+
+  // The gap above the table is part of what has to fit, not something to
+  // subtract once the check has passed — taking it afterwards is exactly how
+  // headings land on a page whose remaining room the first row then misses.
+  // A first row taller than any page only has to *start* here, since a row
+  // now splits: demanding all of it would break to a page no roomier than
+  // the one being left, and spend the rest of this one saying nothing.
+  const opening = measured[0].rowH <= full ? measured[0].rowH : MIN_SLICE
+  const gap = sheet.y < PAGE_H - MARGIN ? 14 : 0
+  if (sheet.room - gap < headerH + opening + 2) sheet.break()
+  else sheet.y -= gap
+  startTable()
+
+  for (const m of measured) {
+    // A row is drawn in slices, so one taller than the page it starts on is
+    // carried onto the next rather than being drawn past the bottom margin,
+    // where the reader never sees it. A long note is exactly the note worth
+    // reading, so losing its tail is the worst thing this file could do.
+    //
+    // Only the analysis splits. The Where and Example cells ride the first
+    // slice: both are top-aligned and neither is more than a couple of
+    // inches tall, and repeated on the continuation they would read as a
+    // second note about the same bar.
+    let rest = m.lines
+    let first = true
+    for (;;) {
+      const lead = rest.length ? advance(rest[0]) : 0
+      // The least this slice can be, and what it would rather be.
+      const floor = Math.max(lead, first ? m.headH : 0) + CELL_PAD * 2
+      const want = first ? m.rowH : floor
+      // A fresh page when this one can't take the slice — or when it can't
+      // take the whole row and a fresh one could. A row taller than `full`
+      // fits nowhere, so it is never granted a page of its own: it starts in
+      // the room that is left and runs on from there.
+      if (floor > sheet.room || (want > sheet.room && want <= full)) {
+        sheet.break()
+        startTable()
+      }
+
+      const slice = fitLines(rest, sheet.room - CELL_PAD * 2)
+      const rowH = Math.max(
+        Math.max(slice.height, first ? m.headH : 0) + CELL_PAD * 2,
+        first ? 34 : 0,
       )
-      const rowH = Math.max(Math.max(heightOf(lines), headH) + CELL_PAD * 2, 34)
-      measured.push({
-        lines,
-        image,
-        captionLines,
-        whereLines,
-        imageW,
-        imageH,
-        headH,
-        rowH,
-        color: row.color,
-      })
-    }
-    if (measured.length === 0) continue
+      const top = sheet.y - rowH
+      sheet.rect(whereX, top, whereW, rowH, undefined, RULE)
+      sheet.rect(exampleX, top, exampleW, rowH, undefined, RULE)
+      sheet.rect(analysisX, top, analysisW, rowH, undefined, RULE)
 
-    const startTable = () => {
-      sheet.text(heading, { size: SIZE_GROUP, font: 'bold' })
-      sheet.y -= headingH
-      drawHeader()
-    }
-    // Room a fresh page leaves for rows, once the heading and the column
-    // headings have been drawn on it. Nothing taller than this can be asked to
-    // fit anywhere, which is what keeps the checks below from breaking to a
-    // page that is no roomier than the one being left.
-    const full = PAGE_H - MARGIN * 2 - headingH - headerH
+      // The note's own hue, on every slice — a rule rather than text, so the
+      // hue never has to clear AA, and it is what says the cell overleaf is
+      // the same note rather than a new one.
+      sheet.rect(
+        whereX + CELL_PAD - 3,
+        top + CELL_PAD,
+        1.8,
+        rowH - CELL_PAD * 2,
+        ink(m.color, [0.72, 0.7, 0.64]),
+      )
 
-    // The gap above the heading is part of what has to fit, not something to
-    // subtract once the check has passed — taking it afterwards is exactly how
-    // a heading lands on a page whose remaining room its first row then misses.
-    // A first row taller than any page only has to *start* here, since a row
-    // now splits: demanding all of it would break to a page no roomier than
-    // the one being left, and spend the rest of this one saying nothing.
-    const opening = measured[0].rowH <= full ? measured[0].rowH : MIN_SLICE
-    const gap = sheet.y < PAGE_H - MARGIN ? 14 : 0
-    if (sheet.room - gap < headingH + headerH + opening + 2) sheet.break()
-    else sheet.y -= gap
-    startTable()
-
-    for (const m of measured) {
-      // A row is drawn in slices, so one taller than the page it starts on is
-      // carried onto the next rather than being drawn past the bottom margin,
-      // where the reader never sees it. A long note is exactly the note worth
-      // reading, so losing its tail is the worst thing this file could do.
-      //
-      // Only the analysis splits. The Where and Example cells ride the first
-      // slice: both are top-aligned and neither is more than a couple of
-      // inches tall, and repeated on the continuation they would read as a
-      // second note about the same bar.
-      let rest = m.lines
-      let first = true
-      for (;;) {
-        const lead = rest.length ? advance(rest[0]) : 0
-        // The least this slice can be, and what it would rather be.
-        const floor = Math.max(lead, first ? m.headH : 0) + CELL_PAD * 2
-        const want = first ? m.rowH : floor
-        // A fresh page when this one can't take the slice — or when it can't
-        // take the whole row and a fresh one could. A row taller than `full`
-        // fits nowhere, so it is never granted a page of its own: it starts in
-        // the room that is left and runs on from there.
-        if (floor > sheet.room || (want > sheet.room && want <= full)) {
-          sheet.break()
-          startTable()
-        }
-
-        const slice = fitLines(rest, sheet.room - CELL_PAD * 2)
-        const rowH = Math.max(
-          Math.max(slice.height, first ? m.headH : 0) + CELL_PAD * 2,
-          first ? 34 : 0,
-        )
-        const top = sheet.y - rowH
-        sheet.rect(whereX, top, whereW, rowH, undefined, RULE)
-        sheet.rect(exampleX, top, exampleW, rowH, undefined, RULE)
-        sheet.rect(analysisX, top, analysisW, rowH, undefined, RULE)
-
-        // The note's own hue, on every slice — a rule rather than text, so the
-        // hue never has to clear AA, and it is what says the cell overleaf is
-        // the same note rather than a new one.
-        sheet.rect(
-          whereX + CELL_PAD - 3,
-          top + CELL_PAD,
-          1.8,
-          rowH - CELL_PAD * 2,
-          ink(m.color, [0.72, 0.7, 0.64]),
-        )
-
-        if (first) {
-          // Where column — the timecode in bold, the bar under it.
-          m.whereLines.forEach((line, i) => {
-            sheet.text(line.text, {
-              x: whereX + CELL_PAD + 3,
-              y: sheet.y - CELL_PAD - SIZE_BODY - i * SIZE_BODY * LEADING,
-              size: SIZE_BODY,
-              font: line.bold ? 'bold' : 'body',
-              color: line.bold ? INK : QUIET,
-            })
+      if (first) {
+        // Where column — the timecode in bold, the bar under it.
+        m.whereLines.forEach((line, i) => {
+          sheet.text(line.text, {
+            x: whereX + CELL_PAD + 3,
+            y: sheet.y - CELL_PAD - SIZE_BODY - i * SIZE_BODY * LEADING,
+            size: SIZE_BODY,
+            font: line.bold ? 'bold' : 'body',
+            color: line.bold ? INK : QUIET,
           })
+        })
 
-          // Example column — top-aligned, like the guide's own tables.
-          let ey = sheet.y - CELL_PAD
-          if (m.image) {
-            // Centred, since a height-capped picture no longer fills the column.
-            sheet.image(
-              m.image,
-              exampleX + CELL_PAD + (exampleInner - m.imageW) / 2,
-              ey - m.imageH,
-              m.imageW,
-              m.imageH,
-            )
-            ey -= m.imageH + 5
-          }
-          for (const line of m.captionLines) {
+        // Example column — top-aligned, like the guide's own tables, and
+        // stacked in the order the note placed them.
+        let ey = sheet.y - CELL_PAD
+        m.examples.forEach((e, i) => {
+          if (i) ey -= IMAGE_GAP
+          // Centred, since a height-capped picture no longer fills the column.
+          sheet.image(
+            e.image,
+            exampleX + CELL_PAD + (exampleInner - e.w) / 2,
+            ey - e.h,
+            e.w,
+            e.h,
+          )
+          ey -= e.h
+          if (e.captionLines.length) ey -= IMAGE_GAP - 1
+          for (const line of e.captionLines) {
             const w = fonts.italic.widthOfTextAtSize(line, SIZE_SMALL)
             sheet.text(line, {
               x: exampleX + CELL_PAD + (exampleInner - w) / 2,
@@ -870,22 +892,22 @@ export async function buildStudyPdf(
             })
             ey -= SIZE_SMALL * LEADING
           }
-        }
-
-        // Analysis column — this slice of it. The first line's gap is dropped:
-        // it sits at the top of the cell, wherever it was cut from.
-        let ay = sheet.y - CELL_PAD
-        rest.slice(0, slice.count).forEach((line, i) => {
-          if (i) ay -= line.gap
-          drawLine(sheet, line, analysisX + CELL_PAD, ay, fonts)
-          ay -= advance(line)
         })
-
-        sheet.y = top
-        rest = rest.slice(slice.count)
-        first = false
-        if (!rest.length) break
       }
+
+      // Analysis column — this slice of it. The first line's gap is dropped:
+      // it sits at the top of the cell, wherever it was cut from.
+      let ay = sheet.y - CELL_PAD
+      rest.slice(0, slice.count).forEach((line, i) => {
+        if (i) ay -= line.gap
+        drawLine(sheet, line, analysisX + CELL_PAD, ay, fonts)
+        ay -= advance(line)
+      })
+
+      sheet.y = top
+      rest = rest.slice(slice.count)
+      first = false
+      if (!rest.length) break
     }
   }
 

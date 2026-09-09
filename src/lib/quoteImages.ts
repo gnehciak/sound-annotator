@@ -21,9 +21,9 @@
 //
 // The same crops are wanted on screen, much smaller and one note at a time;
 // lib/quotePreview.ts does that, over `cropImage` below.
-import type { Annotation, Project } from '../types'
+import type { Annotation, NoteQuote, Project } from '../types'
 import { openPdf } from './pdf'
-import { quoteOf, quotePageOf } from './overlays'
+import { quotePageOf, quotesOf } from './overlays'
 import { scoreBytesUrl } from './score'
 // A type-only cycle back the other way (studyDoc takes QuoteImage), which is
 // erased at build; this direction is the real dependency.
@@ -86,8 +86,13 @@ const COLLECT_TIMEOUT_MS = 20_000
 
 /** Everything an exported document has to draw, fetched and cropped. */
 export interface DocPictures {
-  /** Score quotes, by the id of the note that aimed them. */
-  quotes: Map<string, QuoteImage>
+  /**
+   * Score quotes, by the id of the note that aimed them — a list, in the order
+   * the note placed them, which is the order they are shown in. A quote that
+   * couldn't be cropped is simply missing from its note's list rather than
+   * leaving a hole in it: a gap in a gallery says nothing to a reader.
+   */
+  quotes: Map<string, QuoteImage[]>
   /** The notes' own inline images, by the URL the prose references. */
   images: Map<string, QuoteImage>
 }
@@ -105,9 +110,9 @@ export async function collectPictures(
   project: Project,
   onProgress?: ProgressFn,
 ): Promise<DocPictures> {
-  const out = new Map<string, QuoteImage>()
+  const out = new Map<string, QuoteImage[]>()
   const images = new Map<string, QuoteImage>()
-  const quoted = project.annotations.filter((a) => quoteOf(a))
+  const quoted = project.annotations.filter((a) => quotesOf(a).length > 0)
   const urls = noteImageUrls(project)
   if (quoted.length === 0 && urls.length === 0) return { quotes: out, images }
 
@@ -159,7 +164,7 @@ async function addNoteImages(
 async function addScoreQuotes(
   project: Project,
   notes: Annotation[],
-  out: Map<string, QuoteImage>,
+  out: Map<string, QuoteImage[]>,
   report: ProgressFn,
 ): Promise<void> {
   const score = project.settings?.score
@@ -177,16 +182,30 @@ async function addScoreQuotes(
     report(0.12, 'Reading the score')
     doc = await openPdf(await res.arrayBuffer())
 
-    // Grouped by page so a page carrying three quotes is drawn once. The scale
-    // is the smallest that satisfies every crop on it — the narrowest
-    // rectangle is the one that needs the most magnification.
-    const byPage = new Map<number, Annotation[]>()
-    for (const note of notes) {
-      const page = Math.min(quotePageOf(quoteOf(note)!), doc.pageCount)
-      const list = byPage.get(page)
-      if (list) list.push(note)
-      else byPage.set(page, [note])
+    // Every rectangle in the project, as its own job — a note's quotes can sit
+    // on different pages, so the note is no longer the unit here. Grouped by
+    // page so a page carrying three of them is drawn once, and the scale is
+    // the smallest that satisfies every crop on it: the narrowest rectangle is
+    // the one that needs the most magnification.
+    interface Job {
+      noteId: string
+      /** Which of the note's quotes this is, so the gallery keeps its order. */
+      index: number
+      quote: NoteQuote
     }
+    const byPage = new Map<number, Job[]>()
+    for (const note of notes) {
+      quotesOf(note).forEach((quote, index) => {
+        const page = Math.min(quotePageOf(quote), doc!.pageCount)
+        const job = { noteId: note.id, index, quote }
+        const list = byPage.get(page)
+        if (list) list.push(job)
+        else byPage.set(page, [job])
+      })
+    }
+    // Filled in page order, so a note's gallery is assembled by index at the
+    // end rather than in whatever order the pages happened to be drawn.
+    const cropped = new Map<string, Map<number, QuoteImage>>()
 
     const canvas = document.createElement('canvas')
     let drawn = 0
@@ -200,7 +219,7 @@ async function addScoreQuotes(
       drawn += 1
       const intrinsic = await doc.pageSize(page)
       if (intrinsic.width < 1) continue
-      const narrowest = Math.min(...group.map((a) => quoteOf(a)!.w))
+      const narrowest = Math.min(...group.map((j) => j.quote.w))
       const scale = Math.min(
         MAX_SCALE,
         Math.max(MIN_SCALE, QUOTE_TARGET_PX / (narrowest * intrinsic.width)),
@@ -209,10 +228,20 @@ async function addScoreQuotes(
       // opened for the document, and pdf.js's on-screen path waits for an
       // animation frame a hidden tab never fires. See RenderOptions.offscreen.
       await doc.render(page, canvas, scale, { offscreen: true })
-      for (const note of group) {
-        const crop = cropImage(canvas, canvas.width, canvas.height, quoteOf(note)!)
-        if (crop) out.set(note.id, crop)
+      for (const job of group) {
+        const crop = cropImage(canvas, canvas.width, canvas.height, job.quote)
+        if (!crop) continue
+        const held = cropped.get(job.noteId) ?? new Map<number, QuoteImage>()
+        held.set(job.index, crop)
+        cropped.set(job.noteId, held)
       }
+    }
+    // Back into the order the note placed them, gaps closed.
+    for (const [noteId, byIndex] of cropped) {
+      out.set(
+        noteId,
+        [...byIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, crop]) => crop),
+      )
     }
   } catch (err) {
     // One unreadable score costs the pictures, never the document.

@@ -25,7 +25,6 @@ import {
   buildStudyDoc,
   docName,
   EXAMPLE_HEADING,
-  GROUP_PREFIX,
   SECTION_COLS,
   SECTIONS_HEADING,
   WHERE_HEADING,
@@ -290,90 +289,86 @@ export async function buildStudyDocx(
     body.push(table(widths, rows), para(''))
   }
 
-  for (const group of doc.groups) {
-    body.push(
-      para(
-        run(`${GROUP_PREFIX} — `, { bold: true }) + run(group.label, { bold: true }),
-      ),
-    )
+  // One table, in the order the music makes the notes — see lib/studyDoc for
+  // why they are no longer filed under an element heading each.
+  const widths = [WHERE_COL, EXAMPLE_COL, ANALYSIS_COL]
+  const rows: string[] = [
+    headerRow([WHERE_HEADING, EXAMPLE_HEADING, ANALYSIS_HEADING], widths),
+  ]
 
-    const widths = [WHERE_COL, EXAMPLE_COL, ANALYSIS_COL]
-    const rows: string[] = [
-      headerRow([WHERE_HEADING, EXAMPLE_HEADING, ANALYSIS_HEADING], widths),
-    ]
-
-    for (const row of group.rows) {
-      // Where: the timecode in bold, the bar or rehearsal mark under it.
-      // The note's own hue as a rule down the timecode, which is how a note is
-      // identified everywhere else in the app.
-      // Indented as well as bordered: with no indent the rule sits on the
-      // cell's own black border and is invisible against it.
-      const rule = `<w:pBdr><w:left w:val="single" w:sz="12" w:space="4" w:color="${
-        hex6(row.color) ?? 'D2C9B6'
-      }"/></w:pBdr><w:ind w:left="170"/>`
-      const where = row.where
-        .map(
-          (line, i) =>
-            `<w:p><w:pPr>${rule}</w:pPr>${run(
-              line,
-              i === 0 ? { bold: true } : { size: 18, color: '#6E6555' },
-            )}</w:p>`,
-        )
-        .join('')
-
-      const example: string[] = []
-      if (row.quote) {
-        example.push(
-          para(place(row.quote), { centre: true }),
-        )
-        if (row.quoteFrom) {
-          example.push(
-            para(run(row.quoteFrom, { italic: true, size: 16, color: '6E6555' }), {
-              centre: true,
-            }),
-          )
-        }
-      }
-
-      const analysis: string[] = []
-      // What the note was filed as, before what it says. Its tags and whether
-      // it is a question — not the concepts it names, which are the chips in
-      // the prose below and were only ever a second, unordered copy of them.
-      const badges = row.flags
-      if (badges.length) {
-        analysis.push(
-          para(
-            badges
-              .map(
-                (badge, i) =>
-                  (i ? run('  ·  ', { size: 16, color: '#9A9288' }) : '') +
-                  run(badge.label, { bold: true, size: 16, color: badge.color }),
-              )
-              .join(''),
-          ),
-        )
-      }
-      for (const line of row.analysis) {
-        analysis.push(block(line, pictures.images, place))
-      }
-      if (!row.analysis.length) analysis.push(para(''))
-      if (row.lyrics) {
-        analysis.push(para(run(`“${row.lyrics}”`, { italic: true, color: '6E6555' })))
-      }
-      if (row.spec) {
-        analysis.push(para(run(row.spec, { italic: true, size: 16, color: '6E6555' })))
-      }
-
-      rows.push(
-        `<w:tr>${cell(WHERE_COL, where)}${cell(EXAMPLE_COL, example.join(''))}${cell(
-          ANALYSIS_COL,
-          analysis.join(''),
-        )}</w:tr>`,
+  for (const row of doc.rows) {
+    // Where: the timecode in bold, the bar or rehearsal mark under it.
+    // The note's own hue as a rule down the timecode, which is how a note is
+    // identified everywhere else in the app.
+    // Indented as well as bordered: with no indent the rule sits on the
+    // cell's own black border and is invisible against it.
+    const rule = `<w:pBdr><w:left w:val="single" w:sz="12" w:space="4" w:color="${
+      hex6(row.color) ?? 'D2C9B6'
+    }"/></w:pBdr><w:ind w:left="170"/>`
+    const where = row.where
+      .map(
+        (line, i) =>
+          `<w:p><w:pPr>${rule}</w:pPr>${run(
+            line,
+            i === 0 ? { bold: true } : { size: 18, color: '#6E6555' },
+          )}</w:p>`,
       )
+      .join('')
+
+    // Every quote the note placed, stacked in the order it placed them,
+    // each captioned with the page it was cut from. Word sizes a picture
+    // itself from the EMU on the drawing, so nothing here has to bound the
+    // stack the way the PDF's own layout does.
+    const example: string[] = []
+    for (const { image, from } of row.examples) {
+      example.push(para(place(image), { centre: true }))
+      if (from) {
+        example.push(
+          para(run(from, { italic: true, size: 16, color: '6E6555' }), {
+            centre: true,
+          }),
+        )
+      }
     }
 
-    body.push(table(widths, rows), para(''))
+    const analysis: string[] = []
+    // What the note was filed as, before what it says. Its tags and whether
+    // it is a question — not the concepts it names, which are the chips in
+    // the prose below and were only ever a second, unordered copy of them.
+    const badges = row.flags
+    if (badges.length) {
+      analysis.push(
+        para(
+          badges
+            .map(
+              (badge, i) =>
+                (i ? run('  ·  ', { size: 16, color: '#9A9288' }) : '') +
+                run(badge.label, { bold: true, size: 16, color: badge.color }),
+            )
+            .join(''),
+        ),
+      )
+    }
+    for (const line of row.analysis) {
+      analysis.push(block(line, pictures.images, place))
+    }
+    if (!row.analysis.length) analysis.push(para(''))
+    if (row.lyrics) {
+      analysis.push(para(run(`“${row.lyrics}”`, { italic: true, color: '6E6555' })))
+    }
+    if (row.spec) {
+      analysis.push(para(run(row.spec, { italic: true, size: 16, color: '6E6555' })))
+    }
+
+    rows.push(
+      `<w:tr>${cell(WHERE_COL, where)}${cell(EXAMPLE_COL, example.join(''))}${cell(
+        ANALYSIS_COL,
+        analysis.join(''),
+      )}</w:tr>`,
+    )
   }
+
+  body.push(table(widths, rows), para(''))
 
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body.join(

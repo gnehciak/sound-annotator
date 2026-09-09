@@ -82,7 +82,7 @@ import {
 import { useMediaQuery } from './lib/useMediaQuery'
 import { noteLabel, notePreview } from './lib/format'
 import { colorForId } from './lib/noteColors'
-import { coverUrls, movePinPatch, patchOverlay } from './lib/overlays'
+import { coverUrls, movePinPatch, patchOverlay, withQuoteAt } from './lib/overlays'
 import { customTagsUsedIn, tagsOf } from './lib/tags'
 import {
   Eye,
@@ -1481,7 +1481,14 @@ export default function App() {
       tags: a.tags ? [...a.tags] : undefined,
       order: a.order != null ? a.order + 0.5 : undefined,
       overlay: a.overlay
-        ? { ...a.overlay, quote: a.overlay.quote ? { ...a.overlay.quote } : undefined }
+        ? {
+            ...a.overlay,
+            // The gallery is copied rather than shared: dragging one copy's
+            // rectangle must not move the original's.
+            ...(a.overlay.quotes
+              ? { quotes: a.overlay.quotes.map((q) => ({ ...q })) }
+              : {}),
+          }
         : undefined,
     }
     commitAnnotations(current.id, (anns) => [...anns, copy])
@@ -1552,11 +1559,13 @@ export default function App() {
    * movePin, and the same coalescing, so nudging a rectangle into place is one
    * undo step rather than thirty.
    */
-  function moveQuote(annId: string, quote: NoteQuote) {
+  function moveQuote(annId: string, index: number, quote: NoteQuote) {
     const a = current?.annotations.find((n) => n.id === annId)
     if (!a) return
-    updateAnnotation(annId, patchOverlay(a, { quote }), {
-      coalesceKey: `quote:${annId}`,
+    updateAnnotation(annId, patchOverlay(a, { quotes: withQuoteAt(a, index, quote) }), {
+      // Keyed to the rectangle, not the note: dragging one quote and then
+      // another is two edits, and coalescing them would undo both at once.
+      coalesceKey: `quote:${annId}:${index}`,
     })
   }
 
