@@ -28,6 +28,7 @@ import {
   SECTION_COLS,
   SECTIONS_HEADING,
   WHERE_HEADING,
+  type DocBlock,
   type StudyDoc,
 } from './studyDoc'
 
@@ -80,21 +81,72 @@ function isXmlControl(ch: string): boolean {
 interface RunStyle {
   bold?: boolean
   italic?: boolean
+  underline?: boolean
+  strike?: boolean
+  mono?: boolean
   /** Half-points, as Word counts them: 18 is 9pt. */
   size?: number
+  /** `RRGGBB` or `#rrggbb` — Word wants it bare, so it is stripped here. */
   color?: string
+  /** Run shading, which is how a property tag keeps its ground in Word. */
+  fill?: string
+}
+
+/** Word wants six bare hex digits; everything upstream carries `#rrggbb`. */
+const hex6 = (c: string | undefined): string | null => {
+  const m = c && /^#?([0-9a-fA-F]{6})$/.exec(c.trim())
+  return m ? m[1].toUpperCase() : null
 }
 
 function run(text: string, style: RunStyle = {}): string {
+  const color = hex6(style.color)
+  const fill = hex6(style.fill)
   const props = [
     style.bold ? '<w:b/><w:bCs/>' : '',
     style.italic ? '<w:i/><w:iCs/>' : '',
+    style.underline ? '<w:u w:val="single"/>' : '',
+    style.strike ? '<w:strike/>' : '',
+    style.mono
+      ? '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/>'
+      : '',
     style.size ? `<w:sz w:val="${style.size}"/><w:szCs w:val="${style.size}"/>` : '',
-    style.color ? `<w:color w:val="${style.color}"/>` : '',
+    color ? `<w:color w:val="${color}"/>` : '',
+    fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>` : '',
   ].join('')
   return `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(
     text,
   )}</w:t></w:r>`
+}
+
+/** One of the note's own lines, with every run's appearance kept. */
+function block(b: DocBlock, size?: number): string {
+  const runs = b.runs
+    .map((r) =>
+      run(r.text, {
+        bold: r.bold || b.kind === 'heading',
+        italic: r.italic || b.kind === 'quote',
+        underline: r.underline,
+        strike: r.strike,
+        mono: r.mono,
+        color: r.color,
+        fill: r.fill,
+        ...(size ? { size } : {}),
+      }),
+    )
+    .join('')
+  // Lists and quotes are marked paragraphs rather than real Word lists: a
+  // numbering part is a whole extra document part to keep in step, and a
+  // bullet that is simply *there* survives every copy-paste out of the file.
+  const marker = b.marker ? run(`${b.marker}  `, { color: '#6E6555' }) : ''
+  const indent = b.marker || b.kind === 'quote' ? '<w:ind w:left="284"/>' : ''
+  const border =
+    b.kind === 'quote'
+      ? '<w:pBdr><w:left w:val="single" w:sz="6" w:space="6" w:color="D2C9B6"/></w:pBdr>'
+      : ''
+  // A document with no styles part has no space after a paragraph at all, so
+  // every line of a note would run into the next one.
+  const spacing = `<w:spacing w:after="${b.marker ? 40 : 90}"/>`
+  return `<w:p><w:pPr>${border}${indent}${spacing}</w:pPr>${marker}${runs}</w:p>`
 }
 
 function para(
@@ -221,8 +273,21 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
 
     for (const row of group.rows) {
       // Where: the timecode in bold, the bar or rehearsal mark under it.
+      // The note's own hue as a rule down the timecode, which is how a note is
+      // identified everywhere else in the app.
+      // Indented as well as bordered: with no indent the rule sits on the
+      // cell's own black border and is invisible against it.
+      const rule = `<w:pBdr><w:left w:val="single" w:sz="12" w:space="4" w:color="${
+        hex6(row.color) ?? 'D2C9B6'
+      }"/></w:pBdr><w:ind w:left="170"/>`
       const where = row.where
-        .map((line, i) => para(run(line, i === 0 ? { bold: true } : { size: 18 })))
+        .map(
+          (line, i) =>
+            `<w:p><w:pPr>${rule}</w:pPr>${run(
+              line,
+              i === 0 ? { bold: true } : { size: 18, color: '#6E6555' },
+            )}</w:p>`,
+        )
         .join('')
 
       const example: string[] = []
@@ -244,10 +309,18 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
       const badges = [...row.flags, ...row.properties]
       if (badges.length) {
         analysis.push(
-          para(run(badges.join('  ·  '), { bold: true, size: 16, color: '9A5D08' })),
+          para(
+            badges
+              .map(
+                (badge, i) =>
+                  (i ? run('  ·  ', { size: 16, color: '#9A9288' }) : '') +
+                  run(badge.label, { bold: true, size: 16, color: badge.color }),
+              )
+              .join(''),
+          ),
         )
       }
-      for (const line of row.analysis) analysis.push(para(run(line)))
+      for (const line of row.analysis) analysis.push(block(line))
       if (!row.analysis.length) analysis.push(para(''))
       if (row.lyrics) {
         analysis.push(para(run(`“${row.lyrics}”`, { italic: true, color: '6E6555' })))
@@ -282,16 +355,21 @@ export async function buildStudyDocx(doc: StudyDoc, title: string): Promise<Uint
   const enc = new TextEncoder()
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`),
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`),
     '_rels/.rels': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`),
     'docProps/core.xml': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${esc(
       title,
     )}</dc:title><dc:creator>Sound Annotator</dc:creator><cp:lastModifiedBy>Sound Annotator</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`),
+    // Without a styles part Word picks its own default face and size, which
+    // is how the same file comes out at 11pt Calibri here and 10pt Times
+    // there. One docDefaults block settles it for every run we emit.
+    'word/styles.xml': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="1C1A16"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="252" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>`),
     'word/document.xml': enc.encode(document),
     'word/_rels/document.xml.rels': enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`),
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${rels}</Relationships>`),
   }
   for (const m of media.values()) files[`word/media/${m.file}`] = m.bytes
 

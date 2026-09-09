@@ -18,6 +18,7 @@ import {
   type ProgressFn,
   type QuoteImage,
 } from './quoteImages'
+import type { DocRun } from './studyDoc'
 import {
   ANALYSIS_HEADING,
   buildStudyDoc,
@@ -72,8 +73,6 @@ const INK: Ink = [0.11, 0.1, 0.09]
 const QUIET: Ink = [0.43, 0.4, 0.33]
 const RULE: Ink = [0.72, 0.7, 0.64]
 const SIGNAL: Ink = [0.88, 0.54, 0.05]
-/** The signal, darkened until it clears AA on paper — for the badge line. */
-const SIGNAL_INK: Ink = [0.6, 0.36, 0.03]
 /** The header row's wash — the same one the example document uses. */
 const HEADER_FILL: Ink = [0.988, 0.898, 0.804]
 
@@ -83,6 +82,17 @@ interface Fonts {
   body: PDFFont
   bold: PDFFont
   italic: PDFFont
+  boldItalic: PDFFont
+  mono: PDFFont
+}
+
+/** The face a run's marks add up to. */
+function faceFor(fonts: Fonts, run: { bold?: boolean; italic?: boolean; mono?: boolean }) {
+  if (run.mono) return fonts.mono
+  if (run.bold && run.italic) return fonts.boldItalic
+  if (run.bold) return fonts.bold
+  if (run.italic) return fonts.italic
+  return fonts.body
 }
 
 /**
@@ -163,6 +173,11 @@ class Sheet {
   image(img: PDFImage, x: number, y: number, w: number, h: number): void {
     this.page.drawImage(img, { x, y, width: w, height: h })
   }
+
+  /** pdf-lib's colour object for an ink triple — for callers drawing directly. */
+  color(c: Ink): RGB {
+    return this.rgb(c[0], c[1], c[2])
+  }
 }
 
 /**
@@ -223,40 +238,221 @@ function encodable(s: string): string {
   return out
 }
 
+/** A run measured and placed on a line. */
+interface Piece {
+  text: string
+  run: DocRun
+  width: number
+}
+
+/** `#rrggbb` to the 0–1 triple pdf-lib wants. Falls back to the body ink. */
+function ink(hex: string | undefined, fallback: Ink): Ink {
+  const m = hex && /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return fallback
+  const n = parseInt(m[1], 16)
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]
+}
+
+/**
+ * Break a paragraph of runs across `width`, greedily, keeping each word with
+ * the appearance it was written in.
+ *
+ * Run-aware rather than string-aware because the appearance changes *inside* a
+ * line: a sentence can carry a bold word and a coloured chip, and measuring the
+ * whole thing in one font would wrap it in the wrong place — the more so since
+ * the chips are the widest thing in the prose.
+ */
+function breakRuns(
+  runs: DocRun[],
+  fonts: Fonts,
+  size: number,
+  width: number,
+): Piece[][] {
+  const lines: Piece[][] = []
+  let line: Piece[] = []
+  let used = 0
+  const push = () => {
+    // Trailing space never counts against the margin; nor does it print.
+    while (line.length && !line[line.length - 1].text.trim()) line.pop()
+    if (line.length) lines.push(line)
+    line = []
+    used = 0
+  }
+  for (const run of runs) {
+    const font = faceFor(fonts, run)
+    // Split keeping the spaces, so "a **b** c" doesn't lose the gaps at the
+    // seams between runs.
+    for (const token of encodable(run.text).split(/(\s+)/)) {
+      if (!token) continue
+      const blank = !token.trim()
+      const w = font.widthOfTextAtSize(token, size)
+      if (blank) {
+        // A space at a line start is dropped rather than indenting the line.
+        if (line.length) {
+          line.push({ text: token, run, width: w })
+          used += w
+        }
+        continue
+      }
+      if (used + w > width && line.length) push()
+      if (w > width) {
+        // One word wider than the column: cut it where it stops fitting.
+        let rest = token
+        while (font.widthOfTextAtSize(rest, size) > width && rest.length > 1) {
+          let cut = rest.length - 1
+          while (cut > 1 && font.widthOfTextAtSize(rest.slice(0, cut), size) > width) {
+            cut -= 1
+          }
+          const head = rest.slice(0, cut)
+          line.push({ text: head, run, width: font.widthOfTextAtSize(head, size) })
+          push()
+          rest = rest.slice(cut)
+        }
+        line.push({ text: rest, run, width: font.widthOfTextAtSize(rest, size) })
+        used = font.widthOfTextAtSize(rest, size)
+        continue
+      }
+      line.push({ text: token, run, width: w })
+      used += w
+    }
+  }
+  push()
+  return lines.length ? lines : [[]]
+}
+
 /** One drawable line of the analysis column. */
 interface Line {
-  text: string
+  pieces: Piece[]
   size: number
-  font: keyof Fonts
-  color: Ink
+  /** Space above this line, over and above the leading. */
   gap: number
+  /** How far the runs sit in from the column — a list's hanging indent. */
+  indent: number
+  /** Drawn in that indent, at the line's start. */
+  marker?: string
+  /** A rule down the left, marking a quoted line. */
+  rule?: boolean
 }
+
+/** Sizes for the kinds of block a note's prose can hold. */
+const SIZE_HEADING = SIZE_BODY + 1.5
+const MARKER_INDENT = 12
+const QUOTE_INDENT = 9
 
 function analysisLines(row: StudyRow, fonts: Fonts, width: number): Line[] {
   const out: Line[] = []
-  // The gap belongs *between* runs, not between the wrapped lines inside one:
-  // paying it per line leads a long paragraph differently from a short one,
-  // which reads as an accident rather than as a space.
-  const push = (text: string, font: keyof Fonts, size: number, color: Ink, gap = 0) => {
+  const add = (
+    runs: DocRun[],
+    size: number,
+    gap: number,
+    opts: { indent?: number; marker?: string; rule?: boolean } = {},
+  ) => {
+    const indent = opts.indent ?? 0
     const opening = out.length === 0
-    wrap(encodable(text), fonts[font], size, width).forEach((line, i) => {
-      out.push({ text: line, size, font, color, gap: opening || i > 0 ? 0 : gap })
+    breakRuns(runs, fonts, size, width - indent).forEach((pieces, i) => {
+      out.push({
+        pieces,
+        size,
+        // The gap belongs *between* runs, not between the wrapped lines inside
+        // one: paying it per line leads a long paragraph differently from a
+        // short one, which reads as an accident rather than as a space.
+        gap: opening || i > 0 ? 0 : gap,
+        indent,
+        ...(i === 0 && opts.marker ? { marker: opts.marker } : {}),
+        ...(opts.rule ? { rule: true } : {}),
+      })
     })
   }
+
   // What the note was filed as, before what it says: a question, its tags and
-  // the concepts it names are the app's own record of the note, and they read
-  // as a strapline rather than as part of the prose.
+  // the concepts it names are the app's own record of the note, and each keeps
+  // its own hue, because that hue is what identifies it everywhere else.
   const badges = [...row.flags, ...row.properties]
-  if (badges.length) push(badges.join('  ·  '), 'bold', SIZE_SMALL, SIGNAL_INK)
+  if (badges.length) {
+    const runs: DocRun[] = []
+    badges.forEach((badge, i) => {
+      if (i) runs.push({ text: '  ·  ', color: '#9a9288' })
+      runs.push({ text: badge.label, bold: true, color: badge.color })
+    })
+    add(runs, SIZE_SMALL, 0)
+  }
+
   const first = badges.length ? 6 : 0
   if (row.analysis.length) {
-    row.analysis.forEach((p, i) => push(p, 'body', SIZE_BODY, INK, i === 0 ? first : 3))
+    row.analysis.forEach((block, i) => {
+      const gap = i === 0 ? first : 3
+      if (block.kind === 'heading') {
+        add(
+          block.runs.map((r) => ({ ...r, bold: true })),
+          SIZE_HEADING,
+          i === 0 ? first : 7,
+        )
+      } else if (block.kind === 'quote') {
+        add(
+          block.runs.map((r) => ({ ...r, italic: true })),
+          SIZE_BODY,
+          gap,
+          { indent: QUOTE_INDENT, rule: true },
+        )
+      } else if (block.marker) {
+        add(block.runs, SIZE_BODY, gap, { indent: MARKER_INDENT, marker: block.marker })
+      } else {
+        add(block.runs, SIZE_BODY, gap)
+      }
+    })
   } else {
-    push('—', 'body', SIZE_BODY, QUIET, first)
+    add([{ text: '—', color: '#6e6555' }], SIZE_BODY, first)
   }
-  if (row.lyrics) push(`“${row.lyrics}”`, 'italic', SIZE_BODY, QUIET, 4)
-  if (row.spec) push(row.spec, 'italic', SIZE_SMALL, QUIET, 10)
+
+  if (row.lyrics) {
+    add([{ text: `“${row.lyrics}”`, italic: true, color: '#6e6555' }], SIZE_BODY, 4)
+  }
+  if (row.spec) {
+    add([{ text: row.spec, italic: true, color: '#6e6555' }], SIZE_SMALL, 10)
+  }
   return out
+}
+
+/** Draw one laid-out line at `x`, whose baseline sits `size` below `top`. */
+function drawLine(sheet: Sheet, line: Line, x: number, top: number, fonts: Fonts): void {
+  const baseline = top - line.size
+  if (line.rule) {
+    sheet.rect(x, baseline - line.size * 0.25, 1.5, line.size * 1.3, RULE)
+  }
+  if (line.marker) {
+    sheet.text(line.marker, { x, y: baseline, size: line.size, color: QUIET })
+  }
+  let cursor = x + line.indent
+  for (const piece of line.pieces) {
+    const color = ink(piece.run.color, INK)
+    if (piece.run.fill && piece.text.trim()) {
+      // The chip's ground, as the app's own print stylesheet paints it: the
+      // hue at low strength, so the word is tinted rather than boxed.
+      sheet.rect(
+        cursor - 1.5,
+        baseline - line.size * 0.22,
+        piece.width + 3,
+        line.size * 1.18,
+        ink(piece.run.fill, [1, 1, 1]),
+      )
+    }
+    if (piece.text.trim()) {
+      sheet.page.drawText(piece.text, {
+        x: cursor,
+        y: baseline,
+        size: line.size,
+        font: faceFor(fonts, piece.run),
+        color: sheet.color(color),
+      })
+      if (piece.run.underline) {
+        sheet.rect(cursor, baseline - line.size * 0.14, piece.width, 0.5, color)
+      }
+      if (piece.run.strike) {
+        sheet.rect(cursor, baseline + line.size * 0.28, piece.width, 0.5, color)
+      }
+    }
+    cursor += piece.width
+  }
 }
 
 const heightOf = (lines: Line[]): number =>
@@ -274,6 +470,8 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
     body: await pdf.embedFont(StandardFonts.Helvetica),
     bold: await pdf.embedFont(StandardFonts.HelveticaBold),
     italic: await pdf.embedFont(StandardFonts.HelveticaOblique),
+    boldItalic: await pdf.embedFont(StandardFonts.HelveticaBoldOblique),
+    mono: await pdf.embedFont(StandardFonts.Courier),
   }
   const sheet = new Sheet(pdf, fonts, rgb)
 
@@ -441,7 +639,16 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
         whereLines.length * SIZE_BODY * LEADING + CELL_PAD * 2,
         34,
       )
-      measured.push({ lines, image, captionLines, whereLines, imageW, imageH, rowH })
+      measured.push({
+        lines,
+        image,
+        captionLines,
+        whereLines,
+        imageW,
+        imageH,
+        rowH,
+        color: row.color,
+      })
     }
     if (measured.length === 0) continue
 
@@ -471,10 +678,19 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
       sheet.rect(exampleX, top, exampleW, m.rowH, undefined, RULE)
       sheet.rect(analysisX, top, analysisW, m.rowH, undefined, RULE)
 
-      // Where column — the timecode in bold, the bar under it.
+      // Where column — the timecode in bold, the bar under it, and a rule in
+      // the note's own hue, which is how a note is identified everywhere else
+      // in the app. A rule rather than text, so the hue never has to clear AA.
+      sheet.rect(
+        whereX + CELL_PAD - 3,
+        top + CELL_PAD,
+        1.8,
+        m.rowH - CELL_PAD * 2,
+        ink(m.color, [0.72, 0.7, 0.64]),
+      )
       m.whereLines.forEach((line, i) => {
         sheet.text(line.text, {
-          x: whereX + CELL_PAD,
+          x: whereX + CELL_PAD + 3,
           y: sheet.y - CELL_PAD - SIZE_BODY - i * SIZE_BODY * LEADING,
           size: SIZE_BODY,
           font: line.bold ? 'bold' : 'body',
@@ -511,15 +727,7 @@ export async function buildStudyPdf(doc: StudyDoc, title: string): Promise<Uint8
       let ay = sheet.y - CELL_PAD
       for (const line of m.lines) {
         ay -= line.gap
-        if (line.text) {
-          sheet.text(line.text, {
-            x: analysisX + CELL_PAD,
-            y: ay - line.size,
-            size: line.size,
-            font: line.font,
-            color: line.color,
-          })
-        }
+        drawLine(sheet, line, analysisX + CELL_PAD, ay, fonts)
         ay -= line.size * LEADING
       }
 
