@@ -12,6 +12,26 @@
 // and, later, flip it on the clock.
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
+/**
+ * Where pdf.js fetches its wasm decoders from — kept in step with
+ * `PDF_WASM_DIR` in vite.config.ts, which is what puts the files there.
+ *
+ * Not optional, and the way it fails is the reason it is worth a comment. A
+ * *typeset* score is vector drawing and needs none of this; a **scanned** one
+ * — CCITT fax, JBIG2, JPEG 2000, which is most of what a teacher downloads
+ * from IMSLP — has one big image per page, and pdf.js decodes those in wasm it
+ * loads at run time from this URL. Left unset the URL is the string `null`,
+ * every fetch 404s, the decoder fails to initialise, and pdf.js *skips the
+ * image and paints the page's white background*: a blank sheet of exactly the
+ * right shape, no error, no rejected promise, nothing in the console. So a
+ * scanned score looked like 257 sheets of blank paper.
+ *
+ * Absolute from the origin, via BASE_URL so it survives a non-root deploy.
+ * pdf.js concatenates the file name straight onto it, so the trailing slash is
+ * load-bearing.
+ */
+const wasmUrl = `${import.meta.env.BASE_URL}pdf-wasm/`
+
 type PdfJs = typeof import('pdfjs-dist')
 
 let libPromise: Promise<PdfJs> | null = null
@@ -115,7 +135,7 @@ export async function openPdf(bytes: ArrayBuffer): Promise<LoadedPdf> {
   const lib = await pdfjs()
   // The loading task, not the document, owns the worker — it's what `destroy`
   // has to reach to tear one down.
-  const loading = lib.getDocument({ data: bytes })
+  const loading = lib.getDocument({ data: bytes, wasmUrl })
   // Typed explicitly: `draw` below closes over it before the assignment,
   // which would otherwise leave it inferred as `any`.
   let doc: Awaited<typeof loading.promise>
