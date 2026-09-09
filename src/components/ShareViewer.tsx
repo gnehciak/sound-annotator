@@ -62,6 +62,7 @@ import {
   saveTaskResponse,
 } from '../lib/answers'
 import { exportAnswerSheetPdf } from '../lib/answerSheet'
+import ExportDocxButton from './ExportDocxButton'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
@@ -535,6 +536,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             muted={muted}
             readOnly
             overlay
+            chrome="glass"
             onPlayPause={() => (isPlaying ? pause() : play())}
             onSeek={seek}
             onStep={step}
@@ -641,7 +643,12 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             structure board (its sections have no note bodies), and on a
             listening task the worksheet strip's export (the answer sheet)
             is the one true PDF. JSON export carries any project kind. */}
-        {!isStructure && !isTask && <ExportPdfButton project={project} />}
+        {!isStructure && !isTask && (
+          <>
+            <ExportPdfButton project={project} />
+            <ExportDocxButton project={project} />
+          </>
+        )}
         <ExportJsonButton project={project} />
         <CopyProjectButton project={project} />
         <a
@@ -663,12 +670,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             <TitleBar
               left={scoreView.mode === 'view' ? 'Score' : 'Player'}
               right={sourceLabel(source)}
-              actions={
-                <>
-                  {scoreSwitch}
-                  {scoreButton}
-                </>
-              }
+              center={scoreSwitch}
+              actions={scoreButton}
             />
             {/* `relative` for the score view, which covers this box. */}
             <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -723,7 +726,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               )}
 
               {scorePane && (
-                <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
+                <div className="absolute inset-0 z-30">{scorePane}</div>
               )}
             </div>
           </div>
@@ -771,12 +774,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           <TitleBar
             left={scoreView.mode === 'view' ? 'Score' : 'Player'}
             right={sourceLabel(source)}
-            actions={
-              <>
-                {scoreSwitch}
-                {scoreButton}
-              </>
-            }
+            center={scoreSwitch}
+            actions={scoreButton}
           />
           {/* `relative` for the score view, which covers this box. */}
           <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -821,7 +820,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             )}
 
             {scorePane && (
-              <div className="absolute inset-[0.875rem] z-30">{scorePane}</div>
+              <div className="absolute inset-0 z-30">{scorePane}</div>
             )}
           </div>
 
@@ -910,7 +909,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() =>
-                  exportAnswerSheetPdf(project, {
+                  void exportAnswerSheetPdf(project, {
                     name: studentName,
                     answers: studentAnswers,
                   })

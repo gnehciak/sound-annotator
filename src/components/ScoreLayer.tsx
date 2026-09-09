@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft,
@@ -16,18 +8,26 @@ import {
   Maximize2,
   Minimize2,
   TriangleAlert,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
-import type { Annotation, ProjectScore, ScoreMark, ScoreTurn } from '../types'
+import type { Annotation, NoteQuote, ProjectScore, ScoreMark, ScoreTurn } from '../types'
 import PinLayer from './PinLayer'
+import QuoteFrame from './QuoteFrame'
 import ScoreMarks, { type MarkStyle, type MarkTool } from './ScoreMarks'
+import ScoreSurface from './ScoreSurface'
 import ScoreToolbar from './ScoreToolbar'
-import { scorePinsOn } from '../lib/overlays'
-import { usePinTarget } from '../lib/pinTargets'
-import { openPdf, type LoadedPdf, type PageSize } from '../lib/pdf'
+import { quoteOn, scorePinsOn } from '../lib/overlays'
+import { colorForId } from '../lib/noteColors'
+import { openPdf, type LoadedPdf } from '../lib/pdf'
 import {
   DEFAULT_MARK_WEIGHT,
   DEFAULT_TURN_LEAD,
   MARK_COLORS,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  ZOOM_STEP,
+  clampZoom,
   marksOnPage,
   pageAt,
   removeMark,
@@ -81,6 +81,7 @@ export default function ScoreLayer({
   selectedId,
   readOnly,
   onMovePin,
+  onQuote,
   onPageChange,
   onMarks,
   canDraw = false,
@@ -117,6 +118,8 @@ export default function ScoreLayer({
   selectedId?: string | null
   readOnly?: boolean
   onMovePin?: (id: string, x: number, y: number) => void
+  /** Commit a moved or resized picture quote, in fractions of the page box. */
+  onQuote?: (id: string, quote: NoteQuote) => void
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
   onPageChange?: (page: number) => void
   /** Save the drawn marks. Absent means nobody here may draw. */
@@ -188,11 +191,39 @@ export default function ScoreLayer({
     [pageCount],
   )
 
-  /** The marks on the page in front of the reader. */
-  const pageMarks = useMemo(
-    () => marksOnPage(score.marks, page),
-    [score.marks, page],
+  /**
+   * Scrolling to a page *is* turning to it. The document is one scroller now,
+   * so a reader who scrolls away from the music has done exactly what the
+   * ‹ › buttons used to do — and it has to mean the same thing, or a peek
+   * would be undone by the next thing the mouse wheel did.
+   */
+  const showUserPage = useCallback(
+    (to: number) => {
+      if (followed != null) setPeek({ page: to, from: followed })
+      else setPage(to)
+    },
+    [followed],
   )
+
+  // Zoom is the reader's, not the track's — the same call as which pen is in
+  // your hand. A teacher who magnifies the second flute part has said
+  // something about their eyes and this screen, not about the piece.
+  const [zoom, setZoom] = useState(1)
+  const zoomBy = useCallback(
+    (factor: number) => setZoom((z) => clampZoom(z * factor)),
+    [],
+  )
+  // Refitting is what "back to normal" means, so it resets the zoom too:
+  // leaving a 4× magnification on while switching to fit-page would show the
+  // reader a corner of a page and call it a fit. Adjusted during render — the
+  // shape React documents for state derived from a prop change — rather than
+  // in an effect, which would paint one frame at the old magnification.
+  const [zoomedFor, setZoomedFor] = useState(view.fit)
+  if (zoomedFor !== view.fit) {
+    setZoomedFor(view.fit)
+    setZoom(1)
+  }
+
 
 
   // What is actually armed, derived rather than reset in an effect. The tool
@@ -205,8 +236,13 @@ export default function ScoreLayer({
   // Derived, so the reader's tool is still in their hand when they come back
   // from the expanded view, which an effect that cleared it would have lost.
   const activeTool: MarkTool = drawable ? tool : null
+  // A selection survives scrolling now — several pages are on screen at once,
+  // so "still visible" is no longer the same question as "still on this page".
+  // It only has to still exist.
   const activeMark =
-    drawable && pageMarks.some((m) => m.id === selectedMark) ? selectedMark : null
+    drawable && (score.marks ?? []).some((m) => m.id === selectedMark)
+      ? selectedMark
+      : null
 
   const commitMark = useCallback(
     (mark: ScoreMark) => onMarks?.(upsertMark(score.marks, mark)),
@@ -263,10 +299,24 @@ export default function ScoreLayer({
   // frame's pins follow. A score pin on another page simply isn't drawn: it is
   // a fraction of a page box that isn't on screen, and floating it over the
   // video at those coordinates would put it somewhere that means nothing.
-  const scorePins = useMemo(() => {
-    if (!annotations?.length || currentTime == null) return []
-    return scorePinsOn(annotations, page, currentTime, selectedId)
-  }, [annotations, currentTime, selectedId, page])
+  const pinsOnPage = useCallback(
+    (n: number) =>
+      !annotations?.length || currentTime == null
+        ? []
+        : scorePinsOn(annotations, n, currentTime, selectedId),
+    [annotations, currentTime, selectedId],
+  )
+
+  /**
+   * The open note's picture quote, when it is aimed at *this* page. Not held to
+   * the pins' time rule: a quote is the handout's business, not the stage's, so
+   * it shows whenever its note is open and never otherwise.
+   */
+  const selectedNote = annotations?.find((a) => a.id === selectedId) ?? null
+  const quoteOnPage = useCallback(
+    (n: number) => quoteOn(selectedNote, 'score', n),
+    [selectedNote],
+  )
 
   // Tell the host which page is up, so a pin dropped now lands on it.
   useEffect(() => {
@@ -278,17 +328,31 @@ export default function ScoreLayer({
   // hide its title and its last system under them, which on a score is exactly
   // the part you were reading. Expanded, only the band is in the way, unless
   // the transport has joined it at the foot for a sync pass.
-  const pad = !expanded
-    ? placement === 'pane'
-      ? drawable
-        ? 'pt-10 pb-24'
-        : 'pt-10 pb-12'
-      : 'pt-9 pb-12'
-    : syncing
-      ? 'pt-12 pb-14'
-      : drawable
-        ? 'pt-12 pb-16'
-        : 'pt-12 pb-4'
+  /**
+   * Whether the transport rides at the foot of *this* layer.
+   *
+   * In the video frame it doesn't: the player has its own floating transport
+   * there and a second one would be two play buttons on one picture. Anywhere
+   * this layer covers the player — its own view, or full screen — it has to
+   * carry one, because it has covered the only other one.
+   */
+  const footTransport = !!transport && (placement === 'pane' || expanded)
+
+  /**
+   * Room the page must not be drawn into: the page nav above, and below it
+   * whatever is at the foot. A page fitted edge to edge would hide its title
+   * under the one and its last system under the other, which on a score is
+   * exactly the part you were reading.
+   */
+  const pad = syncing
+    ? { top: 48, bottom: 56 }
+    : placement === 'frame' && !expanded
+      ? // The video's own transport floats here; leave it its band.
+        { top: 36, bottom: 48 }
+      : {
+          top: 40,
+          bottom: (footTransport ? 55 : 0) + (drawable ? 52 : 0),
+        }
 
   const chrome = (
     <ScoreChrome
@@ -301,7 +365,73 @@ export default function ScoreLayer({
       onStep={step}
       onFollow={() => setPeek(null)}
       onExpanded={syncing ? undefined : setExpanded}
+      // Over the picture the chrome is white-on-video; over the score it is
+      // the app's own floating material, like every menu and popover.
+      tone={placement === 'pane' || expanded ? 'panel' : 'video'}
+      // Zoom is offered only where it can be used: the overlay over the video
+      // is inert background, and a magnified page in a 16:9 letterbox would be
+      // a corner of a stave nobody can scroll to the rest of.
+      zoom={placement === 'pane' || expanded ? zoom : undefined}
+      onZoom={zoomBy}
+      onResetZoom={() => setZoom(1)}
     />
+  )
+
+  /**
+   * What a page carries on top of its raster: the marks drawn on it and the
+   * pins aimed at it, both inside the page box so their fractions hold through
+   * any rescale. Marks paint under the pins — a pin is a callout with words on
+   * it and has to stay readable over whatever is highlighted.
+   *
+   * One stable callback, deliberately: the surface memoises its pages, and an
+   * inline arrow here would give every page a new prop on every render and
+   * defeat that on the one path — scrolling — where it matters most.
+   */
+  const drawOverlay = useCallback(
+    (n: number, size: { width: number; height: number }) => (
+      <>
+        <ScoreMarks
+          marks={marksOnPage(score.marks, n)}
+          page={n}
+          size={size}
+          tool={activeTool}
+          style={markStyle}
+          selectedId={activeMark}
+          onSelect={setSelectedMark}
+          onCommit={commitMark}
+        />
+        {selectedNote && quoteOnPage(n) && (
+          <QuoteFrame
+            quote={quoteOnPage(n)!}
+            color={selectedNote.color ?? colorForId(selectedNote.id)}
+            tone="paper"
+            readOnly={readOnly}
+            onChange={onQuote && ((q) => onQuote(selectedNote.id, q))}
+          />
+        )}
+        <PinLayer
+          pins={pinsOnPage(n)}
+          selectedId={selectedId}
+          readOnly={readOnly}
+          onMovePin={onMovePin}
+          spill
+        />
+      </>
+    ),
+    [
+      score.marks,
+      activeTool,
+      markStyle,
+      activeMark,
+      commitMark,
+      pinsOnPage,
+      selectedNote,
+      quoteOnPage,
+      selectedId,
+      readOnly,
+      onMovePin,
+      onQuote,
+    ],
   )
 
   const surface =
@@ -314,32 +444,20 @@ export default function ScoreLayer({
         pdf={pdf.doc}
         page={page}
         fit={view.fit}
+        zoom={zoom}
         pad={pad}
+        // The stack is the reading surface; over the video the layer is inert
+        // background with no room to scroll, so it stays one fitted page.
+        continuous={placement === 'pane' || expanded}
+        interactive={placement === 'pane' || expanded}
+        onUserPage={showUserPage}
+        onZoom={setZoom}
         // Both layers live inside the page box, which is what makes their
         // fractions hold through a rescale — the box resizes, the numbers
         // don't. Marks are painted under the pins: a pin is a callout with
         // words on it and has to stay readable over whatever is highlighted.
-        overlay={(size) => (
-          <>
-            <ScoreMarks
-              marks={pageMarks}
-              page={page}
-              size={size}
-              tool={activeTool}
-              style={markStyle}
-              selectedId={activeMark}
-              onSelect={setSelectedMark}
-              onCommit={commitMark}
-            />
-            <PinLayer
-              pins={scorePins}
-              selectedId={selectedId}
-              readOnly={readOnly}
-              onMovePin={onMovePin}
-              spill
-            />
-          </>
-        )}
+        // Every visible page draws its own, not just the one being followed.
+        overlay={drawOverlay}
       />
     ) : (
       <ScoreMessage tone="quiet" icon={<Loader2 size={18} className="animate-spin" />}>
@@ -352,11 +470,15 @@ export default function ScoreLayer({
   // would put the pen where the scrub bar was a moment ago.
   const toolbar = drawable ? (
     <div
-      // Above the transport, not merely beside it: the transport's gradient
-      // is a tall invisible box reaching well past its controls, and at an
-      // equal z-index it swallows every click aimed at the tools.
+      // Floating, unlike the two strips that bracket the view: the tools are
+      // the thing in your hand, not the panel's furniture, so the pill is only
+      // as wide as they are and the music shows either side of it. Inert
+      // outside the pill for the same reason — the page beside it is still the
+      // page. Above the transport in the stacking order because the
+      // transport's box reaches past its controls and would otherwise swallow
+      // every click aimed at the tools.
       className={`pointer-events-none absolute inset-x-0 z-30 ${
-        placement === 'pane' ? 'bottom-14' : 'bottom-3'
+        footTransport ? 'bottom-16' : 'bottom-3'
       }`}
     >
       <ScoreToolbar
@@ -377,10 +499,12 @@ export default function ScoreLayer({
           {surface}
           {chrome}
           {toolbar}
-          {/* Syncing needs the clock and the seek bar in reach of the page
-              being timed; the overlay transport pins itself to the foot of
-              this box, which is exactly where it's wanted. */}
-          {syncing && transport}
+          {/* Full screen is the score with more room, not a stripped-down
+              version of it: the tools, the pins and the transport all come
+              along. The overlay transport pins itself to the foot of this box,
+              which is where it's wanted both for reading and for timing a
+              sync pass against the page on screen. */}
+          {footTransport && transport}
         </div>
         {syncing && onTurns && currentTime != null && onSeek && (
           <ScoreSync
@@ -407,7 +531,7 @@ export default function ScoreLayer({
   // score to read along with the music, not to silence it.
   if (placement === 'pane') {
     return (
-      <div className="absolute inset-0 animate-fade-in overflow-hidden rounded-lg bg-black">
+      <div className="absolute inset-0 animate-fade-in overflow-hidden bg-ink">
         {surface}
         {chrome}
         {toolbar}
@@ -417,7 +541,7 @@ export default function ScoreLayer({
             follow it. The overlay variant is the right one even on an audio
             track: it pins itself to the foot of whatever box it's in, and
             this box has a black ground for it to read against. */}
-        {transport}
+        {footTransport && transport}
       </div>
     )
   }
@@ -474,124 +598,6 @@ export function ScoreFrame({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ---- the drawn page -------------------------------------------------------
-
-/**
- * The canvas, redrawn whenever the page, the fit or the box it has to fill
- * changes. Height-fit letterboxes the whole page inside the box; width-fit
- * fills the width and lets the page run taller than the box, which is what the
- * scroll container is for.
- */
-function ScoreSurface({
-  pdf,
-  page,
-  fit,
-  pad,
-  overlay,
-}: {
-  pdf: LoadedPdf
-  page: number
-  fit: ScoreView['fit']
-  /** Padding classes reserving room for the chrome over this surface. */
-  pad: string
-  /**
-   * Drawn inside the page box, so it moves and scales with the page. Given
-   * the page's pixel size, which the marks need: a shape stored in fractions
-   * has to be turned back into pixels to be drawn without distorting it.
-   */
-  overlay?: (size: PageSize) => ReactNode
-}) {
-  const pageTarget = usePinTarget('score', page)
-  const boxRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [box, setBox] = useState<PageSize | null>(null)
-  const [drawn, setDrawn] = useState<PageSize | null>(null)
-  const [failed, setFailed] = useState<string | null>(null)
-
-  useLayoutEffect(() => {
-    const el = boxRef.current
-    if (!el) return
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      // Round: a sub-pixel wobble from the surrounding flex layout would
-      // otherwise re-render the page on every frame of a resize.
-      setBox({ width: Math.round(width), height: Math.round(height) })
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !box || box.width < 8 || box.height < 8) return
-    let alive = true
-    pdf.render(page, canvas, box, fit).then(
-      (size) => {
-        if (alive) {
-          setDrawn(size)
-          setFailed(null)
-        }
-      },
-      (e: unknown) => {
-        if (alive) setFailed(e instanceof Error ? e.message : 'That page would not draw.')
-      },
-    )
-    return () => {
-      alive = false
-    }
-  }, [pdf, page, fit, box])
-
-  return (
-    <div
-      ref={boxRef}
-      // ResizeObserver reports the *content* box, so the chrome's padding is
-      // subtracted from the fit for free — the page is drawn into what's left.
-      className={`h-full w-full ${pad} ${
-        fit === 'width'
-          ? 'pointer-events-auto overflow-y-auto overflow-x-hidden'
-          : 'overflow-hidden'
-      }`}
-    >
-      <div
-        className={`flex w-full ${
-          fit === 'width' ? 'min-h-full items-start' : 'h-full items-center'
-        } justify-center`}
-      >
-        {failed ? (
-          <ScoreMessage tone="error" icon={<TriangleAlert size={18} />}>
-            {failed}
-          </ScoreMessage>
-        ) : (
-          // The page box: exactly the drawn page, and positioned, so anything
-          // inside it can be placed as a percentage *of the page*. That is the
-          // whole trick behind a score-anchored pin — the box is what resizes
-          // when the fit changes or the window moves, and the pin's numbers
-          // never do.
-          <div
-            // Also the drop box for a pin dragged out of the inspector: the
-            // page is what you aim at, and the page is what this element is.
-            ref={pageTarget}
-            className="relative shrink-0"
-            style={
-              drawn
-                ? { width: `${drawn.width}px`, height: `${drawn.height}px` }
-                : { width: 0, height: 0 }
-            }
-          >
-            <canvas
-              ref={canvasRef}
-              // White, always: a score is ink on paper, and the surrounding
-              // theme has no say in how printed music reads.
-              className="block h-full w-full bg-white shadow-[0_2px_24px_rgb(0_0_0/0.45)]"
-            />
-            {drawn && overlay?.(drawn)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ---- chrome ---------------------------------------------------------------
 
 /** Page nav and the expand toggle, floating at the top of the layer. */
@@ -605,6 +611,10 @@ function ScoreChrome({
   onStep,
   onFollow,
   onExpanded,
+  tone,
+  zoom,
+  onZoom,
+  onResetZoom,
 }: {
   page: number
   pageCount: number
@@ -618,10 +628,27 @@ function ScoreChrome({
   onFollow: () => void
   /** Absent while syncing — the workspace has its own way out. */
   onExpanded?: (v: boolean) => void
+  /** What this chrome floats over: the picture, or the score's own ground. */
+  tone: 'video' | 'panel'
+  /** The current zoom, or absent where zooming isn't offered. */
+  zoom?: number
+  onZoom: (factor: number) => void
+  onResetZoom: () => void
 }) {
-  const btn = 'btn-icon on-video press disabled:opacity-30'
+  // On the picture: white glyphs standing on a gradient that fades into the
+  // frame, because what is behind is anything at all. On the score: the app's
+  // own floating material — a glass pill, theme-aware glyphs — because what is
+  // behind is a page, and a black band across it would read as damage.
+  const onVideo = tone === 'video'
+  const btn = `btn-icon press disabled:opacity-30 ${onVideo ? 'on-video' : ''}`
   return (
-    <div className="pointer-events-auto absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-8 pt-1.5">
+    <div
+      className={
+        onVideo
+          ? 'pointer-events-auto absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-8 pt-1.5'
+          : 'glass-strip pointer-events-auto absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 border-b border-line/70 px-2 py-1.5'
+      }
+    >
       <button
         type="button"
         onClick={() => onStep(-1)}
@@ -632,7 +659,11 @@ function ScoreChrome({
       >
         <ChevronLeft size={16} />
       </button>
-      <span className="min-w-[64px] text-center font-mono text-[11px] tabular-nums text-white/85">
+      <span
+        className={`min-w-[64px] text-center font-mono text-[11px] tabular-nums ${
+          onVideo ? 'text-white/85' : 'text-fg'
+        }`}
+      >
         {busy ? '···' : `${page} / ${pageCount}`}
       </span>
       <button
@@ -663,11 +694,53 @@ function ScoreChrome({
       {!peeking && following && (
         <span
           title="This score turns its own pages — use ‹ › to look ahead"
-          className="ml-1 shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-white/45"
+          className={`ml-1 shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] ${
+            onVideo ? 'text-white/45' : 'text-muted'
+          }`}
         >
           Following
         </span>
       )}
+      {/* Zoom. The buttons are the discoverable half — a pinch is the one
+          most readers will actually use, and nothing on screen advertises
+          that a pinch works. The readout doubles as "put it back". */}
+      {zoom != null && (
+        <span className="ml-1 flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => onZoom(1 / ZOOM_STEP)}
+            disabled={zoom <= MIN_ZOOM + 0.001}
+            aria-label="Zoom out"
+            title="Zoom out — or pinch"
+            className={btn}
+          >
+            <ZoomOut size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={onResetZoom}
+            disabled={Math.abs(zoom - 1) < 0.001}
+            aria-label="Back to the fitted size"
+            title="Back to the fitted size"
+            className={`press min-w-[42px] rounded font-mono text-[10px] tabular-nums disabled:opacity-40 ${
+              onVideo ? 'text-white/70 hover:text-white' : 'text-muted hover:text-fg'
+            }`}
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => onZoom(ZOOM_STEP)}
+            disabled={zoom >= MAX_ZOOM - 0.001}
+            aria-label="Zoom in"
+            title="Zoom in — or pinch"
+            className={btn}
+          >
+            <ZoomIn size={15} />
+          </button>
+        </span>
+      )}
+
       {onExpanded && (
         <button
           type="button"

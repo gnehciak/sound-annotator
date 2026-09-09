@@ -307,6 +307,28 @@ export function inkBounds(points: number[]): {
  */
 export const INK_MIN_STEP = 0.004
 
+// ---- zoom -----------------------------------------------------------------
+
+/**
+ * How far the reader may zoom, as a multiplier on the fitted size.
+ *
+ * The floor is below 1 on purpose: fit-page already shows a whole page, so the
+ * only reason to go under it is to see two at once, which is exactly what you
+ * want at a page turn. The ceiling is where a printed stave stops gaining
+ * detail — past 5× a 150 dpi scan is just bigger, not clearer — and it also
+ * bounds the canvas a phone has to hold.
+ */
+export const MIN_ZOOM = 0.5
+export const MAX_ZOOM = 5
+
+export function clampZoom(v: number): number {
+  if (!Number.isFinite(v)) return 1
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v))
+}
+
+/** One press of the zoom buttons — a fifth, so four presses roughly double. */
+export const ZOOM_STEP = 1.2
+
 // ---- display knobs --------------------------------------------------------
 // Persisted on the score so a shared track opens the way its owner left it,
 // but a reader may still change them for their own session (see useScoreView).

@@ -24,6 +24,7 @@ import type {
   Annotation,
   NoteBlock,
   NoteOverlay,
+  NoteQuote,
   Project,
   ProjectScore,
   ProjectSettings,
@@ -32,6 +33,7 @@ import type {
   ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
+import { clampQuote } from './overlays'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
 import { MARK_COLORS, MARK_KINDS, sortTurns } from './score'
@@ -199,9 +201,39 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
     const page = num(o.scorePinPage) ?? (legacyScorePin ? num(o.pinPage) : null)
     if (page != null && page >= 1) overlay.scorePinPage = Math.round(page)
   }
+  const quote = sanitizeQuote(o.quote)
+  if (quote) overlay.quote = quote
   const hold = num(o.hold)
   if (hold != null && hold > 0) overlay.hold = hold
   return Object.keys(overlay).length > 0 ? overlay : undefined
+}
+
+/**
+ * A picture quote: a rectangle on the picture or on a page of the score. All
+ * four numbers are needed to mean anything, so a half-written one is dropped
+ * rather than guessed at, and the result is squared up by the same rule the
+ * dragging obeys — inside its surface, never below MIN_QUOTE.
+ */
+function sanitizeQuote(v: unknown): NoteQuote | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const q = v as Record<string, unknown>
+  const on = q.on === 'score' ? 'score' : q.on === 'video' ? 'video' : null
+  const x = num(q.x)
+  const y = num(q.y)
+  const w = num(q.w)
+  const h = num(q.h)
+  if (!on || x == null || y == null || w == null || h == null) return undefined
+  const page = num(q.page)
+  return clampQuote({
+    on,
+    ...(on === 'score' && page != null && page >= 1
+      ? { page: Math.round(page) }
+      : {}),
+    x: clamp01(x),
+    y: clamp01(y),
+    w: clamp01(w),
+    h: clamp01(h),
+  })
 }
 
 function sanitizeAnnotation(v: unknown): Annotation | null {

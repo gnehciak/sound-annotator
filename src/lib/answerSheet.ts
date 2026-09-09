@@ -18,6 +18,7 @@ import { countAnswered, questionsOf } from './questions'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
 import { publicId } from './ids'
 import { PROPERTY_TAG_PRINT_CSS } from './propertyTags'
+import { collectQuoteImages, type QuoteImage } from './quoteImages'
 
 /** Escape text for safe interpolation into HTML. */
 function esc(s: string): string {
@@ -61,6 +62,7 @@ function questionBlock(
   note: Annotation,
   number: number,
   answerText: string,
+  quote?: QuoteImage,
 ): string {
   const color = note.color ?? colorForId(note.id)
   const prompt = primaryTextHtml(note)
@@ -74,6 +76,7 @@ function questionBlock(
       )}</span>
       ${bar ? `<span class="q-bar">${esc(bar)}</span>` : ''}
     </div>
+    ${quote ? `<img class="pq" src="${quote.src}" alt="" />` : ''}
     ${htmlHasContent(prompt) ? `<div class="rich">${prompt}</div>` : ''}
     ${
       answered
@@ -195,6 +198,19 @@ const STYLES = `
   /* A question prompt can carry inline property tags — same paper styling as
      the track export. */
   ${PROPERTY_TAG_PRINT_CSS}
+  /* Picture quotes — the bars (or the moment) a question is asking about.
+     The crop is already baked into the image (see lib/quoteImages), so this
+     only has to bound how much of the page one is allowed to take. */
+  .pq {
+    display: block;
+    max-width: 100%;
+    max-height: 200px;
+    width: auto;
+    margin: 0 0 8px;
+    border: 1px solid #d2c9b6;
+    border-radius: 4px;
+    break-inside: avoid;
+  }
   /* The student's answer — typed text, kept exactly as written. */
   .answer {
     margin-top: 8px;
@@ -249,6 +265,7 @@ const STYLES = `
 export function buildAnswerSheetHtml(
   project: Project,
   input: AnswerSheetInput,
+  quotes: Map<string, QuoteImage> = new Map(),
 ): string {
   const questions = questionsOf(project.annotations)
   const answered = countAnswered(questions, input.answers)
@@ -278,7 +295,9 @@ export function buildAnswerSheetHtml(
 
   const body = questions.length
     ? questions
-        .map((q, i) => questionBlock(q, i + 1, input.answers[q.id] ?? ''))
+        .map((q, i) =>
+          questionBlock(q, i + 1, input.answers[q.id] ?? '', quotes.get(q.id)),
+        )
         .join('')
     : '<p class="empty">This track has no questions.</p>'
 
@@ -325,21 +344,31 @@ export function buildAnswerSheetHtml(
  * Open the answer sheet in a new tab, ready to save as a PDF (mirrors
  * exportProjectPdf — the tab's button or ⌘P; the title names the file).
  */
-export function exportAnswerSheetPdf(
+export async function exportAnswerSheetPdf(
   project: Project,
   input: AnswerSheetInput,
-): void {
+): Promise<void> {
   if (typeof window === 'undefined') return
-  const blob = new Blob([buildAnswerSheetHtml(project, input)], {
-    type: 'text/html',
-  })
-  const url = URL.createObjectURL(blob)
-  const tab = window.open(url, '_blank')
+  // Opened before the picture quotes are resolved, for the reason
+  // exportProjectPdf spells out: a `window.open` after an `await` has lost the
+  // user gesture pop-up blockers look for.
+  const tab = window.open('', '_blank')
   if (!tab) {
-    URL.revokeObjectURL(url)
     alert('The sheet was blocked — allow pop-ups for this site and try again.')
     return
   }
+  tab.document.write(WAITING_HTML)
+  tab.document.close()
+
+  const quotes = await collectQuoteImages(project)
+  const blob = new Blob([buildAnswerSheetHtml(project, input, quotes)], {
+    type: 'text/html',
+  })
+  const url = URL.createObjectURL(blob)
+  tab.location.replace(url)
   // The URL only needs to outlive the navigation (generous margin).
   setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
+
+/** What the new tab shows while the sheet is being built. */
+const WAITING_HTML = `<!doctype html><html><head><meta charset="utf-8" /><title>Preparing…</title></head><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff;color:#6e6555;font:13px/1.5 'Helvetica Neue',Arial,system-ui,sans-serif">Preparing the answer sheet…</body></html>`

@@ -34,6 +34,14 @@ interface Props {
    * this mode — the host places {@link TransportHints} under the frame.
    */
   overlay?: boolean
+  /**
+   * What the floating bar is floating *over*, which decides how it is
+   * dressed. 'video' (the default) stands on its own gradient in white,
+   * palette-blind, because the picture behind it is anything at all. 'glass'
+   * is the app's ordinary floating material, for the score view — where the
+   * thing behind is a white page and the app's own surfaces are what belong.
+   */
+  chrome?: 'video' | 'glass'
   onPlayPause: () => void
   onSeek: (t: number) => void
   /** Relative ±seconds nudge (the 1s/5s buttons); accumulates across taps. */
@@ -52,6 +60,7 @@ export default function Transport({
   muted,
   readOnly = false,
   overlay = false,
+  chrome = 'video',
   onPlayPause,
   onSeek,
   onStep,
@@ -212,7 +221,21 @@ export default function Transport({
   }
 
   if (overlay) {
-    const iconBtn = 'btn-icon-lg on-video press'
+    // Over the picture the bar is white-on-video and palette-blind, standing on
+    // its own gradient. Over the score it is a full-width strip of the app's
+    // own material, pinned to the foot — the page underneath is white paper,
+    // and a black gradient across it would read as a bruise rather than as a
+    // control surface. The buttons follow: `on-video` is white, which is
+    // invisible on the light theme's near-white glass.
+    const glass = chrome === 'glass'
+    const iconBtn = `btn-icon-lg press ${glass ? '' : 'on-video'}`
+    // Everything else that was hardcoded white for the picture, given a
+    // theme-aware twin. Missing one is not a subtle bug: on the light theme's
+    // near-white glass the control simply isn't there.
+    const readout = glass ? 'text-fg' : 'text-white/90'
+    const dim = glass ? 'text-muted/70' : 'text-white/45'
+    const mid = glass ? 'text-muted' : 'text-white/60'
+    const wash = glass ? 'hover:bg-fg/10 focus:bg-fg/15' : 'hover:bg-white/10 focus:bg-white/15'
     return (
       <div
         ref={rootRef}
@@ -224,9 +247,11 @@ export default function Transport({
             setFocusWithin(false)
         }}
         aria-hidden={!visible || undefined}
-        className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-1.5 pt-12 transition-opacity duration-200 ease-instr ${
-          visible ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+        className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-200 ease-instr ${
+          glass
+            ? 'glass-strip border-t border-line/70 px-2.5 pb-1 pt-0.5'
+            : 'bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-1.5 pt-12'
+        } ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
       >
         {/* seek bar — the full frame width; thin at rest, thicker under the pointer */}
         <div
@@ -235,7 +260,11 @@ export default function Transport({
           className="group/bar relative cursor-pointer touch-none py-1.5"
           title="Click or drag to jump"
         >
-          <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/25 transition-[height] duration-100 group-hover/bar:h-[5px]">
+          <div
+            className={`h-[3px] w-full overflow-hidden rounded-full transition-[height] duration-100 group-hover/bar:h-[5px] ${
+              glass ? 'bg-fg/20' : 'bg-white/25'
+            }`}
+          >
             <div className="h-full bg-accent" style={{ width: `${frac * 100}%` }} />
           </div>
           <div
@@ -294,13 +323,15 @@ export default function Transport({
             </button>
           )}
 
-          <span className="ml-1 flex min-w-0 items-center gap-1 font-mono text-[12px] tabular-nums text-white/90">
+          <span
+            className={`ml-1 flex min-w-0 items-center gap-1 font-mono text-[12px] tabular-nums ${readout}`}
+          >
             <input
               {...timeInputProps}
-              className="w-[50px] rounded bg-transparent px-1 py-0.5 text-center outline-none transition-colors hover:bg-white/10 focus:bg-white/15"
+              className={`w-[50px] rounded bg-transparent px-1 py-0.5 text-center outline-none transition-colors ${wash}`}
             />
-            <span className="text-white/45">/</span>
-            <span className="text-white/60">{formatTime(duration)}</span>
+            <span className={dim}>/</span>
+            <span className={mid}>{formatTime(duration)}</span>
           </span>
 
           <div className="flex-1" />
@@ -314,8 +345,14 @@ export default function Transport({
               aria-expanded={speedOpen}
               aria-label={`Playback speed: ${playbackRate}×`}
               title="Playback speed"
-              className={`press flex h-8 items-center rounded-full px-2.5 font-mono text-[11px] tabular-nums transition-colors hover:bg-white/10 ${
-                playbackRate !== 1 ? 'text-accent' : 'text-white/85 hover:text-white'
+              className={`press flex h-8 items-center rounded-full px-2.5 font-mono text-[11px] tabular-nums transition-colors ${
+                glass ? 'hover:bg-fg/10' : 'hover:bg-white/10'
+              } ${
+                playbackRate !== 1
+                  ? 'text-accentink'
+                  : glass
+                    ? 'text-muted hover:text-fg'
+                    : 'text-white/85 hover:text-white'
               }`}
             >
               {playbackRate}×
@@ -351,7 +388,7 @@ export default function Transport({
           </div>
 
           <VolumeControl
-            tone="overlay"
+            tone={glass ? 'panel' : 'overlay'}
             volume={volume}
             muted={muted}
             onSetVolume={onSetVolume}

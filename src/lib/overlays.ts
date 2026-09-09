@@ -4,7 +4,7 @@
 //
 // Everything here is pure geometry and time; the drawing lives in
 // components/VideoOverlays.tsx and the editing controls in NoteInspector.
-import type { Annotation, NoteOverlay } from '../types'
+import type { Annotation, NoteOverlay, NoteQuote } from '../types'
 import { notePlainText } from './format'
 import { primaryTextHtml } from './noteBlocks'
 
@@ -50,9 +50,92 @@ export const hasScorePin = (a: Annotation): boolean =>
 export const scorePinPageOf = (a: Annotation): number =>
   Math.max(1, Math.round(a.overlay?.scorePinPage ?? 1))
 
-/** True when the note puts anything at all on a picture or a page. */
+/**
+ * True when the note puts anything on the *stage* — the picture or the page,
+ * for its moment. Deliberately not counting a picture quote: a quote is what
+ * the note's printed form carries, shown on screen only while the note is open
+ * so it can be aimed. It is not something the class watches.
+ */
 export const hasOverlay = (a: Annotation): boolean =>
   hasCover(a) || hasVideoPin(a) || hasScorePin(a)
+
+// ---- picture quotes ------------------------------------------------------
+// A rectangle on the picture or on a page of the score, which the two print
+// documents reproduce as a cropped image above the note's text. See NoteQuote
+// in ../types for why it is a rectangle and never an image.
+
+/** How small a quote may be dragged, as a fraction of its surface. */
+export const MIN_QUOTE = 0.05
+
+/**
+ * The rectangle a quote gets when it is dropped rather than drawn — a third of
+ * the surface, which is big enough to hold a system of music and small enough
+ * that what you meant is obvious before you resize it.
+ */
+export const DEFAULT_QUOTE_W = 0.36
+export const DEFAULT_QUOTE_H = 0.24
+
+/** The note's quote, if it has one. */
+export const quoteOf = (a: Annotation): NoteQuote | undefined => a.overlay?.quote
+
+/** The page a score quote sits on, 1-based; 1 unless it says. */
+export const quotePageOf = (q: NoteQuote): number =>
+  Math.max(1, Math.round(q.page ?? 1))
+
+/**
+ * The quote to draw in one box, or null. The same choice `framePins` /
+ * `scorePinsOn` make for pins, and made in the same place: nothing downstream
+ * has to know a quote can be on either surface.
+ *
+ * Only the note open in the inspector, deliberately — unlike a cover or a pin,
+ * a quote is not something the class watches, it is what the handout will
+ * carry. On the score a permanent framed region is what the drawing tools' box
+ * mark is for; leaving quotes off the stage keeps the two from looking alike.
+ */
+export function quoteOn(
+  a: Annotation | null | undefined,
+  surface: 'video' | 'score',
+  page?: number,
+): NoteQuote | null {
+  const q = a && quoteOf(a)
+  if (!q || q.on !== surface) return null
+  if (surface === 'score' && page != null && quotePageOf(q) !== page) return null
+  return q
+}
+
+/**
+ * Square a dragged rectangle up: inside the surface, never smaller than
+ * MIN_QUOTE, and with the size honoured ahead of the position, so a rectangle
+ * pushed off an edge slides back in rather than being cropped to a sliver.
+ */
+export function clampQuote(q: NoteQuote): NoteQuote {
+  const w = Math.min(1, Math.max(MIN_QUOTE, q.w))
+  const h = Math.min(1, Math.max(MIN_QUOTE, q.h))
+  return {
+    ...q,
+    w,
+    h,
+    x: Math.min(1 - w, Math.max(0, q.x)),
+    y: Math.min(1 - h, Math.max(0, q.y)),
+  }
+}
+
+/** The default rectangle, centred on a point of its surface. */
+export function quoteAt(
+  surface: 'video' | 'score',
+  x: number,
+  y: number,
+  page?: number,
+): NoteQuote {
+  return clampQuote({
+    on: surface,
+    ...(surface === 'score' ? { page: Math.max(1, Math.round(page ?? 1)) } : {}),
+    x: x - DEFAULT_QUOTE_W / 2,
+    y: y - DEFAULT_QUOTE_H / 2,
+    w: DEFAULT_QUOTE_W,
+    h: DEFAULT_QUOTE_H,
+  })
+}
 
 /**
  * A pin ready to draw: the note it belongs to and where it goes, as 0–1
