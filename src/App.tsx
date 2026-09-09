@@ -125,6 +125,7 @@ import SplitHandle from './components/SplitHandle'
 import { useNotesView } from './lib/useNotesView'
 import { usePassagePlayback } from './lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from './lib/notesSplit'
+import { usePlayerArea } from './lib/playerArea'
 import { computeFitLayout } from './lib/autoLayout'
 import ShareExportMenu from './components/ShareExportMenu'
 import HomePage from './components/HomePage'
@@ -349,8 +350,6 @@ export default function App() {
   const audioUrlRef = useRef<string | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
-  const playerAreaRoRef = useRef<ResizeObserver | null>(null)
-  const playerMaxHRef = useRef(-1)
   // Projects whose orphaned images have already been swept this session.
   const sweptImagesRef = useRef<Set<string>>(new Set())
 
@@ -366,23 +365,9 @@ export default function App() {
     notesRoRef.current.observe(el)
   }, [])
 
-  // Drive --player-max-h from the player area's measured height so the 16:9 video
-  // fills it (capped + centred) — the player now takes all the room the short
-  // overview strip leaves. Guarded against re-applying so it can't loop.
-  const setPlayerArea = useCallback((el: HTMLDivElement | null) => {
-    playerAreaRoRef.current?.disconnect()
-    if (!el) return
-    const apply = () => {
-      const h = el.clientHeight
-      if (h > 0 && Math.abs(h - playerMaxHRef.current) >= 1) {
-        playerMaxHRef.current = h
-        el.style.setProperty('--player-max-h', `${h}px`)
-      }
-    }
-    apply()
-    playerAreaRoRef.current = new ResizeObserver(apply)
-    playerAreaRoRef.current.observe(el)
-  }, [])
+  // The 16:9 video fills the room the short overview strip leaves, rather than
+  // the default 50vh cap (lib/playerArea).
+  const setPlayerArea = usePlayerArea()
 
   const current = projects.find((p) => p.id === currentId) ?? null
 
