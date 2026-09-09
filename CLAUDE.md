@@ -269,8 +269,9 @@ switch. `withMigratedOverlay` converts that on read (in `toProject`, beside
 `withBlocks`) and the JSON importer does the same, so nothing downstream — and
 no old export or `?view=` link — has to know the shape ever existed.
 
-**A score quote is a rectangle, never an image** (`overlay.quote`,
-`components/QuoteFrame.tsx`, `lib/quotePreview.ts`, `lib/quoteImages.ts`).
+**A score quote is a rectangle, never an image** (`overlay.quotes`,
+`components/QuoteFrame.tsx`, `components/QuoteGallery.tsx`,
+`lib/quotePreview.ts`, `lib/quoteImages.ts`).
 Where a pin says *where*, a quote says *what the note is about*: a region of a
 page of the PDF score, which the note then **carries as a picture** — at the
 top of its row in the notes list, like a card's cover; as a thumbnail in the
@@ -278,8 +279,22 @@ inspector; and beside its text in the exported documents, so a handout carries
 the bars it is discussing instead of a timecode the reader has to go and look
 up. Fractions of the page, like everything else aimed at one, and placed by the
 same gesture as the pin: a third key in the inspector row, dragged onto the
-page being quoted, then resized in place by its corners. One per note, because
-a note about two places is two notes.
+page being quoted, then resized in place by its corners.
+
+**A note carries several, as a gallery** — `overlay.quotes`, in the order they
+were placed, capped at `MAX_QUOTES` (8) and free to sit on different pages. A
+passage is often two places at once (the figure and the answer to it; the voice
+and what is under it), and one rectangle per note filed that observation twice
+and cued it to two moments. The gallery is **horizontal** wherever it is drawn
+— the note's row, the inspector — because a quoted system is wide and short,
+and stacking them would push the note's own words off the row; several scroll
+sideways rather than shrinking until none is legible. In the printed documents
+they stack down the Example column instead, where the column is narrow and the
+page is tall, and the *whole stack* is scaled to `EXAMPLES_MAX_H` together
+rather than each picture on its own — two systems off one page printed at two
+magnifications stop being comparable. Notes written before this carry one
+`quote`; `withMigratedOverlay` folds it in on read, and the importer does the
+same, so nothing downstream knows that shape existed.
 
 **The score is the only surface**, and that is a correction rather than a
 limit. A quote could once be aimed at the *picture*, where it cropped the
@@ -314,14 +329,17 @@ Reading a note's own inline pictures that way is cross-origin — fine, since th
 Blob store answers `access-control-allow-origin: *`, but the request has to ask
 for CORS and a tainted canvas is caught rather than thrown.
 
-**Who the frame draws for depends on whether there is anything to aim**
-(`quotesOn`). To an editor it is an aiming tool, so only the note open in the
-inspector is framed: every other rectangle over the page being aimed at is in
-the way of it. To a *reader* — a `?view=` link, or any read-only score — there
-is nothing to aim, so a quote joins the pins on the stage under exactly their
-time rule, and the page shows the bars the note is about while the note is on.
-A frame that never goes away is what a box mark (`ScoreMarks`) is, which is why
-neither rule leaves one there. **Pressing a frame plays the note** — a
+**What is aimed at the score stays on the score** (`quotesOn`,
+`scorePinsOn`). Quotes and score pins are **not time-bound**, unlike anything
+on the picture: a cover or a video pin is one note taking over the frame for
+its moment, but the score is a *document being read*, its marks are all there
+at once, and a rectangle that came and went with the music would be missing
+from the page exactly when someone turned back to it. So every page shows
+everything aimed at it, editor and reader alike, and the clock decides nothing
+there. Only the note open in the inspector can *move* its rectangles
+(`readOnly || note.id !== selectedId`) — handles on all of them would make the
+page a field of things to catch by accident. **Pressing a frame plays the
+note** — a
 rectangle is a region of the music, so the honest answer to a press on it is
 to hear that music, and the note's row scrolls into view with it; a press that
 travels `DRAG_SLOP` is the aiming drag instead, so the editor keeps both
@@ -329,9 +347,10 @@ gestures on one rectangle. Only where the score is *read* (`reading` — its own
 view of the column, or expanded): over the video the layer is background, and
 a rectangle that swallowed the picture's own click-to-pause would cost the
 class more than it gave them. `hasOverlay` still doesn't count a quote — that
-predicate decides who is on the stage, and the frame is drawn from the quote
-itself — and the notes list still keeps the quote's own chip beside the
-picture: the picture shows the region, the chip names the page it came from.
+predicate decides who is on the *stage*, and the frames are drawn from the
+quotes themselves — and the notes list still keeps the quote chip beside the
+pictures: the pictures show the regions, the chip names the pages they came
+from.
 
 **The two exports write real files** — `lib/exportPdf.ts` (pdf-lib) and
 `lib/exportDocx.ts` (OOXML by hand, zipped with `fflate`) — rather than opening
@@ -350,13 +369,22 @@ mark under it. It is narrow, and deliberately narrower than a two-digit range
 needs, since the analysis should not pay all year for a width `13:53–15:12`
 wants: the PDF folds a range after its dash instead (`foldSpan`), the one place
 it reads as continuing, rather than cutting it mid-number as plain wrapping
-does. *Example* is the score quote, captioned with the page it was cut
-from. The grouping is the app's own vocabulary: a note is filed under its first
-inline property tag (`Timbre / Bright`), the same concept list the `@` menu
-offers, with `Ungrouped` last. Above all of it, **structure notes get their own
-table and come out of the grid entirely** — a note that brackets a span *is*
-the song-structure board, and printed among the elements it would read as one
-more observation instead of the frame the others sit inside. What is left over
+does. *Example* is the note's score quotes, stacked in the order it placed
+them, each captioned with the page it was cut from — and captioned from the
+note's own rectangles rather than by position, so a gallery that came back
+short (one crop the score wouldn't give up) prints without captions instead of
+with every later picture labelled the wrong page.
+
+**One table, in time order.** The notes were filed under their first inline
+property tag once (`Element(s) / Sub Element(s) — Timbre / Bright`, one table
+each, `Ungrouped` last), and it cut the reading in two: a listener works
+forwards through a recording, and a document that reorders the notes by topic
+makes them hunt for the next one. The tags are still on every row, which is
+where a reader wanting them by element can see them. Above the table,
+**structure notes get their own and come out of the grid entirely** — a note
+that brackets a span *is* the song-structure board, and printed among the rest
+it would read as one more observation instead of the frame the others sit
+inside. What is left over
 rides as a strapline over the analysis, and only what the prose itself cannot
 say: whether the note is a question, and its tags. The concepts the note names
 were there too and are not any more — they were `propertyTagsInHtml` in

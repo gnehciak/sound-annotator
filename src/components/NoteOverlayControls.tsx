@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Loader2, Crosshair, Quote, X } from 'lucide-react'
+import { Image as ImageIcon, Loader2, Crosshair, X } from 'lucide-react'
 import type { Annotation, NoteOverlay } from '../types'
 import { fileToScaledBlob } from '../lib/image'
 import {
@@ -21,13 +21,17 @@ import {
   hasOverlay,
   isFilled,
   patchOverlay,
+  MAX_QUOTES,
   quoteAt,
-  quoteOf,
   quotePageOf,
+  quotesOf,
+  withQuoteAdded,
+  withQuoteAt,
+  withoutQuoteAt,
   scorePinPageOf,
 } from '../lib/overlays'
 import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
-import { useQuotePreview } from '../lib/quotePreview'
+import { QuoteThumb } from './QuoteGallery'
 
 interface Props {
   annotation: Annotation
@@ -157,10 +161,11 @@ export default function NoteOverlayControls({
   }
   const dropping = dragDepth > 0 && !!uploadImage
 
-  const quoted = quoteOf(annotation)
-  // What the quote actually shows, cut out of the score. Null while it is
-  // being drawn, and for a track whose score can't be read at all.
-  const preview = useQuotePreview(quoted)
+  const quotes = quotesOf(annotation)
+  const quoted = quotes.length > 0
+  // A note quotes a few places, not a dozen: past the cap the key stops
+  // adding rather than silently dropping what it was asked for.
+  const roomForQuote = quotes.length < MAX_QUOTES
   const videoPinned = hasVideoPin(annotation)
   const scorePinned = hasScorePin(annotation)
   const pinned = videoPinned || scorePinned
@@ -257,11 +262,12 @@ export default function NoteOverlayControls({
     // A press that never travelled is a click: place it centre, or take it off.
     if (!press.dragged) {
       if (press.what === 'quote') {
-        // One quote per note, so this really is a toggle. There is only one
-        // surface to land on — the page the score is showing.
-        patch({
-          quote: quoted ? undefined : quoteAt(0.5, 0.5, scorePage ?? 1),
-        })
+        // Adds one, dead centre of the page the score is showing — the same
+        // "no aim given, so put it where it can't be missed" the pin's click
+        // makes. Never a toggle: a note can carry several now, so a press that
+        // took one *off* would be guessing which, and the gallery's own ✕ is
+        // the unambiguous way to remove the one you mean.
+        if (roomForQuote) patch({ quotes: withQuoteAdded(annotation, quoteAt(0.5, 0.5, scorePage ?? 1)) })
         return
       }
       // Toggle the pin belonging to the surface in view, not "any pin": with
@@ -280,7 +286,13 @@ export default function NoteOverlayControls({
       // page, and there is no still of a cross-origin player to cut (see
       // NoteQuote in ../types) — so the frame is not a place to aim one.
       if (drop.kind !== 'score') return
-      patch({ quote: quoteAt(drop.x, drop.y, drop.page ?? scorePage ?? 1) })
+      if (roomForQuote)
+        patch({
+          quotes: withQuoteAdded(
+            annotation,
+            quoteAt(drop.x, drop.y, drop.page ?? scorePage ?? 1),
+          ),
+        })
       return
     }
     patch(
@@ -436,21 +448,20 @@ export default function NoteOverlayControls({
         {scorePage != null && (
           <button
             type="button"
-            role="switch"
-            aria-checked={!!quoted}
+            disabled={!roomForQuote}
             onPointerDown={(e) => startPlacing('quote', e)}
             onPointerMove={movePlacing}
             onPointerUp={endPlacing}
             onPointerCancel={cancelPlacing}
             title={
-              quoted
-                ? 'Click to stop quoting the score'
+              !roomForQuote
+                ? `A note can quote ${MAX_QUOTES} places; remove one to add another`
                 : scoreHidden
                   ? `Quote the middle of page ${scorePage} — switch the column to the score to aim it`
                   : 'Drag onto a page of the score to quote that region — click to quote the middle of the page'
             }
-            aria-label="Quote a region of the score"
-            className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing ${
+            aria-label="Quote another region of the score"
+            className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-45 ${
               placing?.what === 'quote'
                 ? 'border-accent'
                 : quoted
@@ -594,55 +605,65 @@ export default function NoteOverlayControls({
             </div>
           )}
 
-          {/* The quote, once it exists: the music it actually shows, then
-              where on the score it was cut from. The picture is the point of
-              the control — it is what the note carries into the list and into
-              the handout — so it is shown rather than described. */}
+          {/* The quotes, once there are any: the music each one actually
+              shows, with the page it came from and the way to take it off.
+              The pictures are the point of the control — they are what the
+              note carries into the list and into the handout — so they are
+              shown rather than described, side by side and scrolling
+              sideways, which is the shape the row in the list has too. */}
           {quoted && (
             <div className="flex flex-col gap-2">
-              <div className="grid min-h-[54px] place-items-center overflow-hidden rounded-md bg-white p-1 ring-1 ring-line">
-                {preview ? (
-                  <img
-                    src={preview.src}
-                    alt={`The quoted region of page ${quotePageOf(quoted)} of the score`}
-                    className="max-h-[104px] w-auto max-w-full object-contain"
-                  />
-                ) : (
-                  // Not "loading": a score that won't load never resolves, and
-                  // a spinner that spins for ever says less than this does.
-                  <span className="text-[11px] text-black/40">
-                    Drawing page {quotePageOf(quoted)}…
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => patch({ quote: undefined })}
-                  title="Stop quoting that region"
-                  className="chip chip-outline press hover:border-danger/60 hover:text-danger"
-                >
-                  <Quote size={10} />
-                  Quoting page {quotePageOf(quoted)}
-                  <X size={10} />
-                </button>
-                {scorePage != null && scorePage !== quotePageOf(quoted) && (
-                  <button
-                    type="button"
-                    onClick={() => patch({ quote: { ...quoted, page: scorePage } })}
-                    title={`The score is on page ${scorePage}`}
-                    className="btn-ghost btn-sm press"
+              <div className="-mb-0.5 flex gap-2 overflow-x-auto pb-0.5">
+                {quotes.map((quote, i) => (
+                  <div
+                    key={`${quotePageOf(quote)}:${quote.x},${quote.y}:${i}`}
+                    className="relative shrink-0"
                   >
-                    <Crosshair size={11} />
-                    Move to page {scorePage}
-                  </button>
-                )}
-                {scoreHidden && (
-                  <span className="text-[11.5px] text-muted/80">
-                    The column is on the player, so there’s no page to aim on.
-                  </span>
-                )}
+                    <QuoteThumb quote={quote} maxHeight={96} placeholder />
+                    <button
+                      type="button"
+                      onClick={() => patch({ quotes: withoutQuoteAt(annotation, i) })}
+                      title={`Stop quoting this region of page ${quotePageOf(quote)}`}
+                      aria-label={`Stop quoting this region of page ${quotePageOf(quote)}`}
+                      className="press absolute -right-1.5 -top-1.5 grid h-[18px] w-[18px] place-items-center rounded-full border border-line bg-raised text-muted shadow-sm hover:border-danger/60 hover:text-danger"
+                    >
+                      <X size={11} />
+                    </button>
+                    <div className="mt-1 flex items-center justify-center gap-1">
+                      <span className="text-[10.5px] leading-none text-muted">
+                        Page {quotePageOf(quote)}
+                      </span>
+                      {/* Only where it would change something: the score is
+                          showing a different page, and this is the one-press
+                          way to bring the rectangle to it rather than
+                          re-dragging from the key. */}
+                      {scorePage != null && scorePage !== quotePageOf(quote) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patch({
+                              quotes: withQuoteAt(annotation, i, {
+                                ...quote,
+                                page: scorePage,
+                              }),
+                            })
+                          }
+                          title={`Move it to page ${scorePage}, which the score is showing`}
+                          aria-label={`Move this quote to page ${scorePage}`}
+                          className="press grid h-[15px] w-[15px] place-items-center rounded text-muted hover:text-fg"
+                        >
+                          <Crosshair size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
+              {scoreHidden && (
+                <span className="text-[11.5px] text-muted/80">
+                  The column is on the player, so there’s no page to aim on.
+                </span>
+              )}
             </div>
           )}
 

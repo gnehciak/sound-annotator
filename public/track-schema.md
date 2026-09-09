@@ -269,7 +269,7 @@ page of the score. Three independent pieces, any or all, on the note's
 | `scorePinX` | number | The **score pin**: where its dot sits across the drawn page of the score, `0`–`1` from the left — see below. |
 | `scorePinY` | number | And down the page, `0`–`1` from the top. |
 | `scorePinPage` | number | Which score page that pin lives on, 1-based. Defaults to page 1. |
-| `quote` | object | A **score quote**: the region of a page of the track's PDF score this note is about, which the note carries as a picture — on its row, and in the printed notes. See below. |
+| `quotes` | array | **Score quotes**: the regions of the track's PDF score this note is about, which it carries as pictures — a gallery on its row, and down the Example column of the printed notes. In the order they are shown. See below. |
 | `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
 | `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
 | `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
@@ -299,13 +299,13 @@ Files exported before the score got its own view carry a single pin with a
 `pinAnchor: "score"` switch instead. They still import: that pin lands on
 whichever of the two it named.
 
-### `overlay.quote` — the score quote
+### `overlay.quotes` — the score quotes
 
-A rectangle, never an image. What it frames is cut out of the track's PDF score
-wherever the note is shown — at the top of its row in the notes list, in the
-editor's note panel, and as a cropped picture beside its text in the two
-printed documents — so a handout carries the bars it is talking about instead
-of a timecode the reader has to go and look up.
+A list of rectangles, never images. What each one frames is cut out of the
+track's PDF score wherever the note is shown — at the top of its row in the
+notes list, in the editor's note panel, and as a cropped picture beside its
+text in the two printed documents — so a handout carries the bars it is talking
+about instead of a timecode the reader has to go and look up. Each entry:
 
 | field | type | notes |
 | --- | --- | --- |
@@ -318,17 +318,23 @@ of a timecode the reader has to go and look up.
 
 All four numbers are needed together: a rectangle missing any of them is
 dropped rather than guessed at, and one smaller than 5% of the page, or hanging
-off an edge, is squared up on import. One quote per note — a note that is about
-two places is two notes. A quote on a track with no `settings.score` (§9) has
-nothing to cut and simply never appears.
+off an edge, is squared up on import. A quote on a track with no
+`settings.score` (§9) has nothing to cut and simply never appears.
+
+**A note may quote several places, up to eight**; anything past that is dropped
+on import. They need not share a page — a figure on page 2 and the answer to it
+on page 5 is the ordinary case — and they are shown in the order they are
+listed. Files written when a note could carry only one hold a single `quote`
+object instead of this array; they still import, that quote becoming the first
+of the list.
 
 **The pixels are found again every time, never stored.** The crop is made from
 the PDF as it is *now*, so a Drive score that gains a new engraving quotes the
 new engraving from then on, and a quote costs no upload and nothing to copy
 when the track is.
 
-Files exported when a quote could also name the *picture* (`"on": "video"`)
-still import; that quote is dropped. The picture was never quotable in any
+Quotes that name the *picture* (`"on": "video"`), from when the frame was a
+surface one could be aimed at, still import — as nothing: they are dropped. The picture was never quotable in any
 honest way — a YouTube player is a cross-origin iframe whose pixels the page
 cannot read, so such a quote could only ever crop the note's own cover image.
 

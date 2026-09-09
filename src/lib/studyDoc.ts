@@ -8,22 +8,25 @@
 // disagree about is *what the document says*. Anything either of them decides
 // on its own is a rendering decision; anything about the content belongs here.
 //
-// The shape is the marking-guide grid a music teacher works in — an element
-// heading over a table of examples and analysis — **carrying this app's own
-// structure** rather than a blank template's:
+// The shape is the marking-guide grid a music teacher works in — one table of
+// examples and analysis — **carrying this app's own structure** rather than a
+// blank template's:
 //
 //  - **time is the first column**, because a timecode is this app's primary
 //    coordinate: everything in a track is anchored to a moment, and a study
 //    note nobody can find in the recording is half a note. The bar or
 //    rehearsal mark rides with it, and a note that is a question says so.
-//  - **the example is the score quote**, captioned with the page of the score
-//    it was cut from.
-//  - **the element grouping is the app's own vocabulary**: a note is filed
-//    under its first inline property tag (`Timbre / Bright`), which is the
-//    same concept list the `@` menu and the dictionary offer.
+//  - **the examples are the score quotes**, stacked down the column in the
+//    order the note placed them, each captioned with the page it was cut from.
+//  - **one table, in the order the music makes them.** The notes were filed
+//    under their first property tag once — an "Element / Sub-element" heading
+//    over a table each — and it cut the reading in two: a listener following a
+//    recording works forwards through it, and a document that reorders the
+//    notes by topic makes them hunt for the next one. The tags are still on
+//    every row, which is where a reader wanting them by element can see them.
 //  - **sections come first and separately**. A note marked as structure
 //    brackets a span of the music, which is what the song-structure board
-//    *is*; printed among the elements it would read as one more observation
+//    *is*; printed among the rest it would read as one more observation
 //    instead of the frame the others sit inside.
 //
 // The analysis column is the note's own words and nothing else. The guide's
@@ -41,11 +44,11 @@ import { formatTime, noteLabel, notePlainText } from './format'
 import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
 import { getPlugin } from './notePlugins'
 import { layerOf, summarizeElements, type ElementsData } from './musicElements'
-import { hueFor, inkFor, propertyTagsInHtml } from './propertyTags'
+import { hueFor, inkFor } from './propertyTags'
 import { resolveTag, tagsOf } from './tags'
 import { colorForId, hueText } from './noteColors'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
-import { quoteOf, quotePageOf } from './overlays'
+import { quotePageOf, quotesOf } from './overlays'
 import { scoreLabel } from './score'
 import { publicId } from './ids'
 import type { QuoteImage } from './quoteImages'
@@ -54,12 +57,6 @@ import type { QuoteImage } from './quoteImages'
 export const WHERE_HEADING = 'Where'
 export const EXAMPLE_HEADING = 'Example'
 export const ANALYSIS_HEADING = 'Analysis'
-
-/** The heading above each table, minus the group's own name. */
-export const GROUP_PREFIX = 'Element(s) / Sub Element(s)'
-
-/** Where a note with no element tags is filed. */
-export const UNGROUPED = 'Ungrouped'
 
 /** The section table's own headings. */
 export const SECTIONS_HEADING = 'Structure'
@@ -120,6 +117,13 @@ export interface DocBadge {
   color: string
 }
 
+/** One picture in the Example column: the crop, and where it was cut from. */
+export interface DocExample {
+  image: QuoteImage
+  /** The caption under it — "Page 3 of the score". */
+  from: string
+}
+
 /** One structural note: a named span of the music. */
 export interface StudySection {
   name: string
@@ -140,10 +144,11 @@ export interface StudyRow {
   color: string
   /** Short badges above the analysis — "Question", and the note's tags. */
   flags: DocBadge[]
-  /** The score quote, if the note has one that could be resolved. */
-  quote?: QuoteImage
-  /** Where the picture was cut from — "Page 3 of the score". */
-  quoteFrom: string
+  /**
+   * The score quotes, in the order the note placed them — the Example column.
+   * Empty for a note that quotes nothing, or whose score couldn't be read.
+   */
+  examples: DocExample[]
   /** The note's own prose, as written — the analysis column. */
   analysis: DocBlock[]
   /** Anything a block plugin summarises, plus an elements block if it has one. */
@@ -152,19 +157,14 @@ export interface StudyRow {
   lyrics?: string
 }
 
-/** A table: the notes filed under one element / sub-element. */
-export interface StudyGroup {
-  label: string
-  rows: StudyRow[]
-}
-
 export interface StudyDoc {
   title: string
   /** The keyed block under the title — source, score, link, count, range. */
   meta: { key: string; value: string }[]
   /** The structural spine, when the track has one. Printed before the grid. */
   sections: StudySection[]
-  groups: StudyGroup[]
+  /** Every other note, in the order the music makes them: one table. */
+  rows: StudyRow[]
 }
 
 /** Same-time tiebreak used by the notes list: manual order, then creation. */
@@ -173,18 +173,6 @@ function tie(a: Annotation, b: Annotation): number {
   if (a.order != null) return -1
   if (b.order != null) return 1
   return a.createdAt - b.createdAt
-}
-
-/**
- * Which element a note is filed under: its first inline property tag, read as
- * `Element / Sub-element`. Deliberately the *first* rather than all of them —
- * a note belongs in one place in a set of study notes, and the rest are still
- * printed in the row itself.
- */
-function groupOf(note: Annotation): string {
-  const tag = propertyTagsInHtml(primaryTextHtml(note))[0]
-  if (!tag) return UNGROUPED
-  return tag.category ? `${tag.category} / ${tag.value}` : tag.value
 }
 
 /** The app's signal hue, for the one badge that isn't a tag or a concept. */
@@ -402,10 +390,26 @@ function specOf(note: Annotation): string {
   return parts.join(' · ')
 }
 
-/** Where a score quote was cut from, said in the caption under it. */
-function quoteFromOf(note: Annotation): string {
-  const q = quoteOf(note)
-  return q ? `Page ${quotePageOf(q)} of the score` : ''
+/**
+ * The note's Example column: the crops that could be resolved, each captioned
+ * with the page it came from.
+ *
+ * The captions are read off the note's *own* quotes rather than off the
+ * pictures, so they stay in step when one of several can't be cropped: the
+ * collector drops that one from the list, and pairing by position would then
+ * caption every later picture with the wrong page. Matching by count is the
+ * one thing that can't be done — so a note whose gallery came back short is
+ * captioned only where the two agree.
+ */
+function examplesOf(note: Annotation, images: QuoteImage[]): DocExample[] {
+  const quotes = quotesOf(note)
+  return images.map((image, i) => ({
+    image,
+    from:
+      images.length === quotes.length && quotes[i]
+        ? `Page ${quotePageOf(quotes[i])} of the score`
+        : '',
+  }))
 }
 
 /** The span the notes cover, e.g. "0:00–15:42" (one timecode for one moment). */
@@ -434,7 +438,7 @@ export function docName(project: Project): string {
 /** Assemble the document. `quotes` is what lib/quoteImages resolved. */
 export function buildStudyDoc(
   project: Project,
-  quotes: Map<string, QuoteImage> = new Map(),
+  quotes: Map<string, QuoteImage[]> = new Map(),
 ): StudyDoc {
   const notes = [...project.annotations].sort((a, b) => a.start - b.start || tie(a, b))
 
@@ -449,11 +453,10 @@ export function buildStudyDoc(
       text: n.sectionName?.trim() ? notePlainText(primaryTextHtml(n)) : '',
     }))
 
-  // Insertion order is time order, since the notes are already sorted — so the
-  // groups come out in the order the music introduces them, which beats
-  // alphabetical for something read alongside a recording. "Ungrouped" is
-  // pushed last wherever it falls: it is the leftovers, not a topic.
-  const groups = new Map<string, StudyRow[]>()
+  // Time order, which is the order the notes are already in: a study document
+  // is read alongside the recording, so the next row is the next thing that
+  // happens.
+  const rows: StudyRow[] = []
   for (const note of notes) {
     if (note.structure) continue
     const bar = note.bar?.trim()
@@ -468,20 +471,13 @@ export function buildStudyDoc(
           .filter((t): t is { label: string; color: string } => !!t)
           .map((t) => ({ label: t.label, color: hueText(t.color, 'light') })),
       ],
-      quote: quotes.get(note.id),
-      quoteFrom: quoteFromOf(note),
+      examples: examplesOf(note, quotes.get(note.id) ?? []),
       analysis: richBlocks(primaryTextHtml(note)),
       spec: specOf(note),
       ...(note.lyrics?.trim() ? { lyrics: note.lyrics.trim() } : {}),
     }
-    const label = groupOf(note)
-    const rows = groups.get(label)
-    if (rows) rows.push(row)
-    else groups.set(label, [row])
+    rows.push(row)
   }
-  const ordered = [...groups.entries()]
-    .map(([label, rows]) => ({ label, rows }))
-    .sort((a, b) => (a.label === UNGROUPED ? 1 : b.label === UNGROUPED ? -1 : 0))
 
   const source = project.source
   const link = sourceLinkUrl(source)
@@ -507,5 +503,5 @@ export function buildStudyDoc(
     }),
   })
 
-  return { title: project.title || 'Untitled track', meta, sections, groups: ordered }
+  return { title: project.title || 'Untitled track', meta, sections, rows }
 }

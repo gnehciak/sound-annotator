@@ -33,7 +33,7 @@ import type {
   ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
-import { clampQuote } from './overlays'
+import { clampQuote, MAX_QUOTES } from './overlays'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
 import { MARK_COLORS, MARK_KINDS, sortTurns } from './score'
@@ -201,8 +201,18 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
     const page = num(o.scorePinPage) ?? (legacyScorePin ? num(o.pinPage) : null)
     if (page != null && page >= 1) overlay.scorePinPage = Math.round(page)
   }
-  const quote = sanitizeQuote(o.quote)
-  if (quote) overlay.quote = quote
+  // The gallery, and the single `quote` a file written before it carries —
+  // read as the first of the list, which is what `withMigratedOverlay` does on
+  // the reading side. Capped, since a hand-written file could otherwise hand a
+  // note a hundred rectangles to rasterise on every export.
+  const quotes = [
+    ...(Array.isArray(o.quotes) ? o.quotes : []),
+    ...(o.quotes == null ? [o.quote] : []),
+  ]
+    .map(sanitizeQuote)
+    .filter((q): q is NoteQuote => !!q)
+    .slice(0, MAX_QUOTES)
+  if (quotes.length) overlay.quotes = quotes
   const hold = num(o.hold)
   if (hold != null && hold > 0) overlay.hold = hold
   return Object.keys(overlay).length > 0 ? overlay : undefined

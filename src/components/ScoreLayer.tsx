@@ -19,7 +19,7 @@ import QuoteFrame from './QuoteFrame'
 import ScoreMarks, { type MarkStyle, type MarkTool } from './ScoreMarks'
 import ScoreSurface from './ScoreSurface'
 import ScoreToolbar from './ScoreToolbar'
-import { quoteOn, quotesOn, scorePinsOn, type PlacedQuote } from '../lib/overlays'
+import { quotesOn, scorePinsOn, type PlacedQuote } from '../lib/overlays'
 import { colorForId } from '../lib/noteColors'
 import { openPdf, type LoadedPdf } from '../lib/pdf'
 import {
@@ -132,8 +132,11 @@ export default function ScoreLayer({
    * it, but dropping one from the page's context menu does.
    */
   onMovePin?: (id: string, x: number, y: number, page?: number) => void
-  /** Commit a moved or resized score quote, in fractions of the page box. */
-  onQuote?: (id: string, quote: NoteQuote) => void
+  /**
+   * Commit a moved or resized score quote, in fractions of the page box —
+   * `index` says which of the note's quotes moved.
+   */
+  onQuote?: (id: string, index: number, quote: NoteQuote) => void
   /**
    * Play the track from a note's start — what a press on its quote does. A
    * quote is a region of the music, so pressing it asks to hear that music;
@@ -344,38 +347,26 @@ export default function ScoreLayer({
     menu.openAt(e.clientX, e.clientY)
   }
 
-  // The pins aimed at this page, under the same time-and-selection rule the
-  // frame's pins follow. A score pin on another page simply isn't drawn: it is
-  // a fraction of a page box that isn't on screen, and floating it over the
-  // video at those coordinates would put it somewhere that means nothing.
+  // The pins aimed at this page — every one of them, whatever the playhead
+  // says: the score is a document being read, not a stage (see `scorePinsOn`).
+  // A pin on another page simply isn't drawn: it is a fraction of a page box
+  // that isn't on screen, and floating it over the video at those coordinates
+  // would put it somewhere that means nothing.
   const pinsOnPage = useCallback(
-    (n: number) =>
-      !annotations?.length || currentTime == null
-        ? []
-        : scorePinsOn(annotations, n, currentTime, selectedId),
-    [annotations, currentTime, selectedId],
+    (n: number) => (annotations?.length ? scorePinsOn(annotations, n) : []),
+    [annotations],
   )
 
   const selectedNote = annotations?.find((a) => a.id === selectedId) ?? null
   /**
-   * The score quotes framed on this page, and the rule differs by who is
-   * looking. Editing, it is the open note's alone: the frame is a tool for
-   * aiming, and every other note's rectangle over the page being aimed at is
-   * in the way of it. Reading, there is nothing to aim, so a quote joins the
-   * pins on the stage under exactly their time rule — while the note is on,
-   * the page shows the bars it is about, which is what quoting them was for.
+   * Every score quote framed on this page, whoever is looking and whatever the
+   * playhead says — the same rule as the pins, and for the same reason. Only
+   * the open note's rectangles can be *moved*, which is what keeps a page of
+   * them from being a page of handles.
    */
   const quotesOnPage = useCallback(
-    (n: number): PlacedQuote[] => {
-      if (!readOnly) {
-        const quote = quoteOn(selectedNote, n)
-        return quote && selectedNote ? [{ note: selectedNote, quote }] : []
-      }
-      return !annotations?.length
-        ? []
-        : quotesOn(annotations, n, currentTime ?? 0, selectedId)
-    },
-    [readOnly, selectedNote, annotations, currentTime, selectedId],
+    (n: number): PlacedQuote[] => (annotations?.length ? quotesOn(annotations, n) : []),
+    [annotations],
   )
 
   // What the page's menu offers, for the point it was opened on. Marks are
@@ -517,14 +508,17 @@ export default function ScoreLayer({
           onSelect={setSelectedMark}
           onCommit={commitMark}
         />
-        {quotesOnPage(n).map(({ note, quote }) => (
+        {quotesOnPage(n).map(({ note, quote, index }) => (
           <QuoteFrame
-            key={note.id}
+            key={`${note.id}:${index}`}
             quote={quote}
             color={note.color ?? colorForId(note.id)}
             label={noteLabel(note.start, note.end)}
-            readOnly={readOnly}
-            onChange={onQuote && ((q) => onQuote(note.id, q))}
+            // Only the open note's rectangles are draggable. Every quote in
+            // the track is drawn on its page, and handles on all of them would
+            // make the page a field of things to catch by accident.
+            readOnly={readOnly || note.id !== selectedId}
+            onChange={onQuote && ((q) => onQuote(note.id, index, q))}
             // Only where the score is being read. Over the video the layer is
             // inert background, and a rectangle that swallowed the picture's
             // own click-to-pause would cost the class more than it gave them.
