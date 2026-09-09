@@ -58,16 +58,19 @@ for (const cat of ELEMENTS) {
   }
 }
 
-/** Every value in the taxonomy, flattened once: layers first, then elements. */
+/**
+ * Every value in the taxonomy, flattened once — the concepts first, then the
+ * layers.
+ *
+ * Order decides ties, and four words are in both: Melody, Harmony, Bass and
+ * Rhythm are layer roles *and* concept vocabulary. The concept has to win,
+ * because "the rhythm is syncopated" is about Duration, not about which line
+ * of the texture is being described — Layer is a synthetic category serving
+ * the elements block, not a reading of the sentence. This also puts the flat
+ * list in the same order as the dictionary (VOCAB_CATEGORIES), which has
+ * always listed Layer last.
+ */
 const ALL: PropertyOption[] = [
-  ...LAYERS.map((l) => ({
-    key: `${LAYER_FIELD}:${l.id}`,
-    field: LAYER_FIELD,
-    category: 'Layer',
-    fieldLabel: 'Layer',
-    value: l.label,
-    color: l.color,
-  })),
   ...ELEMENTS.flatMap((cat) =>
     cat.fields.flatMap((f) =>
       f.options.map((opt) => ({
@@ -80,6 +83,14 @@ const ALL: PropertyOption[] = [
       })),
     ),
   ),
+  ...LAYERS.map((l) => ({
+    key: `${LAYER_FIELD}:${l.id}`,
+    field: LAYER_FIELD,
+    category: 'Layer',
+    fieldLabel: 'Layer',
+    value: l.label,
+    color: l.color,
+  })),
 ]
 
 /**
@@ -303,6 +314,11 @@ function inflectWord(w: string): string[] {
   if (w.endsWith('ing')) bases.push(w.slice(0, -3), w.slice(0, -3) + 'e')
   if (w.endsWith('ion')) bases.push(w.slice(0, -3) + 'e')
   if (w.endsWith('ic')) bases.push(w.slice(0, -2))
+  // Singulars, for the terms the bank holds in the plural — Cymbals, Claves,
+  // Clusters, Slurs. "Bass" losing its s is junk nobody types, which is the
+  // usual harmless case.
+  if (w.endsWith('es')) bases.push(w.slice(0, -2))
+  if (w.endsWith('s')) bases.push(w.slice(0, -1))
   for (const b of bases) if (b.length > 2) add(b, b + 's', b + 'es')
 
   return out

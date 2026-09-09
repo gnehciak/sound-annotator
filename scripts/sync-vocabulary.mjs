@@ -210,8 +210,11 @@ function buildFile({ fields, terms }) {
   }
 
   const auto = [...autoTerms].sort((a, b) => a.localeCompare(b))
+  // A word that is a term in its own right keeps itself: "piano" is the
+  // instrument, whatever the dynamics row lists it as an alias for.
+  const spoken = new Set(terms.map((t) => t.term.toLowerCase()))
   const aliasKeys = [...aliases.keys()]
-    .filter((k) => !autoTerms.has(k))
+    .filter((k) => !spoken.has(k))
     .sort((a, b) => a.localeCompare(b))
 
   const header = `// GENERATED FILE — do not edit by hand.
