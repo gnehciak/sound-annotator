@@ -81,11 +81,18 @@ const SECTION_NAME_Y = PAD_V
 const SECTION_BRACKET_Y = PAD_V + 13
 const DIAMOND = 7 // note flag size (rotated square)
 
-// Zoom is expressed as a time unit: the seconds between gridlines. Each division
-// occupies UNIT_PX, so a smaller unit = more zoomed in. 'fit' shows the whole
-// track at once. The available units adapt to the track length (see ladderOf).
+// Zoom is expressed as a time unit: the seconds a division occupies UNIT_PX of,
+// so a smaller unit = more zoomed in. 'fit' shows the whole track at once. The
+// units below are the ladder the −/+ buttons step through and the ruler draws
+// its gridlines from — but the zoom itself is *continuous*, because a pinch
+// lands wherever the fingers stop. Only the gridlines snap to a unit.
 const UNITS = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800]
 const UNIT_PX = 56
+// As tight as the strip goes — the ladder's finest division, so a pinch and the
+// + button run out of room in the same place.
+const MIN_UNIT = UNITS[0]
+// A gridline needs this much room before its timecode is worth drawing.
+const TICK_MIN_PX = 46
 
 type Zoom = OverviewZoom // 'fit' | seconds
 
@@ -108,6 +115,22 @@ const effectiveZoomOf = (zoom: Zoom, usableBase: number, duration: number): Zoom
   return UNIT_PX / zoom > fitPxOf(usableBase, duration) * 1.001 ? zoom : 'fit'
 }
 
+// The unit that draws the whole track in the viewport: 'fit' said as a number,
+// and so the loosest unit there is any point in.
+const fitUnitOf = (usableBase: number, duration: number) => {
+  const fit = fitPxOf(usableBase, duration)
+  return fit > 0 ? UNIT_PX / fit : Infinity
+}
+
+// Bring a continuous unit into the strip's range. Anything at or looser than
+// fit *is* fit, and is stored as such — so the readout says FIT, and the
+// remembered level still means "the whole track" on a track of another length.
+const clampZoomUnit = (unit: number, usableBase: number, duration: number): Zoom => {
+  if (!Number.isFinite(unit)) return 'fit'
+  if (unit >= fitUnitOf(usableBase, duration) * 0.999) return 'fit'
+  return Math.max(MIN_UNIT, unit)
+}
+
 // Zoom levels from most zoomed-out (fit) to most zoomed-in (smallest unit),
 // dropping units that would be looser than fit for this track.
 const ladderOf = (usableBase: number, duration: number): Zoom[] => {
@@ -127,9 +150,10 @@ const zoomLabel = (zoom: Zoom) => {
  * time runs left→right, every note is a color-coded flag at its real position,
  * ranges render as bars, section notes get a bracket hung from the top, and the
  * amber playhead sweeps right as it plays. Hovering a flag pops a preview. The
- * strip is zoomable in time units (buttons or ⌘/Ctrl + wheel, anchored at the
- * cursor) and scrolls horizontally; the zoom level is remembered across
- * sessions. A tag-tally footer bottoms out the panel.
+ * strip zooms smoothly, anchored at the cursor — a trackpad pinch (⌘/Ctrl +
+ * wheel) or two fingers on glass move it continuously, while the −/+ buttons
+ * step the ladder of time units — and scrolls horizontally; the zoom level is
+ * remembered across sessions. A tag-tally footer bottoms out the panel.
  */
 export default function TrackOverview({
   annotations,
@@ -174,8 +198,28 @@ export default function TrackOverview({
   const scrollTimerRef = useRef<number | null>(null)
   // Scroll position to apply after a zoom re-render (keeps the cursor anchored).
   const pendingScrollRef = useRef<number | null>(null)
-  // Accumulates trackpad wheel delta so ⌘/Ctrl + wheel steps one unit per notch.
-  const wheelAccumRef = useRef(0)
+  // A pinch changes the zoom every frame, so the remembered level is only
+  // written once the fingers stop — and flushed if the strip goes away first.
+  const saveTimerRef = useRef<number | null>(null)
+  const pendingSaveRef = useRef<Zoom | null>(null)
+  const saveZoomSoon = (z: Zoom) => {
+    pendingSaveRef.current = z
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      pendingSaveRef.current = null
+      saveOverviewZoom(z)
+    }, 400)
+  }
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        if (pendingSaveRef.current != null) saveOverviewZoom(pendingSaveRef.current)
+      }
+    },
+    [],
+  )
 
   // Track the viewport's pixel size: flags are positioned against it, the width
   // drives the time scale, and the content width decides when the strip scrolls.
@@ -226,10 +270,10 @@ export default function TrackOverview({
   const rulerY = spineY + 14
   const stripH = rulerY + 16
 
-  const ladder = ladderOf(usableBase, duration)
-  const curIdx = Math.max(0, ladder.indexOf(effZoom))
-  const canZoomIn = ready && curIdx < ladder.length - 1
-  const canZoomOut = ready && curIdx > 0
+  // A pinch lands between the ladder's rungs, so there's no index to compare —
+  // what's left is simply whether there's room to go further either way.
+  const canZoomIn = ready && pxPerSec < UNIT_PX / MIN_UNIT - 0.001
+  const canZoomOut = ready && effZoom !== 'fit'
 
   // Place each note along the time axis.
   const placed = useMemo<PlacedNote[]>(() => {
@@ -243,12 +287,10 @@ export default function TrackOverview({
     }))
   }, [items, railW, zoom, duration])
 
-  // Time gridlines: at fit, the densest "nice" unit that still reads; otherwise
-  // the chosen zoom unit itself.
-  const gridUnit =
-    effZoom === 'fit'
-      ? (UNITS.find((s) => s * pxPerSec >= 46) ?? UNITS[UNITS.length - 1])
-      : effZoom
+  // Time gridlines: the densest "nice" unit that still has room to be read.
+  // Read off the scale rather than the zoom level, since between two rungs of
+  // the ladder there is no level to name — and at a rung it names that rung.
+  const gridUnit = UNITS.find((s) => s * pxPerSec >= TICK_MIN_PX) ?? UNITS[UNITS.length - 1]
   const ticks: number[] = []
   if (ready && gridUnit) {
     for (let t = gridUnit; t < duration - gridUnit * 0.5; t += gridUnit) ticks.push(t)
@@ -280,11 +322,14 @@ export default function TrackOverview({
   // Set zoom while keeping the time under `clientX` (or the viewport centre)
   // stationary — the natural pro-tool zoom feel. Persists the new level.
   const setZoomAnchored = (next: Zoom, clientX: number | null) => {
+    // Nothing to anchor if the level didn't move — and a pending scroll left
+    // behind here would be applied to whatever zoom came next.
+    if (next === zoomRef.current) return
     const vp = viewportRef.current
     if (!vp || vp.clientWidth <= 0) {
       zoomRef.current = next
       setZoom(next)
-      saveOverviewZoom(next)
+      saveZoomSoon(next)
       return
     }
     const ub = Math.max(0, vp.clientWidth - PAD * 2)
@@ -296,36 +341,58 @@ export default function TrackOverview({
     pendingScrollRef.current = PAD + tAt * newPx - cx
     zoomRef.current = next
     setZoom(next)
-    saveOverviewZoom(next)
+    saveZoomSoon(next)
   }
 
-  // Step one level along the zoom ladder (dir +1 = in, -1 = out).
+  // Step to the next rung of the ladder past where the strip is now (dir +1 =
+  // in, -1 = out). Found by scale rather than by index, because a pinch will
+  // often have left the strip between two rungs.
   const stepZoom = (dir: 1 | -1, clientX: number | null) => {
     const vp = viewportRef.current
     if (!vp) return
     const ub = Math.max(0, vp.clientWidth - PAD * 2)
-    const lad = ladderOf(ub, durationRef.current)
-    const eff = effectiveZoomOf(zoomRef.current, ub, durationRef.current)
-    const idx = Math.max(0, lad.indexOf(eff))
-    setZoomAnchored(lad[clamp(idx + dir, 0, lad.length - 1)], clientX)
+    const dur = durationRef.current
+    const px = pxPerSecOf(zoomRef.current, ub, dur)
+    const lad = ladderOf(ub, dur)
+    const pxOf = (z: Zoom) => pxPerSecOf(z, ub, dur)
+    const next =
+      dir === 1
+        ? lad.find((z) => pxOf(z) > px * 1.001)
+        : [...lad].reverse().find((z) => pxOf(z) < px * 0.999)
+    if (next != null) setZoomAnchored(next, clientX)
   }
 
-  // ⌘/Ctrl + wheel (and trackpad pinch) zooms in time-unit steps, anchored at the
-  // cursor; a plain wheel pans the timeline horizontally and pauses the follow.
+  // Zoom by a ratio about `clientX` — the shape a pinch arrives in, whether
+  // from a trackpad's ctrl+wheel or two fingers on glass. Zooming by hand
+  // pauses the playhead follow, exactly as scrolling by hand does: the strip
+  // must stay where it was left rather than snap back to the playhead.
+  const zoomByFactor = (factor: number, clientX: number | null) => {
+    const vp = viewportRef.current
+    if (!vp) return
+    const ub = Math.max(0, vp.clientWidth - PAD * 2)
+    const dur = durationRef.current
+    const px = pxPerSecOf(zoomRef.current, ub, dur)
+    if (px <= 0 || !(factor > 0)) return
+    markUserScrolling()
+    setZoomAnchored(clampZoomUnit(UNIT_PX / (px * factor), ub, dur), clientX)
+  }
+
+  // A trackpad pinch reaches the page as a ⌘/Ctrl + wheel event — there is no
+  // pinch event on the desktop web, and the browser zooms the whole *page* if
+  // we don't take it — so it zooms continuously, anchored at the cursor; a
+  // plain wheel pans the timeline horizontally and pauses the follow.
   useEffect(() => {
     const vp = viewportRef.current
     if (!vp) return
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault()
-        wheelAccumRef.current += e.deltaY
-        if (wheelAccumRef.current <= -40) {
-          wheelAccumRef.current = 0
-          stepZoom(1, e.clientX)
-        } else if (wheelAccumRef.current >= 40) {
-          wheelAccumRef.current = 0
-          stepZoom(-1, e.clientX)
-        }
+        // The exponent turns a delta into a ratio, so the same pinch travels
+        // the same proportion of the range wherever it starts from. Clamped
+        // per event because trackpads disagree wildly about scale — some send
+        // single digits a frame, some fifty — and the latter would otherwise
+        // cross the whole range in two frames.
+        zoomByFactor(Math.exp(-clamp(e.deltaY, -40, 40) / 260), e.clientX)
       } else if (vp.scrollWidth > vp.clientWidth + 1) {
         // Translate vertical wheel to horizontal pan so a plain scroll wheel
         // still moves the timeline.
@@ -371,9 +438,43 @@ export default function TrackOverview({
     }
   }
 
+  // Touch pinch: two pointers, and the ratio of the distance between them.
+  const touchesRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<number | null>(null)
+  // When the last pinch moved, so the finger that lifts off it isn't also read
+  // as a tap asking to seek there.
+  const pinchedAtRef = useRef(0)
+  const pinchHandlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (e.pointerType !== 'touch' || !touchesRef.current.has(e.pointerId)) return
+      touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touchesRef.current.size !== 2) return
+      const [a, b] = [...touchesRef.current.values()]
+      const gap = Math.hypot(a.x - b.x, a.y - b.y)
+      if (pinchRef.current != null && pinchRef.current > 0) {
+        pinchedAtRef.current = performance.now()
+        zoomByFactor(gap / pinchRef.current, (a.x + b.x) / 2)
+      }
+      pinchRef.current = gap
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      touchesRef.current.delete(e.pointerId)
+      if (touchesRef.current.size < 2) pinchRef.current = null
+    },
+    onPointerCancel: (e: React.PointerEvent) => {
+      touchesRef.current.delete(e.pointerId)
+      if (touchesRef.current.size < 2) pinchRef.current = null
+    },
+  }
+
   const scrub = (e: React.MouseEvent) => {
     const vp = viewportRef.current
     if (!ready || !vp) return
+    if (performance.now() - pinchedAtRef.current < 400) return
     const contentX = vp.scrollLeft + (e.clientX - vp.getBoundingClientRect().left)
     onSeek(clamp((contentX - PAD) / Math.max(0.0001, pxPerSec), 0, duration))
   }
@@ -515,7 +616,7 @@ export default function TrackOverview({
                 aria-label="Reset zoom to fit"
                 className="seg-item press h-5 w-[38px] px-0 tabular-nums"
               >
-                {zoomLabel(effZoom)}
+                {zoomLabel(effZoom === 'fit' ? 'fit' : gridUnit)}
               </button>
               <button
                 type="button"
@@ -543,8 +644,11 @@ export default function TrackOverview({
        <div className="overflow-hidden">
       <div
         ref={viewportRef}
+        {...pinchHandlers}
         className="relative overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
-        style={{ height: stripH, scrollbarWidth: 'none' }}
+        // `pan-x` keeps the horizontal scroll but hands the pinch to us rather
+        // than to the browser's own page zoom.
+        style={{ height: stripH, scrollbarWidth: 'none', touchAction: 'pan-x' }}
       >
         {items.length === 0 ? (
           <Hint>Notes you pin will map onto the timeline here.</Hint>

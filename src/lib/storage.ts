@@ -242,7 +242,9 @@ export function loadOverviewZoom(): OverviewZoom {
   try {
     const raw = localStorage.getItem(OVERVIEW_ZOOM_KEY)
     if (!raw || raw === 'fit') return 'fit'
-    const n = parseInt(raw, 10)
+    // A float, not an int: the overview zooms continuously under a pinch, and
+    // the level it stops at is rarely a whole second.
+    const n = parseFloat(raw)
     return Number.isFinite(n) && n > 0 ? n : 'fit'
   } catch {
     return 'fit'
