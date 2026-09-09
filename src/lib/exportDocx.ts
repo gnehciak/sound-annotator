@@ -336,8 +336,10 @@ export async function buildStudyDocx(
       }
 
       const analysis: string[] = []
-      // What the note was filed as, before what it says.
-      const badges = [...row.flags, ...row.properties]
+      // What the note was filed as, before what it says. Its tags and whether
+      // it is a question — not the concepts it names, which are the chips in
+      // the prose below and were only ever a second, unordered copy of them.
+      const badges = row.flags
       if (badges.length) {
         analysis.push(
           para(
