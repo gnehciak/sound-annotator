@@ -12,7 +12,7 @@
 // schema, no API change, and no line in projectJson's sanitizer: they travel
 // wherever `contentHtml` travels.
 import { ELEMENTS, LAYERS, type ElementField } from './musicElements'
-import { ALIASES, AUTO_TERMS } from './vocabulary.generated'
+import { ALIASES, AUTO_TERMS, GLOSSARY, type Gloss } from './vocabulary.generated'
 import { hueText } from './noteColors'
 
 /** Field id of the synthetic "Layer" category (LAYERS, as a pickable field). */
@@ -440,6 +440,18 @@ export const ANALYSIS_TEMPLATE: [string, string][] = ELEMENTS.flatMap((cat) => {
   const value = field?.options.find((o) => o === cat.label)
   return field && value ? [[field.id, value] as [string, string]] : []
 })
+
+/**
+ * What a word means and one line of it in use, or undefined when the
+ * vocabulary has neither yet. Keyed by field as well as value, because "Thin"
+ * under Timbre and under Texture are two different entries.
+ */
+export function glossFor(field: string, value: string): Gloss | undefined {
+  return GLOSSARY[`${field}:${value}`]
+}
+
+/** How many of the words carry a definition or an example. */
+export const GLOSSED_COUNT = Object.keys(GLOSSARY).length
 
 /** How many words the dictionary holds — shown on its header. */
 export const VOCAB_SIZE = ALL.length

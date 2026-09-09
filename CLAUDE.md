@@ -712,7 +712,12 @@ strictest to loosest:
    (`src/components/ElementsDictionary.tsx`) — the vocabulary made browsable.
    It is search-first (through `searchProperties`, so it ranks identically to
    the `@` menu) with the concept chips as the way in when you can't name the
-   word yet. It opens as a **modal**: 600 words do not fit in a column that is
+   word yet. **Clicking a word reads it rather than inserting it** — the entry
+   below the list gives its `Definition` and its `Exemplar quote`, and the
+   button in that panel is what writes it into the note. Both come from Notion
+   through `GLOSSARY` (keyed `field:Term`, since "Thin" under Timbre and under
+   Texture are two entries); a word with neither says so rather than showing an
+   empty panel. It opens as a **modal**: 600 words do not fit in a column that is
    already scrolling, and the note is the thing you want to keep looking at
    while you choose. Picking a word writes it and leaves the modal open,
    because picking two or three in a row is the normal case. Its Escape
