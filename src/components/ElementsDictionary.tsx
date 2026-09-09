@@ -19,7 +19,17 @@
 // is the one thing you want to keep looking at while choosing a word. Clicking
 // a word writes it into the note behind and leaves the modal open, because
 // picking two or three in a row is the normal case.
+//
+// **It portals to <body>, and it has to.** The inspector is hosted inside
+// PluginWindow, whose pane carries `backdrop-filter` — and a backdrop-filter
+// ancestor becomes the containing block for `position: fixed`. Rendered in
+// place, `inset-0` covered the inspector's own box rather than the viewport
+// (measured: 510×443 inside an 881×1057 window), the panel sampled its own
+// ancestor instead of the page so the frosting came out transparent, and the
+// note's chrome painted over it from the same stacking context. Same reason
+// the expanded score portals — see CLAUDE.md.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { BookOpen, Search, X } from 'lucide-react'
 import {
   VOCAB_CATEGORIES,
@@ -103,9 +113,9 @@ export default function ElementsDictionary({
     }))
   }, [query, cat])
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex animate-fade-in items-center justify-center bg-ink/70 p-6 backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -218,7 +228,8 @@ export default function ElementsDictionary({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

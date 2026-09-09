@@ -720,6 +720,19 @@ strictest to loosest:
    press would also reach App's own Escape handler and close the note behind
    it.
 
+**Anything `position: fixed` rendered inside a pane must portal to `<body>`.**
+`.glass` and `.glass-pop` carry `backdrop-filter`, and a backdrop-filter
+ancestor becomes the containing block for fixed positioning — so `inset-0`
+covers *that pane* rather than the viewport, the overlay lives inside the
+pane's stacking context (so the pane's own chrome can paint over it), and a
+frosted panel samples its ancestor instead of the page, which is why it comes
+out looking transparent rather than blurred. Measured once as 510×443 inside
+an 881×1057 window. The score's expanded view, `Popover`, `ElementsDictionary`
+and `DetectSectionsButton` all portal for this reason. `SettingsModal`,
+`ShortcutsOverlay` and `PluginWindow` do not need to, because they mount at
+App level with no glass above them — check where a new overlay is *mounted*,
+not how it is styled.
+
 **Three actions sit under the note** (`NoteInspector`, driven through
 `AnnotationEditorHandle`). *Template* lays out a bullet per concept, each
 opening with that concept's own tag — real chips rather than bold words, so
