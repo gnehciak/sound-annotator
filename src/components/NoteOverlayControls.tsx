@@ -27,6 +27,7 @@ import {
   scorePinPageOf,
 } from '../lib/overlays'
 import { pinTargetAt, type PinDrop } from '../lib/pinTargets'
+import { useQuotePreview } from '../lib/quotePreview'
 
 interface Props {
   annotation: Annotation
@@ -72,16 +73,21 @@ type Placeable = 'pin' | 'quote'
 /**
  * The note's stage controls: what it puts on the video while it's on screen —
  * a cover image standing in for the picture, and a pin dropped on the frame
- * that captions itself with the note's own text.
+ * that captions itself with the note's own text — plus the region of the score
+ * it quotes, which is a picture the note *carries* rather than something the
+ * class watches.
  *
- * Both are **objects, not switches**: a 16:9 cover slot that echoes the frame's
- * shape, and the pin itself — the dot in the note's hue, in a recessed key you
- * drag onto the picture. Where it lands is what it's anchored to, so placing
- * and anchoring stay one gesture; a plain click drops it dead centre, and
- * clicking a placed pin takes it off again.
+ * All three are **objects, not switches**: a 16:9 cover slot that echoes the
+ * frame's shape, the pin itself — the dot in the note's hue, in a recessed key
+ * you drag onto the picture — and an empty frame you drag onto the page you
+ * are quoting. Where one lands is what it's anchored to, so placing and
+ * anchoring stay one gesture; a plain click drops it dead centre, and clicking
+ * a placed one takes it off again.
  *
  * Video projects only; the host decides that (an audio track's waveform is the
- * picture and must stay uncovered) and simply doesn't render this.
+ * picture and must stay uncovered) and simply doesn't render this. The quote
+ * key is narrower still — it appears only once the track has a score, since
+ * a page of the score is the only thing a quote can be cut out of.
  */
 export default function NoteOverlayControls({
   annotation,
@@ -152,6 +158,9 @@ export default function NoteOverlayControls({
   const dropping = dragDepth > 0 && !!uploadImage
 
   const quoted = quoteOf(annotation)
+  // What the quote actually shows, cut out of the score. Null while it is
+  // being drawn, and for a track whose score can't be read at all.
+  const preview = useQuotePreview(quoted)
   const videoPinned = hasVideoPin(annotation)
   const scorePinned = hasScorePin(annotation)
   const pinned = videoPinned || scorePinned
@@ -248,17 +257,10 @@ export default function NoteOverlayControls({
     // A press that never travelled is a click: place it centre, or take it off.
     if (!press.dragged) {
       if (press.what === 'quote') {
-        // One quote per note, so this really is a toggle: what is on screen is
-        // the surface it lands on, the same answer a click on the pin gives.
+        // One quote per note, so this really is a toggle. There is only one
+        // surface to land on — the page the score is showing.
         patch({
-          quote: quoted
-            ? undefined
-            : quoteAt(
-                onScoreSurface ? 'score' : 'video',
-                0.5,
-                0.5,
-                scorePage ?? 1,
-              ),
+          quote: quoted ? undefined : quoteAt(0.5, 0.5, scorePage ?? 1),
         })
         return
       }
@@ -274,14 +276,11 @@ export default function NoteOverlayControls({
     // that leaves something somewhere nobody aimed.
     if (!drop) return
     if (press.what === 'quote') {
-      patch({
-        quote: quoteAt(
-          drop.kind === 'score' ? 'score' : 'video',
-          drop.x,
-          drop.y,
-          drop.page ?? scorePage ?? 1,
-        ),
-      })
+      // Dropped on the picture: nothing. A quote is cut out of the score's
+      // page, and there is no still of a cross-origin player to cut (see
+      // NoteQuote in ../types) — so the frame is not a place to aim one.
+      if (drop.kind !== 'score') return
+      patch({ quote: quoteAt(drop.x, drop.y, drop.page ?? scorePage ?? 1) })
       return
     }
     patch(
@@ -428,39 +427,45 @@ export default function NoteOverlayControls({
           </span>
         </button>
 
-        {/* The picture quote, as the thing it places: an empty frame with its
-            corners, dragged onto whatever the note is quoting. Same gesture as
+        {/* The score quote, as the thing it places: an empty frame with its
+            corners, dragged onto the page the note is quoting. Same gesture as
             the pin — where it lands is the answer — because it is the same
-            question asked about a region instead of a point. */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!quoted}
-          onPointerDown={(e) => startPlacing('quote', e)}
-          onPointerMove={movePlacing}
-          onPointerUp={endPlacing}
-          onPointerCancel={cancelPlacing}
-          title={
-            scorePage != null
-              ? 'Drag onto the score’s page (or the video) to quote that region in the printed notes'
-              : 'Drag onto the picture to quote that region in the printed notes'
-          }
-          aria-label="Quote a region as a picture"
-          className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing ${
-            placing?.what === 'quote'
-              ? 'border-accent'
-              : quoted
-                ? 'border-line-strong'
-                : 'border-line hover:border-line-strong'
-          }`}
-        >
-          <span
-            style={{ borderColor: quoted ? color : undefined }}
-            className={`block h-[15px] w-[18px] rounded-[3px] border-[1.5px] ${
-              quoted ? '' : 'border-dashed border-muted'
+            question asked about a region instead of a point. Only offered
+            where there is a score: the PDF's page is the one surface a quote
+            can be cut out of. */}
+        {scorePage != null && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!quoted}
+            onPointerDown={(e) => startPlacing('quote', e)}
+            onPointerMove={movePlacing}
+            onPointerUp={endPlacing}
+            onPointerCancel={cancelPlacing}
+            title={
+              quoted
+                ? 'Click to stop quoting the score'
+                : scoreHidden
+                  ? `Quote the middle of page ${scorePage} — switch the column to the score to aim it`
+                  : 'Drag onto a page of the score to quote that region — click to quote the middle of the page'
+            }
+            aria-label="Quote a region of the score"
+            className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing ${
+              placing?.what === 'quote'
+                ? 'border-accent'
+                : quoted
+                  ? 'border-line-strong'
+                  : 'border-line hover:border-line-strong'
             }`}
-          />
-        </button>
+          >
+            <span
+              style={{ borderColor: quoted ? color : undefined }}
+              className={`block h-[15px] w-[18px] rounded-[3px] border-[1.5px] ${
+                quoted ? '' : 'border-dashed border-muted'
+              }`}
+            />
+          </button>
+        )}
 
         <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-muted">
           {stageLine}
@@ -589,25 +594,39 @@ export default function NoteOverlayControls({
             </div>
           )}
 
-          {/* The quote, once it exists: where it is aimed, and — on the
-              picture — whether there is a still for it to crop at all. */}
+          {/* The quote, once it exists: the music it actually shows, then
+              where on the score it was cut from. The picture is the point of
+              the control — it is what the note carries into the list and into
+              the handout — so it is shown rather than described. */}
           {quoted && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => patch({ quote: undefined })}
-                title="Stop quoting that region"
-                className="chip chip-outline press hover:border-danger/60 hover:text-danger"
-              >
-                <Quote size={10} />
-                {quoted.on === 'score'
-                  ? `Quoting page ${quotePageOf(quoted)}`
-                  : 'Quoting the picture'}
-                <X size={10} />
-              </button>
-              {quoted.on === 'score' &&
-                scorePage != null &&
-                scorePage !== quotePageOf(quoted) && (
+            <div className="flex flex-col gap-2">
+              <div className="grid min-h-[54px] place-items-center overflow-hidden rounded-md bg-white p-1 ring-1 ring-line">
+                {preview ? (
+                  <img
+                    src={preview.src}
+                    alt={`The quoted region of page ${quotePageOf(quoted)} of the score`}
+                    className="max-h-[104px] w-auto max-w-full object-contain"
+                  />
+                ) : (
+                  // Not "loading": a score that won't load never resolves, and
+                  // a spinner that spins for ever says less than this does.
+                  <span className="text-[11px] text-black/40">
+                    Drawing page {quotePageOf(quoted)}…
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => patch({ quote: undefined })}
+                  title="Stop quoting that region"
+                  className="chip chip-outline press hover:border-danger/60 hover:text-danger"
+                >
+                  <Quote size={10} />
+                  Quoting page {quotePageOf(quoted)}
+                  <X size={10} />
+                </button>
+                {scorePage != null && scorePage !== quotePageOf(quoted) && (
                   <button
                     type="button"
                     onClick={() => patch({ quote: { ...quoted, page: scorePage } })}
@@ -618,15 +637,12 @@ export default function NoteOverlayControls({
                     Move to page {scorePage}
                   </button>
                 )}
-              {/* The one thing a quote of the picture can't do by itself. A
-                  YouTube frame's pixels are unreachable to page JS, so what
-                  prints is a crop of the note's cover — and without a cover
-                  there is nothing to crop. */}
-              {quoted.on === 'video' && !covered && (
-                <span className="text-[11.5px] text-muted/80">
-                  Needs a cover image to print — set one above.
-                </span>
-              )}
+                {scoreHidden && (
+                  <span className="text-[11.5px] text-muted/80">
+                    The column is on the player, so there’s no page to aim on.
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -674,11 +690,13 @@ export default function NoteOverlayControls({
                 ? placing.what === 'quote'
                   ? `Quote page ${placing.over.page ?? 1}`
                   : `Pin to the score — page ${placing.over.page ?? 1}`
-                : placing.over?.kind === 'frame'
-                  ? placing.what === 'quote'
-                    ? 'Quote the picture'
-                    : 'Pin to the picture'
-                  : 'Drop it on the video'}
+                : placing.what === 'quote'
+                  ? // A quote is cut out of the score's page, so the picture
+                    // is no more a place to drop one than empty air is.
+                    'Drop it on the score'
+                  : placing.over?.kind === 'frame'
+                    ? 'Pin to the picture'
+                    : 'Drop it on the video'}
             </span>
           </div>,
           document.body,

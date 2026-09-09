@@ -16,8 +16,8 @@
 //    coordinate: everything in a track is anchored to a moment, and a study
 //    note nobody can find in the recording is half a note. The bar or
 //    rehearsal mark rides with it, and a note that is a question says so.
-//  - **the example is the picture quote**, captioned with where it was cut
-//    from — a page of the score, or the picture.
+//  - **the example is the score quote**, captioned with the page of the score
+//    it was cut from.
 //  - **the element grouping is the app's own vocabulary**: a note is filed
 //    under its first inline property tag (`Timbre / Bright`), which is the
 //    same concept list the `@` menu and the dictionary offer.
@@ -137,9 +137,9 @@ export interface StudyRow {
   color: string
   /** Short badges above the analysis — "Question", and the note's tags. */
   flags: DocBadge[]
-  /** The picture quote, if the note has one that could be resolved. */
+  /** The score quote, if the note has one that could be resolved. */
   quote?: QuoteImage
-  /** Where the picture was cut from: "Page 3 of the score", or the picture. */
+  /** Where the picture was cut from — "Page 3 of the score". */
   quoteFrom: string
   /** The note's own prose, as written — the analysis column. */
   analysis: DocBlock[]
@@ -255,7 +255,7 @@ function blockKind(tag: string): DocBlock['kind'] | null {
  * colour alone means nothing without a legend.
  *
  * Images are the deliberate omission — a note's inline pictures stay in the
- * app. What a document quotes is the picture quote, aimed on purpose.
+ * app. What a document quotes is the score quote, aimed on purpose.
  */
 function richBlocks(html: string): DocBlock[] {
   if (!html) return []
@@ -404,11 +404,10 @@ function specOf(note: Annotation): string {
   return parts.join(' · ')
 }
 
-/** Where a picture quote was cut from, said in the caption under it. */
+/** Where a score quote was cut from, said in the caption under it. */
 function quoteFromOf(note: Annotation): string {
   const q = quoteOf(note)
-  if (!q) return ''
-  return q.on === 'score' ? `Page ${quotePageOf(q)} of the score` : 'From the picture'
+  return q ? `Page ${quotePageOf(q)} of the score` : ''
 }
 
 /** The span the notes cover, e.g. "0:00–15:42" (one timecode for one moment). */

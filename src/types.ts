@@ -121,7 +121,7 @@ export interface NoteOverlay {
    * Independent of the video pin, not an alternative to it: one note can point
    * at a moment in the picture *and* at the bar it happens in. (Before the
    * score got its own view they were one pin with a `pinAnchor` switch; that
-   * shape is migrated away on read — see `withMigratedPins` in lib/overlays.)
+   * shape is migrated away on read — see `withMigratedOverlay` in lib/overlays.)
    *
    * A score pin draws only while the score view is showing `scorePinPage`:
    * on another page there is no page box for it to be a fraction of.
@@ -131,9 +131,10 @@ export interface NoteOverlay {
   /** Which page of the score the score pin lives on, 1-based; absent is 1. */
   scorePinPage?: number
   /**
-   * The **picture quote**: a rectangle framing part of the picture or of a
-   * score page, which the two print documents reproduce as a cropped image
-   * above the note's text. See NoteQuote.
+   * The **score quote**: a rectangle framing part of a page of the PDF score,
+   * which the note carries as a picture — on its row in the list, in the
+   * inspector, and as a cropped image beside its text in the two print
+   * documents. See NoteQuote.
    */
   quote?: NoteQuote
   /**
@@ -144,37 +145,38 @@ export interface NoteOverlay {
 }
 
 /**
- * A **picture quote**: the region of a surface a note is quoting, so that
- * printing the note prints the music (or the moment) it is about, rather than
- * a timecode the reader has to go and look up.
+ * A **score quote**: the region of a page of the PDF score a note is quoting,
+ * so that reading the note shows the music it is about rather than a bar
+ * number the reader has to go and look up.
  *
- * Stored as a rectangle, never as an image. The pixels are re-derived at
- * export time from something the project already owns — the PDF score's page,
- * or the note's own cover image — which is what keeps a quote free: no upload,
- * no second copy of the bytes to garbage-collect or re-host when the project
- * is copied, and a Drive score that gains a new engraving quotes the *new*
- * engraving on the next export.
+ * Stored as a rectangle, never as an image. The pixels are cut out of the
+ * score again wherever one is shown — the list row, the inspector, an export
+ * — which is what keeps a quote free: no upload, no second copy of the bytes
+ * to garbage-collect or re-host when the project is copied, and a Drive score
+ * that gains a new engraving quotes the *new* engraving from then on.
  *
- * That is also the one limit worth knowing. A quote on the picture crops the
- * note's **cover**, because a cover is the only still of the frame the app can
- * read: a YouTube iframe is cross-origin and its pixels are unreachable to
- * page JS at any moment, on any browser. So a video quote on a note with no
- * cover draws on screen and prints nothing.
+ * The score is the only surface, deliberately. Quoting the *picture* was
+ * offered once and could never work: a YouTube player is a cross-origin
+ * iframe whose pixels are unreachable to page JS at any moment, on any
+ * browser, so a video quote could only ever crop the note's own cover image —
+ * a still that most notes don't have. A quote on a note written then is
+ * dropped on read (`withMigratedOverlay` in lib/overlays).
  *
  * One per note, deliberately: a quote is what the note is *about*, and a note
  * that is about two places is two notes.
  */
 export interface NoteQuote {
   /**
-   * Which surface the rectangle is measured against: `'video'` the 16:9 frame
-   * (and so the note's cover, which fills it), `'score'` one drawn page of the
-   * PDF score.
+   * Which surface the rectangle is measured against. Always `'score'` — kept
+   * as a field so files written by either version of the app read the same
+   * way round, and so a legacy `'video'` quote is recognisable rather than
+   * silently read as a score one.
    */
-  on: 'video' | 'score'
-  /** Which score page, 1-based. Score quotes only; absent is page 1. */
+  on: 'score'
+  /** Which page of the score, 1-based; absent is page 1. */
   page?: number
   /**
-   * The rectangle, as 0–1 fractions of that surface: `x`/`y` its top-left
+   * The rectangle, as 0–1 fractions of the page box: `x`/`y` its top-left
    * corner, `w`/`h` its size. Fractions rather than pixels for the same reason
    * the pins are — the box resizes at every fit, zoom and scroll, and these
    * numbers never do.

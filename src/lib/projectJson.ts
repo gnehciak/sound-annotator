@@ -209,26 +209,28 @@ function sanitizeOverlay(v: unknown): NoteOverlay | undefined {
 }
 
 /**
- * A picture quote: a rectangle on the picture or on a page of the score. All
- * four numbers are needed to mean anything, so a half-written one is dropped
- * rather than guessed at, and the result is squared up by the same rule the
- * dragging obeys — inside its surface, never below MIN_QUOTE.
+ * A score quote: a rectangle on a page of the PDF score. All four numbers are
+ * needed to mean anything, so a half-written one is dropped rather than
+ * guessed at, and the result is squared up by the same rule the dragging obeys
+ * — inside the page, never below MIN_QUOTE.
+ *
+ * A file written when a quote could name the *picture* imports without one:
+ * see NoteQuote in ../types for why that surface is gone, and
+ * `withMigratedOverlay` for the same drop on the reading side.
  */
 function sanitizeQuote(v: unknown): NoteQuote | undefined {
   if (!v || typeof v !== 'object') return undefined
   const q = v as Record<string, unknown>
-  const on = q.on === 'score' ? 'score' : q.on === 'video' ? 'video' : null
   const x = num(q.x)
   const y = num(q.y)
   const w = num(q.w)
   const h = num(q.h)
-  if (!on || x == null || y == null || w == null || h == null) return undefined
+  if (q.on !== 'score' || x == null || y == null || w == null || h == null)
+    return undefined
   const page = num(q.page)
   return clampQuote({
-    on,
-    ...(on === 'score' && page != null && page >= 1
-      ? { page: Math.round(page) }
-      : {}),
+    on: 'score',
+    ...(page != null && page >= 1 ? { page: Math.round(page) } : {}),
     x: clamp01(x),
     y: clamp01(y),
     w: clamp01(w),

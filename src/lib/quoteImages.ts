@@ -1,4 +1,4 @@
-// Turning a note's **picture quote** (a rectangle — see NoteQuote in ../types)
+// Turning a note's **score quote** (a rectangle — see NoteQuote in ../types)
 // into a picture the exported documents can carry.
 //
 // The rectangle is all that's stored, so the pixels have to be found again at
@@ -7,23 +7,20 @@
 // to re-host, and a Drive score that gains a new engraving quotes the new
 // engraving on the next export. The cost is this module.
 //
-// Two sources, because there are two surfaces:
-//
-//  - **the score**, whose bytes we already fetch and rasterise (lib/pdf.ts).
-//    Each referenced page is drawn once, at a scale chosen from the narrowest
-//    crop on it, and every quote is cut out of that raster.
-//  - **the picture**, where the note's *cover* is the still. A YouTube frame's
-//    pixels are unreachable to page JS — the player is a cross-origin iframe,
-//    on every browser, at every moment — so there is nothing else to read. A
-//    video quote on a note with no cover therefore prints nothing, which the
-//    inspector says out loud when the quote is placed.
+// The score's bytes we already fetch and rasterise (lib/pdf.ts). Each
+// referenced page is drawn once, at a scale chosen from the narrowest crop on
+// it, and every quote on that page is cut out of that raster.
 //
 // Everything comes back as a **JPEG**, because the two things that consume it
 // are a PDF and a .docx, and both want bytes rather than a styled window: the
-// crop is done here, on a canvas, once. Reading a cover's pixels that way is
-// cross-origin, which is fine — the Blob store answers
-// `access-control-allow-origin: *` — but the request has to ask for CORS, and
-// a tainted canvas is caught rather than thrown.
+// crop is done here, on a canvas, once. The notes' own inline images come
+// through the same pass — they may be PNGs or WebPs, which neither renderer
+// takes — and reading those is cross-origin, which is fine (the Blob store
+// answers `access-control-allow-origin: *`) as long as the request asks for
+// CORS and a tainted canvas is caught rather than thrown.
+//
+// The same crops are wanted on screen, much smaller and one note at a time;
+// lib/quotePreview.ts does that, over `cropImage` below.
 import type { Annotation, Project } from '../types'
 import { openPdf } from './pdf'
 import { quoteOf, quotePageOf } from './overlays'
@@ -89,7 +86,7 @@ const COLLECT_TIMEOUT_MS = 20_000
 
 /** Everything an exported document has to draw, fetched and cropped. */
 export interface DocPictures {
-  /** Picture quotes, by the id of the note that aimed them. */
+  /** Score quotes, by the id of the note that aimed them. */
   quotes: Map<string, QuoteImage>
   /** The notes' own inline images, by the URL the prose references. */
   images: Map<string, QuoteImage>
@@ -118,14 +115,13 @@ export async function collectPictures(
   // since laying the document out is the short tail after this.
   const report: ProgressFn = (value, label) => onProgress?.(value, label)
   const work = Promise.all([
-    addCoverQuotes(quoted, out),
     addScoreQuotes(project, quoted, out, report),
     addNoteImages(urls, images),
   ])
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<void>((resolve) => {
     timer = setTimeout(() => {
-      console.warn('Picture quotes: gave up waiting; exporting without them.')
+      console.warn('Score quotes: gave up waiting; exporting without them.')
       resolve()
     }, COLLECT_TIMEOUT_MS)
   })
@@ -147,7 +143,7 @@ async function addNoteImages(
       if (!img) return
       // The whole picture, not a crop — but through the same canvas, because a
       // note image may be a PNG or a WebP and neither renderer takes those.
-      const picture = cropOf(
+      const picture = cropImage(
         img,
         img.naturalWidth,
         img.naturalHeight,
@@ -159,24 +155,6 @@ async function addNoteImages(
   )
 }
 
-/** Quotes aimed at the picture: a crop of the note's own cover image. */
-async function addCoverQuotes(
-  notes: Annotation[],
-  out: Map<string, QuoteImage>,
-): Promise<void> {
-  await Promise.all(
-    notes.map(async (note) => {
-      const q = quoteOf(note)
-      const src = note.overlay?.coverUrl
-      if (!q || q.on !== 'video' || !src) return
-      const img = await loadImage(src)
-      if (!img) return
-      const crop = cropOf(img, img.naturalWidth, img.naturalHeight, q)
-      if (crop) out.set(note.id, crop)
-    }),
-  )
-}
-
 /** Quotes aimed at the score: one raster per page, cut up per quote. */
 async function addScoreQuotes(
   project: Project,
@@ -184,13 +162,8 @@ async function addScoreQuotes(
   out: Map<string, QuoteImage>,
   report: ProgressFn,
 ): Promise<void> {
-  const wanted = notes.filter((a) => quoteOf(a)?.on === 'score')
-  if (wanted.length === 0) {
-    report(1, 'Cropping the pictures')
-    return
-  }
   const score = project.settings?.score
-  const url = score && scoreBytesUrl(score)
+  const url = notes.length > 0 && score ? scoreBytesUrl(score) : null
   if (!url) {
     report(1, 'Cropping the pictures')
     return
@@ -208,7 +181,7 @@ async function addScoreQuotes(
     // is the smallest that satisfies every crop on it — the narrowest
     // rectangle is the one that needs the most magnification.
     const byPage = new Map<number, Annotation[]>()
-    for (const note of wanted) {
+    for (const note of notes) {
       const page = Math.min(quotePageOf(quoteOf(note)!), doc.pageCount)
       const list = byPage.get(page)
       if (list) list.push(note)
@@ -237,21 +210,28 @@ async function addScoreQuotes(
       // animation frame a hidden tab never fires. See RenderOptions.offscreen.
       await doc.render(page, canvas, scale, { offscreen: true })
       for (const note of group) {
-        const crop = cropOf(canvas, canvas.width, canvas.height, quoteOf(note)!)
+        const crop = cropImage(canvas, canvas.width, canvas.height, quoteOf(note)!)
         if (crop) out.set(note.id, crop)
       }
     }
   } catch (err) {
     // One unreadable score costs the pictures, never the document.
-    console.error('Picture quotes: the score could not be read —', err)
+    console.error('Score quotes: the score could not be read —', err)
   } finally {
     doc?.destroy()
     report(1, 'Cropping the pictures')
   }
 }
 
-/** Cut a rectangle out of a drawable, as its own JPEG. Null if it can't be. */
-function cropOf(
+/**
+ * Cut a rectangle out of a drawable, as its own JPEG. Null if it can't be —
+ * a canvas tainted by an image whose host refused CORS after all.
+ *
+ * Shared with lib/quotePreview, which wants the same crop at a fraction of the
+ * size for the screen: what a quote *is* has one definition, and the caller
+ * only picks how big.
+ */
+export function cropImage(
   source: CanvasImageSource,
   sourceWidth: number,
   sourceHeight: number,
@@ -276,7 +256,7 @@ function cropOf(
   try {
     return { src: out.toDataURL('image/jpeg', 0.88), width: out.width, height: out.height }
   } catch {
-    // A tainted canvas — the cover's host refused CORS after all. Skip it.
+    // A tainted canvas — the image's host refused CORS after all. Skip it.
     return null
   }
 }

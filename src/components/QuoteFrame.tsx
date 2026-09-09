@@ -6,28 +6,22 @@ import {
 } from 'react'
 import { Quote } from 'lucide-react'
 
-import { hueOnDark, hueText } from '../lib/noteColors'
+import { hueText } from '../lib/noteColors'
 import { clampQuote, MIN_QUOTE } from '../lib/overlays'
 import type { NoteQuote } from '../types'
 
 interface Props {
-  /** The rectangle, as 0–1 fractions of whatever box this fills. */
+  /** The rectangle, as 0–1 fractions of the page box this fills. */
   quote: NoteQuote
   /** The note's hue — the frame is the note's, like its pin and its row. */
   color: string
-  /**
-   * What is behind the frame, which decides how the hue is resolved: `dark`
-   * over the picture, where the stage layer is always dark in both themes;
-   * `paper` over a score page, which is white in both.
-   */
-  tone: 'dark' | 'paper'
   /** View-only (share links, foreign tracks): draw the frame, never move it. */
   readOnly?: boolean
   /** Commit a moved or resized rectangle, in the same fractions. */
   onChange?: (quote: NoteQuote) => void
 }
 
-/** One nudge of the arrow keys, as a fraction of the box (Shift = ×5). */
+/** One nudge of the arrow keys, as a fraction of the page (Shift = ×5). */
 const NUDGE = 0.01
 
 /** The four corners: which edges each moves, and where it sits. */
@@ -50,13 +44,13 @@ interface Grab {
 }
 
 /**
- * The **picture quote's** rectangle, drawn as fractions of whatever box it
- * fills — the video frame (VideoOverlays) or a drawn page of the score
+ * The **score quote's** rectangle, drawn as fractions of the page box it fills
  * (ScoreLayer), exactly like PinLayer and for the same reason: the box is what
  * resizes, and these numbers never do.
  *
- * What it frames is what the note's printed form carries as an image (see
- * lib/quoteImages.ts). So it is drawn as an *aiming* tool rather than as stage
+ * What it frames is the picture the note carries — onto its row in the list,
+ * into the inspector, and into the printed documents (lib/quotePreview,
+ * lib/quoteImages). So it is drawn as an *aiming* tool rather than as stage
  * furniture — a hairline and four corners, no fill, nothing that hides the
  * music being aimed at — and it shows only for the note open in the inspector.
  * A framed region the class is meant to see is a mark (ScoreMarks), a
@@ -67,7 +61,7 @@ interface Grab {
  * corners resize it, both committed once on release, so a drag is one save and
  * one undo step rather than one per pointer event.
  */
-export default function QuoteFrame({ quote, color, tone, readOnly, onChange }: Props) {
+export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   // The rectangle under the pointer, held locally for the length of the drag.
   const [draft, setDraft] = useState<NoteQuote | null>(null)
@@ -75,7 +69,8 @@ export default function QuoteFrame({ quote, color, tone, readOnly, onChange }: P
   const editable = !readOnly && !!onChange
 
   const q = draft ?? quote
-  const hue = tone === 'dark' ? hueOnDark(color) : hueText(color, 'light')
+  // The page is white paper in both themes, so the hue is resolved for one.
+  const hue = hueText(color, 'light')
 
   // Takes the event first rather than returning a handler, so nothing here is
   // *called* during render — a factory invoked in the JSX would put this ref
@@ -155,7 +150,7 @@ export default function QuoteFrame({ quote, color, tone, readOnly, onChange }: P
       <div
         role={editable ? 'button' : undefined}
         tabIndex={editable ? 0 : undefined}
-        aria-label={editable ? 'Move the picture quote' : undefined}
+        aria-label={editable ? 'Move the score quote' : undefined}
         onPointerDown={(e) => begin(e, true, 0, 0)}
         onPointerMove={move}
         onPointerUp={end}
@@ -182,7 +177,7 @@ export default function QuoteFrame({ quote, color, tone, readOnly, onChange }: P
             handles are, and the middle of an edge is the one place a label
             can sit without covering one. */}
         <span
-          style={{ background: hue, color: tone === 'dark' ? '#0f0f11' : '#fff' }}
+          style={{ background: hue, color: '#fff' }}
           className="pointer-events-none absolute left-1/2 top-0 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-[3px] px-1 py-[3px] text-[8px] font-semibold uppercase leading-none tracking-[0.14em]"
         >
           <Quote size={8} strokeWidth={2.5} />

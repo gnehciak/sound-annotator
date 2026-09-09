@@ -52,24 +52,25 @@ export const scorePinPageOf = (a: Annotation): number =>
 
 /**
  * True when the note puts anything on the *stage* — the picture or the page,
- * for its moment. Deliberately not counting a picture quote: a quote is what
- * the note's printed form carries, shown on screen only while the note is open
+ * for its moment. Deliberately not counting a score quote: a quote is a
+ * picture the note *carries*, framed on the page only while the note is open
  * so it can be aimed. It is not something the class watches.
  */
 export const hasOverlay = (a: Annotation): boolean =>
   hasCover(a) || hasVideoPin(a) || hasScorePin(a)
 
-// ---- picture quotes ------------------------------------------------------
-// A rectangle on the picture or on a page of the score, which the two print
-// documents reproduce as a cropped image above the note's text. See NoteQuote
-// in ../types for why it is a rectangle and never an image.
+// ---- score quotes --------------------------------------------------------
+// A rectangle on a page of the PDF score, which the note carries as a picture
+// wherever it is shown — its row in the list, the inspector, and the printed
+// documents. See NoteQuote in ../types for why it is a rectangle and never an
+// image, and why the score is the only surface it can be aimed at.
 
-/** How small a quote may be dragged, as a fraction of its surface. */
+/** How small a quote may be dragged, as a fraction of the page. */
 export const MIN_QUOTE = 0.05
 
 /**
  * The rectangle a quote gets when it is dropped rather than drawn — a third of
- * the surface, which is big enough to hold a system of music and small enough
+ * the page, which is big enough to hold a system of music and small enough
  * that what you meant is obvious before you resize it.
  */
 export const DEFAULT_QUOTE_W = 0.36
@@ -83,28 +84,28 @@ export const quotePageOf = (q: NoteQuote): number =>
   Math.max(1, Math.round(q.page ?? 1))
 
 /**
- * The quote to draw in one box, or null. The same choice `framePins` /
- * `scorePinsOn` make for pins, and made in the same place: nothing downstream
- * has to know a quote can be on either surface.
+ * The quote to draw on one page of the score, or null. The same choice
+ * `scorePinsOn` makes for pins, and made in the same place: nothing downstream
+ * has to know which page a quote is aimed at.
  *
  * Only the note open in the inspector, deliberately — unlike a cover or a pin,
- * a quote is not something the class watches, it is what the handout will
- * carry. On the score a permanent framed region is what the drawing tools' box
- * mark is for; leaving quotes off the stage keeps the two from looking alike.
+ * a quote is not something the class watches, it is the picture the note
+ * carries. A permanently framed region on the page is what the drawing tools'
+ * box mark is for; leaving quotes off the stage keeps the two from looking
+ * alike.
  */
 export function quoteOn(
   a: Annotation | null | undefined,
-  surface: 'video' | 'score',
   page?: number,
 ): NoteQuote | null {
   const q = a && quoteOf(a)
-  if (!q || q.on !== surface) return null
-  if (surface === 'score' && page != null && quotePageOf(q) !== page) return null
+  if (!q) return null
+  if (page != null && quotePageOf(q) !== page) return null
   return q
 }
 
 /**
- * Square a dragged rectangle up: inside the surface, never smaller than
+ * Square a dragged rectangle up: inside the page, never smaller than
  * MIN_QUOTE, and with the size honoured ahead of the position, so a rectangle
  * pushed off an edge slides back in rather than being cropped to a sliver.
  */
@@ -120,16 +121,11 @@ export function clampQuote(q: NoteQuote): NoteQuote {
   }
 }
 
-/** The default rectangle, centred on a point of its surface. */
-export function quoteAt(
-  surface: 'video' | 'score',
-  x: number,
-  y: number,
-  page?: number,
-): NoteQuote {
+/** The default rectangle, centred on a point of a page of the score. */
+export function quoteAt(x: number, y: number, page: number): NoteQuote {
   return clampQuote({
-    on: surface,
-    ...(surface === 'score' ? { page: Math.max(1, Math.round(page ?? 1)) } : {}),
+    on: 'score',
+    page: Math.max(1, Math.round(page)),
     x: x - DEFAULT_QUOTE_W / 2,
     y: y - DEFAULT_QUOTE_H / 2,
     w: DEFAULT_QUOTE_W,
@@ -175,18 +171,34 @@ export function movePinPatch(
 }
 
 /**
- * Migrate a note off the single-pin shape that predates the score view, where
- * one pin carried a `pinAnchor: 'score'` switch instead of the two independent
- * pins there are now. Applied wherever notes enter the app — the project
- * loader and the JSON importer — so nothing downstream has to know the old
- * shape existed.
+ * Migrate a note off the overlay shapes earlier versions wrote. Applied
+ * wherever notes enter the app — the project loader and the JSON importer —
+ * so nothing downstream has to know either shape existed.
+ *
+ * Two of them:
+ *
+ *  • the **single pin** that predates the score view, which carried a
+ *    `pinAnchor: 'score'` switch instead of the two independent pins there
+ *    are now;
+ *  • a **quote of the picture**, from when a quote could be aimed at the
+ *    frame. It is dropped rather than moved: its fractions are of a 16:9
+ *    frame and mean nothing on a portrait page, and what it cropped — the
+ *    note's cover image — was never the music. See NoteQuote in ../types.
  *
  * Returns the note untouched (not a copy) when there is nothing to migrate,
  * which is every note written since.
  */
-export function withMigratedPins(a: Annotation): Annotation {
+export function withMigratedOverlay(a: Annotation): Annotation {
   const o = a.overlay as (NoteOverlay & LegacyPin) | undefined
-  if (!o || o.pinAnchor !== 'score') return a
+  if (!o) return a
+  // Read `on` through the older, wider type: today's says `'score'` and only
+  // a file (or a row) written before it can say anything else.
+  if (o.quote && (o.quote as { on?: string }).on !== 'score') {
+    const kept = { ...o }
+    delete kept.quote
+    return withMigratedOverlay({ ...a, overlay: kept })
+  }
+  if (o.pinAnchor !== 'score') return a
   const { pinPage, pinX, pinY, ...rest } = o
   delete (rest as LegacyPin).pinAnchor
   return {
