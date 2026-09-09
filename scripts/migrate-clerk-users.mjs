@@ -1,6 +1,12 @@
 // One-time seed of the `users` table from the Clerk instance we left behind.
 // Usage: node --env-file=.env.local scripts/migrate-clerk-users.mjs [--apply]
 //
+// ALREADY RUN, and it cannot run again: this executed against production on
+// 2026-09-09 (4 accounts, zero orphans), after which the Clerk integration and
+// CLERK_SECRET_KEY were deleted from Vercel. It is kept as the record of where
+// `users.id` came from — read it before touching that column, and see the
+// comment on the table in scripts/schema.sql.
+//
 // Why this exists at all: `users.id` has to keep being the Clerk `user_…` id.
 // That string is written into every projects.owner_id, every folders.owner_id,
 // and every Blob path (users/{owner_id}/images/{projectId}/…). Minting fresh
