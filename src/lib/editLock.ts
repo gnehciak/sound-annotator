@@ -153,8 +153,14 @@ export function useEditLock(opts: {
       const remote = () => onRemoteDataRef.current?.(toProject(projectId, data))
 
       // The owner switched link editing off under us — read-only, stop
-      // claiming.
-      if (data.ownerId !== user.uid && data.editableByLink !== true) {
+      // claiming. An email invite survives that (it names this person, not the
+      // link), so `myRole` gets a say before we stand down.
+      if (
+        data.ownerId !== user.uid &&
+        data.editableByLink !== true &&
+        data.myRole !== 'editor' &&
+        data.myRole !== 'owner'
+      ) {
         remote()
         setBoth('revoked')
         setHolder(null)

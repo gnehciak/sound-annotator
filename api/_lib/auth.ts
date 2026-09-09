@@ -35,7 +35,7 @@ export async function getUid(request: Request): Promise<string | null> {
 export async function isAdmin(uid: string): Promise<boolean> {
   const allowed = adminEmails()
   if (allowed.length === 0) return false
-  const email = await emailOf(uid)
+  const email = await getUserEmail(uid)
   return email != null && allowed.includes(email)
 }
 
@@ -46,11 +46,25 @@ function adminEmails(): string[] {
     .filter(Boolean)
 }
 
-async function emailOf(uid: string): Promise<string | null> {
-  const rows = (await sql`
-    SELECT email FROM users WHERE id = ${uid} LIMIT 1
-  `) as unknown as { email: string }[]
-  return rows[0]?.email?.toLowerCase() ?? null
+/**
+ * The caller's primary email, lowercased — the identity per-person sharing is
+ * keyed on (see _lib/shares.ts), and the one ADMIN_EMAILS is checked against.
+ *
+ * This used to be memoized for a minute because it resolved against Clerk,
+ * which was a network hop away and ran on every foreign read and every
+ * autosave by an invited editor. It is a primary-key lookup in the same
+ * Postgres the request is already talking to now, so the cache bought nothing
+ * but a minute of staleness and is gone.
+ */
+export async function getUserEmail(uid: string): Promise<string | null> {
+  try {
+    const rows = (await sql`
+      SELECT email FROM users WHERE id = ${uid} LIMIT 1
+    `) as unknown as { email: string }[]
+    return rows[0]?.email?.toLowerCase() ?? null
+  } catch {
+    return null
+  }
 }
 
 /** A user's display name, for the byline stamped when a project is published.

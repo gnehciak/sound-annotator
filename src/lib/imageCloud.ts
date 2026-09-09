@@ -78,22 +78,29 @@ export async function deleteProjectImages(
 
 /**
  * Garbage-collect a project's orphaned images: delete every uploaded object
- * that no longer appears in any of the project's note HTML. Matching happens
- * server-side on the blob's URL — exactly the string embedded in note HTML —
- * so a still-referenced image is always recognised and kept.
+ * whose URL appears in none of the strings handed over. Matching happens
+ * server-side on the blob's URL, so anything that merely *contains* the URL
+ * counts as a reference and keeps the image.
  *
- * Safe against editor undo because it reconciles against *persisted* note
- * HTML: run it on load (not mid-edit), so an image is only collected once
- * it's truly gone from the saved notes. Resolves with the number deleted.
+ * `referenced` is therefore every place a project can name an image, not just
+ * note HTML: pass the notes' HTML **and** their cover-image URLs (see
+ * `coverUrls()` in lib/overlays.ts), or the sweep reads a live cover as an
+ * orphan and deletes it.
+ *
+ * Safe against editor undo because it reconciles against *persisted* content:
+ * run it on load (not mid-edit), so an image is only collected once it's truly
+ * gone from the saved notes. Resolves with the number deleted.
  */
 export async function reconcileProjectImages(
   _uid: string,
   projectId: string,
-  noteHtml: string[],
+  referenced: string[],
 ): Promise<number> {
   const { deleted } = await api<{ deleted: number }>('/api/blobs/gc', {
     method: 'POST',
-    json: { projectId, html: noteHtml },
+    // The route's field is still called `html` — it joins whatever it's given
+    // into one haystack, so a bare URL is as good a reference as a <img> tag.
+    json: { projectId, html: referenced },
   })
   return deleted
 }

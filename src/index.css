@@ -315,6 +315,56 @@ html[data-armed] body::before {
     color: #fff;
     background-color: rgb(255 255 255 / 0.1);
   }
+  /* Chrome that sits on the picture, not in a pane: the pin caption and the
+     cover's reposition hint. Palette-blind like .on-video above (a themed pane
+     would fight whatever frame is behind it) and *always dark*, whatever the
+     mode — so the note hue arrives through hueOnDark(), the dark-surface
+     counterpart of hueText().
+
+     Shaped like the app's own instrument output rather than a callout: a dense
+     floating glass box (the .pop family's job — legible over live content),
+     a silkscreen mono label row, and a hairline under it that exists only when
+     a body follows. No colored edge bar; the hue is carried by the timecode
+     and the leader hairline that ties the box back to its dot. */
+  .on-video-pop {
+    --hue: #fff;
+    @apply relative overflow-hidden rounded-md;
+    background-color: rgb(0 0 0 / 0.76);
+    backdrop-filter: blur(10px);
+    box-shadow:
+      0 10px 30px rgb(0 0 0 / 0.55),
+      inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  }
+  .on-video-pop__label {
+    @apply flex items-center gap-1.5 px-2.5 py-[5px] font-mono text-[10px] font-semibold uppercase tracking-[0.14em] tabular-nums;
+    color: var(--hue);
+  }
+  .on-video-pop__body {
+    @apply px-2.5 pb-[7px] pt-1.5;
+  }
+  /* Three lines, then the note itself carries the rest — a paragraph over the
+     frame is a wall, not a caption. The padding lives on the wrapper above:
+     a -webkit-box clips at its *padding* box, so any padding here would leak
+     a sliver of the fourth line under the clamp. */
+  .on-video-pop__text {
+    @apply text-[13px] leading-[1.45] text-white/90;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+  /* The rule belongs to the pairing, not to either row: a label with nothing
+     under it is just a label. */
+  .on-video-pop__label + .on-video-pop__body {
+    border-top: 1px solid rgb(255 255 255 / 0.14);
+  }
+  /* The hairline that ties a caption back to its dot — hue as the link between
+     two things, the way a callout on a technical drawing works. */
+  .on-video-leader {
+    @apply absolute h-px w-[14px] -translate-y-1/2;
+    background-color: var(--hue);
+    opacity: 0.85;
+  }
 
   /* ---------- chips ---------- */
   .chip {
@@ -440,6 +490,17 @@ html[data-armed] body::before {
     backdrop-filter: blur(22px) saturate(160%);
     border: 1px solid var(--glass-ring);
     box-shadow: var(--glass-shadow), var(--glass-hi);
+  }
+  /* A full-width bar of the floating material, pinned to an edge of a
+     scrolling surface — the score view's chrome. The same substance as
+     .glass-pop, minus its drop shadow: a strip that spans a whole edge sits on
+     a hairline, not a halo, and a halo the width of the panel is the thing
+     that made the score's chrome read as damage on the page. Callers add the
+     edge (border-b at the head, border-t at the foot). */
+  .glass-strip {
+    background-color: var(--pop);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
   }
   /* The transport console: a recessed well (the glow lives under the video). */
   .well {
@@ -1064,4 +1125,62 @@ html[data-armed] body::before {
 }
 .note-mention:hover {
   background: rgb(var(--accent-ink) / 0.2);
+}
+
+/* Inline property tag — a concept value committed mid-sentence. Styled like a
+   token in a code editor: the value alone, coloured by its concept (`--hue`,
+   stamped by components/propertyTag.ts), with no chrome at rest so it sits in
+   the sentence rather than on top of it. Nothing between it and the next
+   character either, or every tag would push its own comma away. It resolves
+   into an object under the pointer — that is where the wash appears and the
+   concept name arrives as the tooltip. */
+.prop-tag {
+  white-space: nowrap;
+  padding: 0 0.04em;
+  border-radius: 3px;
+  color: var(--hue);
+  font-weight: 500;
+  user-select: none;
+}
+/* Light mode only. On the near-black canvas a hue is already the brightest
+   thing in the line and needs no help; on the white page the same word is a
+   dark mark among dark marks, so the tag carries a faint ground of its own
+   hue — the .chip family's wash idiom, at a lower strength so the sentence
+   still reads as prose. The negative margin gives the ground room to breathe
+   without the tag pushing its own comma away. */
+[data-theme='light'] .prop-tag {
+  background: color-mix(in srgb, var(--hue) 13%, transparent);
+  padding: 0 0.16em;
+  margin: 0 -0.06em;
+  font-weight: 600;
+}
+.ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 18%, transparent);
+}
+[data-theme='light'] .ProseMirror .prop-tag:hover {
+  background: color-mix(in srgb, var(--hue) 26%, transparent);
+}
+/* A word that names a concept but isn't a tag yet — the editor's squiggle, and
+   the same idea as the tag above: a hint you can act on, never a change made
+   for you. Faint at rest (the prose has to stay readable with a dozen of them
+   in it), and only under the pointer does it look clickable. Neutral rather
+   than hued, deliberately: the word has no concept yet — picking one is what
+   the card is for — and a coloured underline would claim it already had.
+   See components/propertySuggest.ts. */
+.ProseMirror .prop-suggest {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, rgb(var(--text-muted)) 55%, transparent);
+}
+.ProseMirror .prop-suggest:hover {
+  border-radius: 3px;
+  background: color-mix(in srgb, rgb(var(--accent)) 12%, transparent);
+  text-decoration-color: rgb(var(--accent-ink));
+}
+/* ProseMirror marks the lifted node while it's being dragged. */
+.ProseMirror .prop-tag.ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--hue) 70%, transparent);
+  outline-offset: 1px;
 }

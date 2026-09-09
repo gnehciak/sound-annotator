@@ -8,6 +8,7 @@ import type { Project } from '../types'
 import HomeDot from './HomeDot'
 import AdminUsers from './AdminUsers'
 import { publicId } from '../lib/ids'
+import { navigate, useRoute } from '../lib/nav'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -33,7 +34,12 @@ export default function AdminProjects() {
   const [state, setState] = useState<'loading' | 'ok' | 'denied' | 'error'>('loading')
   const [projects, setProjects] = useState<AdminProject[]>([])
   const [filter, setFilter] = useState<Filter>('all')
-  const [tab, setTab] = useState<Tab>('projects')
+  // The tab is a route (`?admin=1&tab=users`), not state: the two tabs are
+  // different enough to be worth a link, and Back should leave one for the
+  // other rather than the console entirely.
+  const route = useRoute()
+  const tab: Tab = route.page === 'admin' && route.tab === 'users' ? 'users' : 'projects'
+  const setTab = (t: Tab) => navigate({ page: 'admin', tab: t })
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {

@@ -1,11 +1,38 @@
-// Taxonomy for the "musical elements" note plugin: the layers a note can
-// describe, and the element categories with their dropdown fields. This is the
-// single place to retune the vocabulary — add an instrument or a contour by
-// editing one array; the editor UI is generated from it.
+// The concept vocabulary: the layers a note can describe, and the categories
+// and describing words under them. One array drives three surfaces — the "@"
+// menu's inline property tags (lib/propertyTags.ts), the elements block's grid
+// (plugins/elements/), and both print documents.
 //
-// NOTE: the option lists below are sensible defaults; adjust them to match your
-// own listening worksheet. The structure (categories, fields, layers) mirrors
-// the classic elements-of-music grid.
+// This module owns the *types* and the helpers. The words themselves live in
+// vocabulary.generated.ts, synced from Notion — see `npm run sync:vocab`.
+//
+// The words are the marking-guideline vocabulary from the owner's "Concept
+// vocabulary" bank (HSC & Trial sample answers), which is why the categories
+// are the six NSW concepts of music rather than a generic elements grid, and
+// why the option lists read as describing words ("shimmering", "hemiola",
+// "terraced") rather than a tick-box taxonomy. Terms the bank writes as
+// alternatives ("slurred / slurs") are split into one option each, so every
+// word is its own chip and its own search hit.
+//
+// A few lists are ours, not the bank's, because a bank of describing words has
+// no equivalent: the performing-media lists, Layer role, and the Dynamic level
+// ladder (ppp–fff). The bank keeps every Italian marking in one pile; the sync
+// splits it by the concept it belongs to, so "@dolce" is Expression and
+// "@cresc" is Dynamics.
+//
+// Category hues follow the owner's concept nav. That nav pairs Dynamics with
+// Expression and Performing media with Timbre, so each pair shares a colour
+// family (lime beside green, cyan beside blue) — near enough to read as a
+// pair, far enough apart to tell two chips apart at a glance. Red, blue and
+// violet are a step lighter than the nav's mid-tones: dark is the default
+// canvas here, and at full strength those three read under 4.5:1 on it.
+//
+// Field ids are stored data — they are the keys of ElementsData.fields and the
+// `data-field` of every inline tag — so rename a label freely, and an id only
+// after checking the database says nothing stores it.
+
+// Type-only in the other direction, so the pair does not form a runtime cycle.
+import { ELEMENTS } from './vocabulary.generated'
 
 /** A single dropdown within an element category. */
 export interface ElementField {
@@ -21,6 +48,8 @@ export interface ElementField {
 export interface ElementCategory {
   id: string
   label: string
+  /** Note-palette hue, worn by this category's inline property tags. */
+  color: string
   fields: ElementField[]
 }
 
@@ -47,91 +76,14 @@ export const LAYERS: Layer[] = [
   { id: 'rhythm', label: 'Rhythm', color: '#ff9f2e' },
 ]
 
-export const ELEMENTS: ElementCategory[] = [
-  {
-    id: 'timbre',
-    label: 'Tone colour',
-    fields: [
-      {
-        id: 'timbre.instrument',
-        label: 'Instrument / section',
-        options: ['Strings', 'Woodwind', 'Brass', 'Percussion', 'Keyboard', 'Guitar', 'Voice', 'Synth / electronic'],
-        allowCustom: true,
-      },
-      {
-        id: 'timbre.quality',
-        label: 'Timbre',
-        options: ['Bright', 'Warm', 'Mellow', 'Harsh', 'Nasal', 'Breathy', 'Rich', 'Thin'],
-        allowCustom: true,
-      },
-      {
-        id: 'timbre.production',
-        label: 'Sound produced by',
-        options: ['Bowing', 'Plucking', 'Striking', 'Blowing', 'Singing', 'Electronic'],
-        allowCustom: true,
-      },
-    ],
-  },
-  {
-    id: 'texture',
-    label: 'Texture',
-    fields: [
-      {
-        id: 'texture.role',
-        label: 'Layer role',
-        options: ['Melody', 'Counter-melody', 'Accompaniment', 'Bass line', 'Pad / drone', 'Rhythmic'],
-        allowCustom: true,
-      },
-      {
-        id: 'texture.density',
-        label: 'Layer density',
-        options: ['Sparse', 'Moderate', 'Dense'],
-      },
-    ],
-  },
-  {
-    id: 'duration',
-    label: 'Duration',
-    fields: [
-      {
-        id: 'duration.values',
-        label: 'Note lengths / values',
-        options: ['Long / sustained', 'Short / detached', 'Mixed', 'Even', 'Dotted / syncopated'],
-        allowCustom: true,
-      },
-    ],
-  },
-  {
-    id: 'pitch',
-    label: 'Pitch',
-    fields: [
-      {
-        id: 'pitch.type',
-        label: 'Melodic / harmonic type',
-        options: ['Conjunct (stepwise)', 'Disjunct (leaps)', 'Arpeggiated', 'Scalic', 'Chordal', 'Drone'],
-        allowCustom: true,
-      },
-      {
-        id: 'pitch.contour',
-        label: 'Melodic / harmonic contour',
-        options: ['Rising', 'Falling', 'Arch', 'Wave', 'Static', 'Undulating'],
-        allowCustom: true,
-      },
-    ],
-  },
-  {
-    id: 'dynamics',
-    label: 'Dynamics',
-    fields: [
-      {
-        id: 'dynamics.volume',
-        label: 'Volume of layer',
-        options: ['pp', 'p', 'mp', 'mf', 'f', 'ff', 'Crescendo', 'Diminuendo'],
-        allowCustom: true,
-      },
-    ],
-  },
-]
+/**
+ * The concept vocabulary itself — generated from the Notion word bank by
+ * `npm run sync:vocab` (scripts/sync-vocabulary.mjs), which is also where the
+ * categories, their colours, their field order and the lists the bank has no
+ * equivalent for are configured. Edit those there, the words in Notion, and
+ * never `vocabulary.generated.ts` by hand.
+ */
+export { ELEMENTS }
 
 const LAYER_BY_ID = new Map(LAYERS.map((l) => [l.id, l]))
 

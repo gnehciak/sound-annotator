@@ -67,7 +67,7 @@ export function lockLive(lock: LockValue | null | undefined): boolean {
 
 export function rowToProject(
   r: ProjectRow,
-  opts?: { withLock?: boolean },
+  opts?: { withLock?: boolean; myRole?: 'owner' | 'editor' | 'viewer' },
 ): Record<string, unknown> {
   const p: Record<string, unknown> = {
     id: r.id,
@@ -92,6 +92,11 @@ export function rowToProject(
   const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems
   if (stems && Object.keys(stems).length > 0) p.stems = stems
   if (opts?.withLock) p.lock = r.lock ?? null
+  // What THIS caller may do here, when it isn't already legible from the row —
+  // an email invite is invisible to the client otherwise, and the viewer has
+  // to know whether to offer an Edit button. Server-computed on every read, so
+  // it can't be forged: a client that sets it is simply overwritten.
+  if (opts?.myRole) p.myRole = opts.myRole
   return p
 }
 

@@ -57,6 +57,134 @@ export interface NoteBlock {
   data: unknown
 }
 
+/**
+ * What a note puts on screen besides its own row — the note's "stage layer".
+ * Three independent pieces, any or all:
+ *
+ *  - a **cover**: a full-frame image that stands in for the picture (a score
+ *    excerpt, a diagram, a photo) while the audio keeps playing underneath;
+ *  - a **video pin**: a dot placed somewhere on the frame, captioned with the
+ *    note's own text — a callout pointing at what's happening there;
+ *  - a **score pin**: the same callout aimed at a place on the page of the
+ *    track's PDF score, in the score view.
+ *
+ * All of them ride the note's moment: they appear over the note's span
+ * (`start`→`end`), or for `hold` seconds from `start` when the note is a
+ * single point. They also appear whenever the note is open in the inspector,
+ * so you can compose one without scrubbing to its time.
+ *
+ * The cover and the video pin are video sources only (YouTube and Drive): an
+ * audio track's waveform *is* the picture and must stay uncovered, the same
+ * line `clipStart`/`clipEnd` draw (see ProjectSource). The score pin has no
+ * such restriction — the score is its own view, and an audio track has one
+ * just as a video track does.
+ */
+export interface NoteOverlay {
+  /**
+   * Public Blob URL of the cover image, under the project's ordinary note-image
+   * prefix (`users/{uid}/images/{projectId}/…`) — it *is* a note image, just
+   * one referenced from here rather than from the note's HTML. Anything that
+   * sweeps or copies note images must therefore read this field too: see
+   * `coverUrls()` in lib/overlays.ts and its callers (the image GC in App,
+   * lib/copyProject.ts).
+   */
+  coverUrl?: string
+  /**
+   * How the cover meets the 16:9 frame: 'contain' (the default) shows the whole
+   * image letterboxed, 'cover' fills the frame and crops the overflow.
+   */
+  coverFit?: 'contain' | 'cover'
+  /**
+   * Which part of a filled cover survives the crop, as 0–1 fractions (CSS
+   * `object-position`): 0 keeps the left/top edge, 1 the right/bottom, and the
+   * absent default is 0.5 — dead centre, which is where a crop lands if nobody
+   * says otherwise. Only meaningful with `coverFit: 'cover'`; a contained image
+   * has no overflow to choose from. Set by dragging the cover itself.
+   */
+  coverX?: number
+  coverY?: number
+  /**
+   * The **video pin**: a position on the picture, as 0–1 fractions from its
+   * top-left. Both are set together or not at all — their absence is what "no
+   * pin on the video" means. Fractions rather than pixels so a pin holds its
+   * spot at every player size.
+   */
+  pinX?: number
+  pinY?: number
+  /**
+   * The **score pin**: the same idea aimed at the drawn page of the PDF score
+   * (see lib/score.ts), as 0–1 fractions *of the page box*. It marks a place
+   * in the music rather than a place on screen, and holds it through every
+   * rescale, refit, expand and scroll, because the page box is what moves and
+   * these numbers never do.
+   *
+   * Independent of the video pin, not an alternative to it: one note can point
+   * at a moment in the picture *and* at the bar it happens in. (Before the
+   * score got its own view they were one pin with a `pinAnchor` switch; that
+   * shape is migrated away on read — see `withMigratedPins` in lib/overlays.)
+   *
+   * A score pin draws only while the score view is showing `scorePinPage`:
+   * on another page there is no page box for it to be a fraction of.
+   */
+  scorePinX?: number
+  scorePinY?: number
+  /** Which page of the score the score pin lives on, 1-based; absent is 1. */
+  scorePinPage?: number
+  /**
+   * The **picture quote**: a rectangle framing part of the picture or of a
+   * score page, which the two print documents reproduce as a cropped image
+   * above the note's text. See NoteQuote.
+   */
+  quote?: NoteQuote
+  /**
+   * Seconds the layer stays up for a note with no `end`. Ignored on a note that
+   * has a span — that span is the window. Defaults to OVERLAY_HOLD.
+   */
+  hold?: number
+}
+
+/**
+ * A **picture quote**: the region of a surface a note is quoting, so that
+ * printing the note prints the music (or the moment) it is about, rather than
+ * a timecode the reader has to go and look up.
+ *
+ * Stored as a rectangle, never as an image. The pixels are re-derived at
+ * export time from something the project already owns — the PDF score's page,
+ * or the note's own cover image — which is what keeps a quote free: no upload,
+ * no second copy of the bytes to garbage-collect or re-host when the project
+ * is copied, and a Drive score that gains a new engraving quotes the *new*
+ * engraving on the next export.
+ *
+ * That is also the one limit worth knowing. A quote on the picture crops the
+ * note's **cover**, because a cover is the only still of the frame the app can
+ * read: a YouTube iframe is cross-origin and its pixels are unreachable to
+ * page JS at any moment, on any browser. So a video quote on a note with no
+ * cover draws on screen and prints nothing.
+ *
+ * One per note, deliberately: a quote is what the note is *about*, and a note
+ * that is about two places is two notes.
+ */
+export interface NoteQuote {
+  /**
+   * Which surface the rectangle is measured against: `'video'` the 16:9 frame
+   * (and so the note's cover, which fills it), `'score'` one drawn page of the
+   * PDF score.
+   */
+  on: 'video' | 'score'
+  /** Which score page, 1-based. Score quotes only; absent is page 1. */
+  page?: number
+  /**
+   * The rectangle, as 0–1 fractions of that surface: `x`/`y` its top-left
+   * corner, `w`/`h` its size. Fractions rather than pixels for the same reason
+   * the pins are — the box resizes at every fit, zoom and scroll, and these
+   * numbers never do.
+   */
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface Annotation {
   id: string
   /** seconds into the track */
@@ -120,6 +248,11 @@ export interface Annotation {
    * and hand back a PDF answer sheet (lib/answerSheet.ts). Off by default.
    */
   question?: boolean
+  /**
+   * What this note puts on top of the video — a cover image, a positioned pin,
+   * or both. Absent on notes that stay in the list. See NoteOverlay.
+   */
+  overlay?: NoteOverlay
   createdAt: number
 }
 
@@ -159,14 +292,27 @@ export interface Project {
    */
   editableByLink?: boolean
   /**
-   * When true, the project is listed on the public Browse gallery — anyone
-   * can find it there and open it read-only (publishing implies viewability,
-   * independent of `shared`). Off by default; toggled from the Share panel.
-   * Only the owner can flip it; the server stamps the byline on publish.
+   * When true, the project is listed on the public Browse gallery. Not a
+   * second door: the gallery card opens the same `?view={id}` link, so this is
+   * a property *of* that link rather than a gate beside it — it implies
+   * `shared`, and it is refused while `editableByLink` is on (the server
+   * coerces both, see api/projects/[id]/index.ts). Off by default; toggled
+   * from the Share panel under the view-only link. Only the owner can flip it;
+   * the server stamps the byline on publish.
    */
   published?: boolean
   /** Display name stamped by the server when the project was published. */
   publishedByName?: string
+  /**
+   * What *this* caller may do here, stamped by the server on every read of a
+   * project (api/_lib/db.ts). Absent for an anonymous link holder, who has
+   * exactly the powers the link itself describes. It exists because an email
+   * invite (`ProjectShare`) is otherwise invisible from the client: nothing on
+   * the row says "and Sam may edit this", so the viewer would offer a reader's
+   * screen to someone who was invited to write. Never sent on a save — a
+   * client's opinion of its own role is not consulted.
+   */
+  myRole?: 'owner' | 'editor' | 'viewer'
   /**
    * Id of the home-page folder this track lives in, or null/absent for the
    * root library ("unfiled"). Folders live in their own `folders` collection
@@ -204,6 +350,159 @@ export interface Project {
   deletedAt?: number
 }
 
+/**
+ * Which view the player column is showing: the player, or the score.
+ *
+ * The score is a *view*, not a layer — its own panel over the whole column,
+ * where a portrait page gets the room a 16:9 frame could never give it and
+ * there is space for the drawing tools. Laying it over the picture as well is
+ * a separate switch (`ProjectScore.overVideo`), not a third mode here, so
+ * this enum stays exactly the two states the column's view switch offers.
+ *
+ * Legacy rows and exports carry `'score'` (opaque over the frame) and
+ * `'overlay'`; both are migrated on read — see `scoreView` in lib/score.ts.
+ */
+export type ScoreMode = 'off' | 'view'
+
+/** A pen mark drawn on the score: what shape it is. */
+export type ScoreMarkKind = 'highlight' | 'box' | 'ellipse' | 'arrow' | 'ink'
+
+/**
+ * One mark drawn on a page of the score — a highlighted bar, a circled
+ * chord, an arrow at an entry.
+ *
+ * Every number here is a **fraction of the drawn page**, 0–1, for the same
+ * reason a score pin's are: the page box is what changes size when the panel
+ * is resized, the fit is switched or the score is expanded, and a mark stored
+ * in fractions needs no arithmetic to survive any of it.
+ *
+ * Marks belong to the *track*, not to a reader — they live in `settings` with
+ * the rest of the score, so what the teacher draws is what the class opens.
+ */
+export interface ScoreMark {
+  id: string
+  /** 1-based page this mark is drawn on. */
+  page: number
+  kind: ScoreMarkKind
+  /** A key from lib/noteColors.ts — the same palette the notes use. */
+  color: string
+  /**
+   * The mark's box, as fractions of the page. For 'highlight', 'box' and
+   * 'ellipse' this is the shape itself. For 'arrow' it is tail → head, so
+   * `w`/`h` may be negative (an arrow pointing up and to the left). For 'ink'
+   * it is the bounding box of `points`, kept so hit-testing needs no sweep.
+   */
+  x: number
+  y: number
+  w: number
+  h: number
+  /**
+   * 'ink' only: the freehand stroke, flattened `[x0, y0, x1, y1, …]` in the
+   * same page fractions. Flat rather than `{x, y}[]` because this rides the
+   * project's jsonb — a stroke of 60 points is 120 numbers either way, and
+   * one array is a third of the bytes of 60 two-key objects.
+   */
+  points?: number[]
+  /** Stroke weight, 1 (fine) to 3 (broad). Absent is 2. */
+  weight?: number
+}
+
+/** Fit a page by its height (whole page, letterboxed) or its width (fills the
+ *  frame, scrolls). */
+export type ScoreFit = 'height' | 'width'
+
+/**
+ * One page turn: at clip time `t`, the score shows page `page`.
+ *
+ * A list of these, not one time per page, because music repeats. A da capo, a
+ * repeated exposition or a second verse brings the same page back at a later
+ * moment, which a page→time map cannot express and a sorted list of turns
+ * can. The page shown at any moment is the last turn at or before it (see
+ * `pageAt` in lib/score.ts), so the list also needs no entry for "still on
+ * this page".
+ */
+export interface ScoreTurn {
+  /** Clip time in seconds — the same clock notes use (0 = `clipStart`). */
+  t: number
+  /** 1-based page number. */
+  page: number
+}
+
+/**
+ * A PDF score attached to a track — the printed music the recording is of,
+ * read in its own view beside the notes so the page and the sound arrive
+ * together (and, optionally, laid over the picture as well).
+ *
+ * Two ways in, and they are not equivalent. A `blob` score is bytes we host
+ * (owner-only upload, `users/{uid}/scores/{projectId}/…`), fixed at the moment
+ * it was uploaded. A `drive` score is a *link*: the teacher keeps annotating
+ * the same Drive file and every reader picks the new version up, which is the
+ * whole reason the Drive path exists. Its bytes cannot be fetched from Drive
+ * by the browser for exactly the reasons a Drive video can't be — see
+ * lib/drive.ts — so they come through the same `/api/browse?drive=` proxy.
+ *
+ * Lives inside `settings` rather than at the top of Project so it rides the
+ * existing jsonb through the client and API field whitelists with no schema
+ * or API change, the way the project `kind` does. That also means an owner
+ * *and* a guest can set it (both may write `settings`), which is deliberate:
+ * a guest may link a Drive score, and the upload half is gated in the UI and
+ * by the upload token, not here.
+ *
+ * `turns` is anchored to the clip window like every note time, so App's
+ * setClip shifts it alongside the notes when the window is retuned.
+ */
+export interface ProjectScore {
+  /** Where the bytes live: a Drive file we proxy, or a PDF we host. */
+  kind: 'drive' | 'blob'
+  /** Drive — the file id plus the link it was pasted from, the same pair a
+   *  Drive video source carries. The file must be shared "Anyone with the
+   *  link": the proxy holds no Drive credentials. */
+  driveFileId?: string
+  driveUrl?: string
+  /** Blob — the public (unguessable) URL of the uploaded PDF. */
+  url?: string
+  /** The uploaded file's name, for the score menu. Uploads only. */
+  fileName?: string
+  /** Which view the column opens on — it travels with the project, so a
+   *  shared track opens the way its owner left it. A reader may switch views
+   *  for their own session without writing anything back. */
+  mode?: ScoreMode
+  /**
+   * Also lay the score over the picture, dimmed, while the column is on the
+   * *player* view — the old overlay behaviour, kept because seeing the staves
+   * move under the video is its own thing and the score view can't do it.
+   * Off by default. Ignored on an audio track, whose waveform is the picture
+   * and must stay uncovered.
+   */
+  overVideo?: boolean
+  /** Overlay opacity, 0.2–1. Only meaningful with `overVideo`. */
+  opacity?: number
+  /** Page fit. Defaults to 'height' — the whole page, letterboxed. */
+  fit?: ScoreFit
+  /**
+   * Whether the overlaid score paints in front of a note's cover image and
+   * pins (lib/overlays.ts) rather than behind them. Off by default, which is
+   * the order that reads: a note that takes over the picture is a deliberate
+   * interruption of it, and a score is the steady background to the whole
+   * track. Only meaningful with `overVideo` — in the score view nothing is
+   * competing for the space. Either way the score stays *under* the
+   * transport; nothing is worth losing the play button for.
+   */
+  onTop?: boolean
+  /**
+   * What has been drawn on the pages — highlights, boxes, arrows, ink. Absent
+   * or empty means a clean score. See ScoreMark; the tools are in the score
+   * view's toolbar, and anyone who may edit the track may draw.
+   */
+  marks?: ScoreMark[]
+  /**
+   * When the page turns, in clip seconds, ascending. Absent or empty means the
+   * reader turns the pages by hand. Written by the Sync pages panel; shifted
+   * with the notes when the clip window moves.
+   */
+  turns?: ScoreTurn[]
+}
+
 export interface ProjectSettings {
   /**
    * What kind of editor this project opens in. Absent (the default) is a
@@ -220,6 +519,13 @@ export interface ProjectSettings {
   overviewOpen?: boolean
   /** Default ordering for the notes list. See AnnotationList for the modes. */
   noteOrder?: 'timeline' | 'auto' | 'live'
+  /**
+   * The PDF score shown over the picture, when the track has one. Unlike the
+   * other keys here it holds an object, so it needs an explicit branch in
+   * lib/projectJson.ts's settings sanitizer (primitives pass through on their
+   * own; anything else is dropped).
+   */
+  score?: ProjectScore
 }
 
 /**
@@ -243,6 +549,28 @@ export interface BrowseItem {
   publishedByName: string
   publishedAt: number
   updatedAt: number
+}
+
+/**
+ * One person invited to a project by email (the `project_shares` table).
+ *
+ * Sharing has two independent halves and this is the second: the link says
+ * what *anyone holding it* may do, an invite says what *one named person* may
+ * do on top of that. So a view-only link plus an editor invite is the ordinary
+ * shape — the link is the class, the invite is the colleague — and neither
+ * setting has to be weakened to express the other.
+ *
+ * Keyed by email rather than uid because the invite is written before the
+ * person has necessarily signed in. Owner-only to read or change; the server
+ * is the enforcement (api/projects/[id]/shares.ts).
+ */
+export interface ProjectShare {
+  /** Lowercased by the server; compare case-insensitively. */
+  email: string
+  /** `viewer` opens it read-only; `editor` may write content, under the same
+   *  edit lock as everyone else. */
+  role: 'viewer' | 'editor'
+  invitedAt: number
 }
 
 /** A home-page folder grouping tracks. Flat (no nesting), never shared. */

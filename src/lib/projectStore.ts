@@ -3,6 +3,7 @@
 // inline in the `annotations` jsonb (kept small — images go to Blob storage).
 import { api, ApiError } from './api'
 import { withBlocks } from './noteBlocks'
+import { withMigratedPins } from './overlays'
 import type { EditLockClaim } from './editLock'
 import type { Annotation, BrowseItem, Project } from '../types'
 
@@ -20,14 +21,23 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     title: typeof data.title === 'string' ? data.title : 'Untitled track',
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : undefined,
     source: (data.source ?? undefined) as Project['source'],
-    // Migrate legacy notes (contentHtml only) to the block model on read.
+    // Migrate legacy notes on read: `contentHtml` only to the block model,
+    // and the single anchored pin that predates the score view to the two
+    // independent ones. Both are read-side only — a row keeps its old shape
+    // until something writes it back.
     annotations: Array.isArray(data.annotations)
-      ? (data.annotations as Annotation[]).map(withBlocks)
+      ? (data.annotations as Annotation[]).map((a) => withMigratedPins(withBlocks(a)))
       : [],
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,
     editableByLink: data.editableByLink === true,
     published: data.published === true,
+    // Server-stamped on every read; a project the client only ever wrote (a
+    // brand-new one) simply has none until its first fetch.
+    myRole:
+      data.myRole === 'owner' || data.myRole === 'editor' || data.myRole === 'viewer'
+        ? data.myRole
+        : undefined,
     publishedByName:
       typeof data.publishedByName === 'string' ? data.publishedByName : undefined,
     folderId: typeof data.folderId === 'string' ? data.folderId : null,

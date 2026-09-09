@@ -3,17 +3,21 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import {
   X,
-  Trash2,
   Plus,
+  Minus,
   ChevronLeft,
   ChevronRight,
   Crosshair,
   Brackets,
   CircleHelp,
+  Hash,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { formatTime, parseTime } from '../lib/format'
@@ -21,23 +25,19 @@ import {
   blocksOf,
   textHtmlOf,
   asTextData,
-  makeBlock,
   TEXT_BLOCK,
 } from '../lib/noteBlocks'
-import { getPlugin, addablePlugins } from '../lib/notePlugins'
-import { tagsOf } from '../lib/tags'
+import { getPlugin } from '../lib/notePlugins'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor, { type AnnotationEditorHandle } from './AnnotationEditor'
-import TagPicker from './TagPicker'
-import ColorPicker from './ColorPicker'
+import ElementsDictionary from './ElementsDictionary'
+import NoteOverlayControls from './NoteOverlayControls'
 import Popover from './Popover'
 import type { MentionItem } from './MentionList'
 
 interface Props {
   annotation: Annotation
   color: string
-  /** Custom tags already used elsewhere in this project, offered for reuse. */
-  projectTags: string[]
   currentTime: number
   /** Track play state + rate, so the range bar smooths between time ticks. */
   isPlaying?: boolean
@@ -54,7 +54,6 @@ interface Props {
     patch: Partial<Annotation>,
     opts?: { mode?: 'text'; coalesceKey?: string },
   ) => void
-  onDelete: () => void
   /** Cue the playhead to a time (clicking the range bar). */
   onSeek: (t: number) => void
   onSeekNote: (id: string) => void
@@ -65,30 +64,48 @@ interface Props {
   ) => Promise<string>
   /** False for guests — see AnnotationEditor's `allowImages`. */
   allowImages?: boolean
+  /**
+   * Whether this project has a video frame to draw on — the note's cover image
+   * and pin controls (see NoteOverlayControls). False for audio tracks, whose
+   * waveform is the picture and must stay uncovered.
+   */
+  allowOverlays?: boolean
+  /** The score page on screen, when the track has a score (see the pin anchor
+   *  in NoteOverlayControls). Absent means there is no score to pin to. */
+  scorePage?: number
+  /** The track has a score, but it's switched off. */
+  scoreHidden?: boolean
 }
 
 /**
- * The single place a note is edited: its metadata controls (colour, tag, start /
- * end, delete), the rich-text body, and every property block (each plugin's
- * editor rendered inline). Hosted in the plugin window (docked 3rd column or
- * modal); the note row itself is just a preview.
+ * The single place a note is edited, in three groups split by what they act on:
+ * the note's **time** (a well — the note's own transport), the note's **record**
+ * (tags plus the section / question / bar chips, each one's field revealed only
+ * when it's on), and what it puts **on the picture** (NoteOverlayControls) —
+ * then the rich-text body and every property block.
+ *
+ * The note's colour and its delete button live in the host's title bar, which
+ * every presentation already pays for; see PluginWindow's `leading`/`actions`.
+ * Hosted in the plugin window (docked 3rd column or modal); the note row itself
+ * is just a preview.
  */
 export default function NoteInspector({
   annotation,
   color,
-  projectTags,
   currentTime,
   isPlaying = false,
   playbackRate = 1,
   autoFocus,
   onFocusHandled,
   onUpdate,
-  onDelete,
   onSeek,
   onSeekNote,
   mentionItems,
   uploadImage,
   allowImages = true,
+  allowOverlays = false,
+  scorePage,
+  scoreHidden,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const editorApiRef = useRef<AnnotationEditorHandle | null>(null)
@@ -107,11 +124,6 @@ export default function NoteInspector({
       { coalesceKey: `block:${blockId}` },
     )
   }
-  const addBlock = (type: string) => {
-    const plugin = getPlugin(type)
-    if (!plugin) return
-    onUpdate({ blocks: [...blocks, makeBlock(type, plugin.createData())] })
-  }
   const removeBlock = (blockId: string) =>
     onUpdate({ blocks: blocks.filter((b) => b.id !== blockId) })
 
@@ -128,6 +140,21 @@ export default function NoteInspector({
   // Removing the end makes this a point note, which can't be a section (a
   // section needs a span to bracket), so drop the structure flag too.
   const clearEnd = () => onUpdate({ end: undefined, structure: false })
+
+  // The bar field is revealed by its chip. A note that already carries a bar
+  // opens with it showing; switching the chip off clears the value, so what the
+  // panel hides is never data.
+  const [barOpen, setBarOpen] = useState(!!annotation.bar)
+  const barRef = useRef<HTMLInputElement>(null)
+  const toggleBar = () => {
+    if (barOpen) {
+      setBarOpen(false)
+      if (annotation.bar) onUpdate({ bar: undefined })
+    } else {
+      setBarOpen(true)
+      requestAnimationFrame(() => barRef.current?.focus())
+    }
+  }
 
   // Just-created note: focus the text editor so the user can type immediately.
   useEffect(() => {
@@ -148,65 +175,61 @@ export default function NoteInspector({
     if (id) onSeekNote(id)
   }
 
+  const ranged = annotation.end != null
+
   return (
     // Keyed by note id in the host, so this remounts (and fades in) each time a
     // different note is loaded into the inspector.
     <div className="flex animate-fade-in flex-col">
-      {/* Metadata controls */}
-      <div className="flex flex-wrap items-center gap-[7px] border-b border-line/60 px-[13px] py-2.5">
-        <ColorPicker color={color} onChange={(c) => onUpdate({ color: c })} />
-        <TagPicker
-          tags={tagsOf(annotation)}
-          projectTags={projectTags}
-          onChange={(tags) => onUpdate({ tags })}
+      {/* ---- time: begin, a scrubber, end, and the length ---- */}
+      <div className="border-b border-line/60 px-[13px] py-2.5">
+        <NoteTimeBar
+          start={annotation.start}
+          end={annotation.end ?? null}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          playbackRate={playbackRate}
+          color={color}
+          onSeek={onSeek}
+          onSetStart={setStart}
+          onSetEnd={setEnd}
+          onClearEnd={clearEnd}
         />
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={onDelete}
-          title="Delete note"
-          aria-label="Delete note"
-          className="btn-icon press hover:text-danger"
-        >
-          <Trash2 size={14} />
-        </button>
       </div>
 
-      {/* Structure section: a clear on/off switch on its own row, with a name
-          field (when on) that shows beside the section's bracket in the overview. */}
+      {/* ---- the record: what kind of note this is. The tags that label it
+              live in the title bar with its colour; these are the fixed set
+              of switches, each one's field revealed only once it's on. ---- */}
       <div className="flex flex-col gap-2 border-b border-line/60 px-[13px] py-2.5">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={annotation.structure ?? false}
-          aria-disabled={annotation.end == null}
-          onClick={() => {
-            if (annotation.end == null) return
-            onUpdate({ structure: !annotation.structure })
-          }}
-          title={
-            annotation.end == null
-              ? 'Give this note an end time first — a section brackets a span, not a single moment'
-              : 'Section notes are bracketed along their span in the overview'
-          }
-          className={`flex w-full items-center justify-between gap-2.5 rounded-md border px-[11px] py-2 text-left transition-colors ${
-            annotation.end == null
-              ? 'cursor-not-allowed border-line/60 opacity-50'
-              : annotation.structure
-                ? 'press border-accent/40 bg-accent/[0.06]'
-                : 'press border-line/70 hover:border-line-strong'
-          }`}
-        >
-          <span
-            className={`flex items-center gap-2 text-[12.5px] ${
-              annotation.structure ? 'text-fg' : 'text-muted'
-            }`}
-          >
-            <Brackets size={14} className="shrink-0" />
-            Mark as section note
-          </span>
-          <span className="switch" data-on={annotation.structure || undefined} />
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <PropChip
+            icon={Brackets}
+            label="Section"
+            on={!!annotation.structure}
+            disabled={!ranged}
+            title={
+              ranged
+                ? 'Bracketed along its span in the track overview'
+                : 'Give this note an end time first — a section brackets a span, not a single moment'
+            }
+            onClick={() => onUpdate({ structure: !annotation.structure })}
+          />
+          <PropChip
+            icon={CircleHelp}
+            label="Question"
+            on={!!annotation.question}
+            title="Turns the shared view link into a listening task — students type an answer under this note and export their sheet as a PDF"
+            onClick={() => onUpdate({ question: !annotation.question })}
+          />
+          <PropChip
+            icon={Hash}
+            label={annotation.bar?.trim() || 'Bar'}
+            on={barOpen}
+            title="Where this moment falls in the printed music — a bar number or a rehearsal mark"
+            onClick={toggleBar}
+          />
+        </div>
+
         {annotation.structure && (
           <input
             value={annotation.sectionName ?? ''}
@@ -217,73 +240,36 @@ export default function NoteInspector({
           />
         )}
 
-        {/* Listening-task question: the note's text becomes a prompt students
-            answer. Shared through the view link, question notes grow an answer
-            box and the class hands back a PDF answer sheet (lib/questions.ts). */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={annotation.question ?? false}
-          onClick={() => onUpdate({ question: !annotation.question })}
-          title="Question notes turn the shared view link into a listening task — students type an answer under this note and export their sheet as a PDF"
-          className={`press flex w-full items-center justify-between gap-2.5 rounded-md border px-[11px] py-2 text-left transition-colors ${
-            annotation.question
-              ? 'border-accent/40 bg-accent/[0.06]'
-              : 'border-line/70 hover:border-line-strong'
-          }`}
-        >
-          <span
-            className={`flex items-center gap-2 text-[12.5px] ${
-              annotation.question ? 'text-fg' : 'text-muted'
-            }`}
-          >
-            <CircleHelp size={14} className="shrink-0" />
-            Ask as a question
-          </span>
-          <span className="switch" data-on={annotation.question || undefined} />
-        </button>
+        {barOpen && (
+          <input
+            ref={barRef}
+            value={annotation.bar ?? ''}
+            onChange={(e) => {
+              const v = e.target.value
+              onUpdate(
+                { bar: v.trim() ? v : undefined },
+                { coalesceKey: `bar:${annotation.id}` },
+              )
+            }}
+            placeholder="24 · reh. B"
+            aria-label="Bar or rehearsal mark"
+            className="field"
+          />
+        )}
       </div>
 
-      {/* Times — a mini range bar; Begin on the left, End on the right. Click an
-          end to nudge it ±1s, set it to now, or type an exact time. */}
-      <NoteTimeBar
-        start={annotation.start}
-        end={annotation.end ?? null}
-        currentTime={currentTime}
-        isPlaying={isPlaying}
-        playbackRate={playbackRate}
-        color={color}
-        onSeek={onSeek}
-        onSetStart={setStart}
-        onSetEnd={setEnd}
-        onClearEnd={clearEnd}
-      />
-
-      {/* Score position — pairs with the time row above: where the note's
-          moment falls in the printed music. Free text: a bar number or a
-          rehearsal mark. A typing run collapses into one undo step. */}
-      <div className="flex items-center gap-2 border-b border-line/60 px-[13px] py-2.5">
-        <label
-          htmlFor={`note-bar-${annotation.id}`}
-          title="Where this moment falls in the score"
-          className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted"
-        >
-          Bar
-        </label>
-        <input
-          id={`note-bar-${annotation.id}`}
-          value={annotation.bar ?? ''}
-          onChange={(e) => {
-            const v = e.target.value
-            onUpdate(
-              { bar: v.trim() ? v : undefined },
-              { coalesceKey: `bar:${annotation.id}` },
-            )
-          }}
-          placeholder="Bar number or rehearsal mark — e.g. 24, reh. B"
-          className="field"
+      {/* What this note puts on the video while it's on screen — a cover image
+          and/or a pinned caption. Only where there's a frame to draw on. */}
+      {allowOverlays && (
+        <NoteOverlayControls
+          annotation={annotation}
+          color={color}
+          onUpdate={onUpdate}
+          uploadImage={uploadImage}
+          scorePage={scorePage}
+          scoreHidden={scoreHidden}
         />
-      </div>
+      )}
 
       {/* Content blocks: text editor inline, then each property plugin's editor.
           White "page" so pasted (white-bg) screenshots blend; on dark it's = ink. */}
@@ -335,20 +321,67 @@ export default function NoteInspector({
           )
         })}
 
-        {addablePlugins().length > 0 && (
-          <div className="border-t border-line px-[13px] py-2.5">
-            <AddPropertyMenu onAdd={addBlock} />
-          </div>
-        )}
+        {/* The vocabulary itself, at the foot of the note: search it, or open a
+            concept, and click a word to write it into the prose as a tag. This
+            is where "+ Property" used to add an empty grid. */}
+        <ElementsDictionary
+          onInsert={(field, value) =>
+            editorApiRef.current?.insertProperty(field, value)
+          }
+        />
       </div>
     </div>
   )
 }
 
 /**
- * A compact range bar for the note's span: Begin on the left, End on the right,
- * with a fill tracking the playhead's progress through the note. Clicking an
- * endpoint opens a popover to nudge it ±1s, set it to now, or type an exact time.
+ * One of the note's kind switches, shaped as a chip so the three of them read
+ * as a rail beside the tags rather than three stacked boxes. `role="switch"`
+ * keeps the on/off semantics the bordered rows used to carry; `data-active`
+ * draws the on state (see `.chip[data-active]` in index.css).
+ */
+function PropChip({
+  icon: Icon,
+  label,
+  on,
+  disabled,
+  title,
+  onClick,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>
+  label: string
+  on: boolean
+  disabled?: boolean
+  title: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      data-active={on || undefined}
+      className="chip chip-outline press max-w-[10rem]"
+      style={{
+        ['--hue' as string]: on
+          ? 'rgb(var(--accent-ink))'
+          : 'rgb(var(--text-muted))',
+      }}
+    >
+      <Icon size={11} className="shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
+/**
+ * The note's own transport: a recessed well carrying Begin, a scrubber through
+ * the note, End, and the length. Clicking an endpoint opens a popover to nudge
+ * it ±1s, set it to now, or type an exact time; the length's − / + move End
+ * while Begin stays put, so the note keeps its cue.
  */
 function NoteTimeBar({
   start,
@@ -383,7 +416,9 @@ function NoteTimeBar({
     rate: playbackRate,
   })
   return (
-    <div className="flex items-center gap-2 border-b border-line/60 px-[13px] py-2.5">
+    // Wraps rather than crushes: at the inspector's narrowest the length drops
+    // to its own line instead of squeezing the scrubber to nothing.
+    <div className="well flex flex-wrap items-center gap-2 px-[7px] py-[5px]">
       <TimeEndpoint
         label="Begin"
         time={start}
@@ -402,7 +437,7 @@ function NoteTimeBar({
           const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
           onSeek(isRange ? start + f * (end - start) : start)
         }}
-        className="group/bar relative flex min-w-0 flex-1 items-center py-2"
+        className="group/bar relative flex min-w-[40px] flex-1 basis-[64px] items-center py-2"
       >
         <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-inset transition-colors group-hover/bar:bg-line-strong">
           {isRange ? (
@@ -426,6 +461,130 @@ function NoteTimeBar({
         onClear={isRange ? onClearEnd : undefined}
         align="right"
       />
+      {isRange && (
+        <LengthStepper
+          start={start}
+          end={end}
+          onSetEnd={onSetEnd}
+          onClearEnd={onClearEnd}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * How long the note runs — the number a teacher nudges most, and the one the
+ * panel never showed. − / + move End only, so trimming a note never loses the
+ * moment it is cued to; ⇧ steps by 5s and holding a key repeats. Stepping below
+ * a second removes the end outright, which is how a range becomes a point note
+ * again (and why the Section chip goes with it).
+ */
+const STEP_FAST = 5
+const HOLD_DELAY = 350
+const HOLD_EVERY = 110
+
+function LengthStepper({
+  start,
+  end,
+  onSetEnd,
+  onClearEnd,
+}: {
+  start: number
+  end: number
+  onSetEnd: (t: number) => void
+  onClearEnd: () => void
+}) {
+  const timers = useRef<{ delay?: number; every?: number }>({})
+  const stop = () => {
+    window.clearTimeout(timers.current.delay)
+    window.clearInterval(timers.current.every)
+    timers.current = {}
+  }
+  useEffect(() => stop, [])
+
+  /**
+   * A press owns its own running end, rather than reading the note back on
+   * every tick: nothing else moves the note while a key is held, and a repeat
+   * that outlives the render it started in would otherwise keep stepping from
+   * the same stale second.
+   */
+  const press = (dir: number, e: ReactPointerEvent<HTMLButtonElement>) => {
+    // The press itself is the first step, so there is no onClick to double it.
+    e.preventDefault()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* the press still steps; only the repeat needs the capture */
+    }
+    const by = dir * (e.shiftKey ? STEP_FAST : 1)
+    let value = end
+    const tick = () => {
+      const next = value + by
+      // Below a second there is no span left to shorten: the end goes, and the
+      // note is a point note again (which is why Section goes with it).
+      if (next - start < 1) {
+        stop()
+        onClearEnd()
+        return
+      }
+      value = next
+      onSetEnd(next)
+    }
+    tick()
+    timers.current.delay = window.setTimeout(() => {
+      timers.current.every = window.setInterval(tick, HOLD_EVERY)
+    }, HOLD_DELAY)
+  }
+  // Pointer events skip the keyboard, so Enter/Space steps once here.
+  const key = (dir: number, e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    const next = end + dir * (e.shiftKey ? STEP_FAST : 1)
+    if (next - start < 1) onClearEnd()
+    else onSetEnd(next)
+  }
+
+  const btn =
+    'grid h-6 w-6 shrink-0 place-items-center text-muted transition-colors hover:bg-raised hover:text-accentink'
+
+  return (
+    <div
+      role="group"
+      aria-label="Note length"
+      className="bevel-inset ml-auto flex shrink-0 items-center overflow-hidden rounded-full border border-line bg-inset"
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => press(-1, e)}
+        onPointerUp={stop}
+        onPointerCancel={stop}
+        onKeyDown={(e) => key(-1, e)}
+        title="Shorten by 1s — ⇧ for 5s, hold to run"
+        aria-label="Shorten the note by one second"
+        className={btn}
+      >
+        <Minus size={12} />
+      </button>
+      <span
+        aria-live="polite"
+        title="How long this note runs"
+        className="led min-w-[44px] text-center text-[11.5px]"
+      >
+        {formatTime(end - start)}
+      </span>
+      <button
+        type="button"
+        onPointerDown={(e) => press(1, e)}
+        onPointerUp={stop}
+        onPointerCancel={stop}
+        onKeyDown={(e) => key(1, e)}
+        title="Lengthen by 1s — ⇧ for 5s, hold to run"
+        aria-label="Lengthen the note by one second"
+        className={btn}
+      >
+        <Plus size={12} />
+      </button>
     </div>
   )
 }
@@ -452,7 +611,8 @@ function TimeEndpoint({
   const ref = useRef<HTMLButtonElement>(null)
 
   const base = time ?? Math.floor(currentTime)
-  const display = time != null ? formatTime(time) : '—'
+  // An unset end names the thing it would become, rather than showing a dash.
+  const display = time != null ? formatTime(time) : '+ End'
   const inputValue = text ?? (time != null ? formatTime(time) : '')
 
   const close = () => {
@@ -477,7 +637,7 @@ function TimeEndpoint({
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={`${label} — click to edit`}
-        aria-label={`${label} ${display}`}
+        aria-label={`${label} ${time != null ? display : 'not set'}`}
         className="chip chip-outline press text-[12px] normal-case tracking-[0.02em] tabular-nums"
         style={{
           ['--hue' as string]: open ? 'rgb(var(--accent-ink))' : 'rgb(var(--text))',
@@ -555,48 +715,5 @@ function TimeEndpoint({
         )}
       </Popover>
     </div>
-  )
-}
-
-/** "+ Property" menu — lists the addable plugins and adds the chosen block. */
-function AddPropertyMenu({ onAdd }: { onAdd: (type: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const btnRef = useRef<HTMLButtonElement>(null)
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
-      >
-        <Plus size={12} /> Property
-      </button>
-      <Popover
-        open={open}
-        anchorRef={btnRef}
-        onClose={() => setOpen(false)}
-        width={192}
-        className="origin-top-left py-1"
-      >
-        {addablePlugins().map((p) => {
-          const Icon = p.icon
-          return (
-            <button
-              key={p.type}
-              type="button"
-              onClick={() => {
-                onAdd(p.type)
-                setOpen(false)
-              }}
-              className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-fg"
-            >
-              <Icon size={13} className="shrink-0" /> {p.label}
-            </button>
-          )
-        })}
-      </Popover>
-    </>
   )
 }

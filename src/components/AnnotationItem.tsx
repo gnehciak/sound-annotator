@@ -6,6 +6,9 @@ import {
   RotateCw,
   Brackets,
   CircleHelp,
+  Image as ImageIcon,
+  MapPin,
+  Quote,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { noteLabel } from '../lib/format'
@@ -13,6 +16,14 @@ import { blocksOf, asTextData, TEXT_BLOCK } from '../lib/noteBlocks'
 import { getPlugin } from '../lib/notePlugins'
 import { resolveTag, tagsOf } from '../lib/tags'
 import { hueText } from '../lib/noteColors'
+import {
+  hasCover,
+  hasOverlay,
+  hasScorePin,
+  hasVideoPin,
+  quoteOf,
+  quotePageOf,
+} from '../lib/overlays'
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
@@ -340,6 +351,42 @@ export default function AnnotationItem({
           </span>
         )}
 
+        {/* Stage chip — this note puts something on screen for its moment.
+            One chip however many pieces: the question the list is scanned for
+            is "does this note touch the picture or the page at all?", and the
+            tooltip is where the answer gets specific. It does say *which*
+            surface, though — a note that only marks the score has nothing to
+            do with the video, and a chip claiming otherwise sends you looking
+            in the wrong place. */}
+        {hasOverlay(annotation) && (
+          <span
+            title={stageTitle(annotation)}
+            className="chip chip-outline"
+            style={{ ['--hue' as string]: color, color: hueText(color, theme) }}
+          >
+            {hasCover(annotation) ? (
+              <ImageIcon size={9} strokeWidth={2.4} className="shrink-0" />
+            ) : (
+              <MapPin size={9} strokeWidth={2.4} className="shrink-0" />
+            )}
+            {stageChip(annotation)}
+          </span>
+        )}
+
+        {/* Picture quote — its own chip rather than a fourth thing folded into
+            the stage one, because it answers a different question: not "does
+            this note touch the picture", but "does the handout show the music
+            this note is about". */}
+        {quoteOf(annotation) && (
+          <span
+            title={quoteTitle(annotation)}
+            className="chip chip-outline chip-neutral"
+          >
+            <Quote size={9} strokeWidth={2.4} className="shrink-0" />
+            Quote
+          </span>
+        )}
+
         {/* Score position — the bar number / rehearsal mark, shown as typed. */}
         {annotation.bar?.trim() && (
           <span
@@ -471,3 +518,33 @@ export default function AnnotationItem({
   )
 }
 
+
+/**
+ * What the stage chip says this note puts on screen. One chip covers all
+ * three pieces — the question the list is being scanned for is "does this note
+ * touch the picture or the page at all?" — so the tooltip is where the answer
+ * gets specific.
+ */
+function stageChip(a: Annotation): string {
+  const onVideo = hasCover(a) || hasVideoPin(a)
+  if (onVideo && hasScorePin(a)) return 'On video + score'
+  return onVideo ? 'On video' : 'On score'
+}
+
+/** What the quote chip says on hover: which surface, and which page of it. */
+function quoteTitle(a: Annotation): string {
+  const q = quoteOf(a)
+  if (!q) return ''
+  return q.on === 'score'
+    ? `The printed notes show this region of page ${quotePageOf(q)}`
+    : 'The printed notes show this region of the note’s cover image'
+}
+
+function stageTitle(a: Annotation): string {
+  const parts = [
+    hasCover(a) && 'a cover image over the video',
+    hasVideoPin(a) && 'a pinned caption on the video',
+    hasScorePin(a) && 'a pinned caption on the score',
+  ].filter((p): p is string => !!p)
+  return `Shows ${parts.join(' and ')}`
+}

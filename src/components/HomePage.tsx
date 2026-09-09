@@ -44,9 +44,16 @@ interface Props {
    *  filter them out of a search or a tally. */
   trashed: Project[]
   folders: Folder[]
-  /** Open folder (null = root library). Owned by App so it survives editor trips. */
+  /** Open folder (null = root library). Comes off the URL — App reads the
+   *  route — so a folder is a place the browser can go Back to. */
   openFolderId: string | null
   onOpenFolder: (id: string | null) => void
+  /** Your library, or the public Browse gallery. Also a route (`?browse=1`). */
+  homeTab: 'library' | 'browse'
+  onSwitchHomeTab: (tab: 'library' | 'browse') => void
+  /** The trash (`?trash=1`) — a destination beside the folders, not one of them. */
+  trashOpen: boolean
+  onOpenTrash: () => void
   onOpenTrack: (id: string) => void
   /** Creates in the open folder (App reads openFolderId) and opens the editor.
    *  Pass 'structure' for a song-structure board (the section timeline). */
@@ -105,18 +112,9 @@ const salutation = () => {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-/** Which home view is on: your library, or the public Browse gallery. */
+/** Which home view is on: your library, or the public Browse gallery. Both are
+ *  routes now (App owns them); the sticky "last bench" lives there too. */
 type HomeView = 'library' | 'browse'
-
-const VIEW_KEY = 'sound-annotator:home-view'
-
-const loadView = (): HomeView => {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'browse' ? 'browse' : 'library'
-  } catch {
-    return 'library'
-  }
-}
 
 /**
  * Stagger helper for the dashboard cascade: base delay plus a per-index step,
@@ -149,6 +147,10 @@ export default function HomePage({
   folders,
   openFolderId,
   onOpenFolder,
+  homeTab: view,
+  onSwitchHomeTab: switchView,
+  trashOpen,
+  onOpenTrash,
   onOpenTrack,
   onCreateTrack,
   onDeleteTrack,
@@ -165,17 +167,6 @@ export default function HomePage({
 }: Props) {
   const theme = useResolvedTheme()
   const { user } = useAuth()
-  // Library vs the public Browse gallery. Sticky across visits — a teacher
-  // mid-lesson reopening the app lands back on whichever bench they left.
-  const [view, setView] = useState<HomeView>(loadView)
-  const switchView = (v: HomeView) => {
-    setView(v)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {
-      /* private mode — the view just won't stick */
-    }
-  }
   const [query, setQuery] = useState('')
   // Folder tile currently in inline-rename mode (a fresh folder starts there).
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -190,14 +181,17 @@ export default function HomePage({
   const [cascading, setCascading] = useState(true)
   // The trash is a destination like a folder, but not a folder: App must never
   // see it as openFolderId, or a track created while it's open would be born
-  // into it. So it's local, and this key — not openFolderId alone — is what
-  // "which view am I in" means for the cascade and the remount below.
-  const [trashOpen, setTrashOpen] = useState(false)
+  // into it. It's its own route, and this key — not openFolderId alone — is
+  // what "which view am I in" means for the cascade and the remount below.
   const viewKey = trashOpen ? 'trash' : openFolderId ?? 'root'
   const [lastViewKey, setLastViewKey] = useState(viewKey)
   if (lastViewKey !== viewKey) {
     setLastViewKey(viewKey)
     setCascading(true)
+    // Arriving in the trash clears the search: the two fight over the same
+    // tile grid, and a stale query would hide the track you came to restore.
+    // Here rather than in the click handler, so Back into the trash does it too.
+    if (viewKey === 'trash') setQuery('')
   }
   useEffect(() => {
     // 1.2s covers header rise (~320ms) + tracks-heading delay (240ms) + 12-tile
@@ -206,19 +200,9 @@ export default function HomePage({
     return () => clearTimeout(t)
   }, [viewKey])
 
-  // Opening the trash clears the search: the two would otherwise fight over the
-  // same tile grid, and a stale query would hide the track you came to restore.
-  const openTrash = () => {
-    setQuery('')
-    setTrashOpen(true)
-  }
-  const leaveTrash = () => setTrashOpen(false)
-  // Any folder navigation leaves the trash — it's a sibling destination, not a
-  // layer on top of one.
-  const goToFolder = (id: string | null) => {
-    setTrashOpen(false)
-    onOpenFolder(id)
-  }
+  // Leaving the trash is just going to the library root — sibling destinations,
+  // not a layer on top of one, so the same navigation covers both.
+  const leaveTrash = () => onOpenFolder(null)
 
   const folderIds = useMemo(() => new Set(folders.map((f) => f.id)), [folders])
   // A folderId pointing at a deleted folder (removed on another device) groups
@@ -527,7 +511,7 @@ export default function HomePage({
                       notes={counts.get(f.id)?.notes ?? 0}
                       renaming={renamingId === f.id}
                       enterDelay={cascading ? stagger(140, i) : '0ms'}
-                      onOpen={() => goToFolder(f.id)}
+                      onOpen={() => onOpenFolder(f.id)}
                       onStartRename={() => setRenamingId(f.id)}
                       onRename={(name) => {
                         setRenamingId(null)
@@ -546,7 +530,7 @@ export default function HomePage({
                     enterDelay={
                       cascading ? stagger(140, folders.length) : '0ms'
                     }
-                    onOpen={openTrash}
+                    onOpen={onOpenTrash}
                     onDropTrack={onDeleteTrack}
                   />
                   <button
@@ -726,29 +710,48 @@ function ImportTrackButton({
   onImport: (file: File) => Promise<void>
   variant: 'header' | 'hero'
 }) {
-  const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  // null when idle; otherwise how far through a run of files we are. A single
+  // file is just a run of one, so there's no second code path for the common
+  // case — the label only mentions counts when there's more than one.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const busy = progress !== null
 
-  async function handleFile(file: File) {
-    setBusy(true)
+  /**
+   * Import every chosen file, one at a time. Sequential on purpose: each
+   * import re-uploads its images, and a whole folder of kits fired at once
+   * would open dozens of parallel uploads. One bad file doesn't stop the run
+   * — the failures are collected and reported together at the end, so
+   * importing 30 tracks never becomes 30 dialogs.
+   */
+  async function handleFiles(files: File[]) {
+    const failed: string[] = []
+    setProgress({ done: 0, total: files.length })
     try {
-      await onImport(file)
-    } catch (err) {
-      console.error('Import failed:', err)
-      const detail = err instanceof Error && err.message ? err.message : ''
-      alert(
-        detail
-          ? `Import failed — ${detail}`
-          : 'Import failed — check the file and try again.',
-      )
+      for (const [i, file] of files.entries()) {
+        try {
+          await onImport(file)
+        } catch (err) {
+          console.error('Import failed:', file.name, err)
+          const detail = err instanceof Error && err.message ? err.message : ''
+          failed.push(detail ? `${file.name} — ${detail}` : file.name)
+        }
+        setProgress({ done: i + 1, total: files.length })
+      }
     } finally {
-      setBusy(false)
+      setProgress(null)
       // Re-arm the picker so re-choosing the same file fires change again.
       if (inputRef.current) inputRef.current.value = ''
     }
+    if (failed.length > 0)
+      alert(
+        `${failed.length} of ${files.length} ${
+          files.length === 1 ? 'file' : 'files'
+        } couldn’t be imported:\n\n${failed.join('\n')}`,
+      )
   }
 
   // Handlers live in the component body, not inline in the rows below: a
@@ -775,12 +778,13 @@ function ImportTrackButton({
         ref={inputRef}
         type="file"
         accept=".json,application/json"
+        multiple
         className="hidden"
         aria-hidden
         tabIndex={-1}
         onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void handleFile(f)
+          const files = [...(e.target.files ?? [])]
+          if (files.length > 0) void handleFiles(files)
         }}
       />
       <button
@@ -790,7 +794,7 @@ function ImportTrackButton({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Import a track from a JSON file, or read the file schema"
+        title="Import tracks from JSON files, or read the file schema"
         className={`btn-ghost press shrink-0 disabled:cursor-wait ${
           variant === 'hero' ? 'px-4 py-2 text-[11px]' : ''
         }`}
@@ -801,7 +805,11 @@ function ImportTrackButton({
           <FileUp size={13} />
         )}
         <span className={variant === 'hero' ? '' : 'hidden sm:inline'}>
-          {busy ? 'Importing…' : 'Import'}
+          {!progress
+            ? 'Import'
+            : progress.total > 1
+              ? `Importing ${progress.done + 1}/${progress.total}…`
+              : 'Importing…'}
         </span>
         <ChevronDown
           size={11}
@@ -817,8 +825,8 @@ function ImportTrackButton({
         <div className="py-1">
           <MenuRow
             icon={<FileUp size={14} />}
-            title="Choose a file…"
-            detail="Bring in a track exported as JSON."
+            title="Choose files…"
+            detail="Bring in tracks exported as JSON — one file or many."
             onClick={chooseFile}
           />
           <div className="my-1 border-t border-line/60" />
@@ -1406,14 +1414,20 @@ function TrackTile({
             exact) but stops being true while it's in there — the links 404 and
             the gallery card is gone. So the chips go quiet too, rather than
             promise a live link for a track nobody can reach. */}
-        {!trashed && p.published && (
+        {/* One link, so one chip: listed on Browse is the louder fact and
+            implies the link is live, so it stands in for "Shared" rather than
+            sitting beside it. */}
+        {!trashed && (p.published || p.shared) && (
           <span className="chip chip-signal">
-            <Globe size={10} /> Published
-          </span>
-        )}
-        {!trashed && p.shared && (
-          <span className="chip chip-signal">
-            <Eye size={10} /> Shared
+            {p.published ? (
+              <>
+                <Globe size={10} /> On Browse
+              </>
+            ) : (
+              <>
+                <Eye size={10} /> Link on
+              </>
+            )}
           </span>
         )}
         {folderName && (

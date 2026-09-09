@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "vercel dev",
+    "prebuild": "node scripts/sync-vocabulary.mjs --soft",
     "build": "npm run check:schema && tsc -b && vite build",
     "check:schema": "node scripts/check-schema-doc.mjs",
     "lint": "eslint .",
+    "sync:vocab": "node --env-file-if-exists=.env.local scripts/sync-vocabulary.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,8 +24,11 @@
     "@tiptap/starter-kit": "^3.24.0",
     "@vercel/blob": "^2.5.0",
     "@vercel/functions": "^3.7.5",
+    "fflate": "^0.8.3",
     "jose": "^6.2.12",
     "lucide-react": "^1.17.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "wavesurfer.js": "^7.12.7"
