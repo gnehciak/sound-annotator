@@ -428,6 +428,19 @@ export const VOCAB_CATEGORIES: {
   },
 ]
 
+/**
+ * The concept-by-concept scaffold the note's Template action writes: each of
+ * the eight concepts, in the order the dictionary lists them, named by its own
+ * `Element name` value. Pairs are [field, value] so the chip is a real tag.
+ */
+export const ANALYSIS_TEMPLATE: [string, string][] = ELEMENTS.flatMap((cat) => {
+  const field = cat.fields.find((f) => f.id.endsWith('.element'))
+  // The field's options are alphabetical, so ask for the concept's own name
+  // rather than taking the first — "Pitch", not "Melodic".
+  const value = field?.options.find((o) => o === cat.label)
+  return field && value ? [[field.id, value] as [string, string]] : []
+})
+
 /** How many words the dictionary holds — shown on its header. */
 export const VOCAB_SIZE = ALL.length
 

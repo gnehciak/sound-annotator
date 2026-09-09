@@ -67,6 +67,11 @@ export function suggestAt(state: EditorState, pos: number): SuggestHit | undefin
   return propertySuggestKey.getState(state)?.hits.find((h) => pos >= h.from && pos <= h.to)
 }
 
+/** Every underlined word in the document, in order — what "tag all" acts on. */
+export function suggestionsIn(state: EditorState): SuggestHit[] {
+  return propertySuggestKey.getState(state)?.hits ?? []
+}
+
 export const PropertySuggest = Extension.create({
   name: 'propertySuggest',
 

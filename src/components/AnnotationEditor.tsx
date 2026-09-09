@@ -28,7 +28,13 @@ import { ResizableImage } from './resizableImage'
 import { ImageUploadPlaceholder, uploadImageWithPlaceholder } from './imageUpload'
 import { createMention } from './noteMention'
 import { PropertyTag } from './propertyTag'
-import { PropertySuggest, suggestAt, type SuggestHit } from './propertySuggest'
+import {
+  PropertySuggest,
+  suggestAt,
+  suggestionsIn,
+  type SuggestHit,
+} from './propertySuggest'
+import { ANALYSIS_TEMPLATE } from '../lib/propertyTags'
 import Popover from './Popover'
 import type { MentionItem } from './MentionList'
 
@@ -69,6 +75,10 @@ export interface AnnotationEditorHandle {
   focus: () => void
   /** Insert a property tag at the caret — the dictionary's way in. */
   insertProperty: (field: string, value: string) => void
+  /** Drop the concept-by-concept scaffold in, and report whether it went. */
+  insertTemplate: () => void
+  /** Turn every underlined word into a tag at once; returns how many. */
+  tagAllSuggestions: () => number
   /**
    * Insert a cross-reference to another note at the caret — the same atom the
    * "@" menu writes, reached instead from that note's own context menu (which
@@ -249,13 +259,78 @@ const AnnotationEditor = forwardRef<AnnotationEditorHandle, Props>(function Anno
     }
   }
 
+  /**
+   * The analysis scaffold: one bullet per concept, each opening with that
+   * concept's own tag. Written as real chips rather than bold words so the
+   * headings are the same data as everything else — they colour themselves,
+   * and a finished note reads back as "this paragraph is about Texture"
+   * without the teacher having to tag the heading afterwards.
+   */
+  const insertTemplate = () => {
+    const ed = editorRef.current
+    if (!ed) return
+    const list = {
+      type: 'bulletList',
+      content: ANALYSIS_TEMPLATE.map(([field, value]) => ({
+        type: 'listItem',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'propertyTag', attrs: { field, value, text: '' } },
+              { type: 'text', text: ' — ' },
+            ],
+          },
+        ],
+      })),
+    }
+    // An untouched note is one empty paragraph; appending to it would leave a
+    // blank line above the list, so the scaffold becomes the note instead.
+    const empty = ed.state.doc.textContent.trim() === '' && ed.state.doc.childCount <= 1
+    if (empty) ed.chain().focus().setContent(list).run()
+    else ed.chain().focus('end').insertContent(list).run()
+  }
+
+  /**
+   * Accept every underline at once. Applied back to front so each replacement
+   * leaves the positions of the ones before it untouched, and in a single
+   * chain so the whole sweep is one undo step.
+   *
+   * Where a word names two concepts ("thin" is Timbre and Texture) this takes
+   * the first; the chip's own menu is how the other is chosen. That is the
+   * trade a bulk action makes, and why the card still exists.
+   */
+  const tagAll = (): number => {
+    const ed = editorRef.current
+    if (!ed) return 0
+    const hits = [...suggestionsIn(ed.state)].sort((a, b) => b.from - a.from)
+    if (!hits.length) return 0
+    let chain = ed.chain().focus()
+    for (const h of hits) {
+      const opt = h.options[0]
+      chain = chain.insertContentAt(
+        { from: h.from, to: h.to },
+        { type: 'propertyTag', attrs: { field: opt.field, value: opt.value, text: h.text } },
+      )
+    }
+    chain.run()
+    return hits.length
+  }
+
+  // Deliberately built once. Every method here reaches the editor through
+  // `editorRef`, so the closures captured on the first render stay correct for
+  // the life of the component; listing them as dependencies would rebuild the
+  // handle on each keystroke and buy nothing.
   useImperativeHandle(
     ref,
     () => ({
       focus: () => editorRef.current?.commands.focus('end'),
       insertProperty: (field, value) => putTag(field, value),
+      insertTemplate: () => insertTemplate(),
+      tagAllSuggestions: () => tagAll(),
       insertNoteRef: (id, label) => putAtCaret({ type: 'mention', attrs: { id, label } }),
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 
