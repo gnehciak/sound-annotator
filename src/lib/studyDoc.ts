@@ -29,10 +29,13 @@
 // The analysis column is the note's own words and nothing else. The guide's
 // *What / Why* prompts were tried and dropped: the app has nothing to put
 // under either, so they printed as two labels around one paragraph and a gap —
-// scaffolding for writing that had already been done. What the note was filed
-// as still rides above it as a strapline, because that the app does know. The
-// .docx is where the rest gets written, and a heading nobody asked for is not
-// what makes that possible.
+// scaffolding for writing that had already been done. So was the list of
+// concepts that used to head the column: it was `propertyTagsInHtml` in
+// document order, so a thoroughly tagged note opened with forty badges — the
+// same word four and five times over — restating, stripped of the sentences
+// that gave them their meaning, what is legible in the prose an inch below.
+// The strapline that remains is only what the prose *cannot* say: that the
+// note is a question, and the tags it was filed under.
 import type { Annotation, Project } from '../types'
 import { formatTime, noteLabel, notePlainText } from './format'
 import { blocksOf, primaryTextHtml, TEXT_BLOCK } from './noteBlocks'
@@ -49,7 +52,7 @@ import type { QuoteImage } from './quoteImages'
 
 /** The column headings of every element table. */
 export const WHERE_HEADING = 'Where'
-export const EXAMPLE_HEADING = 'Example (drawing or quotation)'
+export const EXAMPLE_HEADING = 'Example'
 export const ANALYSIS_HEADING = 'Analysis'
 
 /** The heading above each table, minus the group's own name. */
@@ -110,7 +113,7 @@ export interface DocBlock {
   marker?: string
 }
 
-/** A coloured badge in the strapline: a tag, or a concept the note names. */
+/** A coloured badge in the strapline: the note is a question, or carries a tag. */
 export interface DocBadge {
   label: string
   /** AA-safe on white paper — every hue here has been through `hueText`. */
@@ -143,8 +146,6 @@ export interface StudyRow {
   quoteFrom: string
   /** The note's own prose, as written — the analysis column. */
   analysis: DocBlock[]
-  /** Its inline property tags, spelled out — "Timbre: Bright", in their hues. */
-  properties: DocBadge[]
   /** Anything a block plugin summarises, plus an elements block if it has one. */
   spec: string
   /** The note's lyric line, when it carries one. */
@@ -249,10 +250,14 @@ function blockKind(tag: string): DocBlock['kind'] | null {
  * The chips are the point. An inline property tag is a *claim about the music*
  * made in the middle of a sentence, and a study document that prints it as an
  * ordinary word has thrown away the one thing distinguishing "bright" the
- * adjective from Bright the timbre. So they come out as they look on paper in
- * the app's own print stylesheet: the hue at 13% over white, AA-safe ink, and
- * the concept spelled out after the value, because paper has no hover and a
- * colour alone means nothing without a legend.
+ * adjective from Bright the timbre. So it keeps the ground it wears in the
+ * app's own print stylesheet — the hue at 13% over white, AA-safe ink — and
+ * nothing else. Not the weight: three marks (ink, ground, bold) on one word is
+ * decoration, and the ground alone already says a claim is being made. And not
+ * the concept spelled out after the value, which was tried: a densely tagged
+ * paragraph printed one parenthesis per chip — "(Duration)" eleven times in a
+ * single cell — and the sentence underneath stopped being readable. The word
+ * *is* the claim; the colour says which kind.
  *
  * Images are the deliberate omission — a note's inline pictures stay in the
  * app. What a document quotes is the score quote, aimed on purpose.
@@ -289,23 +294,16 @@ function richBlocks(html: string): DocBlock[] {
     if (el.hasAttribute('data-property-tag')) {
       const field = el.getAttribute('data-field') ?? ''
       const value = el.getAttribute('data-value') ?? ''
-      const category = el.getAttribute('data-category') ?? ''
       const text = el.getAttribute('data-text') || value || (el.textContent ?? '')
       into.push({
-        text: category ? `${text} (${category})` : text,
-        bold: true,
+        text,
         color: inkFor(field, value),
         fill: tint(hueFor(field, value)),
       })
       return
     }
     if (el.classList.contains('note-mention')) {
-      into.push({
-        text: el.textContent ?? '',
-        bold: true,
-        color: LINK_INK,
-        fill: MENTION_FILL,
-      })
+      into.push({ text: el.textContent ?? '', color: LINK_INK, fill: MENTION_FILL })
       return
     }
 
@@ -473,10 +471,6 @@ export function buildStudyDoc(
       quote: quotes.get(note.id),
       quoteFrom: quoteFromOf(note),
       analysis: richBlocks(primaryTextHtml(note)),
-      properties: propertyTagsInHtml(primaryTextHtml(note)).map((t) => ({
-        label: t.category ? `${t.category}: ${t.value}` : t.value,
-        color: inkFor(t.field, t.value),
-      })),
       spec: specOf(note),
       ...(note.lyrics?.trim() ? { lyrics: note.lyrics.trim() } : {}),
     }

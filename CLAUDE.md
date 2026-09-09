@@ -339,15 +339,24 @@ The shape is the marking-guide grid a music teacher works in, **carrying this
 app's own structure** rather than a blank template's. *Where* is the first
 column, because a timecode is this app's primary coordinate — a study note
 nobody can find in the recording is half a note — with the bar or rehearsal
-mark under it. *Example* is the score quote, captioned with the page it was cut
+mark under it. It is narrow, and deliberately narrower than a two-digit range
+needs, since the analysis should not pay all year for a width `13:53–15:12`
+wants: the PDF folds a range after its dash instead (`foldSpan`), the one place
+it reads as continuing, rather than cutting it mid-number as plain wrapping
+does. *Example* is the score quote, captioned with the page it was cut
 from. The grouping is the app's own vocabulary: a note is filed under its first
 inline property tag (`Timbre / Bright`), the same concept list the `@` menu
 offers, with `Ungrouped` last. Above all of it, **structure notes get their own
 table and come out of the grid entirely** — a note that brackets a span *is*
 the song-structure board, and printed among the elements it would read as one
 more observation instead of the frame the others sit inside. What is left over
-rides as a strapline over the analysis: whether the note is a question, its
-tags, and the concepts it names.
+rides as a strapline over the analysis, and only what the prose itself cannot
+say: whether the note is a question, and its tags. The concepts the note names
+were there too and are not any more — they were `propertyTagsInHtml` in
+document order, so a thoroughly tagged note opened with forty badges naming the
+same handful of concepts four and five times over, restating an inch above the
+prose, stripped of the sentences that gave them their meaning, exactly what the
+chips below say in place.
 
 The analysis column is the note's own words **as they were written**. A note
 is composed in a rich-text editor, and flattening it to a string on the way out
@@ -356,11 +365,20 @@ the coloured chips that say which concept a word is. So `studyDoc` carries
 `DocRun`s (bold / italic / underline / strike / code, ink and ground) inside
 `DocBlock`s (paragraph, heading, quote, list item), and each renderer maps a
 run onto its own idea of a styled span: pdf-lib picks a face and paints a
-ground, Word gets a `w:rPr`. The chips keep the appearance the app's own print
-stylesheet gives them — the hue at 13% over white, AA-safe ink, and the concept
-spelled out after the value, because paper has no hover and a colour alone
-means nothing without a legend. The note's own hue rules its row, as it does
-everywhere else in the app.
+ground, Word gets a `w:rPr`. A chip keeps the ground the app's own print
+stylesheet gives it — the hue at 13% over white, AA-safe ink — and nothing
+else. Not the weight, since three marks on one word is decoration and the
+ground already says a claim is being made; and not the concept spelled out
+after the value, which was tried and printed `(Duration)` eleven times in a
+single cell, because a note tagged as thoroughly as this app invites is a
+sentence with a parenthesis after every other word. The note's own hue rules
+its row, as it does everywhere else in the app.
+
+The PDF draws a line's grounds **before** any of its glyphs, in two passes over
+the same pieces. A chip's ground is 1.5pt wider than its word on either side
+(the bleed the app's print CSS gives it), so painting each piece in turn let
+each chip rub out the tail of the character before it — "(theme" came out as a
+chip with a stub of a bracket beside it.
 
 The note's **own inline images** come too, at the width they were dragged to
 (CSS pixels, so the PDF converts at ¾ to the point; the .docx goes through EMU
@@ -394,7 +412,15 @@ pasted emoji would otherwise fail the entire export (the .docx has no such
 limit and keeps them). **Rows are measured before any of them is drawn**, so a
 group heading and its column headings are only placed where the first row can
 follow them; taking the leading gap *after* the fit check rather than as part
-of it is exactly how an orphaned heading ends up at the foot of a page. And
+of it is exactly how an orphaned heading ends up at the foot of a page. A row
+taller than the page it starts on is **cut into slices** at a line boundary and
+carried on under a repeated heading, since a long note is exactly the note
+worth reading and drawing its tail past the bottom margin loses it silently;
+only the analysis splits, while the *Where* and *Example* cells ride the first
+slice and the note's hue rule runs down every one of them, which is what says
+the cell overleaf is the same note. A row that could never fit a page is not
+granted one of its own — it starts in the room that is left, or the heading
+above it would sit alone over a blank half page. And
 **the PDF's tab is opened before the document is built**, since a score has to
 be fetched and rasterised first and a `window.open` on the far side of an
 `await` has lost the user gesture pop-up blockers look for; a blocked pop-up
