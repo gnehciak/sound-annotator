@@ -434,9 +434,8 @@ export default function ScoreLayer({
    * under the one and its last system under the other, which on a score is
    * exactly the part you were reading.
    */
-  const pad = syncing
-    ? { top: 48, bottom: 56 }
-    : placement === 'frame' && !expanded
+  const pad =
+    placement === 'frame' && !expanded
       ? // The video's own transport floats here; leave it its band.
         { top: 36, bottom: 48 }
       : {
@@ -592,8 +591,11 @@ export default function ScoreLayer({
 
   if (expanded) {
     return createPortal(
-      <div className="fixed inset-0 z-[80] flex animate-fade-in flex-col bg-ink/95 backdrop-blur-sm">
-        <div className="relative min-h-0 flex-1" onContextMenu={openMenu}>
+      // The sync panel stands beside the score, so this box is a row — until
+      // the screen is too narrow for a column of turns to leave the page a
+      // readable slot, where it stacks and the panel takes the foot instead.
+      <div className="fixed inset-0 z-[80] flex animate-fade-in flex-col bg-ink/95 backdrop-blur-sm sm:flex-row">
+        <div className="relative min-h-0 min-w-0 flex-1" onContextMenu={openMenu}>
           {surface}
           {chrome}
           {toolbar}
