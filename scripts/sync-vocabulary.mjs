@@ -141,6 +141,8 @@ async function fetchRows() {
         pageId: (p.Field?.relation ?? [])[0]?.id ?? '',
         auto: p['Auto-tag']?.checkbox === true,
         aliases: plain(p.Aliases?.rich_text),
+        definition: plain(p.Definition?.rich_text),
+        example: plain(p['Exemplar quote']?.rich_text),
       }
     })
     .filter((t) => t.term && t.pageId)
@@ -175,6 +177,7 @@ function buildFile({ fields, terms }) {
   let count = 0
   const autoTerms = new Set()
   const aliases = new Map()
+  const glossary = new Map()
 
   for (const [id, label, color] of CONCEPTS) {
     const mine = fields
@@ -191,6 +194,14 @@ function buildFile({ fields, terms }) {
       )
       for (const r of rows) {
         if (r.auto) autoTerms.add(r.term)
+        // Keyed by field as well as word: "Thin" is a Timbre and a Texture,
+        // and the two do not mean the same thing.
+        if (r.definition || r.example) {
+          glossary.set(`${f.fieldId}:${r.term}`, {
+            d: r.definition || '',
+            e: r.example || '',
+          })
+        }
         for (const a of (r.aliases || '').split(',').map((x) => x.trim()).filter(Boolean)) {
           // First writer wins; a real term always keeps its own word.
           const k = a.toLowerCase()
@@ -216,6 +227,7 @@ function buildFile({ fields, terms }) {
   const aliasKeys = [...aliases.keys()]
     .filter((k) => !spoken.has(k))
     .sort((a, b) => a.localeCompare(b))
+  const glossKeys = [...glossary.keys()].sort((a, b) => a.localeCompare(b))
 
   const header = `// GENERATED FILE — do not edit by hand.
 //
@@ -230,7 +242,7 @@ function buildFile({ fields, terms }) {
 //   npm run sync:vocab
 //
 // See lib/musicElements.ts for what ELEMENTS feeds, and lib/propertyTags.ts
-// for what AUTO_TERMS and ALIASES do.
+// for what AUTO_TERMS, ALIASES and GLOSSARY do.
 import type { ElementCategory } from './musicElements'
 
 export const ELEMENTS: ElementCategory[] = [
@@ -251,6 +263,23 @@ export const ELEMENTS: ElementCategory[] = [
     (aliasKeys.length
       ? '\n' + aliasKeys.map((k) => `  ${quote(k)}: ${quote(aliases.get(k))},`).join('\n') + '\n'
       : '') +
+    '}\n\n/**\n' +
+    ' * What each word means and one line of it in use — the Definition column\n' +
+    ' * and the Exemplar quote, keyed by `field:Term` because the same word in\n' +
+    ' * two concepts is two different entries. Only words that have one or the\n' +
+    ' * other appear here; the dictionary says so when a word has neither.\n' +
+    ' */\nexport interface Gloss {\n  /** Definition. */\n  d: string\n  /** Example of the word in use. */\n  e: string\n}\n' +
+    'export const GLOSSARY: Record<string, Gloss> = {' +
+    (glossKeys.length
+      ? '\n' +
+        glossKeys
+          .map((k) => {
+            const g = glossary.get(k)
+            return `  ${quote(k)}: { d: ${quote(g.d)}, e: ${quote(g.e)} },`
+          })
+          .join('\n') +
+        '\n'
+      : '') +
     '}\n'
 
   return {
@@ -259,6 +288,7 @@ export const ELEMENTS: ElementCategory[] = [
     count,
     auto: auto.length,
     aliases: aliasKeys.length,
+    glossed: glossKeys.length,
     fields: fields.length,
     unmapped,
   }
@@ -294,22 +324,26 @@ try {
 // the three lists *separately*. Diffing the file as one bag of quoted strings
 // misses a word being ticked or un-ticked, because every auto-tagging term is
 // already an ELEMENTS value: the bag is identical and the behaviour is not.
-const section = (text, marker) => {
+const section = (text, marker, keysOnly = false) => {
   const i = text.indexOf(marker)
   if (i < 0) return new Set()
   const end = text.indexOf('\n]', i) + 1 || text.indexOf('\n}', i) + 1
-  return new Set(
-    [...text.slice(i, end).matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1]),
-  )
+  const slice = text.slice(i, end)
+  // The glossary's *values* are whole sentences, so diffing them would print a
+  // paragraph per edit. Its keys are what the report is actually about: which
+  // words gained or lost an entry.
+  const re = keysOnly ? /^ {2}'((?:[^'\\]|\\.)*)':/gm : /'((?:[^'\\]|\\.)*)'/g
+  return new Set([...slice.matchAll(re)].map((m) => m[1]))
 }
 const LISTS = [
   ['', 'export const ELEMENTS'],
   ['auto-tagging', 'export const AUTO_TERMS'],
   ['aliases', 'export const ALIASES'],
+  ['glossed', 'export const GLOSSARY', true],
 ]
-const diffs = LISTS.map(([label, marker]) => {
-  const before = section(previous, marker)
-  const after = section(built.source, marker)
+const diffs = LISTS.map(([label, marker, keysOnly]) => {
+  const before = section(previous, marker, keysOnly)
+  const after = section(built.source, marker, keysOnly)
   return {
     label,
     added: [...after].filter((v) => !before.has(v)),
@@ -322,7 +356,7 @@ const removed = diffs[0].removed
 console.log(
   `${rows.terms.length} terms across ${built.fields} fields in Notion → ` +
     `${built.count} options in ${CONCEPTS.length} concepts, ` +
-    `${built.auto} auto-tagging, ${built.aliases} aliases`,
+    `${built.auto} auto-tagging, ${built.aliases} aliases, ${built.glossed} glossed`,
 )
 let quiet = true
 for (const d of diffs) {

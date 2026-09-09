@@ -30,10 +30,11 @@
 // the expanded score portals — see CLAUDE.md.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BookOpen, Search, X } from 'lucide-react'
+import { BookOpen, CornerDownLeft, Search, X } from 'lucide-react'
 import {
   VOCAB_CATEGORIES,
   VOCAB_SIZE,
+  glossFor,
   hueFor,
   searchProperties,
 } from '../lib/propertyTags'
@@ -60,7 +61,15 @@ export default function ElementsDictionary({
   const theme = useResolvedTheme()
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState<string | null>(null)
-  const [lastPicked, setLastPicked] = useState<string | null>(null)
+  /** The word whose entry is open below the list. Clicking a word reads it;
+   *  the button in that panel is what writes it into the note. */
+  const [picked, setPicked] = useState<{
+    field: string
+    value: string
+    category: string
+    fieldLabel: string
+  } | null>(null)
+  const [lastInserted, setLastInserted] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -78,6 +87,11 @@ export default function ElementsDictionary({
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
+
+  const insert = (field: string, value: string) => {
+    onInsert(field, value)
+    setLastInserted(value)
+  }
 
   const groups = useMemo<Group[]>(() => {
     const q = query.trim()
@@ -102,11 +116,11 @@ export default function ElementsDictionary({
       }
       return [...byField.values()]
     }
-    const picked = VOCAB_CATEGORIES.find((c) => c.id === cat)
-    if (!picked) return []
-    return picked.fields.map((f) => ({
+    const concept = VOCAB_CATEGORIES.find((c) => c.id === cat)
+    if (!concept) return []
+    return concept.fields.map((f) => ({
       key: f.id,
-      category: picked.label,
+      category: concept.label,
       fieldLabel: f.label,
       field: f.id,
       options: f.options,
@@ -132,9 +146,9 @@ export default function ElementsDictionary({
           </span>
           <span className="font-mono text-[10px] text-muted">{VOCAB_SIZE} words</span>
           <div className="flex-1" />
-          {lastPicked && (
+          {lastInserted && (
             <span className="animate-fade-in font-mono text-[10px] text-accentink">
-              {lastPicked} added
+              {lastInserted} added
             </span>
           )}
           <button
@@ -164,7 +178,7 @@ export default function ElementsDictionary({
             />
           </div>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="mt-1.5 flex flex-wrap gap-1">
             {VOCAB_CATEGORIES.map((c) => (
               <button
                 key={c.id}
@@ -206,11 +220,18 @@ export default function ElementsDictionary({
                         <button
                           key={value}
                           type="button"
-                          onClick={() => {
-                            onInsert(g.field, value)
-                            setLastPicked(value)
-                          }}
-                          title={`Tag this note — ${g.category}: ${value}`}
+                          onClick={() =>
+                            setPicked({
+                              field: g.field,
+                              value,
+                              category: g.category,
+                              fieldLabel: g.fieldLabel,
+                            })
+                          }
+                          aria-pressed={
+                            picked?.value === value && picked?.field === g.field
+                          }
+                          title={`${g.category}: ${value}`}
                           className="chip chip-outline press normal-case tracking-[0.01em]"
                           style={{
                             ['--hue' as string]: color,
@@ -227,9 +248,78 @@ export default function ElementsDictionary({
             </div>
           )}
         </div>
+
+        {picked && <Entry {...picked} onInsert={insert} />}
       </div>
     </div>,
     document.body,
+  )
+}
+
+/**
+ * The entry for one word: what it means, one line of it in use, and the button
+ * that writes it into the note.
+ *
+ * It sits under the list rather than replacing it, because the question a
+ * reader is answering ("is this the word I want?") is comparative — they have
+ * just scanned nine near-synonyms and need to keep seeing them. Absent
+ * definitions are named rather than hidden: an empty panel would read as a
+ * broken feature instead of a column nobody has filled in yet.
+ */
+function Entry({
+  field,
+  value,
+  category,
+  fieldLabel,
+  onInsert,
+}: {
+  field: string
+  value: string
+  category: string
+  fieldLabel: string
+  onInsert: (field: string, value: string) => void
+}) {
+  const theme = useResolvedTheme()
+  const gloss = glossFor(field, value)
+  const color = hueFor(field, value)
+  return (
+    <div className="animate-fade-in shrink-0 border-t border-line/70 bg-fg/[0.03] px-4 py-3.5">
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-[15px] font-semibold"
+          style={{ color: hueText(color, theme) }}
+        >
+          {value}
+        </span>
+        <span className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-muted">
+          {category} · {fieldLabel}
+        </span>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => onInsert(field, value)}
+          title={`Write ${value} into the note as a tag`}
+          className="btn-ghost btn-sm press shrink-0 hover:border-accent hover:text-accentink"
+        >
+          <CornerDownLeft size={12} /> Insert
+        </button>
+      </div>
+
+      {gloss?.d ? (
+        <p className="mt-1.5 text-[12.5px] leading-relaxed text-fg">{gloss.d}</p>
+      ) : (
+        <p className="mt-1.5 text-[12px] italic leading-relaxed text-muted">
+          No definition yet — add one in the Notion Terms database and press the
+          push button.
+        </p>
+      )}
+
+      {gloss?.e && (
+        <p className="mt-1.5 border-l-2 border-line pl-2.5 text-[11.5px] leading-relaxed text-muted">
+          {gloss.e}
+        </p>
+      )}
+    </div>
   )
 }
 
