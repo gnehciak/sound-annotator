@@ -55,11 +55,13 @@ import {
   deleteScoreBlob,
 } from './lib/scoreCloud'
 import {
+  scoreBytesUrl,
   scoreView as scoreViewOf,
   shiftTurns,
   type ScoreView,
 } from './lib/score'
 import type { NoteQuote, ScoreMark, ScoreTurn } from './types'
+import { QuoteScoreProvider } from './lib/quotePreview'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -1546,7 +1548,7 @@ export default function App() {
   const moveScorePin = movePin('score')
 
   /**
-   * Land a moved or resized picture quote — same one-save-per-release deal as
+   * Land a moved or resized score quote — same one-save-per-release deal as
    * movePin, and the same coalescing, so nudging a rectangle into place is one
    * undo step rather than thirty.
    */
@@ -2149,7 +2151,6 @@ export default function App() {
         readOnly={effectiveViewOnly}
         onMovePin={moveFramePin}
         onMoveCover={moveCover}
-        onQuote={moveQuote}
         onTogglePlay={() => (isPlaying ? pause() : play())}
       />
       {transport}
@@ -2179,6 +2180,10 @@ export default function App() {
   }
 
   return (
+    // Every quote on screen — the covers on the list's rows, the thumbnail in
+    // the inspector — is a crop of this track's score, and this is where the
+    // one score anything is quoting is known. See lib/quotePreview.
+    <QuoteScoreProvider url={score ? scoreBytesUrl(score, scoreReload) : null}>
     <div className="flex h-full flex-col text-fg">
       {/* Guests have no account to hold their work — their links are the only
           way back to it, so the bar sits above everything, not in a menu. */}
@@ -3108,6 +3113,7 @@ export default function App() {
         />
       )}
     </div>
+    </QuoteScoreProvider>
   )
 }
 

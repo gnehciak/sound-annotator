@@ -11,7 +11,8 @@ import type { PlayerHandle, Project } from '../types'
 import ScoreButton from './ScoreButton'
 import ScoreLayer from './ScoreLayer'
 import ScoreViewSwitch from './ScoreViewSwitch'
-import { scoreView as scoreViewOf, type ScoreView } from '../lib/score'
+import { scoreBytesUrl, scoreView as scoreViewOf, type ScoreView } from '../lib/score'
+import { QuoteScoreProvider } from '../lib/quotePreview'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
   loadVolume,
@@ -587,6 +588,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   )
 
   return (
+    // The quotes on the notes' rows are crops of this track's score; the
+    // provider is what tells them which score to cut them out of.
+    <QuoteScoreProvider url={score ? scoreBytesUrl(score, scoreReload) : null}>
     <div className="flex h-full flex-col text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
         <HomeDot>
@@ -952,5 +956,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         />
       )}
     </div>
+    </QuoteScoreProvider>
   )
 }

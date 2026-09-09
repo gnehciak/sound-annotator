@@ -803,7 +803,7 @@ export async function buildStudyPdf(
  * Export a project's notes as a PDF and open the file.
  *
  * The tab is opened **before** the document is built, and navigated once it
- * is: a score has to be fetched and rasterised for the picture quotes, and a
+ * is: a score has to be fetched and rasterised for the score quotes, and a
  * `window.open` on the far side of an `await` has lost the user gesture that
  * pop-up blockers look for. If the pop-up is blocked anyway the file is
  * downloaded instead, which needs no such permission — either way the press

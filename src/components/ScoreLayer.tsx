@@ -131,7 +131,7 @@ export default function ScoreLayer({
    * it, but dropping one from the page's context menu does.
    */
   onMovePin?: (id: string, x: number, y: number, page?: number) => void
-  /** Commit a moved or resized picture quote, in fractions of the page box. */
+  /** Commit a moved or resized score quote, in fractions of the page box. */
   onQuote?: (id: string, quote: NoteQuote) => void
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
   onPageChange?: (page: number) => void
@@ -340,13 +340,13 @@ export default function ScoreLayer({
   )
 
   /**
-   * The open note's picture quote, when it is aimed at *this* page. Not held to
+   * The open note's score quote, when it is aimed at *this* page. Not held to
    * the pins' time rule: a quote is the handout's business, not the stage's, so
    * it shows whenever its note is open and never otherwise.
    */
   const selectedNote = annotations?.find((a) => a.id === selectedId) ?? null
   const quoteOnPage = useCallback(
-    (n: number) => quoteOn(selectedNote, 'score', n),
+    (n: number) => quoteOn(selectedNote, n),
     [selectedNote],
   )
 
@@ -494,7 +494,6 @@ export default function ScoreLayer({
           <QuoteFrame
             quote={quoteOnPage(n)!}
             color={selectedNote.color ?? colorForId(selectedNote.id)}
-            tone="paper"
             readOnly={readOnly}
             onChange={onQuote && ((q) => onQuote(selectedNote.id, q))}
           />

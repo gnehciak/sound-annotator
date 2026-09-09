@@ -3,7 +3,7 @@
 // inline in the `annotations` jsonb (kept small — images go to Blob storage).
 import { api, ApiError } from './api'
 import { withBlocks } from './noteBlocks'
-import { withMigratedPins } from './overlays'
+import { withMigratedOverlay } from './overlays'
 import type { EditLockClaim } from './editLock'
 import type { Annotation, BrowseItem, Project } from '../types'
 
@@ -26,7 +26,7 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     // independent ones. Both are read-side only — a row keeps its old shape
     // until something writes it back.
     annotations: Array.isArray(data.annotations)
-      ? (data.annotations as Annotation[]).map((a) => withMigratedPins(withBlocks(a)))
+      ? (data.annotations as Annotation[]).map((a) => withMigratedOverlay(withBlocks(a)))
       : [],
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,

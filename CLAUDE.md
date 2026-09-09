@@ -265,47 +265,61 @@ width cap is a percentage of its box — right for a wide frame, and a column of
 one-word lines on a portrait page.
 
 Notes written before the score view carried one pin plus a `pinAnchor: 'score'`
-switch. `withMigratedPins` converts that on read (in `toProject`, beside
+switch. `withMigratedOverlay` converts that on read (in `toProject`, beside
 `withBlocks`) and the JSON importer does the same, so nothing downstream — and
 no old export or `?view=` link — has to know the shape ever existed.
 
-**A picture quote is a rectangle, never an image** (`overlay.quote`,
-`components/QuoteFrame.tsx`, `lib/quoteImages.ts`). Where a pin says *where*, a
-quote says *what the note is about*: a region of the picture or of a page of the
-score, which the exported documents reproduce as a cropped picture beside the
-note's text — so a handout carries the bars it is discussing instead of a
-timecode the reader has to go and look up. Fractions of its surface, like
-everything else aimed at a page, and placed by the same gesture as the pin:
-a third key in the inspector row, dragged onto whatever is being quoted, then
-resized in place by its corners. One per note, because a note about two places
-is two notes.
+**A score quote is a rectangle, never an image** (`overlay.quote`,
+`components/QuoteFrame.tsx`, `lib/quotePreview.ts`, `lib/quoteImages.ts`).
+Where a pin says *where*, a quote says *what the note is about*: a region of a
+page of the PDF score, which the note then **carries as a picture** — at the
+top of its row in the notes list, like a card's cover; as a thumbnail in the
+inspector; and beside its text in the exported documents, so a handout carries
+the bars it is discussing instead of a timecode the reader has to go and look
+up. Fractions of the page, like everything else aimed at one, and placed by the
+same gesture as the pin: a third key in the inspector row, dragged onto the
+page being quoted, then resized in place by its corners. One per note, because
+a note about two places is two notes.
+
+**The score is the only surface**, and that is a correction rather than a
+limit. A quote could once be aimed at the *picture*, where it cropped the
+note's **cover** — the only still of the frame this app can read, since a
+YouTube player is a cross-origin iframe whose pixels are unreachable to page JS
+at any moment, on any browser — so it printed nothing on the notes (most of
+them) that carry no cover. So the frame is not a drop target for the quote key,
+the key itself appears only once the track has a score, and a note written
+before this has its video quote dropped on read (`withMigratedOverlay`,
+`sanitizeQuote`). Note the gate the key inherits: the whole stage row is
+rendered for video tracks only, so an audio track with a score can't quote it
+yet.
 
 Storing a rectangle rather than an image is the whole design, and it buys
 three things: a quote costs no upload, it adds **nothing** to the blob sweeps or
 to `copyProject` (the two places a stored image would have to be taught about),
-and a Drive score whose file gains a new engraving quotes the new engraving on
-the next export. The pixels are found again at export time — a score quote is
-cut out of a page pdf.js rasterises for it, at a scale chosen from the crop so
-a narrow rectangle is drawn bigger. The cost is the one asymmetry: a quote of
-the *picture* crops the note's **cover**, because a cover is the only still of
-the frame this app can read — a YouTube player is a cross-origin iframe and its
-pixels are unreachable to page JS at any moment, on any browser — so a video
-quote on a note with no cover draws on screen and prints nothing, which the
-inspector says out loud. Every crop comes back as a **JPEG** — the consumers
-are a PDF and a .docx, and both want bytes rather than a styled window — which
-means reading a cover's pixels cross-origin: fine, since the Blob store answers
-`access-control-allow-origin: *`, but the request has to ask for CORS and a
-tainted canvas is caught rather than thrown. `collectQuoteImages` also runs
-under a deadline, because a score is fetched over the network and an export
-that waits forever on a Drive file nobody shares any more is
-indistinguishable from a broken one.
+and a Drive score whose file gains a new engraving quotes the new engraving
+from then on. The pixels are cut out of a page pdf.js rasterises for the
+purpose — twice over, and the two are worth keeping apart. `lib/quoteImages.ts`
+is the **export** pass: every quote in the project at print resolution, under
+one deadline and one progress arc, because a score is fetched over the network
+and an export that waits forever on a Drive file nobody shares any more is
+indistinguishable from a broken one. `lib/quotePreview.ts` is the **screen**
+pass: small crops asked for one note at a time while a list scrolls, so it
+shares one open document (released after a minute's quiet), one raster per page
+and one cache of crops across every row, and renders them one at a time —
+twenty notes mounting at once would otherwise start twenty pdf.js renders in
+the same instant. Both go through `cropImage`, and every crop comes back as a
+**JPEG**: the export's consumers are a PDF and a .docx, which want bytes rather
+than a styled window, and the same bytes are what an `<img>` on a row takes.
+Reading a note's own inline pictures that way is cross-origin — fine, since the
+Blob store answers `access-control-allow-origin: *`, but the request has to ask
+for CORS and a tainted canvas is caught rather than thrown.
 
 The frame draws **only for the note open in the inspector**, unlike a cover or
-a pin: it is an aiming tool for the handout, not something the class watches,
-and a permanently framed region on the page is what a box mark
-(`ScoreMarks`) already is. That is also why `hasOverlay` doesn't count it —
-that predicate decides who is on the stage — and why the notes list gives a
-quote its own chip rather than folding it into the stage one.
+a pin: it is an aiming tool, not something the class watches, and a permanently
+framed region on the page is what a box mark (`ScoreMarks`) already is. That is
+also why `hasOverlay` doesn't count it — that predicate decides who is on the
+stage — and why the notes list keeps the quote's own chip beside the picture:
+the picture shows the region, the chip names the page it came from.
 
 **The two exports write real files** — `lib/exportPdf.ts` (pdf-lib) and
 `lib/exportDocx.ts` (OOXML by hand, zipped with `fflate`) — rather than opening
@@ -320,7 +334,7 @@ The shape is the marking-guide grid a music teacher works in, **carrying this
 app's own structure** rather than a blank template's. *Where* is the first
 column, because a timecode is this app's primary coordinate — a study note
 nobody can find in the recording is half a note — with the bar or rehearsal
-mark under it. *Example* is the picture quote, captioned with where it was cut
+mark under it. *Example* is the score quote, captioned with the page it was cut
 from. The grouping is the app's own vocabulary: a note is filed under its first
 inline property tag (`Timbre / Bright`), the same concept list the `@` menu
 offers, with `Ungrouped` last. Above all of it, **structure notes get their own

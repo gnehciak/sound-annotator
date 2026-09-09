@@ -5,11 +5,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Move } from 'lucide-react'
-import type { Annotation, NoteQuote } from '../types'
+import type { Annotation } from '../types'
 import PinLayer from './PinLayer'
-import QuoteFrame from './QuoteFrame'
-import { colorForId } from '../lib/noteColors'
-import { coverPosition, isFilled, quoteOn, visibleLayer } from '../lib/overlays'
+import { coverPosition, isFilled, visibleLayer } from '../lib/overlays'
 import { usePinTarget } from '../lib/pinTargets'
 
 interface Props {
@@ -28,8 +26,6 @@ interface Props {
   onMovePin?: (id: string, x: number, y: number) => void
   /** Commit a repositioned fill crop, as 0–1 object-position fractions. */
   onMoveCover?: (id: string, x: number, y: number) => void
-  /** Commit a moved or resized picture quote, in fractions of the frame. */
-  onQuote?: (id: string, quote: NoteQuote) => void
   /**
    * Play/pause, handed to the captions. A caption has to take the pointer to
    * offer its close control, which means it covers the player's own
@@ -68,7 +64,6 @@ export default function VideoOverlays({
   readOnly,
   onMovePin,
   onMoveCover,
-  onQuote,
   onTogglePlay,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
@@ -91,10 +86,6 @@ export default function VideoOverlays({
   const frameTarget = usePinTarget('frame')
 
   const layer = visibleLayer(annotations, currentTime, selectedId)
-  // The open note's quote, if it is aimed at the frame rather than at a page.
-  const selected = annotations.find((a) => a.id === selectedId)
-  const selectedQuote = quoteOn(selected, 'video')
-  const quoted = selected && selectedQuote ? { note: selected, quote: selectedQuote } : null
   const coverUrl = layer.cover?.overlay?.coverUrl
   const cover = coverUrl && !broken.has(coverUrl) ? layer.cover : null
   const editable = !readOnly
@@ -223,20 +214,6 @@ export default function VideoOverlays({
             </div>
           )}
         </>
-      )}
-
-      {/* The open note's picture quote, under the pins so a caption is never
-          hidden by the rectangle it sits inside. Only ever the open note's:
-          the frame is an aiming tool for the printed handout, not something
-          the class watches (see QuoteFrame). */}
-      {quoted && (
-        <QuoteFrame
-          quote={quoted.quote}
-          color={quoted.note.color ?? colorForId(quoted.note.id)}
-          tone="dark"
-          readOnly={readOnly}
-          onChange={onQuote && ((q) => onQuote(quoted.note.id, q))}
-        />
       )}
 
       {/* Frame-anchored pins only. A pin aimed at the score's page is drawn

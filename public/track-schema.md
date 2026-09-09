@@ -269,7 +269,7 @@ page of the score. Three independent pieces, any or all, on the note's
 | `scorePinX` | number | The **score pin**: where its dot sits across the drawn page of the score, `0`–`1` from the left — see below. |
 | `scorePinY` | number | And down the page, `0`–`1` from the top. |
 | `scorePinPage` | number | Which score page that pin lives on, 1-based. Defaults to page 1. |
-| `quote` | object | A **picture quote**: the region of the picture or of a score page this note is about, reproduced as a cropped image in the printed notes. See below. |
+| `quote` | object | A **score quote**: the region of a page of the track's PDF score this note is about, which the note carries as a picture — on its row, and in the printed notes. See below. |
 | `hold` | number | Seconds the layer stays up on a note with **no `end`**. Defaults to 4; a note with an `end` uses its own span instead. |
 | `coverUrl` | string | A hosted cover image. **You can't write this** — see below. |
 | `coverFit` | string | `"cover"` fills the frame and crops; omit for the default, which letterboxes the whole image. |
@@ -299,32 +299,38 @@ Files exported before the score got its own view carry a single pin with a
 `pinAnchor: "score"` switch instead. They still import: that pin lands on
 whichever of the two it named.
 
-### `overlay.quote` — the picture quote
+### `overlay.quote` — the score quote
 
-A rectangle, never an image. The two printed documents — the notes report and
-the answer sheet — reproduce what it frames as a cropped picture above the
-note's text, so a handout carries the bars it is talking about instead of a
-timecode the reader has to go and look up.
+A rectangle, never an image. What it frames is cut out of the track's PDF score
+wherever the note is shown — at the top of its row in the notes list, in the
+editor's note panel, and as a cropped picture beside its text in the two
+printed documents — so a handout carries the bars it is talking about instead
+of a timecode the reader has to go and look up.
 
 | field | type | notes |
 | --- | --- | --- |
-| `on` | string | `"score"` — a region of a page of the track's PDF score; `"video"` — a region of the picture. Required. |
-| `page` | number | Which score page, 1-based. `"score"` quotes only; defaults to page 1. |
-| `x` | number | The rectangle's left edge, `0`–`1` across that surface. |
+| `on` | string | `"score"`, the only surface a quote can be cut out of. Required. |
+| `page` | number | Which page of the score, 1-based. Defaults to page 1. |
+| `x` | number | The rectangle's left edge, `0`–`1` across the page. |
 | `y` | number | Its top edge, `0`–`1` down. |
-| `w` | number | Its width, as a fraction of the surface. |
+| `w` | number | Its width, as a fraction of the page. |
 | `h` | number | Its height. |
 
 All four numbers are needed together: a rectangle missing any of them is
-dropped rather than guessed at, and one smaller than 5% of its surface, or
-hanging off an edge, is squared up on import. One quote per note — a note that
-is about two places is two notes.
+dropped rather than guessed at, and one smaller than 5% of the page, or hanging
+off an edge, is squared up on import. One quote per note — a note that is about
+two places is two notes. A quote on a track with no `settings.score` (§9) has
+nothing to cut and simply never appears.
 
-**The pixels are found again at export time, never stored.** A `"score"` quote
-is cut out of the PDF, so a Drive score that gains a new engraving quotes the
-new engraving on the next export. A `"video"` quote crops the note's **cover
-image** — a YouTube frame's pixels can't be read by the page at all — so a
-`"video"` quote on a note with no `coverUrl` prints nothing.
+**The pixels are found again every time, never stored.** The crop is made from
+the PDF as it is *now*, so a Drive score that gains a new engraving quotes the
+new engraving from then on, and a quote costs no upload and nothing to copy
+when the track is.
+
+Files exported when a quote could also name the *picture* (`"on": "video"`)
+still import; that quote is dropped. The picture was never quotable in any
+honest way — a YouTube player is a cross-origin iframe whose pixels the page
+cannot read, so such a quote could only ever crop the note's own cover image.
 
 **The cover is the `<img>` rule again.** A cover image is a note image: the app
 hosts the bytes, and a file can't bring its own. `coverUrl` is a link, so a URL

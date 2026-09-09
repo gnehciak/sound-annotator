@@ -28,6 +28,7 @@ import {
   quoteOf,
   quotePageOf,
 } from '../lib/overlays'
+import { useQuotePreview } from '../lib/quotePreview'
 import { useResolvedTheme } from '../lib/theme'
 import { useSmoothProgress } from '../lib/useSmoothProgress'
 import AnnotationEditor from './AnnotationEditor'
@@ -132,6 +133,12 @@ export default function AnnotationItem({
   onAnswer,
 }: Props) {
   const theme = useResolvedTheme()
+  // The note's quote, as the picture it is: the region of the score this note
+  // is about, cut out of the page. It stands at the top of the row like a
+  // card's cover — which is what it is to the reader, the one thing on the row
+  // that shows the music instead of describing it. Null until it is drawn, and
+  // for a track whose score can't be read.
+  const quotePreview = useQuotePreview(quoteOf(annotation))
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const tags = tagsOf(annotation)
   // Drop the body preview entirely on empty notes — TipTap serializes a blank
@@ -323,8 +330,29 @@ export default function AnnotationItem({
         style={{ background: color }}
       />
 
+      {/* The quote, as the note's cover. Inside the row's own gutters rather
+          than bled to its edges, so the spine and the progress bar keep the
+          strip they own — a picture under either of them would read as damage
+          to the picture. White ground because a page of a score is white in
+          both themes. */}
+      {quotePreview && (
+        <div className="pl-3 pr-2 pt-3">
+          <div className="overflow-hidden rounded-md bg-white ring-1 ring-line">
+            <img
+              src={quotePreview.src}
+              alt={`The quoted region of page ${quotePageOf(quoteOf(annotation)!)} of the score`}
+              className="mx-auto max-h-[176px] w-auto max-w-full object-contain"
+            />
+          </div>
+        </div>
+      )}
+
       {/* header */}
-      <div className={`flex items-center gap-1.5 pl-3 pr-2 pt-3 ${hasBody ? 'pb-1' : 'pb-3'}`}>
+      <div
+        className={`flex items-center gap-1.5 pl-3 pr-2 ${
+          quotePreview ? 'pt-2' : 'pt-3'
+        } ${hasBody ? 'pb-1' : 'pb-3'}`}
+      >
         {/* Timecode chip — for ranges, a passage-play segment is fused on. */}
         <span className="press inline-flex items-stretch">
           <button
@@ -447,10 +475,11 @@ export default function AnnotationItem({
           </span>
         )}
 
-        {/* Picture quote — its own chip rather than a fourth thing folded into
+        {/* Score quote — its own chip rather than a fourth thing folded into
             the stage one, because it answers a different question: not "does
-            this note touch the picture", but "does the handout show the music
-            this note is about". */}
+            this note touch the picture", but "which music is this note
+            about". It stays even with the picture above: the picture shows
+            the region, the chip names the page it came from. */}
         {quoteOf(annotation) && (
           <span
             title={quoteTitle(annotation)}
@@ -615,13 +644,10 @@ function stageChip(a: Annotation): string {
   return onVideo ? 'On video' : 'On score'
 }
 
-/** What the quote chip says on hover: which surface, and which page of it. */
+/** What the quote chip says on hover: which page of the score it was cut from. */
 function quoteTitle(a: Annotation): string {
   const q = quoteOf(a)
-  if (!q) return ''
-  return q.on === 'score'
-    ? `The printed notes show this region of page ${quotePageOf(q)}`
-    : 'The printed notes show this region of the note’s cover image'
+  return q ? `This note quotes page ${quotePageOf(q)} of the score` : ''
 }
 
 function stageTitle(a: Annotation): string {

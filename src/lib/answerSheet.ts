@@ -198,7 +198,7 @@ const STYLES = `
   /* A question prompt can carry inline property tags — same paper styling as
      the track export. */
   ${PROPERTY_TAG_PRINT_CSS}
-  /* Picture quotes — the bars (or the moment) a question is asking about.
+  /* Score quotes — the bars a question is asking about.
      The crop is already baked into the image (see lib/quoteImages), so this
      only has to bound how much of the page one is allowed to take. */
   .pq {
@@ -349,7 +349,7 @@ export async function exportAnswerSheetPdf(
   input: AnswerSheetInput,
 ): Promise<void> {
   if (typeof window === 'undefined') return
-  // Opened before the picture quotes are resolved, for the reason
+  // Opened before the score quotes are resolved, for the reason
   // exportProjectPdf spells out: a `window.open` after an `await` has lost the
   // user gesture pop-up blockers look for.
   const tab = window.open('', '_blank')
