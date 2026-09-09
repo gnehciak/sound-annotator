@@ -19,6 +19,9 @@ import {
   Brackets,
   CircleHelp,
   Hash,
+  BookOpen,
+  ListChecks,
+  Wand2,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { formatTime, parseTime } from '../lib/format'
@@ -118,6 +121,9 @@ export default function NoteInspector({
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
   const ownApiRef = useRef<AnnotationEditorHandle | null>(null)
+  const [dictOpen, setDictOpen] = useState(false)
+  /** Transient: how many underlines the last "Tag underlined" press converted. */
+  const [tagged, setTagged] = useState<number | null>(null)
   // One ref callback feeding two holders: this component's own (focus, the
   // dictionary's tag insertion) and the host's, when it asked for one.
   const setEditorApi = (api: AnnotationEditorHandle | null) => {
@@ -336,15 +342,56 @@ export default function NoteInspector({
           )
         })}
 
-        {/* The vocabulary itself, at the foot of the note: search it, or open a
-            concept, and click a word to write it into the prose as a tag. This
-            is where "+ Property" used to add an empty grid. */}
-        <ElementsDictionary
-          onInsert={(field, value) =>
-            ownApiRef.current?.insertProperty(field, value)
-          }
-        />
+        {/* Three things you do *to* a note's prose rather than in it: lay out
+            the concepts to answer, go looking for a word, or accept every
+            underline at once. The dictionary opens as a modal — 600 words do
+            not fit in a column that is already scrolling, and the note is the
+            thing you want to keep looking at while you choose. */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-[13px] py-2.5">
+          <button
+            type="button"
+            onClick={() => ownApiRef.current?.insertTemplate()}
+            title="Add a bullet for each concept, each already tagged"
+            className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
+          >
+            <ListChecks size={12} /> Template
+          </button>
+          <button
+            type="button"
+            onClick={() => setDictOpen(true)}
+            title="Browse or search every word the vocabulary knows"
+            className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
+          >
+            <BookOpen size={12} /> Dictionary
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const n = ownApiRef.current?.tagAllSuggestions() ?? 0
+              setTagged(n)
+              window.setTimeout(() => setTagged(null), 2600)
+            }}
+            title="Turn every underlined word in this note into a tag"
+            className="btn-ghost btn-sm press hover:border-accent hover:text-accentink"
+          >
+            <Wand2 size={12} /> Tag underlined
+          </button>
+          {tagged != null && (
+            <span className="animate-fade-in font-mono text-[10px] text-muted">
+              {tagged === 0
+                ? 'nothing underlined'
+                : `${tagged} tagged — undo to put them back`}
+            </span>
+          )}
+        </div>
       </div>
+
+      {dictOpen && (
+        <ElementsDictionary
+          onInsert={(field, value) => ownApiRef.current?.insertProperty(field, value)}
+          onClose={() => setDictOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -12,8 +12,15 @@
 // eight concept chips are the way in when you can't: pick one and its whole
 // field list opens, which is the "what could I say here?" browse the "@" menu
 // deliberately doesn't do (it needs a query).
-import { useMemo, useRef, useState } from 'react'
-import { BookOpen, ChevronDown, Search } from 'lucide-react'
+//
+// It is a modal rather than a panel folded into the note. Six hundred words
+// need room, and the inspector is a narrow column that was already scrolling —
+// opening the vocabulary inside it pushed the note itself off the screen, which
+// is the one thing you want to keep looking at while choosing a word. Clicking
+// a word writes it into the note behind and leaves the modal open, because
+// picking two or three in a row is the normal case.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, Search, X } from 'lucide-react'
 import {
   VOCAB_CATEGORIES,
   VOCAB_SIZE,
@@ -34,16 +41,33 @@ interface Group {
 
 export default function ElementsDictionary({
   onInsert,
+  onClose,
 }: {
   /** Write the word into the note as a tag, at the caret. */
   onInsert: (field: string, value: string) => void
+  onClose: () => void
 }) {
   const theme = useResolvedTheme()
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState<string | null>(null)
+  const [lastPicked, setLastPicked] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    searchRef.current?.focus()
+    // Capture phase, and stopImmediatePropagation: the app closes the note
+    // inspector on Escape with its own window listener, and plain
+    // stopPropagation does not stop a sibling listener on the same target — so
+    // one press would shut the dictionary *and* the note behind it.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopImmediatePropagation()
+      e.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
 
   const groups = useMemo<Group[]>(() => {
     const q = query.trim()
@@ -80,38 +104,42 @@ export default function ElementsDictionary({
   }, [query, cat])
 
   return (
-    <div ref={rootRef} className="border-t border-line">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((o) => !o)
-          // It sits at the very bottom of a scrolling inspector, so opening it
-          // otherwise unfolds the whole thing below the fold.
-          if (!open)
-            requestAnimationFrame(() => {
-              rootRef.current?.scrollIntoView({ block: 'nearest' })
-              searchRef.current?.focus()
-            })
-        }}
-        aria-expanded={open}
-        title="Every word the concept vocabulary knows — click one to tag it here"
-        className="flex w-full items-center gap-2 px-[13px] py-2.5 text-left"
+    <div
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-label="Elements of music"
+        className="glass-pop flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl"
       >
-        <BookOpen size={12} className="shrink-0 text-muted" />
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-fg">
-          Elements of music
-        </span>
-        <span className="font-mono text-[10px] text-muted">{VOCAB_SIZE} words</span>
-        <div className="flex-1" />
-        <ChevronDown
-          size={13}
-          className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+        <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/70 bg-fg/[0.03] px-3.5">
+          <BookOpen size={13} className="shrink-0 text-muted" />
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+            Elements of music
+          </span>
+          <span className="font-mono text-[10px] text-muted">{VOCAB_SIZE} words</span>
+          <div className="flex-1" />
+          {lastPicked && (
+            <span className="animate-fade-in font-mono text-[10px] text-accentink">
+              {lastPicked} added
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close (Esc)"
+            aria-label="Close"
+            className="btn-icon press"
+          >
+            <X size={15} />
+          </button>
+        </div>
 
-      {open && (
-        <div className="animate-fade-in px-[13px] pb-3">
-          <div className="relative mb-2">
+        <div className="flex min-h-0 flex-col gap-2 px-4 py-3.5">
+          <div className="relative">
             <Search
               size={12}
               className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
@@ -120,13 +148,13 @@ export default function ElementsDictionary({
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search — e.g. timbre bright, hemiola, ternary"
+              placeholder="Search — e.g. timbre bright, cor anglais, hemiola, 7/8"
               aria-label="Search the concept vocabulary"
               className="field pl-[26px]"
             />
           </div>
 
-          <div className="mb-2 flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1">
             {VOCAB_CATEGORIES.map((c) => (
               <button
                 key={c.id}
@@ -145,7 +173,7 @@ export default function ElementsDictionary({
           </div>
 
           {groups.length === 0 ? (
-            <p className="px-0.5 py-1 text-[11.5px] leading-snug text-muted">
+            <p className="px-0.5 py-3 text-[11.5px] leading-snug text-muted">
               {!query
                 ? 'Pick a concept, or search. Clicking a word writes it into the note as a tag.'
                 : cat
@@ -155,7 +183,7 @@ export default function ElementsDictionary({
                   : 'No word like that. The vocabulary is finite; type “@” in the note to tag the word you want anyway.'}
             </p>
           ) : (
-            <div className="max-h-56 space-y-2.5 overflow-y-auto pr-0.5">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {groups.map((g) => (
                 <div key={g.key}>
                   <div className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-muted">
@@ -168,7 +196,10 @@ export default function ElementsDictionary({
                         <button
                           key={value}
                           type="button"
-                          onClick={() => onInsert(g.field, value)}
+                          onClick={() => {
+                            onInsert(g.field, value)
+                            setLastPicked(value)
+                          }}
                           title={`Tag this note — ${g.category}: ${value}`}
                           className="chip chip-outline press normal-case tracking-[0.01em]"
                           style={{
@@ -186,7 +217,7 @@ export default function ElementsDictionary({
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -694,11 +694,31 @@ strictest to loosest:
    preview or view link shows the prose as written.
 3. **The `@` menu**, which still lists note cross-references below the
    properties so there is one trigger key rather than two
-   (`src/components/noteMention.ts`), and the **dictionary** at the foot of the
-   inspector (`src/components/ElementsDictionary.tsx`) — the vocabulary made
-   browsable, standing where "+ Property" used to. It is search-first (through
-   `searchProperties`, so it ranks identically to the `@` menu) with the eight
-   concept chips as the way in when you can't name the word yet.
+   (`src/components/noteMention.ts`), and the **dictionary**
+   (`src/components/ElementsDictionary.tsx`) — the vocabulary made browsable.
+   It is search-first (through `searchProperties`, so it ranks identically to
+   the `@` menu) with the concept chips as the way in when you can't name the
+   word yet. It opens as a **modal**: 600 words do not fit in a column that is
+   already scrolling, and the note is the thing you want to keep looking at
+   while you choose. Picking a word writes it and leaves the modal open,
+   because picking two or three in a row is the normal case. Its Escape
+   listener is **capture-phase with `stopImmediatePropagation`**, or the same
+   press would also reach App's own Escape handler and close the note behind
+   it.
+
+**Three actions sit under the note** (`NoteInspector`, driven through
+`AnnotationEditorHandle`). *Template* lays out a bullet per concept, each
+opening with that concept's own tag — real chips rather than bold words, so
+the headings are the same data as everything else. *Dictionary* opens the
+modal. *Tag underlined* accepts every underline in one chain, applied back to
+front so earlier positions stay valid and the whole sweep is one undo step;
+where a word names two concepts it takes the first, which is why the card
+still exists.
+
+**Untagging leaves the word.** The chip replaced a word when it was made, so
+removing it puts that word back as plain text rather than deleting it —
+otherwise "the texture is thin" quietly becomes "the texture is". Deleting the
+word is what Backspace over the chip is for.
 
 **The `@` menu narrows like an editor's completion list**, which is what the
 600-word vocabulary needs: `searchProperties` (`src/lib/propertyTags.ts`) reads

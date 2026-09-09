@@ -17,7 +17,7 @@ import Popover from './Popover'
 export default function PropertyTagView({
   node,
   updateAttributes,
-  deleteNode,
+  getPos,
   editor,
 }: NodeViewProps) {
   const theme = useResolvedTheme()
@@ -32,6 +32,24 @@ export default function PropertyTagView({
   const color = hueFor(field, value)
   const options = optionsForField(field)
   const editable = editor.isEditable
+
+  /**
+   * Untag: put the word back as plain text rather than deleting it.
+   *
+   * The chip stands *for* a word in the sentence — it replaced one when it was
+   * made — so removing the tag has to give the sentence its word back, or
+   * "the texture is thin" quietly becomes "the texture is". Deleting the word
+   * is what Backspace over the chip is for.
+   */
+  const untag = () => {
+    const from = getPos()
+    if (typeof from !== 'number') return
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from, to: from + node.nodeSize }, text)
+      .run()
+  }
 
   return (
     <NodeViewWrapper
@@ -98,13 +116,13 @@ export default function PropertyTagView({
             onClick={(e) => {
               e.stopPropagation()
               setOpen(false)
-              deleteNode()
+              untag()
             }}
             className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-raised hover:text-danger ${
               options.length > 0 ? 'mt-1 border-t border-line/60 pt-2' : ''
             }`}
           >
-            <X size={12} /> Remove tag
+            <X size={12} /> Untag, keep the word
           </button>
         </Popover>
       )}
