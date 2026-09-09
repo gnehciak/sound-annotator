@@ -90,6 +90,7 @@ export default function ScoreLayer({
   readOnly,
   onMovePin,
   onQuote,
+  onPlayNote,
   onPageChange,
   onMarks,
   canDraw = false,
@@ -133,6 +134,12 @@ export default function ScoreLayer({
   onMovePin?: (id: string, x: number, y: number, page?: number) => void
   /** Commit a moved or resized score quote, in fractions of the page box. */
   onQuote?: (id: string, quote: NoteQuote) => void
+  /**
+   * Play the track from a note's start — what a press on its quote does. A
+   * quote is a region of the music, so pressing it asks to hear that music;
+   * the host decides what "play from here" means, since it owns the transport.
+   */
+  onPlayNote?: (id: string) => void
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
   onPageChange?: (page: number) => void
   /** Save the drawn marks. Absent means nobody here may draw. */
@@ -145,6 +152,13 @@ export default function ScoreLayer({
   const [rawExpanded, setExpanded] = useState(false)
   const [lead, setLead] = useState(DEFAULT_TURN_LEAD)
   const expanded = rawExpanded || syncing
+  /**
+   * Whether the score is the surface being *read* — its own view of the
+   * column, or the whole viewport — as against the layer laid over the video,
+   * which is background: no room to draw on, to zoom, or to scroll, and a
+   * picture underneath whose own clicks it must not swallow.
+   */
+  const reading = placement === 'pane' || expanded
 
   // The drawing tools. All three are the reader's own session state, not the
   // track's: which pen you last held is about you, and saving it would make
@@ -158,7 +172,7 @@ export default function ScoreLayer({
   // Drawing needs a surface big enough to aim at, so the tools are offered in
   // the pane and expanded but never in the video frame — and never while the
   // sync workspace is up, where every press is meant to be a page turn.
-  const drawable = canDraw && !!onMarks && !syncing && (placement === 'pane' || expanded)
+  const drawable = canDraw && !!onMarks && !syncing && reading
 
   // A shorter replacement (or a different score) must never leave the reader
   // parked on a page that no longer exists. Clamped as it is read rather than
@@ -440,7 +454,7 @@ export default function ScoreLayer({
    * this layer covers the player — its own view, or full screen — it has to
    * carry one, because it has covered the only other one.
    */
-  const footTransport = !!transport && (placement === 'pane' || expanded)
+  const footTransport = !!transport && reading
 
   /**
    * Room the page must not be drawn into: the page nav above, and below it
@@ -470,11 +484,11 @@ export default function ScoreLayer({
       onExpanded={syncing ? undefined : setExpanded}
       // Over the picture the chrome is white-on-video; over the score it is
       // the app's own floating material, like every menu and popover.
-      tone={placement === 'pane' || expanded ? 'panel' : 'video'}
+      tone={reading ? 'panel' : 'video'}
       // Zoom is offered only where it can be used: the overlay over the video
       // is inert background, and a magnified page in a 16:9 letterbox would be
       // a corner of a stave nobody can scroll to the rest of.
-      zoom={placement === 'pane' || expanded ? zoom : undefined}
+      zoom={reading ? zoom : undefined}
       onZoom={zoomBy}
       onResetZoom={() => setZoom(1)}
     />
@@ -508,8 +522,13 @@ export default function ScoreLayer({
             key={note.id}
             quote={quote}
             color={note.color ?? colorForId(note.id)}
+            label={noteLabel(note.start, note.end)}
             readOnly={readOnly}
             onChange={onQuote && ((q) => onQuote(note.id, q))}
+            // Only where the score is being read. Over the video the layer is
+            // inert background, and a rectangle that swallowed the picture's
+            // own click-to-pause would cost the class more than it gave them.
+            onPlay={reading && onPlayNote ? () => onPlayNote(note.id) : undefined}
           />
         ))}
         <PinLayer
@@ -533,6 +552,8 @@ export default function ScoreLayer({
       readOnly,
       onMovePin,
       onQuote,
+      reading,
+      onPlayNote,
     ],
   )
 
@@ -550,8 +571,8 @@ export default function ScoreLayer({
         pad={pad}
         // The stack is the reading surface; over the video the layer is inert
         // background with no room to scroll, so it stays one fitted page.
-        continuous={placement === 'pane' || expanded}
-        interactive={placement === 'pane' || expanded}
+        continuous={reading}
+        interactive={reading}
         onUserPage={showUserPage}
         onZoom={setZoom}
         // Both layers live inside the page box, which is what makes their

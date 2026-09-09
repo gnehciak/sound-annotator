@@ -321,7 +321,14 @@ the way of it. To a *reader* — a `?view=` link, or any read-only score — the
 is nothing to aim, so a quote joins the pins on the stage under exactly their
 time rule, and the page shows the bars the note is about while the note is on.
 A frame that never goes away is what a box mark (`ScoreMarks`) is, which is why
-neither rule leaves one there. `hasOverlay` still doesn't count a quote — that
+neither rule leaves one there. **Pressing a frame plays the note** — a
+rectangle is a region of the music, so the honest answer to a press on it is
+to hear that music, and the note's row scrolls into view with it; a press that
+travels `DRAG_SLOP` is the aiming drag instead, so the editor keeps both
+gestures on one rectangle. Only where the score is *read* (`reading` — its own
+view of the column, or expanded): over the video the layer is background, and
+a rectangle that swallowed the picture's own click-to-pause would cost the
+class more than it gave them. `hasOverlay` still doesn't count a quote — that
 predicate decides who is on the stage, and the frame is drawn from the quote
 itself — and the notes list still keeps the quote's own chip beside the
 picture: the picture shows the region, the chip names the page it came from.

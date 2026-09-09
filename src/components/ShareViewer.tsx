@@ -335,6 +335,17 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
     [annotations, seek],
   )
 
+  // Play the track from a note — what pressing its quote on the score asks
+  // for. It scrolls the note's row into view on the way, since the region on
+  // the page and the row are the same thing said twice.
+  const playFromNote = useCallback(
+    (id: string) => {
+      seekToNote(id)
+      play()
+    },
+    [seekToNote, play],
+  )
+
   const jumpNote = useCallback(
     (dir: 1 | -1) => {
       if (annotations.length === 0) return
@@ -527,6 +538,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           />
         }
         annotations={annotations}
+        onPlayNote={playFromNote}
         readOnly
       />
     ) : null

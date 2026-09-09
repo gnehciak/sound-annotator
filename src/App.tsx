@@ -1666,6 +1666,15 @@ export default function App() {
     if (!(mode === 'dock' && wideForDock)) pause()
   }
 
+  // Play the track from a note — what pressing its quote on the score asks
+  // for. The scroll comes along: the region on the page and the note it
+  // belongs to are the same thing said twice, and the reader pressed one of
+  // them, so the other should be where they can read it.
+  function playFromNote(id: string) {
+    seekToNote(id)
+    play()
+  }
+
   // Jump to a mentioned note: seek to it and scroll it into view.
   function seekToNote(id: string) {
     const a = annotationsRef.current.find((x) => x.id === id)
@@ -2080,6 +2089,7 @@ export default function App() {
         readOnly={effectiveViewOnly}
         onMovePin={moveScorePin}
         onQuote={moveQuote}
+        onPlayNote={playFromNote}
         onPageChange={setScorePage}
         onMarks={canEditSettings ? changeMarks : undefined}
         canDraw={canEditSettings}

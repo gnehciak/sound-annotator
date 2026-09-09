@@ -19,10 +19,25 @@ interface Props {
   readOnly?: boolean
   /** Commit a moved or resized rectangle, in the same fractions. */
   onChange?: (quote: NoteQuote) => void
+  /**
+   * Play the track from the note this quote belongs to. Present wherever the
+   * score is being *read* — the rectangle is a region of music, so the honest
+   * thing for a press on it to do is play that music.
+   */
+  onPlay?: () => void
+  /** The note's own timecode, for the tooltip and the accessible name. */
+  label?: string
 }
 
 /** One nudge of the arrow keys, as a fraction of the page (Shift = ×5). */
 const NUDGE = 0.01
+
+/**
+ * How far a press may travel and still count as a click, in px. The same rule
+ * the pin key follows: a rectangle you are aiming is dragged, and a rectangle
+ * you merely pressed is one you wanted to hear.
+ */
+const DRAG_SLOP = 4
 
 /** The four corners: which edges each moves, and where it sits. */
 const CORNERS = [
@@ -57,16 +72,32 @@ interface Grab {
  * different object with a different job; keeping quotes off the stage is what
  * stops the two from looking alike.
  *
- * Inert when read-only; otherwise the body drags the rectangle and the four
- * corners resize it, both committed once on release, so a drag is one save and
- * one undo step rather than one per pointer event.
+ * The body drags the rectangle and the four corners resize it, both committed
+ * once on release, so a drag is one save and one undo step rather than one per
+ * pointer event. A press that never travels `DRAG_SLOP` isn't a drag at all:
+ * it plays the note, because a region of the music is a thing you want to
+ * hear, and that is the whole gesture where the frame is read-only.
  */
-export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) {
+export default function QuoteFrame({
+  quote,
+  color,
+  readOnly,
+  onChange,
+  onPlay,
+  label,
+}: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   // The rectangle under the pointer, held locally for the length of the drag.
   const [draft, setDraft] = useState<NoteQuote | null>(null)
   const grab = useRef<Grab | null>(null)
+  // Whether the press on the body has travelled far enough to be a drag. A
+  // press that never does is a click, and plays the note — so an editor gets
+  // both gestures on one rectangle without a second control to hit.
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const editable = !readOnly && !!onChange
+  // Anything the pointer or the keyboard can reach: the rectangle is a button
+  // wherever it plays, and a draggable one where it is also being aimed.
+  const interactive = editable || !!onPlay
 
   const q = draft ?? quote
   // The page is white paper in both themes, so the hue is resolved for one.
@@ -90,6 +121,9 @@ export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) 
       /* the drag still tracks while the pointer is over the element */
     }
     grab.current = { whole, sx, sy, startX: e.clientX, startY: e.clientY, from: quote }
+    // Only the body's press can turn out to be a click: a corner is a handle,
+    // and pressing one is never a request to hear anything.
+    press.current = whole ? { x: e.clientX, y: e.clientY, moved: false } : null
     setDraft(quote)
   }
 
@@ -97,6 +131,8 @@ export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) 
     const g = grab.current
     const box = boxRef.current?.getBoundingClientRect()
     if (!g || !box || box.width === 0 || box.height === 0) return
+    const p = press.current
+    if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) >= DRAG_SLOP) p.moved = true
     const dx = (e.clientX - g.startX) / box.width
     const dy = (e.clientY - g.startY) / box.height
     if (g.whole) {
@@ -123,14 +159,28 @@ export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) 
 
   const end = () => {
     const next = draft
+    const clicked = !!press.current && !press.current.moved
     grab.current = null
+    press.current = null
     setDraft(null)
+    // A press that stayed put is a click, and the sub-slop wobble under it is
+    // not a move anyone asked for — so it plays the note and commits nothing.
+    if (clicked) {
+      onPlay?.()
+      return
+    }
     if (next) onChange?.(next)
   }
 
   // The arrows move the rectangle; the corners are the only way to resize it.
   // One meaning per key beats overloading Shift, which is already the big step.
+  // Enter and Space are the click, since this is a button to the keyboard.
   const nudge = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (onPlay && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault()
+      onPlay()
+      return
+    }
     if (!editable) return
     const by = e.shiftKey ? NUDGE * 5 : NUDGE
     const step: Record<string, [number, number]> = {
@@ -148,13 +198,24 @@ export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) 
   return (
     <div ref={boxRef} className="pointer-events-none absolute inset-0">
       <div
-        role={editable ? 'button' : undefined}
-        tabIndex={editable ? 0 : undefined}
-        aria-label={editable ? 'Move the score quote' : undefined}
+        role={interactive ? 'button' : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        aria-label={
+          editable
+            ? 'Move the score quote, or press it to play the note'
+            : onPlay
+              ? `Play from ${label ?? 'this score quote'}`
+              : undefined
+        }
+        title={onPlay && label ? `Play from ${label}` : undefined}
         onPointerDown={(e) => begin(e, true, 0, 0)}
         onPointerMove={move}
         onPointerUp={end}
         onPointerCancel={end}
+        // Reading, there is no press to interpret: the rectangle is inert
+        // except as a button, so the browser's own click is the whole gesture
+        // — and a touch that scrolled the page never produces one.
+        onClick={editable ? undefined : onPlay}
         onKeyDown={nudge}
         style={{
           left: `${q.x * 100}%`,
@@ -166,10 +227,10 @@ export default function QuoteFrame({ quote, color, readOnly, onChange }: Props) 
           boxShadow: `inset 0 0 0 1.5px ${hue}`,
         }}
         className={`absolute animate-fade-in rounded-[3px] ${
-          editable
-            ? 'pointer-events-auto cursor-move touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent'
+          interactive
+            ? 'pointer-events-auto outline-none focus-visible:ring-2 focus-visible:ring-accent'
             : ''
-        }`}
+        } ${editable ? 'cursor-move touch-none' : onPlay ? 'cursor-pointer' : ''}`}
       >
         {/* A badge, not a caption: what the rectangle *is* needs saying once,
             and its words are the note's own, printed underneath it. Centred on
