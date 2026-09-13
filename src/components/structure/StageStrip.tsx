@@ -25,6 +25,13 @@ const hexA = (hex: string, a: number) =>
  *
  * `children` stack above the shape — the chord bar, which in full screen
  * belongs with the song's map rather than floating on its own.
+ *
+ * A flush black band across the whole width, down to the bottom edge of the
+ * screen: the chord bar, then the section name and the clock, then the
+ * song's shape as the last thing before the edge. No gradient, no inset —
+ * on a projector the foot of the frame is where the eye rests, and a strip
+ * floating in a gradient read as chrome over the picture rather than as the
+ * lesson's own readout.
  */
 export default function StageStrip({
   sections,
@@ -53,12 +60,12 @@ export default function StageStrip({
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-[4%] pb-[1.6%] pt-10"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-black"
       style={{ containerType: 'inline-size' }}
     >
       {children}
       <div
-        className="flex items-baseline justify-between gap-3 px-0.5 pb-[0.5em] font-mono uppercase tracking-[0.18em] text-white/65"
+        className="flex items-baseline justify-between gap-3 px-[1.2%] py-[0.45em] font-mono uppercase tracking-[0.18em] text-white/65"
         style={{ fontSize: 'clamp(10px, 1.05cqi, 17px)' }}
       >
         <span className="min-w-0 truncate text-white/85">
@@ -71,8 +78,8 @@ export default function StageStrip({
       <div
         onPointerDown={seekAt}
         title="Click to jump"
-        className="pointer-events-auto relative cursor-pointer overflow-hidden rounded-full bg-white/15"
-        style={{ height: 'clamp(7px, 0.8cqi, 13px)' }}
+        className="pointer-events-auto relative w-full cursor-pointer overflow-hidden bg-white/15"
+        style={{ height: 'clamp(10px, 1.1cqi, 18px)' }}
       >
         {ordered.map((sec) => {
           const end = sec.end ?? sec.start

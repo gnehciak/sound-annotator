@@ -18,6 +18,9 @@ import { hexA } from './structure/drag'
  * track's transform — the players report time four times a second, and a
  * bar stepping at that rate is the one thing this must never do.
  *
+ * Black, opaque: the strip is a readout, not a window onto the picture,
+ * and an opaque layer is also the cheapest thing to composite over video.
+ *
  * Built to be cheap under a playing video, which is where it lives. No
  * backdrop blur (a blur the compositor has to redo every frame over moving
  * pixels), no filters, and only the bars within a frame's width of the
@@ -111,10 +114,8 @@ export default function ChordOverlay({
     <div
       ref={rootRef}
       aria-hidden
-      className={`pointer-events-none overflow-hidden bg-black/60 ${
-        placement === 'foot'
-          ? 'absolute inset-x-0 bottom-0 z-10'
-          : 'relative mb-[0.6em] rounded-md'
+      className={`pointer-events-none overflow-hidden bg-black ${
+        placement === 'foot' ? 'absolute inset-x-0 bottom-0 z-10' : 'relative w-full'
       }`}
       style={{ height }}
     >
@@ -178,7 +179,7 @@ export default function ChordOverlay({
       </div>
       {/* What has been played dims behind the now line. */}
       <div
-        className="absolute inset-y-0 left-0 bg-gradient-to-r from-black/45 to-transparent"
+        className="absolute inset-y-0 left-0 bg-gradient-to-r from-black/60 to-transparent"
         style={{ width: `${NOW_FRAC * 100}%` }}
       />
       <div
