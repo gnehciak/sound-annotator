@@ -22,6 +22,7 @@ import {
   LYRIC_SCALES,
   LYRIC_STYLES,
   lyricStyleOf,
+  MAX_LYRIC_DIM,
   nudgeLine,
   removeLine,
   setLineText,
@@ -79,6 +80,9 @@ interface Props {
   /** The overlay's look (see LYRIC_STYLES) and the way to change it. */
   style?: string
   onStyle?: (style: string) => void
+  /** The veil over the picture under the lyrics, 0–MAX_LYRIC_DIM. */
+  dim?: number
+  onDim?: (dim: number) => void
   /** Take the picture and the words full screen — video tracks only. */
   onFullscreen?: () => void
   onSeek: (t: number) => void
@@ -98,6 +102,8 @@ export default function LyricsPanel({
   onScale,
   style,
   onStyle,
+  dim = 0,
+  onDim,
   onFullscreen,
   onSeek,
   onPlayPause,
@@ -288,6 +294,30 @@ export default function LyricsPanel({
                             </button>
                           )
                         })}
+                        {onDim && (
+                          <>
+                            <div className="my-1 border-t border-line/60" />
+                            {/* The veil: a lyric video darkens its picture
+                                so the words own the frame; a class watching
+                                the video wants it lighter. One slider. */}
+                            <label className="flex items-center gap-2 px-2.5 py-1.5">
+                              <span className="shrink-0 text-[12px] text-muted">Dim video</span>
+                              <input
+                                type="range"
+                                min={0}
+                                max={Math.round(MAX_LYRIC_DIM * 100)}
+                                step={5}
+                                value={Math.round(dim * 100)}
+                                onChange={(e) => onDim(Number(e.target.value) / 100)}
+                                aria-label="Dim the video under the lyrics"
+                                className="flex-1 accent-accent"
+                              />
+                              <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted">
+                                {Math.round(dim * 100)}%
+                              </span>
+                            </label>
+                          </>
+                        )}
                       </div>
                     </Popover>
                   </>

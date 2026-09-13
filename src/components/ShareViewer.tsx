@@ -52,7 +52,7 @@ import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
 import StageStrip from './structure/StageStrip'
-import { clampLyricScale } from '../lib/lyrics'
+import { clampLyricDim, clampLyricScale } from '../lib/lyrics'
 import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
 import {
@@ -112,6 +112,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // …and how big they are: a reader's own size, seeded from the owner's.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
+  const [lyricsDimOverride, setLyricsDimOverride] = useState<number | null>(null)
   // The full-screen lyric stage — see App for the shape; the same here.
   const playerBoxRef = useRef<HTMLDivElement>(null)
   const [lyricFullscreen, setLyricFullscreen] = useState(false)
@@ -544,6 +545,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const lyrics = project.settings?.lyrics
   const lyricsScale = clampLyricScale(lyricsScaleOverride ?? project.settings?.lyricsScale)
   const lyricsStyle = lyricsStyleOverride ?? project.settings?.lyricsStyle
+  const lyricsDim = clampLyricDim(lyricsDimOverride ?? project.settings?.lyricsDim)
   const buildScoreLayer = (placement: 'pane' | 'frame') =>
     score ? (
       // A reader gets the following, never the timing of it, and sees the
@@ -638,6 +640,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           currentTime={currentTime}
           readOnly
           onTogglePlay={() => (isPlaying ? pause() : play())}
+        />
+      )}
+      {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && lyricsDim > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[9] bg-black"
+          style={{ opacity: lyricsDim }}
         />
       )}
       {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
@@ -836,6 +845,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               onScale={setLyricsScaleOverride}
               style={lyricsStyle}
               onStyle={setLyricsStyleOverride}
+              dim={lyricsDim}
+              onDim={setLyricsDimOverride}
               onFullscreen={isVideoSource(source) ? toggleLyricFullscreen : undefined}
               onSeek={seek}
               onPlayPause={() => (isPlaying ? pause() : play())}

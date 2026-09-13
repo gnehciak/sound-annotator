@@ -63,7 +63,7 @@ import {
 import type { LyricLine, NoteQuote, ScoreMark, ScoreTurn } from './types'
 import LyricOverlay from './components/LyricOverlay'
 import StageStrip from './components/structure/StageStrip'
-import { clampLyricScale, shiftLyrics } from './lib/lyrics'
+import { clampLyricDim, clampLyricScale, shiftLyrics } from './lib/lyrics'
 import { QuoteScoreProvider } from './lib/quotePreview'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
@@ -551,6 +551,8 @@ export default function App() {
   const lyricsScale = clampLyricScale(lyricsScaleOverride ?? current?.settings?.lyricsScale)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
   const lyricsStyle = lyricsStyleOverride ?? current?.settings?.lyricsStyle
+  const [lyricsDimOverride, setLyricsDimOverride] = useState<number | null>(null)
+  const lyricsDim = clampLyricDim(lyricsDimOverride ?? current?.settings?.lyricsDim)
   // The full-screen lyric stage: the player box under the Fullscreen API.
   // Read back from the document rather than assumed, since the browser
   // handles Esc itself and the state has to follow it out.
@@ -587,6 +589,7 @@ export default function App() {
     setSyncingScore(false)
     setLyricsScaleOverride(null)
     setLyricsStyleOverride(null)
+    setLyricsDimOverride(null)
   }
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
 
@@ -650,6 +653,14 @@ export default function App() {
     (style: string) => {
       if (canEditSettings) patchProjectSettings({ lyricsStyle: style })
       else setLyricsStyleOverride(style)
+    },
+    [canEditSettings, patchProjectSettings],
+  )
+
+  const changeLyricsDim = useCallback(
+    (dim: number) => {
+      if (canEditSettings) patchProjectSettings({ lyricsDim: dim })
+      else setLyricsDimOverride(dim)
     },
     [canEditSettings, patchProjectSettings],
   )
@@ -2313,6 +2324,15 @@ export default function App() {
           onTogglePlay={() => (isPlaying ? pause() : play())}
         />
       )}
+      {/* The veil under the words: between the picture and everything
+          drawn on it, so covers, pins and the transport keep their ink. */}
+      {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && lyricsDim > 0 && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[9] bg-black"
+          style={{ opacity: lyricsDim }}
+        />
+      )}
       {/* The sung line, over the stage layer and under the transport. */}
       {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
         <LyricOverlay
@@ -2931,6 +2951,8 @@ export default function App() {
                 onScale={changeLyricsScale}
                 style={lyricsStyle}
                 onStyle={changeLyricsStyle}
+                dim={lyricsDim}
+                onDim={changeLyricsDim}
                 onFullscreen={
                   isVideoSource(current.source) ? toggleLyricFullscreen : undefined
                 }

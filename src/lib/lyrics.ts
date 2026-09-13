@@ -58,6 +58,13 @@ export function lyricStyleOf(v: string | undefined | null): LyricStyle {
   return LYRIC_STYLES.some((s) => s.id === v) ? (v as LyricStyle) : 'caption'
 }
 
+/** The veil over the picture under the lyrics: 0 (none) to MAX_LYRIC_DIM. */
+export const MAX_LYRIC_DIM = 0.9
+export function clampLyricDim(v: number | undefined | null): number {
+  if (v == null || !Number.isFinite(v)) return 0
+  return Math.min(MAX_LYRIC_DIM, Math.max(0, v))
+}
+
 /** Tenths are the resolution the stamps are shown at, so it is what they keep. */
 const tenths = (t: number) => Math.round(Math.max(0, t) * 10) / 10
 

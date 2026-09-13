@@ -247,6 +247,7 @@ is fine; a hundred full-page scans in one file is not.
 | `chords` | object | The chord track of a song-structure board — see [§10](#10-chords--the-progression). |
 | `lyrics` | array | The track's lyrics as timed lines — see below. The other nested value settings accept. |
 | `lyricsStyle` | string | How the lyrics are drawn on the video: `"caption"` (a quiet line at the foot, the default), `"pop"` (a lyric video — brush capitals mid-frame, a word at a time), `"rise"` (a letter at a time) or `"karaoke"` (the line fills as it is sung). Anything else reads as `"caption"`. |
+| `lyricsDim` | number | How much the picture is darkened under the lyrics while they are on the video: `0` (not at all, the default) to `0.9`. A black veil between the video and the words. |
 | `lyricsScale` | number | How big the lyrics are on the video, as a multiplier on their frame-relative size. `1` is the default; the app's A−/A+ keys walk `0.6`–`2.6`, and anything outside that is clamped. |
 
 <!-- /fields -->

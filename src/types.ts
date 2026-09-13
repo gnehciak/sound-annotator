@@ -636,6 +636,12 @@ export interface ProjectSettings {
    * `karaoke` (the line fills as it is sung). Unknown values read as `caption`.
    */
   lyricsStyle?: string
+  /**
+   * How much the picture is darkened under the lyrics, 0 (not at all, the
+   * default) to 0.9 — a black veil between the video and the words, so a
+   * bright frame doesn't fight them. Only while the lyrics are on the video.
+   */
+  lyricsDim?: number
 }
 
 /**

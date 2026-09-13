@@ -589,7 +589,10 @@ pays. Karaoke's wipe is a background-clip gradient animated over
 `--lyric-dur` (the time to the next line — the one place the overlay reads
 the *next* stamp), started `--lyric-offset` back when a seek lands mid-line,
 fixed once per line so ticks don't restart it, and `animation-play-state:
-paused` while the player is. Each arriving line is
+paused` while the player is. `settings.lyricsDim` (the slider at the foot of
+that menu) is a black veil at that opacity between the picture and
+everything drawn on it — `z-[9]`, under the note layer's `z-10` — rendered
+only while the lyrics are on the video, since it exists for the words. Each arriving line is
 a new element keyed by its document index, which is what replays the
 entrance; a rest simply unmounts it. It rides PlayerPane's `overlay` slot
 between the note stage layer and the transport, inert like both, and only
