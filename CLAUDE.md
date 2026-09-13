@@ -575,7 +575,7 @@ only while `settings.lyrics` is *absent* — an empty list is a deletion and
 must not resurrect what it deleted.
 
 **The overlay has four looks** (`settings.lyricsStyle`, `LYRIC_STYLES`), the
-Sparkles menu on the sheet. `caption` is the quiet one: the sung line over the
+sliders menu on the sheet. `caption` is the quiet one: the sung line over the
 lower part of the frame with the next one fainter beneath, white with a
 shadow rather than a box, sized to the frame with container-query inches so a
 narrow frame and a wide one read at the same proportion. `pop`, `rise` and

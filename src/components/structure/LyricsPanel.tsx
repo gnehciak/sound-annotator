@@ -10,7 +10,7 @@ import {
   Minus,
   Play,
   Plus,
-  Sparkles,
+  SlidersHorizontal,
   Timer as TimerIcon,
   Trash2,
 } from 'lucide-react'
@@ -259,7 +259,7 @@ export default function LyricsPanel({
                       aria-label="Lyric style"
                       className="btn-icon press"
                     >
-                      <Sparkles size={14} />
+                      <SlidersHorizontal size={14} />
                     </button>
                     <Popover
                       open={styleOpen}
