@@ -739,6 +739,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onSplit={() => {}}
             onUpdate={() => {}}
             onDelete={() => {}}
+            chords={project.settings?.chords}
           />
         </div>
         {annotations.some((a) => a.lyrics?.trim()) && (

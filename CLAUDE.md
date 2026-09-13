@@ -156,6 +156,39 @@ that board, and on a listening guide it would bury the teacher's own notes
 under a dozen machine ones. Their project is born `shared`, so the `?view=`
 link they hand in is the existing read-only viewer.
 
+**The song-structure board carries a chord track** (`settings.chords`,
+`src/lib/chords.ts`, `components/structure/ChordLane.tsx` +
+`ChordControls.tsx`): a Hooktheory-style progression under the section lane,
+sharing its zoom window so a chord sits under the section it belongs to and
+the playhead runs through both. Two ideas, kept apart on purpose. The *grid*
+is `bpm` + `offset` (seconds of bar 1, on the clip clock — `setClip` shifts it
+with the notes) + `beatsPerBar`, and it is what ties a beat to a second of the
+recording. The *chords* sit on it in **beats, never seconds**, and each is a
+**scale degree, never a letter name** — so retuning the tempo slides every
+chord onto the music together, and changing the key re-spells the whole
+progression (`spellChord` stacks thirds inside the mode's scale, so every
+mode and every spelling comes out right without a table). Both are exactly
+what a teacher does when the first guess at the tempo or the key was wrong.
+Written by the **digit keys**: `1`–`7` (by `e.code`, so `⇧1` is still the
+first degree with the seventh added) write a chord at the *cursor* — placed by
+clicking the lane (which also seeks, so the two never disagree), stepped on by
+each chord written, or the playhead itself while the music plays, so a
+progression can be typed in live. Typing is *type-over* (`writeChord`): a
+chord starting at the cursor is retyped in place, one sounding across it is
+cut there. With a chord selected the same keys retype it; ⌫ deletes the
+selection or takes back the chord just typed. The typed length follows the
+last resize, so a two-chords-a-bar song types itself. Degrees are coloured
+`DEGREE_COLORS` (colour-is-data: a IV is the same green in every key).
+Chord edits are **undoable** (`changeChords` in App goes through `commit`),
+unlike the score's display knobs, because a wrong digit in a run wants ⌘Z —
+and gated on `canEditSettings` like every settings write, since the server
+clips a link editor's settings and their chords would never land; the board
+takes `chordsReadOnly` separately from `readOnly` for that reason. The
+analysis's tempo seeds a chord track on a board that has none, and never
+touches one that exists. `sanitizeChords` in `projectJson.ts` drops
+overlapping chords rather than trimming them, and §10 of the schema doc is
+the published shape.
+
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are
 already out in the world, so the route is a query param on one page: `?` the

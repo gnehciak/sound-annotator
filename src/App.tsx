@@ -144,6 +144,8 @@ import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
+import { defaultChords, shiftChords } from './lib/chords'
+import type { ProjectChords } from './types'
 import { questionNumbers } from './lib/questions'
 import { useHotkeys, isTypingTarget } from './lib/useHotkeys'
 import { useProjectHistory } from './lib/useProjectHistory'
@@ -1377,17 +1379,23 @@ export default function App() {
       const len = next.end != null ? next.end - after : Infinity
       const slide = (t: number) => Math.min(Math.max(t + delta, 0), len)
       const score = current.settings?.score
+      const chords = current.settings?.chords
       commitProject(current.id, {
         source: {
           ...current.source,
           clipStart: next.start,
           clipEnd: next.end,
         },
-        ...(score?.turns?.length
+        ...(score?.turns?.length || (chords && delta !== 0)
           ? {
               settings: {
                 ...current.settings,
-                score: { ...score, turns: shiftTurns(score.turns, slide) },
+                ...(score?.turns?.length
+                  ? { score: { ...score, turns: shiftTurns(score.turns, slide) } }
+                  : {}),
+                // The chord grid's downbeat rides the same clock; its beats
+                // are relative to it, so shifting the one moves them all.
+                ...(chords ? { chords: shiftChords(chords, delta) } : {}),
               },
             }
           : {}),
@@ -1736,7 +1744,7 @@ export default function App() {
   const applyDetectedSections = useCallback(
     (
       sections: DetectedSection[],
-      _bpm?: number,
+      bpm?: number,
       stems?: Record<string, string>,
     ) => {
       const id = currentIdRef.current
@@ -1746,9 +1754,49 @@ export default function App() {
         ...anns.filter((a) => !a.id.startsWith(AI_SECTION_PREFIX)),
         ...fresh,
       ])
+      // The model's tempo seeds a chord track on a board that has none yet —
+      // the one number a chord grid can't guess — and leaves a track that
+      // exists alone, since its tempo may already have been tuned by ear.
+      if (bpm && bpm > 0)
+        setProjects((ps) =>
+          ps.map((p) =>
+            p.id === id && !p.settings?.chords
+              ? { ...p, settings: { ...p.settings, chords: defaultChords(bpm) } }
+              : p,
+          ),
+        )
       if (stems && Object.keys(stems).length > 0) patchProject(id, { stems })
     },
-    [commitAnnotations, patchProject],
+    [commitAnnotations, patchProject, setProjects],
+  )
+
+  /**
+   * The chord track (settings.chords, lib/chords.ts) — undoable, unlike the
+   * score's display knobs, because it is *typed*: a wrong digit in a run of
+   * chords wants ⌘Z, not the trash. `undefined` removes the track. Gated on
+   * canEditSettings, the same fence as every other settings write — the
+   * server clips a link editor's settings, so their chords would never land.
+   */
+  const changeChords = useCallback(
+    (next: ProjectChords | undefined, opts?: { coalesceKey?: string }) => {
+      const id = currentIdRef.current
+      if (!id || !canEditSettings) return
+      commit(
+        (ps) =>
+          ps.map((p) => {
+            if (p.id !== id) return p
+            const rest = { ...p.settings }
+            delete rest.chords
+            return {
+              ...p,
+              updatedAt: now(),
+              settings: next ? { ...rest, chords: next } : rest,
+            }
+          }),
+        opts,
+      )
+    },
+    [commit, canEditSettings],
   )
 
   // ---- song-structure sections (structure projects only) -----------------
@@ -2728,6 +2776,9 @@ export default function App() {
                 onSplit={splitSection}
                 onUpdate={updateAnnotation}
                 onDelete={deleteAnnotation}
+                chords={current.settings?.chords}
+                chordsReadOnly={!canEditSettings}
+                onChordsChange={changeChords}
               />
             </div>
 
@@ -3107,6 +3158,7 @@ export default function App() {
         <ShortcutsOverlay
           closing={help.closing}
           onClose={() => setShowHelp(false)}
+          structure={isStructure && !effectiveViewOnly}
         />
       )}
       {showSettings && (

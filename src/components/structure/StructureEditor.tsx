@@ -13,7 +13,7 @@ import {
   ZoomOut,
   Maximize,
 } from 'lucide-react'
-import type { Annotation } from '../../types'
+import type { Annotation, ProjectChords } from '../../types'
 import { formatTime, noteLabel, parseTime } from '../../lib/format'
 import { colorForId, hueText } from '../../lib/noteColors'
 import { useResolvedTheme } from '../../lib/theme'
@@ -27,6 +27,16 @@ import {
 } from '../../lib/sections'
 import { useHotkeys } from '../../lib/useHotkeys'
 import TitleBar from '../TitleBar'
+import { clamp, hexA, windowDrag } from './drag'
+import ChordLane from './ChordLane'
+import { ChordFooter, ChordSetupRow } from './ChordControls'
+import {
+  chordBefore,
+  defaultChords,
+  snapBeat,
+  timeBeat,
+  writeChord,
+} from '../../lib/chords'
 
 /**
  * The song-structure board: the whole editing surface of a 'structure'
@@ -41,6 +51,15 @@ import TitleBar from '../TitleBar'
  * Owns only view state (tool, zoom window, selection, in-flight drags).
  * All data mutations go up through the on* props, which App routes into the
  * undoable annotation history — so ⌘Z works across every gesture here.
+ *
+ * Under the section lane runs the **chord track** (ChordLane, lib/chords.ts):
+ * a beat grid at the song's tempo with a Hooktheory-style progression on it.
+ * The digit keys 1–7 write a chord of that degree at the *cursor* — placed by
+ * clicking the lane, advanced by each chord written, or the playhead itself
+ * while the music plays, so a progression can be typed in live — and ⇧ adds
+ * the seventh. With a chord selected the same keys retype it. The chords are
+ * `settings.chords`, so they go up through `onChordsChange` rather than the
+ * annotation props, and App puts them in the same undo history.
  */
 
 interface Props {
@@ -61,6 +80,16 @@ interface Props {
     opts?: { coalesceKey?: string },
   ) => void
   onDelete: (id: string) => void
+  /** The chord track, when the project has one. */
+  chords?: ProjectChords
+  /** Whether the chord track may be edited — narrower than `readOnly`, since
+   *  a link editor may write sections but not settings. */
+  chordsReadOnly?: boolean
+  /** Replace the chord track (undefined removes it). Undoable in App. */
+  onChordsChange?: (
+    next: ProjectChords | undefined,
+    opts?: { coalesceKey?: string },
+  ) => void
 }
 
 type Tool = 'select' | 'cut'
@@ -82,50 +111,9 @@ const LANE_H_MAX = 360
 const LANE_H_KEY = 'sa:structure-lane-h'
 
 const round1 = (x: number) => Math.round(x * 10) / 10
-const clamp = (x: number, lo: number, hi: number) =>
-  Math.min(Math.max(x, lo), hi)
-
-/** #rrggbb + alpha → #rrggbbaa (section hues are always 6-digit hex). */
-const hexA = (hex: string, a: number) =>
-  `${hex}${Math.round(clamp(a, 0, 1) * 255)
-    .toString(16)
-    .padStart(2, '0')}`
 
 /** Grid quantum for a zoom level: finer as pixels-per-second grows. */
 const gridFor = (pps: number) => (pps >= 48 ? 0.1 : pps >= 12 ? 0.5 : 1)
-
-/**
- * Run a drag gesture on window-level listeners (the pointer leaves the lane
- * constantly at this scale). Freezes the cursor + text selection for the
- * gesture's lifetime; each closure reads fresh state through refs. Returns a
- * `cancel` that tears the gesture down *without* firing onUp — the escape
- * hatch a starting pinch uses to abort a half-formed drag.
- */
-function windowDrag(
-  onMove: (ev: PointerEvent) => void,
-  onUp?: (ev: PointerEvent) => void,
-  cursor?: string,
-): () => void {
-  const move = (ev: PointerEvent) => onMove(ev)
-  let done = false
-  const cleanup = () => {
-    if (done) return
-    done = true
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }
-  const up = (ev: PointerEvent) => {
-    cleanup()
-    onUp?.(ev)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-  if (cursor) document.body.style.cursor = cursor
-  document.body.style.userSelect = 'none'
-  return cleanup
-}
 
 /** Quantize to the grid, then let nearby magnet times (section edges, the
  *  playhead, the track ends) win within SNAP_PX. */
@@ -153,6 +141,9 @@ export default function StructureEditor({
   onSplit,
   onUpdate,
   onDelete,
+  chords,
+  chordsReadOnly = false,
+  onChordsChange,
 }: Props) {
   const theme = useResolvedTheme()
   const [tool, setTool] = useState<Tool>('select')
@@ -160,6 +151,24 @@ export default function StructureEditor({
   // undone) simply matches nothing, and read-only mode masks it entirely.
   const [rawSelectedId, setSelectedId] = useState<string | null>(null)
   const selectedId = readOnly ? null : rawSelectedId
+  // One selection across both lanes: picking a section drops the chord and
+  // vice versa, so ⌫ and the footer never have two things to mean.
+  const [rawSelectedChordId, setSelectedChordId] = useState<string | null>(null)
+  const canEditChords = !readOnly && !chordsReadOnly && !!onChordsChange
+  const selectedChordId = canEditChords ? rawSelectedChordId : null
+  const selectSec = (id: string | null) => {
+    setSelectedId(id)
+    if (id) setSelectedChordId(null)
+  }
+  const selectChord = (id: string | null) => {
+    setSelectedChordId(id)
+    if (id) selectSec(null)
+  }
+  // Where the next digit writes, in beats. Null means the playhead.
+  const [cursor, setCursor] = useState<number | null>(null)
+  // The length a typed chord gets: a bar to begin with, then whatever the
+  // last chord was resized to, so a two-chords-a-bar song types itself.
+  const lastLenRef = useRef<number | null>(null)
   // The zoom window in seconds; null = the whole track ("fit").
   const [view, setView] = useState<{ s: number; e: number } | null>(null)
   // Live preview of a drag-to-create gesture (committed on release).
@@ -192,6 +201,78 @@ export default function StructureEditor({
   const selected = selectedId
     ? sections.find((a) => a.id === selectedId) ?? null
     : null
+  const selectedChord =
+    chords && selectedChordId
+      ? chords.chords.find((c) => c.id === selectedChordId) ?? null
+      : null
+
+  // The chords as last rendered, for the drag closures below: a gesture's
+  // move handler is created at pointerdown and outlives several renders.
+  const chordsRef = useRef(chords)
+  useEffect(() => {
+    chordsRef.current = chords
+  })
+
+  /** Chord edits, with one thing learned on the way past: a chord resized
+   *  (by drag or by the footer's stepper) sets the length the next typed
+   *  chord gets. Read against the ref rather than the closure — the lane's
+   *  drag handlers hold whichever `onChange` they were rendered with. */
+  const changeChords = useCallback(
+    (next: ProjectChords, opts?: { coalesceKey?: string }) => {
+      if (!canEditChords) return
+      const prev = chordsRef.current
+      if (prev) {
+        for (const after of next.chords) {
+          const before = prev.chords.find((c) => c.id === after.id)
+          if (before && before.len !== after.len) {
+            lastLenRef.current = after.len
+            break
+          }
+        }
+      }
+      onChordsChange?.(next, opts)
+    },
+    [canEditChords, onChordsChange],
+  )
+
+  /**
+   * The digit keys: write a chord of `degree` at the insertion point — the
+   * cursor, or the playhead while the music plays — and move the cursor to
+   * its end. With a chord selected, retype that one instead (its length and
+   * place are the part already right).
+   */
+  const writeDegree = (degree: number, seventh: boolean) => {
+    if (!chords || !canEditChords) return
+    if (selectedChord) {
+      changeChords({
+        ...chords,
+        chords: chords.chords.map((c) =>
+          c.id === selectedChord.id
+            ? { ...c, degree, seventh: seventh || undefined, inversion: undefined }
+            : c,
+        ),
+      })
+      return
+    }
+    // Paused: write at the cursor (or the playhead, when none has been
+    // placed) and step the cursor on, so a run of digits lays chords end to
+    // end. Playing: every digit lands on the playhead, and the cursor stays
+    // out of it — the music is what is moving the insertion point.
+    const at =
+      cursor != null && !isPlaying
+        ? cursor
+        : snapBeat(timeBeat(chords, liveRef.current.currentTime), 1)
+    const len = lastLenRef.current ?? chords.beatsPerBar
+    const written = writeChord(chords.chords, at, len, degree, seventh)
+    changeChords({ ...chords, chords: written.chords })
+    setCursor(isPlaying ? null : written.cursor)
+  }
+
+  const deleteChord = (id: string) => {
+    if (!chords) return
+    changeChords({ ...chords, chords: chords.chords.filter((c) => c.id !== id) })
+    setSelectedChordId(null)
+  }
 
   // Timeline geometry: one rect for the ruler + lane column.
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -281,17 +362,39 @@ export default function StructureEditor({
   }, [selected])
 
   // Tool + selection keys (App owns transport keys; V stays the view toggle).
+  // The digits are the chord track's — by key *code*, since ⇧1 is "!" on the
+  // keyboard but still the first degree here.
   useHotkeys((e) => {
     if (readOnly) return
+    const digit = /^(?:Digit|Numpad)([1-7])$/.exec(e.code)
+    if (digit && chords && canEditChords) {
+      e.preventDefault()
+      writeDegree(Number(digit[1]), e.shiftKey)
+      return
+    }
     const k = e.key.toLowerCase()
     if (k === 's') setTool('select')
     else if (k === 'c') setTool('cut')
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-      e.preventDefault()
-      onDelete(selectedId)
-      setSelectedId(null)
-    } else if (e.key === 'Escape' && selectedId && !e.defaultPrevented) {
-      setSelectedId(null)
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedChordId) {
+        e.preventDefault()
+        deleteChord(selectedChordId)
+      } else if (selectedId) {
+        e.preventDefault()
+        onDelete(selectedId)
+        selectSec(null)
+      } else if (chords && canEditChords && cursor != null && !isPlaying) {
+        // Backspace at the cursor takes back the chord just typed.
+        const prev = chordBefore(chords.chords, cursor)
+        if (prev) {
+          e.preventDefault()
+          deleteChord(prev.id)
+          setCursor(prev.beat)
+        }
+      }
+    } else if (e.key === 'Escape' && !e.defaultPrevented) {
+      if (selectedChordId) selectChord(null)
+      else if (selectedId) selectSec(null)
     }
   })
 
@@ -360,7 +463,7 @@ export default function StructureEditor({
     if (hi - lo >= MIN_SECTION) {
       const id = crypto.randomUUID()
       onCreate(id, lo, hi)
-      setSelectedId(id)
+      selectSec(id)
       pendingFocusRef.current = id
     }
   }
@@ -395,10 +498,10 @@ export default function StructureEditor({
         if (g && g.e - g.s >= MIN_SECTION) {
           const id = crypto.randomUUID()
           onCreate(id, g.s, g.e)
-          setSelectedId(id)
+          selectSec(id)
           pendingFocusRef.current = id
         } else {
-          setSelectedId(null)
+          selectSec(null)
           onSeek(anchor)
         }
       },
@@ -416,7 +519,7 @@ export default function StructureEditor({
     }
     if (tool === 'cut') return cutAt(t)
 
-    setSelectedId(sec.id)
+    selectSec(sec.id)
     const end = sec.end ?? sec.start
     const len = end - sec.start
     const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
@@ -454,7 +557,7 @@ export default function StructureEditor({
     (sec: Annotation, edge: 'start' | 'end') => (e: React.PointerEvent) => {
       if (e.button !== 0 || e.shiftKey || readOnly || tool !== 'select') return
       e.stopPropagation()
-      setSelectedId(sec.id)
+      selectSec(sec.id)
       const end = sec.end ?? sec.start
       const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
       const magnets = magnetsExcept(sec.id)
@@ -866,7 +969,9 @@ export default function StructureEditor({
 
         <div
           onPointerDown={onLaneDown}
-          className="bevel-inset relative touch-none overflow-hidden rounded-b-sm border border-line bg-inset"
+          className={`bevel-inset relative touch-none overflow-hidden border border-line bg-inset ${
+            chords ? '' : 'rounded-b-sm'
+          }`}
           style={{ cursor: laneCursor, height: laneH }}
         >
           {/* Faint grid continuing the ruler's majors. */}
@@ -907,7 +1012,7 @@ export default function StructureEditor({
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     if (readOnly) onSeek(sec.start)
-                    else setSelectedId(sec.id)
+                    else selectSec(sec.id)
                   }
                 }}
                 title={`${sectionName(sec)} · ${noteLabel(sec.start, sec.end)}`}
@@ -979,6 +1084,27 @@ export default function StructureEditor({
           )}
         </div>
 
+        {chords && (
+          <ChordLane
+            chords={chords}
+            vs={vs}
+            ve={ve}
+            pps={pps}
+            xOf={xOf}
+            tOfClient={tOfClient}
+            beginDrag={beginDrag}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            readOnly={!canEditChords}
+            selectedId={selectedChordId}
+            cursor={cursor}
+            onSelect={selectChord}
+            onCursor={setCursor}
+            onSeek={onSeek}
+            onChange={changeChords}
+          />
+        )}
+
         {/* Playhead — the one signal-colored mark: "now". */}
         {playheadVisible && (
           <div
@@ -1003,11 +1129,53 @@ export default function StructureEditor({
         <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
       </div>
 
+      {/* The chord track's grid: key, tempo, metre, downbeat. A board with
+          no chord track yet offers to start one; a reader sees nothing. */}
+      {chords ? (
+        <ChordSetupRow
+          chords={chords}
+          currentTime={currentTime}
+          readOnly={!canEditChords}
+          onChange={changeChords}
+          onRemove={() => {
+            onChordsChange?.(undefined)
+            setSelectedChordId(null)
+            setCursor(null)
+          }}
+        />
+      ) : (
+        canEditChords && (
+          <div className="flex h-10 items-center gap-x-3 border-t border-line/70 px-3.5">
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
+              Chords
+            </span>
+            <button
+              type="button"
+              onClick={() => onChordsChange?.(defaultChords())}
+              title="Add a chord track under the sections — set the key and tempo, then press 1–7"
+              className="btn-ghost btn-sm press"
+            >
+              Add chord track
+            </button>
+            <span className="truncate text-[11px] text-muted">
+              A beat grid at the song's tempo; press 1–7 to write chords on it.
+            </span>
+          </div>
+        )
+      )}
+
       {/* Footer — a FIXED slot so selecting a section never reflows the
           board: the selected section's controls, or a one-line hint. */}
       {!readOnly && (
-      <div className="flex h-11 items-center gap-x-3 overflow-hidden border-t border-line/70 px-3.5">
-      {selected ? (
+      <div className="flex h-11 items-center gap-x-3 overflow-x-auto overflow-y-hidden border-t border-line/70 px-3.5">
+      {selectedChord && chords ? (
+        <ChordFooter
+          chords={chords}
+          chord={selectedChord}
+          onChange={changeChords}
+          onDelete={() => deleteChord(selectedChord.id)}
+        />
+      ) : selected ? (
         <>
           <span
             aria-hidden
@@ -1097,7 +1265,7 @@ export default function StructureEditor({
             type="button"
             onClick={() => {
               onDelete(selected.id)
-              setSelectedId(null)
+              selectSec(null)
             }}
             title="Delete section (⌫)"
             aria-label="Delete section"
@@ -1108,7 +1276,9 @@ export default function StructureEditor({
         </>
       ) : (
         <p className="truncate text-[12px] text-muted">
-          Drag across the track to draw a section — click one to name it.
+          {chords && canEditChords
+            ? 'Drag across the track to draw a section · press 1–7 to write a chord at the cursor, ⇧ for the seventh.'
+            : 'Drag across the track to draw a section — click one to name it.'}
         </p>
       )}
       </div>

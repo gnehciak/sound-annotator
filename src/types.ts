@@ -514,6 +514,57 @@ export interface ProjectScore {
   turns?: ScoreTurn[]
 }
 
+/**
+ * The chord track of a song-structure board — a Hooktheory-style progression
+ * in scale degrees over a beat grid (lib/chords.ts). The grid (`bpm`,
+ * `offset`, `beatsPerBar`) is what ties a beat to a second of the recording;
+ * the chords sit on it in *beats*, never seconds, so retuning the tempo moves
+ * them all onto the music together, and each is a *degree* of the key rather
+ * than a letter name, so changing the key re-spells the progression instead
+ * of invalidating it.
+ *
+ * Lives in `settings` like the score and the project `kind`, for the same
+ * reason: it rides the existing jsonb with no schema or API change, and an
+ * owner or a guest may write it. `offset` is on the clip clock, so App's
+ * setClip shifts it with the notes.
+ */
+export type ChordMode =
+  | 'major'
+  | 'minor'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'locrian'
+
+export interface Chord {
+  id: string
+  /** Where it starts, in beats from the downbeat at `offset` (beat 0). May be
+   *  negative: a pickup bar is real music. */
+  beat: number
+  /** How long it sounds, in beats. At least MIN_CHORD_BEATS. */
+  len: number
+  /** Scale degree, 1–7. The quality comes from the key's mode. */
+  degree: number
+  /** Add the diatonic seventh. */
+  seventh?: boolean
+  /** Inversion: 0 (root, the default), 1, 2, or 3 with a seventh. */
+  inversion?: number
+}
+
+export interface ProjectChords {
+  /** Tonic spelling from lib/chords' KEY_NAMES ("C", "F#", "Bb"). */
+  key: string
+  mode: ChordMode
+  /** Tempo, 30–300. */
+  bpm: number
+  /** Seconds (clip time) of beat 0, the first downbeat. */
+  offset: number
+  /** Metre's top number, 2–7. */
+  beatsPerBar: number
+  chords: Chord[]
+}
+
 export interface ProjectSettings {
   /**
    * What kind of editor this project opens in. Absent (the default) is a
@@ -537,6 +588,11 @@ export interface ProjectSettings {
    * own; anything else is dropped).
    */
   score?: ProjectScore
+  /**
+   * The chord track of a song-structure board. Like `score`, an object, so
+   * it takes an explicit branch in lib/projectJson.ts's settings sanitizer.
+   */
+  chords?: ProjectChords
 }
 
 /**
