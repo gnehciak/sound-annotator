@@ -22,11 +22,13 @@
 // fails the deploy when the doc and src/types.ts disagree.
 import type {
   Annotation,
+  Chord,
   LyricLine,
   NoteBlock,
   NoteOverlay,
   NoteQuote,
   Project,
+  ProjectChords,
   ProjectScore,
   ProjectSettings,
   ProjectSource,
@@ -39,6 +41,15 @@ import { clampQuote, MAX_QUOTES } from './overlays'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
 import { MARK_COLORS, MARK_KINDS, sortTurns } from './score'
+import {
+  BEATS_PER_BAR_OPTIONS,
+  CHORD_MODES,
+  KEY_NAMES,
+  MAX_BPM,
+  MIN_BPM,
+  MIN_CHORD_BEATS,
+  sortedChords,
+} from './chords'
 
 export const PROJECT_JSON_FORMAT = 'sound-annotator-project'
 export const PROJECT_JSON_VERSION = 1
@@ -466,14 +477,75 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 /** Signed, for the one place a fraction is a direction rather than a size. */
 const clampSigned = (n: number) => Math.min(1, Math.max(-1, n))
 
+/** Ceiling on the chords one import may carry — hundreds past any song. */
+const MAX_CHORDS = 2000
+
+/**
+ * The chord track — the other object-valued settings key. The grid is
+ * checked field by field (a tempo of 0 would put every chord at infinity),
+ * and each chord is kept only if it has a place, a length and a degree;
+ * anything overlapping the chord before it is dropped rather than trimmed,
+ * since two chords in one place is a file that doesn't know what it means.
+ */
+function sanitizeChords(v: unknown): ProjectChords | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const raw = v as Record<string, unknown>
+  const key = str(raw.key)
+  const mode = str(raw.mode)
+  const bpm = num(raw.bpm)
+  const beatsPerBar = num(raw.beatsPerBar)
+  const chords: ProjectChords = {
+    key: key && (KEY_NAMES as readonly string[]).includes(key) ? key : 'C',
+    mode: CHORD_MODES.some((m) => m.id === mode) ? (mode as ProjectChords['mode']) : 'major',
+    bpm: bpm != null ? Math.min(MAX_BPM, Math.max(MIN_BPM, bpm)) : 120,
+    offset: num(raw.offset) ?? 0,
+    beatsPerBar:
+      beatsPerBar != null && BEATS_PER_BAR_OPTIONS.includes(Math.round(beatsPerBar))
+        ? Math.round(beatsPerBar)
+        : 4,
+    chords: [],
+  }
+  if (Array.isArray(raw.chords)) {
+    const list: Chord[] = []
+    for (const item of raw.chords.slice(0, MAX_CHORDS)) {
+      if (!item || typeof item !== 'object') continue
+      const c = item as Record<string, unknown>
+      const beat = num(c.beat)
+      const len = num(c.len)
+      const degree = num(c.degree)
+      if (beat == null || len == null || len < MIN_CHORD_BEATS || degree == null) continue
+      if (degree < 1 || degree > 7) continue
+      const chord: Chord = {
+        id: str(c.id) ?? newId(),
+        beat,
+        len,
+        degree: Math.round(degree),
+      }
+      if (c.seventh === true) chord.seventh = true
+      const inversion = num(c.inversion)
+      if (inversion != null && inversion >= 1)
+        chord.inversion = Math.min(chord.seventh ? 3 : 2, Math.round(inversion))
+      list.push(chord)
+    }
+    let end = -Infinity
+    for (const c of sortedChords(list)) {
+      if (c.beat < end - 1e-6) continue
+      chords.chords.push(c)
+      end = c.beat + c.len
+    }
+  }
+  return chords
+}
+
 /**
  * Settings pass through leniently: any key holding a primitive survives, so a
  * settings knob added later — including the project `kind` that makes a track
  * open as a song-structure board — round-trips without this file having to
  * know it. Only `noteOrder` is checked against its enum (an unknown value
  * would silently break the notes-list sorting); everything non-primitive
- * (nested objects, arrays) is dropped, which is why the score — the one
- * object-valued key — gets an explicit pass of its own.
+ * (nested objects, arrays) is dropped, which is why the score, the lyrics
+ * and the chord track — the three nested keys — get explicit passes of their
+ * own.
  */
 function sanitizeSettings(v: unknown): ProjectSettings | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
@@ -493,6 +565,8 @@ function sanitizeSettings(v: unknown): ProjectSettings | undefined {
     delete settings.noteOrder
   const score = sanitizeScore((v as Record<string, unknown>).score)
   if (score) settings.score = score
+  const chords = sanitizeChords((v as Record<string, unknown>).chords)
+  if (chords) settings.chords = chords
   // Kept even when empty: an empty list is "no lyrics", and it is what stops
   // a file's legacy per-section blocks from being folded in over it.
   const lyrics = sanitizeLyrics((v as Record<string, unknown>).lyrics)

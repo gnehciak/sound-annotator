@@ -243,7 +243,8 @@ is fine; a hundred full-page scans in one file is not.
 | `noteOrder` | string | Default ordering of the notes list: `"timeline"`, `"auto"`, or `"live"`. Any other value is dropped. |
 | `overviewOpen` | boolean | Whether the overview timeline strip opens by default. |
 | `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
-| `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). One of the two nested values settings accept. |
+| `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). One of the three nested values settings accept. |
+| `chords` | object | The chord track of a song-structure board — see [§10](#10-chords--the-progression). |
 | `lyrics` | array | The track's lyrics as timed lines — see below. The other nested value settings accept. |
 | `lyricsStyle` | string | How the lyrics are drawn on the video: `"caption"` (a quiet line at the foot, the default), `"pop"` (a lyric video — brush capitals mid-frame, a word at a time), `"rise"` (a letter at a time) or `"karaoke"` (the line fills as it is sung). Anything else reads as `"caption"`. |
 | `lyricsScale` | number | How big the lyrics are on the video, as a multiplier on their frame-relative size. `1` is the default; the app's A−/A+ keys walk `0.6`–`2.6`, and anything outside that is clamped. |
@@ -253,7 +254,7 @@ is fine; a hundred full-page scans in one file is not.
 Settings are lenient by design: **any** key holding a string, finite number, or
 boolean passes through, so a knob added to the app later still round-trips
 through older files. Nested objects and arrays are dropped — `score` and
-`lyrics` are the two exceptions, and both are validated entry by entry.
+`lyrics` and `chords` are the exceptions, and each is validated entry by entry.
 
 ### `lyrics` — the timed lines
 
@@ -478,7 +479,60 @@ An import carries at most 2000 marks, and an ink stroke at most 2000 points.
 
 ---
 
-## 10. `blocks` (advanced — you almost certainly want to skip this)
+## 10. `chords` — the progression
+
+A song-structure board (`settings.kind: "structure"`) can carry the song's
+chord progression under its section timeline, written the way Hooktheory
+writes one: **in scale degrees over a beat grid**. It lives on
+`settings.chords`.
+
+| field | type | notes |
+| --- | --- | --- |
+| `key` | string | The tonic, spelled: `"C"`, `"F#"`, `"Bb"`, `"Db"`… Anything unrecognised becomes `"C"`. |
+| `mode` | string | `"major"` (default), `"minor"`, `"dorian"`, `"phrygian"`, `"lydian"`, `"mixolydian"` or `"locrian"`. |
+| `bpm` | number | Tempo, `30`–`300`. Defaults to `120`. |
+| `offset` | number | **Track seconds** of the first downbeat (beat 0, bar 1) — on the notes' clock, so a `clipStart` shifts it with everything else. May be negative for a pickup. Defaults to `0`. |
+| `beatsPerBar` | number | The metre's top number, `2`–`7`. Defaults to `4`. |
+| `chords` | array | The chords — see below. |
+
+Each chord:
+
+| field | type | notes |
+| --- | --- | --- |
+| `id` | string | Minted if absent. |
+| `beat` | number | Where it starts, in **beats from `offset`**. Bar 3 of a 4/4 song is beat `8`. Half-beats (`8.5`) are fine. |
+| `len` | number | How long it sounds, in beats. At least `0.5`. |
+| `degree` | number | The scale degree, `1`–`7`. The chord's quality comes from the mode: in C major `2` is Dm, in A minor `2` is B°. |
+| `seventh` | boolean | Add the diatonic seventh (`5` in C major becomes G7; `1` becomes Cmaj7). |
+| `inversion` | number | `1` or `2` (`3` with a seventh). Omit for root position. |
+
+```json
+"chords": {
+  "key": "G", "mode": "major", "bpm": 118, "offset": 0.42, "beatsPerBar": 4,
+  "chords": [
+    { "beat": 0,  "len": 4, "degree": 1 },
+    { "beat": 4,  "len": 4, "degree": 5, "seventh": true },
+    { "beat": 8,  "len": 4, "degree": 6 },
+    { "beat": 12, "len": 2, "degree": 4 },
+    { "beat": 14, "len": 2, "degree": 5 }
+  ]
+}
+```
+
+Chords are positioned in beats rather than seconds, and named by degree rather
+than by letter, on purpose: retuning the tempo slides every chord onto the
+music together, and changing the key re-spells the whole progression (`1 5 6
+4` is I–V–vi–IV in any key) instead of invalidating it. A time in seconds for
+a chord is therefore `offset + beat × 60 ÷ bpm`.
+
+Chords missing a usable `beat`, `len` or `degree` are dropped individually; a
+chord that overlaps the one before it is dropped too, since two chords in one
+place is a file that does not know what it means. An import carries at most
+2000 chords.
+
+---
+
+## 11. `blocks` (advanced — you almost certainly want to skip this)
 
 A note's content is really a list of typed blocks, each rendered by a plugin.
 Notes that carry only `contentHtml` are migrated to a single `text` block on
@@ -496,7 +550,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 11. A complete, valid file
+## 12. A complete, valid file
 
 ```json
 {
@@ -538,7 +592,7 @@ read, which is why authoring `contentHtml` is enough.
 
 ---
 
-## 12. Checklist before importing
+## 13. Checklist before importing
 
 - `format` is exactly `"sound-annotator-project"` and `version` is `1`.
 - Every note has a numeric `start` in **seconds** — `2:14` must become `134`,

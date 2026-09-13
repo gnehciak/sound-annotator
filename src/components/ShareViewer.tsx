@@ -817,6 +817,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onSplit={() => {}}
             onUpdate={() => {}}
             onDelete={() => {}}
+            chords={project.settings?.chords}
           />
         </div>
         {lyrics && lyrics.length > 0 && (

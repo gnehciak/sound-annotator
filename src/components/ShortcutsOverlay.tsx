@@ -45,6 +45,16 @@ const NAV_VIEW: Group = {
   ],
 }
 
+const STRUCTURE: Group = {
+  title: 'Structure board',
+  items: [
+    { keys: ['S', 'C'], label: 'Select / cut tool' },
+    { keys: ['1', '…', '7'], label: 'Write a chord of that degree' },
+    { keys: ['⇧', '1–7'], label: 'Write it with the seventh' },
+    { keys: ['⌫'], label: 'Delete the selection, or the last chord' },
+  ],
+}
+
 const EDITING: Group = {
   title: 'Editing',
   items: [
@@ -57,14 +67,20 @@ export default function ShortcutsOverlay({
   onClose,
   closing = false,
   readOnly = false,
+  structure = false,
 }: {
   onClose: () => void
   closing?: boolean
   readOnly?: boolean
+  /** A song-structure board: its own tool and chord keys instead of the
+   *  note-taking ones, which it doesn't answer to. */
+  structure?: boolean
 }) {
   const groups: Group[] = readOnly
     ? [TRANSPORT, NOTES_VIEW, NAV_VIEW]
-    : [TRANSPORT, NOTES_EDIT, NAV_EDIT, EDITING]
+    : structure
+      ? [TRANSPORT, STRUCTURE, NAV_EDIT, EDITING]
+      : [TRANSPORT, NOTES_EDIT, NAV_EDIT, EDITING]
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm ${
