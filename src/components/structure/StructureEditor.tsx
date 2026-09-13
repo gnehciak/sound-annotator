@@ -1157,6 +1157,7 @@ export default function StructureEditor({
             beginDrag={beginDrag}
             currentTime={currentTime}
             isPlaying={isPlaying}
+            playbackRate={playbackRate}
             readOnly={!canEditChords}
             selectedId={selectedChordId}
             cursor={cursor}
@@ -1197,6 +1198,8 @@ export default function StructureEditor({
         <ChordSetupRow
           chords={chords}
           currentTime={currentTime}
+          isPlaying={isPlaying}
+          playbackRate={playbackRate}
           readOnly={!canEditChords}
           onChange={changeChords}
           onRemove={() => {

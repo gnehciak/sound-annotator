@@ -668,7 +668,6 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         <ChordOverlay
           chords={project.settings.chords}
           currentTime={currentTime}
-          duration={duration}
           isPlaying={isPlaying}
           rate={playbackRate}
         />
@@ -681,7 +680,17 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               duration={duration}
               currentTime={currentTime}
               onSeek={seek}
-            />
+            >
+              {chordsOnVideo && project.settings?.chords && (
+                <ChordOverlay
+                  chords={project.settings.chords}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  rate={playbackRate}
+                  placement="stage"
+                />
+              )}
+            </StageStrip>
           )}
           <button
             type="button"

@@ -8,18 +8,17 @@ import {
   MAX_BPM,
   MIN_BPM,
   MIN_CHORD_BEATS,
-  chordAt,
   chordGap,
   degreeColor,
   describeLength,
   spellChord,
   tapTempo,
-  timeBeat,
   withQuality,
 } from '../../lib/chords'
 import { formatTime, parseTime } from '../../lib/format'
 import { hueText } from '../../lib/noteColors'
 import { useResolvedTheme } from '../../lib/theme'
+import { useSoundingChord } from '../../lib/useSoundingChord'
 import { clamp } from './drag'
 
 /**
@@ -61,6 +60,8 @@ type Change = (next: ProjectChords, opts?: { coalesceKey?: string }) => void
 export function ChordSetupRow({
   chords,
   currentTime,
+  isPlaying,
+  playbackRate,
   readOnly,
   onChange,
   onRemove,
@@ -69,6 +70,8 @@ export function ChordSetupRow({
 }: {
   chords: ProjectChords
   currentTime: number
+  isPlaying: boolean
+  playbackRate: number
   readOnly: boolean
   onChange: Change
   onRemove: () => void
@@ -82,7 +85,9 @@ export function ChordSetupRow({
   const [bpmDraft, setBpmDraft] = useState<string | null>(null)
   const [offsetDraft, setOffsetDraft] = useState<string | null>(null)
 
-  const now = chordAt(chords.chords, timeBeat(chords, currentTime))
+  // Read off the frame-rate clock, so the readout changes on the beat.
+  const soundingId = useSoundingChord(chords, currentTime, isPlaying, playbackRate)
+  const now = soundingId ? chords.chords.find((c) => c.id === soundingId) : undefined
   const spelled = now ? spellChord(now, chords.key, chords.mode) : null
   const nowColor = now ? degreeColor(now.degree) : null
 
