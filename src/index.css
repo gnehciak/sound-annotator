@@ -358,6 +358,38 @@ html[data-armed] body::before {
   .on-video-pop__label + .on-video-pop__body {
     border-top: 1px solid rgb(255 255 255 / 0.14);
   }
+  /* The lyric stage: the sung line over the lower part of the picture, and
+     the one coming after it, fainter, beneath. White on the picture like the
+     rest of the on-video chrome, with a shadow rather than a box — a box
+     would be a subtitle bar, and this is closer to a lyric video. The type
+     is sized to the frame (container-query inches), so a 340px frame and a
+     full-width one both read at the same proportion. */
+  .lyric-stage {
+    container-type: inline-size;
+    padding: 0 6%;
+    text-align: center;
+  }
+  .lyric-stage__line {
+    font-size: clamp(15px, 3.6cqi, 38px);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: #fff;
+    text-shadow:
+      0 1px 2px rgb(0 0 0 / 0.9),
+      0 0 18px rgb(0 0 0 / 0.6);
+    text-wrap: balance;
+  }
+  .lyric-stage__next {
+    margin-top: 0.4em;
+    font-size: clamp(12px, 2.1cqi, 22px);
+    line-height: 1.25;
+    color: rgb(255 255 255 / 0.55);
+    text-shadow:
+      0 1px 2px rgb(0 0 0 / 0.9),
+      0 0 14px rgb(0 0 0 / 0.6);
+    text-wrap: balance;
+  }
   /* The hairline that ties a caption back to its dot — hue as the link between
      two things, the way a callout on a technical drawing works. */
   .on-video-leader {

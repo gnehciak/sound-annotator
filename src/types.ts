@@ -246,9 +246,10 @@ export interface Annotation {
    */
   sectionName?: string
   /**
-   * Plain-text lyrics for a song-structure section (whole-section granularity,
-   * not line-synced), shown in the structure board's Lyrics panel. Only
-   * meaningful on structure projects' sections.
+   * Legacy: whole-section lyrics as one block of text, from before lyrics were
+   * timed lines. Folded into `settings.lyrics` on read (`withMigratedLyrics`,
+   * lib/lyrics.ts) — each block's lines are spread evenly across the section —
+   * so nothing downstream sees it. Never written any more.
    */
   lyrics?: string
   /**
@@ -514,6 +515,24 @@ export interface ProjectScore {
   turns?: ScoreTurn[]
 }
 
+/**
+ * One line of the track's lyrics. The lines live in document order — the
+ * order they were pasted in, which is the order the song sings them — and
+ * each carries the clip second it starts sounding once it has been timed.
+ * A line with no `t` has simply not been timed yet: it is kept, shown in the
+ * lyric sheet under "Not timed", and never drawn on the video.
+ *
+ * An empty `text` is a *rest*: at its `t` the video's lyric clears, which is
+ * how the screen goes quiet for a solo or between two stanzas rather than
+ * holding the last line sung.
+ */
+export interface LyricLine {
+  /** Clip time in seconds — the same clock notes and page turns use. */
+  t?: number
+  /** The words, or "" for a rest. */
+  text: string
+}
+
 export interface ProjectSettings {
   /**
    * What kind of editor this project opens in. Absent (the default) is a
@@ -537,6 +556,16 @@ export interface ProjectSettings {
    * own; anything else is dropped).
    */
   score?: ProjectScore
+  /**
+   * The track's lyrics, one entry per line, in document order — see
+   * LyricLine. Timed lines are drawn over the video as the song reaches them
+   * and grouped under the section they fall in on the structure board's lyric
+   * sheet. An array, so like `score` it needs its own branch in
+   * lib/projectJson.ts's settings sanitizer. Absent means no lyrics; an empty
+   * list means they were deleted (which is what stops the legacy per-section
+   * text from being migrated in again).
+   */
+  lyrics?: LyricLine[]
 }
 
 /**

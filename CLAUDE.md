@@ -514,6 +514,68 @@ orphan by matching blob URLs against the strings it's handed, and
 covers on the next project open. Anything else that walks a project's images
 must read it too.
 
+**Lyrics are timed lines, not per-section text** (`src/lib/lyrics.ts`,
+`LyricOverlay.tsx`, `structure/LyricsPanel.tsx`, `structure/LyricTimer.tsx`).
+`settings.lyrics` is a `LyricLine[]` — the words in **document order**, the
+order the song sings them, each carrying the clip second it starts once it has
+been timed (`t`, tenths), and an empty `text` is a *rest* that clears the
+picture. Two orders matter and every reader says which it wants: document
+order is what the timer walks and the paste box shows; time order
+(`timedLines`) is what the overlay and the sheet read, and only timed lines
+have a place in it. The timing rides on the line rather than reordering the
+list, so a stamp typed wrong never shuffles the verse it belongs to.
+
+They live in `settings` (the second object-valued key, with its own
+`sanitizeLyrics` branch in `projectJson.ts`), so like the score, the turns
+and the marks they take the settings rights — an owner or a guest writes
+them, a link editor reads. Unlike the settings knobs they are *content*, so
+App's `changeLyrics` goes through `commit` and is undoable: typing coalesces
+per line, a stamp is its own step, so ⌘Z after a live pass takes back one
+press rather than the whole pass. `setClip` slides the stamps with the notes
+and the page turns (`shiftLyrics`). The old shape — `Annotation.lyrics`, one
+block of text per section — is folded in on read by `withMigratedLyrics`
+(`toProject` and the importer, beside `withMigratedOverlay`), each block's
+lines spread evenly across its section: the one thing that shape said was
+which section the words belonged to, and an even spread keeps exactly that
+while giving the picture something to show until a pass replaces it. It runs
+only while `settings.lyrics` is *absent* — an empty list is a deletion and
+must not resurrect what it deleted.
+
+**The overlay is a lyric video, not a subtitle bar**: the sung line over the
+lower part of the frame with the next one fainter beneath, white with a
+shadow rather than a box, sized to the frame with container-query inches so a
+narrow frame and a wide one read at the same proportion. Each arriving line is
+a new element keyed by its document index, which is what replays the
+entrance; a rest simply unmounts it. It rides PlayerPane's `overlay` slot
+between the note stage layer and the transport, inert like both, and only
+on video sources — an audio track's waveform is the picture. Whether it shows
+is the reader's own switch (the eye in the sheet's title bar), session state
+like the score's zoom.
+
+**The sheet files each line under the section it starts in** (`groupBySection`):
+every section is listed, lyrics or not — "Solo: no lyrics" is a fact worth
+reading off the sheet — with lines that start between sections in a
+heading-less run where they fall, and untimed lines at the foot. Editing is
+per row and second-precise: the time chip becomes a field on the selected row
+(type `1:23.4`), a crosshair stamps the row at the playhead, ± nudges by half
+a second; Enter opens a line under, Backspace on an empty one removes it.
+Rows are fixed-height so selecting one moves nothing, as the page-turn list
+learned.
+
+**The timer is one key.** Paste the whole lyric (one line per lyric line,
+blank line = rest, blank runs collapse to one), press play, and press `→` as
+each line begins: it stamps the cursor line with the playhead minus the lead
+(same idea as the page turns, default 0.3 s) and moves on; `←` steps the
+cursor back without stamping; clicking a line aims the cursor at it and seeks
+to the last stamp before it so the run-up can be heard. The listener is
+capture-phase so the transport's own arrow keys never see the press while the
+workspace is open — during a pass "next line" is the only thing `→` can
+honestly mean — and it stands down in the text box and the lead field.
+*Edit text* re-opens the paste and `retextLyrics` keeps the stamp of every
+line whose words survived, matched in order, so a typo fixed on line 12 is
+not eleven presses. The panel is keyed per track so a half-run pass never
+carries over to the next song.
+
 **PDF scores** (`src/lib/score.ts`, `src/components/ScoreLayer.tsx`): a track
 can carry the printed music, read in **its own view of the player column** so
 the page and the sound arrive together. It lives at `settings.score` — inside the existing jsonb, so
