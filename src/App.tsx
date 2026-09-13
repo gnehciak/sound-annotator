@@ -553,6 +553,9 @@ export default function App() {
   const lyricsStyle = lyricsStyleOverride ?? current?.settings?.lyricsStyle
   const [lyricsDimOverride, setLyricsDimOverride] = useState<number | null>(null)
   const lyricsDim = clampLyricDim(lyricsDimOverride ?? current?.settings?.lyricsDim)
+  const [lyricsSectionColorOverride, setLyricsSectionColorOverride] = useState<boolean | null>(null)
+  const lyricsSectionColor =
+    lyricsSectionColorOverride ?? current?.settings?.lyricsSectionColor === true
   // The full-screen lyric stage: the player box under the Fullscreen API.
   // Read back from the document rather than assumed, since the browser
   // handles Esc itself and the state has to follow it out.
@@ -590,6 +593,7 @@ export default function App() {
     setLyricsScaleOverride(null)
     setLyricsStyleOverride(null)
     setLyricsDimOverride(null)
+    setLyricsSectionColorOverride(null)
   }
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
 
@@ -661,6 +665,14 @@ export default function App() {
     (dim: number) => {
       if (canEditSettings) patchProjectSettings({ lyricsDim: dim })
       else setLyricsDimOverride(dim)
+    },
+    [canEditSettings, patchProjectSettings],
+  )
+
+  const changeLyricsSectionColor = useCallback(
+    (on: boolean) => {
+      if (canEditSettings) patchProjectSettings({ lyricsSectionColor: on })
+      else setLyricsSectionColorOverride(on)
     },
     [canEditSettings, patchProjectSettings],
   )
@@ -2341,6 +2353,7 @@ export default function App() {
           scale={lyricsScale}
           style={lyricsStyle}
           isPlaying={isPlaying}
+          colorBy={lyricsSectionColor ? current?.annotations : undefined}
         />
       )}
       {lyricFullscreen ? (
@@ -2953,6 +2966,8 @@ export default function App() {
                 onStyle={changeLyricsStyle}
                 dim={lyricsDim}
                 onDim={changeLyricsDim}
+                sectionColor={lyricsSectionColor}
+                onSectionColor={changeLyricsSectionColor}
                 onFullscreen={
                   isVideoSource(current.source) ? toggleLyricFullscreen : undefined
                 }

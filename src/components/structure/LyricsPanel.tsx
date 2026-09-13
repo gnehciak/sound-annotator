@@ -83,6 +83,9 @@ interface Props {
   /** The veil over the picture under the lyrics, 0–MAX_LYRIC_DIM. */
   dim?: number
   onDim?: (dim: number) => void
+  /** Colour the words in their section's hue rather than white. */
+  sectionColor?: boolean
+  onSectionColor?: (on: boolean) => void
   /** Take the picture and the words full screen — video tracks only. */
   onFullscreen?: () => void
   onSeek: (t: number) => void
@@ -104,6 +107,8 @@ export default function LyricsPanel({
   onStyle,
   dim = 0,
   onDim,
+  sectionColor = false,
+  onSectionColor,
   onFullscreen,
   onSeek,
   onPlayPause,
@@ -294,6 +299,23 @@ export default function LyricsPanel({
                             </button>
                           )
                         })}
+                        {onSectionColor && (
+                          <>
+                            <div className="my-1 border-t border-line/60" />
+                            <button
+                              type="button"
+                              onClick={() => onSectionColor(!sectionColor)}
+                              aria-pressed={sectionColor}
+                              title="Each line takes the colour of the section it starts in"
+                              className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-raised"
+                            >
+                              <span className={`text-[12px] ${sectionColor ? 'text-fg' : 'text-muted'}`}>
+                                Colour by section
+                              </span>
+                              <span className="switch" data-on={sectionColor || undefined} />
+                            </button>
+                          </>
+                        )}
                         {onDim && (
                           <>
                             <div className="my-1 border-t border-line/60" />

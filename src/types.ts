@@ -642,6 +642,11 @@ export interface ProjectSettings {
    * bright frame doesn't fight them. Only while the lyrics are on the video.
    */
   lyricsDim?: number
+  /**
+   * Colour the lyrics on the video in the hue of the section each line
+   * starts in (lifted for the dark picture), instead of white. Off by default.
+   */
+  lyricsSectionColor?: boolean
 }
 
 /**

@@ -592,7 +592,13 @@ fixed once per line so ticks don't restart it, and `animation-play-state:
 paused` while the player is. `settings.lyricsDim` (the slider at the foot of
 that menu) is a black veil at that opacity between the picture and
 everything drawn on it — `z-[9]`, under the note layer's `z-10` — rendered
-only while the lyrics are on the video, since it exists for the words. Each arriving line is
+only while the lyrics are on the video, since it exists for the words.
+`settings.lyricsSectionColor` (the switch above it) hands the overlay the
+sections as `colorBy`, and each line takes the hue of the section *its own
+moment* falls in — through `hueOnDark`, like every hue on the stage layer —
+via `--lyric-color`, which the caption's ink and the karaoke wipe's lit half
+both read; the brush looks read it too. By the line's moment rather than the
+playhead's so a line sung across a boundary keeps one colour. Each arriving line is
 a new element keyed by its document index, which is what replays the
 entrance; a rest simply unmounts it. It rides PlayerPane's `overlay` slot
 between the note stage layer and the transport, inert like both, and only

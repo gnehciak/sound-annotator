@@ -113,6 +113,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
   const [lyricsDimOverride, setLyricsDimOverride] = useState<number | null>(null)
+  const [lyricsSectionColorOverride, setLyricsSectionColorOverride] = useState<boolean | null>(null)
   // The full-screen lyric stage — see App for the shape; the same here.
   const playerBoxRef = useRef<HTMLDivElement>(null)
   const [lyricFullscreen, setLyricFullscreen] = useState(false)
@@ -546,6 +547,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const lyricsScale = clampLyricScale(lyricsScaleOverride ?? project.settings?.lyricsScale)
   const lyricsStyle = lyricsStyleOverride ?? project.settings?.lyricsStyle
   const lyricsDim = clampLyricDim(lyricsDimOverride ?? project.settings?.lyricsDim)
+  const lyricsSectionColor =
+    lyricsSectionColorOverride ?? project.settings?.lyricsSectionColor === true
   const buildScoreLayer = (placement: 'pane' | 'frame') =>
     score ? (
       // A reader gets the following, never the timing of it, and sees the
@@ -656,6 +659,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           scale={lyricsScale}
           style={lyricsStyle}
           isPlaying={isPlaying}
+          colorBy={lyricsSectionColor ? project.annotations : undefined}
         />
       )}
       {lyricFullscreen ? (
@@ -847,6 +851,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               onStyle={setLyricsStyleOverride}
               dim={lyricsDim}
               onDim={setLyricsDimOverride}
+              sectionColor={lyricsSectionColor}
+              onSectionColor={setLyricsSectionColorOverride}
               onFullscreen={isVideoSource(source) ? toggleLyricFullscreen : undefined}
               onSeek={seek}
               onPlayPause={() => (isPlaying ? pause() : play())}

@@ -4,8 +4,10 @@ import { useMemo, useState } from 'react'
 // (@fontsource); the browser fetches the file only once a glyph asks for it,
 // so a track on the caption look never pays for it.
 import '@fontsource/permanent-marker/400.css'
-import type { LyricLine } from '../types'
+import type { Annotation, LyricLine } from '../types'
 import { clampLyricScale, lyricAt, lyricStyleOf, timedLines } from '../lib/lyrics'
+import { colorForId, hueOnDark } from '../lib/noteColors'
+import { sectionAt, sortedSections } from '../lib/sections'
 
 /**
  * The look's class, spelled out per look rather than built from the id:
@@ -68,6 +70,7 @@ export default function LyricOverlay({
   scale,
   style,
   isPlaying = true,
+  colorBy,
 }: {
   lines: LyricLine[]
   /** Clip seconds — the clock the stamps were written in. */
@@ -78,8 +81,15 @@ export default function LyricOverlay({
   style?: string
   /** Karaoke only: the wipe holds while the player does. */
   isPlaying?: boolean
+  /**
+   * The song's sections, when the words should take the hue of the one each
+   * line starts in — lifted for the dark picture, like every note hue on
+   * the stage layer. Absent means white.
+   */
+  colorBy?: Annotation[]
 }) {
   const timed = useMemo(() => timedLines(lines), [lines])
+  const sections = useMemo(() => (colorBy ? sortedSections(colorBy) : null), [colorBy])
   const { current, next } = lyricAt(timed, currentTime)
   const look = lyricStyleOf(style)
   // Where in its own duration the current line was when it appeared — fixed
@@ -93,8 +103,14 @@ export default function LyricOverlay({
   const offset =
     wipe?.index === current.index ? wipe.offset : Math.max(0, currentTime - current.t)
 
+  // By the *line's* moment, not the playhead's: a line sung across a section
+  // boundary keeps one colour for its whole life.
+  const section = sections ? sectionAt(sections, current.t) : undefined
   const vars = {
     ['--lyric-scale' as string]: clampLyricScale(scale),
+    ...(section
+      ? { ['--lyric-color' as string]: hueOnDark(section.color ?? colorForId(section.id)) }
+      : {}),
     ['--lyric-dur' as string]: `${Math.max(0.5, (next ? next.t : current.t + 4) - current.t)}s`,
     ['--lyric-offset' as string]: `-${offset}s`,
   }
