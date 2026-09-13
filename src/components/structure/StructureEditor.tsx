@@ -982,8 +982,8 @@ export default function StructureEditor({
             currentTime={currentTime}
             isPlaying={isPlaying}
             rate={playbackRate}
-            place={(t) => `${clamp(t / dur, 0, 1) * 100}%`}
-            className="absolute inset-y-0 w-px bg-accent"
+            place={(t) => clamp(t / dur, 0, 1) * (miniRef.current?.clientWidth ?? 0)}
+            className="absolute inset-y-0 left-0 w-px bg-accent will-change-transform"
           />
         </div>
       </div>
@@ -1173,8 +1173,8 @@ export default function StructureEditor({
           currentTime={currentTime}
           isPlaying={isPlaying}
           rate={playbackRate}
-          place={(t) => (t >= vs && t <= ve ? `${(t - vs) * pps}px` : null)}
-          className="pointer-events-none absolute inset-y-0 z-20 w-[2px] -translate-x-1/2 bg-accent"
+          place={(t) => (t >= vs && t <= ve ? (t - vs) * pps - 1 : null)}
+          className="pointer-events-none absolute inset-y-0 left-0 z-20 w-[2px] bg-accent will-change-transform"
         >
           <span className="absolute -left-[4px] top-0 h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[rgb(var(--accent))]" />
         </SmoothPlayhead>
@@ -1356,10 +1356,16 @@ export default function StructureEditor({
 
 /**
  * A playhead on the frame-rate clock: the players report time four times a
- * second, and a mark bound to that steps across the board. This one writes
- * its own `left` every frame from useSmoothClock and re-renders nothing —
- * `place` maps a time to a CSS left (or null to hide) and is read through a
- * ref, so the board's zoom can change under it without restarting the clock.
+ * second, and a mark bound to that steps across the board. This one moves
+ * itself every frame from useSmoothClock and re-renders nothing — `place`
+ * maps a time to a pixel offset (or null to hide) and is read through a ref,
+ * so the board's zoom can change under it without restarting the clock.
+ *
+ * It moves by `transform`, on its own compositor layer (`will-change`), and
+ * never by `left`: a `left` write is a layout and a repaint of the lane it
+ * crosses, sixty times a second, and that paint is GPU work the video
+ * underneath is already competing for. A transform is a matrix the
+ * compositor applies to a texture it already has.
  */
 function SmoothPlayhead({
   currentTime,
@@ -1372,7 +1378,7 @@ function SmoothPlayhead({
   currentTime: number
   isPlaying: boolean
   rate: number
-  place: (t: number) => string | null
+  place: (t: number) => number | null
   className: string
   children?: React.ReactNode
 }) {
@@ -1382,9 +1388,9 @@ function SmoothPlayhead({
   const apply = (t: number) => {
     const el = ref.current
     if (!el) return
-    const left = placeRef.current(t)
-    el.style.display = left == null ? 'none' : ''
-    if (left != null) el.style.left = left
+    const x = placeRef.current(t)
+    el.style.display = x == null ? 'none' : ''
+    if (x != null) el.style.transform = `translate3d(${x}px,0,0)`
   }
   useLayoutEffect(() => {
     placeRef.current = place
