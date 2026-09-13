@@ -13,6 +13,7 @@ import {
   timeBeat,
 } from '../../lib/chords'
 import { hueText } from '../../lib/noteColors'
+import { useSoundingChord } from '../../lib/useSoundingChord'
 import { useResolvedTheme } from '../../lib/theme'
 import { type BeginDrag, clamp, hexA } from './drag'
 
@@ -42,6 +43,7 @@ interface Props {
   beginDrag: BeginDrag
   currentTime: number
   isPlaying: boolean
+  playbackRate: number
   readOnly: boolean
   selectedId: string | null
   /** The insertion point, in beats — null means "the playhead". */
@@ -62,6 +64,7 @@ export default function ChordLane({
   beginDrag,
   currentTime,
   isPlaying,
+  playbackRate,
   readOnly,
   selectedId,
   cursor,
@@ -92,6 +95,9 @@ export default function ChordLane({
   )
 
   const nowBeat = timeBeat(chords, currentTime)
+  // The sounding chord lights off the frame-rate clock, in step with the
+  // playhead crossing it, not the players' coarse ticks.
+  const soundingId = useSoundingChord(chords, currentTime, isPlaying, playbackRate)
   // Where the next digit writes: the cursor, or — paused with none placed —
   // the beat under the playhead, drawn so the insertion point is never a
   // guess. Playing, the playhead itself is the point and needs no second mark.
@@ -240,7 +246,7 @@ export default function ChordLane({
         const w = Math.max(xOf(t1) - left, 2)
         const color = degreeColor(chord.degree)
         const isSel = chord.id === selectedId
-        const sounding = chord.beat <= nowBeat && nowBeat < chord.beat + chord.len
+        const sounding = soundingId === chord.id
         const spelled = spellChord(chord, chords.key, chords.mode)
         const label = `${spelled.roman}${spelled.figure} · ${spelled.name}`
         return (
@@ -260,7 +266,7 @@ export default function ChordLane({
               }
             }}
             title={label}
-            className={`group absolute inset-y-[3px] touch-none overflow-hidden rounded-[3px] border outline-none transition-[filter] ${
+            className={`group absolute inset-y-[3px] touch-none overflow-hidden rounded-[3px] border outline-none ${
               isSel ? 'z-10 shadow-[inset_0_0_0_1.5px_rgb(var(--text)/0.6)]' : ''
             }`}
             style={{
@@ -269,7 +275,6 @@ export default function ChordLane({
               background: hexA(color, isSel ? 0.55 : sounding ? 0.5 : 0.3),
               borderColor: hexA(color, sounding ? 1 : 0.8),
               cursor: readOnly ? 'pointer' : 'grab',
-              filter: sounding ? 'brightness(1.12)' : undefined,
             }}
           >
             {/* The numeral is the mark — big enough to read across the

@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { Annotation } from '../../types'
 import { formatTime } from '../../lib/format'
 import { colorForId } from '../../lib/noteColors'
@@ -22,17 +22,22 @@ const hexA = (hex: string, a: number) =>
  *
  * Click-to-seek, so a hand on the mouse can jump between sections without
  * leaving full screen; that is the one reason it takes the pointer.
+ *
+ * `children` stack above the shape — the chord bar, which in full screen
+ * belongs with the song's map rather than floating on its own.
  */
 export default function StageStrip({
   sections,
   duration,
   currentTime,
   onSeek,
+  children,
 }: {
   sections: Annotation[]
   duration: number
   currentTime: number
   onSeek: (t: number) => void
+  children?: ReactNode
 }) {
   const ordered = sortedSections(sections)
   // The player may not have reported a length yet; the sections know one.
@@ -51,6 +56,7 @@ export default function StageStrip({
       className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-[4%] pb-[1.6%] pt-10"
       style={{ containerType: 'inline-size' }}
     >
+      {children}
       <div
         className="flex items-baseline justify-between gap-3 px-0.5 pb-[0.5em] font-mono uppercase tracking-[0.18em] text-white/65"
         style={{ fontSize: 'clamp(10px, 1.05cqi, 17px)' }}

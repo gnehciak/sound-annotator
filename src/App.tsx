@@ -2366,7 +2366,6 @@ export default function App() {
         <ChordOverlay
           chords={current.settings.chords}
           currentTime={currentTime}
-          duration={duration}
           isPlaying={isPlaying}
           rate={playbackRate}
         />
@@ -2380,7 +2379,19 @@ export default function App() {
               duration={duration}
               currentTime={currentTime}
               onSeek={seek}
-            />
+            >
+              {/* The chord bar rides above the song's shape, sized to the
+                  frame, so the projector shows the changes coming. */}
+              {chordsOnVideo && current.settings?.chords && (
+                <ChordOverlay
+                  chords={current.settings.chords}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  rate={playbackRate}
+                  placement="stage"
+                />
+              )}
+            </StageStrip>
           )}
           <button
             type="button"
