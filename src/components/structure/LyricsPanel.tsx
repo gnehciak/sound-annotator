@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AArrowDown,
   AArrowUp,
+  Check,
   Crosshair,
   Eye,
   EyeOff,
@@ -9,6 +10,7 @@ import {
   Minus,
   Play,
   Plus,
+  Sparkles,
   Timer as TimerIcon,
   Trash2,
 } from 'lucide-react'
@@ -18,6 +20,8 @@ import {
   groupBySection,
   insertLineAfter,
   LYRIC_SCALES,
+  LYRIC_STYLES,
+  lyricStyleOf,
   nudgeLine,
   removeLine,
   setLineText,
@@ -30,6 +34,7 @@ import { colorForId, hueText } from '../../lib/noteColors'
 import { useResolvedTheme } from '../../lib/theme'
 import { sectionAt, sectionName, sortedSections } from '../../lib/sections'
 import TitleBar from '../TitleBar'
+import Popover from '../Popover'
 import LyricTimer from './LyricTimer'
 
 /**
@@ -71,6 +76,9 @@ interface Props {
   /** The overlay's type size (see LYRIC_SCALES) and the way to change it. */
   scale?: number
   onScale?: (scale: number) => void
+  /** The overlay's look (see LYRIC_STYLES) and the way to change it. */
+  style?: string
+  onStyle?: (style: string) => void
   /** Take the picture and the words full screen — video tracks only. */
   onFullscreen?: () => void
   onSeek: (t: number) => void
@@ -88,6 +96,8 @@ export default function LyricsPanel({
   onToggleOnVideo,
   scale = 1,
   onScale,
+  style,
+  onStyle,
   onFullscreen,
   onSeek,
   onPlayPause,
@@ -99,6 +109,8 @@ export default function LyricsPanel({
   // it, so the controls can never point at a line that has moved.
   const [selected, setSelected] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const styleBtnRef = useRef<HTMLButtonElement | null>(null)
+  const [styleOpen, setStyleOpen] = useState(false)
   // A line just opened under another wants the caret; found by index once
   // the list has re-rendered with it in.
   const pendingFocus = useRef<number | null>(null)
@@ -228,6 +240,56 @@ export default function LyricsPanel({
                     >
                       <AArrowUp size={15} />
                     </button>
+                  </>
+                )}
+                {onStyle && (
+                  <>
+                    <button
+                      ref={styleBtnRef}
+                      type="button"
+                      onClick={() => setStyleOpen((o) => !o)}
+                      aria-expanded={styleOpen}
+                      title="How the lyrics look on the video"
+                      aria-label="Lyric style"
+                      className="btn-icon press"
+                    >
+                      <Sparkles size={14} />
+                    </button>
+                    <Popover
+                      open={styleOpen}
+                      anchorRef={styleBtnRef}
+                      onClose={() => setStyleOpen(false)}
+                      width={250}
+                    >
+                      <div className="py-1">
+                        {LYRIC_STYLES.map((s) => {
+                          const on = lyricStyleOf(style) === s.id
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={on}
+                              onClick={() => {
+                                onStyle(s.id)
+                                setStyleOpen(false)
+                              }}
+                              className={`pop-row ${on ? 'text-fg' : ''}`}
+                            >
+                              <span className="flex w-4 shrink-0 justify-center">
+                                {on && <Check size={13} />}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-medium text-fg">{s.label}</span>
+                                <span className="block text-[11px] leading-snug text-muted">
+                                  {s.detail}
+                                </span>
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </Popover>
                   </>
                 )}
                 <button

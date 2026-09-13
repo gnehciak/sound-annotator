@@ -51,6 +51,7 @@ import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
+import StageStrip from './structure/StageStrip'
 import { clampLyricScale } from '../lib/lyrics'
 import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
@@ -110,6 +111,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
   // …and how big they are: a reader's own size, seeded from the owner's.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
+  const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
   // The full-screen lyric stage — see App for the shape; the same here.
   const playerBoxRef = useRef<HTMLDivElement>(null)
   const [lyricFullscreen, setLyricFullscreen] = useState(false)
@@ -541,6 +543,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
   const lyrics = project.settings?.lyrics
   const lyricsScale = clampLyricScale(lyricsScaleOverride ?? project.settings?.lyricsScale)
+  const lyricsStyle = lyricsStyleOverride ?? project.settings?.lyricsStyle
   const buildScoreLayer = (placement: 'pane' | 'frame') =>
     score ? (
       // A reader gets the following, never the timing of it, and sees the
@@ -638,18 +641,34 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         />
       )}
       {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
-        <LyricOverlay lines={lyrics} currentTime={currentTime} scale={lyricsScale} />
+        <LyricOverlay
+          lines={lyrics}
+          currentTime={currentTime}
+          scale={lyricsScale}
+          style={lyricsStyle}
+          isPlaying={isPlaying}
+        />
       )}
       {lyricFullscreen ? (
-        <button
-          type="button"
-          onClick={toggleLyricFullscreen}
-          title="Exit full screen (Esc)"
-          aria-label="Exit full screen"
-          className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-        >
-          <Minimize2 size={15} />
-        </button>
+        <>
+          {isStructure && (
+            <StageStrip
+              sections={project.annotations}
+              duration={duration}
+              currentTime={currentTime}
+              onSeek={seek}
+            />
+          )}
+          <button
+            type="button"
+            onClick={toggleLyricFullscreen}
+            title="Exit full screen (Esc)"
+            aria-label="Exit full screen"
+            className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Minimize2 size={15} />
+          </button>
+        </>
       ) : (
         transport
       )}
@@ -814,6 +833,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               }
               scale={lyricsScale}
               onScale={setLyricsScaleOverride}
+              style={lyricsStyle}
+              onStyle={setLyricsStyleOverride}
               onFullscreen={isVideoSource(source) ? toggleLyricFullscreen : undefined}
               onSeek={seek}
               onPlayPause={() => (isPlaying ? pause() : play())}

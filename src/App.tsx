@@ -62,6 +62,7 @@ import {
 } from './lib/score'
 import type { LyricLine, NoteQuote, ScoreMark, ScoreTurn } from './types'
 import LyricOverlay from './components/LyricOverlay'
+import StageStrip from './components/structure/StageStrip'
 import { clampLyricScale, shiftLyrics } from './lib/lyrics'
 import { QuoteScoreProvider } from './lib/quotePreview'
 import { fetchVideoTitle } from './lib/youtube'
@@ -546,6 +547,8 @@ export default function App() {
   // write it, else (a link editor) a session override, like the score view.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const lyricsScale = clampLyricScale(lyricsScaleOverride ?? current?.settings?.lyricsScale)
+  const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
+  const lyricsStyle = lyricsStyleOverride ?? current?.settings?.lyricsStyle
   // The full-screen lyric stage: the player box under the Fullscreen API.
   // Read back from the document rather than assumed, since the browser
   // handles Esc itself and the state has to follow it out.
@@ -581,6 +584,7 @@ export default function App() {
     setScoreReload(0)
     setSyncingScore(false)
     setLyricsScaleOverride(null)
+    setLyricsStyleOverride(null)
   }
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
 
@@ -636,6 +640,14 @@ export default function App() {
     (scale: number) => {
       if (canEditSettings) patchProjectSettings({ lyricsScale: scale })
       else setLyricsScaleOverride(scale)
+    },
+    [canEditSettings, patchProjectSettings],
+  )
+
+  const changeLyricsStyle = useCallback(
+    (style: string) => {
+      if (canEditSettings) patchProjectSettings({ lyricsStyle: style })
+      else setLyricsStyleOverride(style)
     },
     [canEditSettings, patchProjectSettings],
   )
@@ -2257,18 +2269,35 @@ export default function App() {
       )}
       {/* The sung line, over the stage layer and under the transport. */}
       {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
-        <LyricOverlay lines={lyrics} currentTime={currentTime} scale={lyricsScale} />
+        <LyricOverlay
+          lines={lyrics}
+          currentTime={currentTime}
+          scale={lyricsScale}
+          style={lyricsStyle}
+          isPlaying={isPlaying}
+        />
       )}
       {lyricFullscreen ? (
-        <button
-          type="button"
-          onClick={toggleLyricFullscreen}
-          title="Exit full screen (Esc)"
-          aria-label="Exit full screen"
-          className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-        >
-          <Minimize2 size={15} />
-        </button>
+        <>
+          {/* The song's shape along the foot — where in the song we are. */}
+          {isStructure && current && (
+            <StageStrip
+              sections={current.annotations}
+              duration={duration}
+              currentTime={currentTime}
+              onSeek={seek}
+            />
+          )}
+          <button
+            type="button"
+            onClick={toggleLyricFullscreen}
+            title="Exit full screen (Esc)"
+            aria-label="Exit full screen"
+            className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Minimize2 size={15} />
+          </button>
+        </>
       ) : (
         transport
       )}
@@ -2851,6 +2880,8 @@ export default function App() {
                 }
                 scale={lyricsScale}
                 onScale={changeLyricsScale}
+                style={lyricsStyle}
+                onStyle={changeLyricsStyle}
                 onFullscreen={
                   isVideoSource(current.source) ? toggleLyricFullscreen : undefined
                 }

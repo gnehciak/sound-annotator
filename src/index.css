@@ -390,6 +390,99 @@ html[data-armed] body::before {
       0 0 14px rgb(0 0 0 / 0.6);
     text-wrap: balance;
   }
+  /* ---- the lyric-video looks ------------------------------------------
+     Mid-frame rather than at the foot, in a brush marker face, and animated
+     by the stylesheet alone: the overlay splits a line into word (and letter)
+     spans that each carry their index in `--i`, and the stagger is a delay
+     off that. Reduced motion clamps every animation to a frame globally. */
+  .lyric-stage--pop,
+  .lyric-stage--rise,
+  .lyric-stage--karaoke {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8%;
+  }
+  .lyric-stage--pop .lyric-stage__line,
+  .lyric-stage--rise .lyric-stage__line {
+    font-family: 'Permanent Marker', 'IBM Plex Sans', system-ui, sans-serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+    font-size: calc(clamp(22px, 5.4cqi, 112px) * var(--lyric-scale, 1));
+    text-shadow:
+      0 2px 4px rgb(0 0 0 / 0.65),
+      0 0 34px rgb(0 0 0 / 0.5);
+  }
+  .lyric-word,
+  .lyric-char {
+    display: inline-block;
+    white-space: pre;
+  }
+  .lyric-stage--pop .lyric-word {
+    animation: lyric-word-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 75ms);
+  }
+  @keyframes lyric-word-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em) scale(0.82);
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+  .lyric-stage--rise .lyric-char {
+    animation: lyric-char-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 26ms);
+  }
+  @keyframes lyric-char-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.7em) rotate(8deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  /* Karaoke: the line is a gradient clipped to its glyphs, twice as wide as
+     the line, slid from the dim half to the lit half over the line's own
+     duration (`--lyric-dur`, the time to the next line) — started that far
+     back (`--lyric-offset`) when a seek lands mid-line, and held while the
+     player is paused. No text-shadow: it would paint through the clip. */
+  .lyric-stage--karaoke .lyric-stage__line {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    font-size: calc(clamp(20px, 4.6cqi, 96px) * var(--lyric-scale, 1));
+    /* The unsung half stays readable on a black frame — it is the line the
+       class is about to sing, not a ghost of it. */
+    background-image: linear-gradient(90deg, #fff 50%, rgb(255 255 255 / 0.55) 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.7));
+    animation: lyric-wipe var(--lyric-dur, 4s) linear both;
+    animation-delay: var(--lyric-offset, 0s);
+  }
+  .lyric-stage--karaoke[data-paused] .lyric-stage__line {
+    animation-play-state: paused;
+  }
+  @keyframes lyric-wipe {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
   /* The full-screen lyric stage: the player's box taken full screen with the
      transport and the note layer put away, so what reaches the projector is
      the picture and the words. The *box* is fullscreened rather than the

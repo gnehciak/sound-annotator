@@ -573,6 +573,13 @@ export interface ProjectSettings {
    * who can't write settings resizes for their own session instead.
    */
   lyricsScale?: number
+  /**
+   * How the lyrics are drawn on the video — see LYRIC_STYLES in lib/lyrics.ts:
+   * `caption` (the quiet line at the foot, the default), `pop` (a lyric video:
+   * brush capitals mid-frame, word by word), `rise` (letter by letter) or
+   * `karaoke` (the line fills as it is sung). Unknown values read as `caption`.
+   */
+  lyricsStyle?: string
 }
 
 /**

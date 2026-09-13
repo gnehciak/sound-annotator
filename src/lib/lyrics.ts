@@ -39,6 +39,25 @@ export function stepLyricScale(scale: number, dir: 1 | -1): number {
   return LYRIC_SCALES[Math.min(LYRIC_SCALES.length - 1, Math.max(0, nearest + dir))]
 }
 
+/**
+ * The looks the overlay can take. `caption` is the quiet line at the foot;
+ * the other three are the *lyric video* looks, mid-frame and animated — a
+ * word at a time, a letter at a time, or filled left to right as the line is
+ * sung. All CSS: the words are split into spans and each span carries its
+ * index, and the stylesheet does the rest (see `.lyric-stage--*`).
+ */
+export const LYRIC_STYLES = [
+  { id: 'caption', label: 'Caption', detail: 'A quiet line at the foot of the picture.' },
+  { id: 'pop', label: 'Lyric video', detail: 'Brush capitals mid-frame, a word at a time.' },
+  { id: 'rise', label: 'Rise', detail: 'Each letter climbs into place.' },
+  { id: 'karaoke', label: 'Karaoke', detail: 'The line fills as it is sung.' },
+] as const
+export type LyricStyle = (typeof LYRIC_STYLES)[number]['id']
+
+export function lyricStyleOf(v: string | undefined | null): LyricStyle {
+  return LYRIC_STYLES.some((s) => s.id === v) ? (v as LyricStyle) : 'caption'
+}
+
 /** Tenths are the resolution the stamps are shown at, so it is what they keep. */
 const tenths = (t: number) => Math.round(Math.max(0, t) * 10) / 10
 

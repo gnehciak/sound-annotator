@@ -541,10 +541,22 @@ while giving the picture something to show until a pass replaces it. It runs
 only while `settings.lyrics` is *absent* — an empty list is a deletion and
 must not resurrect what it deleted.
 
-**The overlay is a lyric video, not a subtitle bar**: the sung line over the
+**The overlay has four looks** (`settings.lyricsStyle`, `LYRIC_STYLES`), the
+Sparkles menu on the sheet. `caption` is the quiet one: the sung line over the
 lower part of the frame with the next one fainter beneath, white with a
 shadow rather than a box, sized to the frame with container-query inches so a
-narrow frame and a wide one read at the same proportion. Each arriving line is
+narrow frame and a wide one read at the same proportion. `pop`, `rise` and
+`karaoke` are the *lyric video* looks — mid-frame, brush capitals (Permanent
+Marker, self-hosted through @fontsource like Plex, fetched only when a glyph
+asks for it), and animated by **the stylesheet alone**: `LyricOverlay` splits
+the line into word and letter spans that carry their index in `--i`, and the
+stagger is a delay off that. No animation library — GSAP/SplitText or Motion
+would buy timeline control this doesn't need, at a bundle cost every viewer
+pays. Karaoke's wipe is a background-clip gradient animated over
+`--lyric-dur` (the time to the next line — the one place the overlay reads
+the *next* stamp), started `--lyric-offset` back when a seek lands mid-line,
+fixed once per line so ticks don't restart it, and `animation-play-state:
+paused` while the player is. Each arriving line is
 a new element keyed by its document index, which is what replays the
 entrance; a rest simply unmounts it. It rides PlayerPane's `overlay` slot
 between the note stage layer and the transport, inert like both, and only
@@ -558,7 +570,11 @@ and the words alone**: the player *box* (`.lyric-fs`, the div around
 PlayerPane) goes under the Fullscreen API — the box rather than the player's
 own frame, so nothing inside remounts and a YouTube iframe doesn't restart —
 and while `document.fullscreenElement` is that box the note layer and the
-transport stand down (Space and the picture's own click still pause). The
+transport stand down (Space and the picture's own click still pause), and
+`StageStrip` draws the song's shape along the foot — the sections as bands
+in proportion, the unplayed part dimmed, the sounding section named beside
+the clock, click to jump — sized to the frame in container units like the
+words. The
 state is read back from `fullscreenchange`, never assumed, because Esc is the
 browser's and has to be followed out.
 
