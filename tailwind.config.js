@@ -96,6 +96,12 @@ export default {
         // The docked inspector slides open by growing its column width, so the
         // notes list eases aside instead of the panel jumping in.
         'dock-in': { from: { width: '0' }, to: { width: '22rem' } },
+        // A lyric line arriving on the picture: up and in, a touch longer
+        // than a note so it reads as the song reaching the line, not a cut.
+        'lyric-in': {
+          from: { opacity: '0', transform: 'translateY(10px) scale(0.985)' },
+          to: { opacity: '1', transform: 'none' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 160ms ease-out both',
@@ -114,6 +120,7 @@ export default {
         'rise-in': 'rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards',
         'now-pulse': 'now-pulse 1.7s ease-in-out infinite',
         'dock-in': 'dock-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both',
+        'lyric-in': 'lyric-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both',
       },
       // Softly squared ("station, warmed"): chips 5px, controls 6px, grouped
       // containers 8px, panels 10px. Still far from pill/card territory — the

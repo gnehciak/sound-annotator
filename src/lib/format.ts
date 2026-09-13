@@ -67,7 +67,8 @@ export function parseTime(input: string): number | null {
  * a sub-second thing and rounding to the second would hide it.
  */
 export function formatTenths(seconds: number): string {
-  const safe = Math.max(0, seconds)
-  const whole = Math.floor(safe)
-  return `${formatTime(whole)}.${Math.floor((safe - whole) * 10)}`
+  // Round to whole tenths *first*: `18.2 - 18` is 0.19999… in binary, and
+  // flooring that printed 18.2 as "0:18.1" on every line that carried it.
+  const tenths = Math.round(Math.max(0, seconds) * 10)
+  return `${formatTime(Math.floor(tenths / 10))}.${tenths % 10}`
 }

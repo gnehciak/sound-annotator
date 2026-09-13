@@ -49,6 +49,7 @@ import { usePlayerArea } from '../lib/playerArea'
 import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
+import LyricOverlay from './LyricOverlay'
 import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
 import {
@@ -103,6 +104,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // Per-session score display, over whatever the owner saved (see below).
   const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
   const [scoreReload, setScoreReload] = useState(0)
+  // The timed lyrics on the picture — a reader's own switch, never saved.
+  const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   // Resolved view prefs. State initializes from localStorage; on project load
@@ -501,6 +504,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the owner's saved choice and never written back.
   const score = project.settings?.score
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
+  const lyrics = project.settings?.lyrics
   const buildScoreLayer = (placement: 'pane' | 'frame') =>
     score ? (
       // A reader gets the following, never the timing of it, and sees the
@@ -595,6 +599,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         readOnly
         onTogglePlay={() => (isPlaying ? pause() : play())}
       />
+      {lyricsOnVideo && lyrics && lyrics.length > 0 && (
+        <LyricOverlay lines={lyrics} currentTime={currentTime} />
+      )}
       {transport}
     </>
   )
@@ -741,15 +748,21 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onDelete={() => {}}
           />
         </div>
-        {annotations.some((a) => a.lyrics?.trim()) && (
+        {lyrics && lyrics.length > 0 && (
           <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
             <LyricsPanel
+              lines={lyrics}
               sections={annotations}
               currentTime={currentTime}
               isPlaying={isPlaying}
               readOnly
+              onVideo={isVideoSource(source) ? lyricsOnVideo : undefined}
+              onToggleOnVideo={
+                isVideoSource(source) ? () => setLyricsOnVideo((v) => !v) : undefined
+              }
               onSeek={seek}
-              onUpdateLyrics={() => {}}
+              onPlayPause={() => (isPlaying ? pause() : play())}
+              onChange={() => {}}
             />
           </div>
         )}

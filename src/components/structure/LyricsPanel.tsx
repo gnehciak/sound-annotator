@@ -1,137 +1,291 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Annotation } from '../../types'
-import { formatTime } from '../../lib/format'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Crosshair,
+  Eye,
+  EyeOff,
+  Minus,
+  Play,
+  Plus,
+  Timer as TimerIcon,
+  Trash2,
+} from 'lucide-react'
+import type { Annotation, LyricLine } from '../../types'
+import { formatTenths, formatTime, parseTime } from '../../lib/format'
+import {
+  groupBySection,
+  insertLineAfter,
+  nudgeLine,
+  removeLine,
+  setLineText,
+  stampLine,
+  timedIndexAt,
+  timedLines,
+} from '../../lib/lyrics'
 import { colorForId, hueText } from '../../lib/noteColors'
 import { useResolvedTheme } from '../../lib/theme'
 import { sectionAt, sectionName, sortedSections } from '../../lib/sections'
 import TitleBar from '../TitleBar'
+import LyricTimer from './LyricTimer'
 
 /**
- * The structure board's right column: a lyric sheet. Whole-section lyrics
- * (deliberately not line-synced) set like a score page — generous spacing
- * instead of dividers, one thin hue rail per section as its identity mark,
- * the section name in its own hue. While the song plays, the sounding
- * section stays lit and the others fall back, karaoke-sheet style.
+ * The structure board's right column: the lyric sheet. The track's lines
+ * (`settings.lyrics`, see lib/lyrics.ts) filed under the section each one
+ * starts in, so the sheet reads as the song's form with the words inside it —
+ * every section is listed, lyrics or not, and lines that start between
+ * sections sit in a heading-less run where they fall. Lines still waiting
+ * for a stamp gather at the foot under "Not timed", since they have no place
+ * on the clock yet.
  *
- * Auto-pin: whenever the sounding section changes — playback rolling into
- * the next section, or any seek (ruler, chips, a lyric heading) — and again
- * when Play is pressed, the sheet scrolls that section to its top, like the
- * notes list pinning the playing note. A measured bottom spacer lets even
- * the last section pin, and the pin stands down while the caret is in the
- * sheet so it never yanks the page out from under someone typing.
+ * While the song plays the line being sung is lit and the sheet scrolls to
+ * keep it in view, karaoke-sheet style, standing down whenever the caret is
+ * in the sheet so it never yanks a line out from under someone typing. The
+ * sections not sounding fall back while playing, as before.
+ *
+ * Editing is per line, and every control is second-precise: the time chip
+ * becomes a field when its row is selected (type `1:23.4`, Enter), a
+ * crosshair stamps the row at the playhead, ± nudge it by half a second.
+ * Enter in a line's words opens a new line under it; Backspace on an empty
+ * one removes it. The timing *pass* — paste it all, press → per line — is
+ * the LyricTimer workspace, which takes this column over from the Time key.
  */
 
 interface Props {
+  lines: LyricLine[]
   /** The project's sections (all of its annotations, in any order). */
   sections: Annotation[]
   currentTime: number
   isPlaying: boolean
   readOnly: boolean
+  /**
+   * Whether the lines are drawn on the video, and the switch for it. Absent
+   * on an audio track — its waveform is the picture and there is nothing to
+   * draw on.
+   */
+  onVideo?: boolean
+  onToggleOnVideo?: () => void
   onSeek: (t: number) => void
-  onUpdateLyrics: (id: string, lyrics: string) => void
+  onPlayPause: () => void
+  onChange: (lines: LyricLine[], opts?: { coalesceKey?: string }) => void
 }
 
 export default function LyricsPanel({
+  lines,
   sections,
   currentTime,
   isPlaying,
   readOnly,
+  onVideo,
+  onToggleOnVideo,
   onSeek,
-  onUpdateLyrics,
+  onPlayPause,
+  onChange,
 }: Props) {
   const theme = useResolvedTheme()
-  const ordered = sortedSections(sections)
-  const activeId = sectionAt(ordered, currentTime)?.id ?? null
+  const [timing, setTiming] = useState(false)
+  // The row whose controls are out. Cleared when the list changes shape under
+  // it, so the controls can never point at a line that has moved.
+  const [selected, setSelected] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const roRef = useRef<ResizeObserver | null>(null)
-  // Bottom spacer so the last sections can still pin to the panel top.
-  const [pad, setPad] = useState(0)
+  // A line just opened under another wants the caret; found by index once
+  // the list has re-rendered with it in.
+  const pendingFocus = useRef<number | null>(null)
 
-  const setScrollEl = useCallback((el: HTMLDivElement | null) => {
-    scrollRef.current = el
-    roRef.current?.disconnect()
-    if (!el) return
-    const update = () => setPad(Math.max(0, el.clientHeight - 96))
-    update()
-    roRef.current = new ResizeObserver(update)
-    roRef.current.observe(el)
-  }, [])
+  const { groups, untimed } = useMemo(
+    () => groupBySection(lines, sections),
+    [lines, sections],
+  )
+  const timed = useMemo(() => timedLines(lines), [lines])
+  const soundingAt = timedIndexAt(timed, currentTime)
+  const sounding = soundingAt >= 0 ? timed[soundingAt].index : null
+  const activeSectionId = useMemo(
+    () => sectionAt(sortedSections(sections), currentTime)?.id ?? null,
+    [sections, currentTime],
+  )
 
-  /** Scroll the sounding section to the top of the sheet. */
-  const activeIdRef = useRef(activeId)
+  // Keep the sung line in view — or, between lines, the sounding section's
+  // heading — whenever either changes, and again when Play is pressed.
+  const pinTarget = sounding != null ? `lyric-${sounding}` : activeSectionId ? `lyrics-${activeSectionId}` : null
+  const pinTargetRef = useRef(pinTarget)
   useEffect(() => {
-    activeIdRef.current = activeId
+    pinTargetRef.current = pinTarget
   })
-  const pinActive = useCallback(() => {
+  const pin = () => {
     const panel = scrollRef.current
-    const id = activeIdRef.current
+    const id = pinTargetRef.current
     if (!panel || !id) return
-    // Never yank the sheet out from under someone typing in it.
     if (panel.contains(document.activeElement)) return
-    const el = document.getElementById(`lyrics-${id}`)
-    if (!el) return
-    const top =
-      el.getBoundingClientRect().top -
-      panel.getBoundingClientRect().top +
-      panel.scrollTop -
-      6
-    panel.scrollTo({
-      top: Math.max(0, top),
+    const el = document.getElementById(id)
+    if (!el || !panel.contains(el)) return
+    el.scrollIntoView({
+      block: 'center',
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
         ? 'auto'
         : 'smooth',
     })
-  }, [])
+  }
+  useEffect(() => {
+    if (pinTarget) pin()
+  }, [pinTarget])
+  useEffect(() => {
+    if (isPlaying) pin()
+  }, [isPlaying])
 
-  // Pin whenever the sounding section changes — that covers playback rolling
-  // across a boundary AND any seek, playing or paused…
   useEffect(() => {
-    if (activeId) pinActive()
-  }, [activeId, pinActive])
-  // …and when Play is pressed, re-pin the section already sounding.
-  useEffect(() => {
-    if (isPlaying) pinActive()
-  }, [isPlaying, pinActive])
+    const i = pendingFocus.current
+    if (i == null) return
+    pendingFocus.current = null
+    scrollRef.current
+      ?.querySelector<HTMLInputElement>(`input[data-line="${i}"]`)
+      ?.focus()
+  }, [lines])
+
+  const edit = (next: LyricLine[], opts?: { coalesceKey?: string }) => {
+    onChange(next, opts)
+  }
+
+  if (timing && !readOnly) {
+    return (
+      <LyricTimer
+        lines={lines}
+        currentTime={currentTime}
+        isPlaying={isPlaying}
+        onPlayPause={onPlayPause}
+        onSeek={onSeek}
+        onChange={(next) => edit(next)}
+        onClose={() => setTiming(false)}
+      />
+    )
+  }
+
+  const rowProps = (index: number, t: number | undefined, text: string) => ({
+    index,
+    t,
+    text,
+    sounding: index === sounding,
+    selected: index === selected,
+    readOnly,
+    currentTime,
+    onSeek,
+    onSelect: () => setSelected(index),
+    onText: (v: string) =>
+      edit(setLineText(lines, index, v), { coalesceKey: `lyric-text:${index}` }),
+    onStamp: (at: number) => edit(stampLine(lines, index, at)),
+    onNudge: (by: number) => edit(nudgeLine(lines, index, by)),
+    onInsertAfter: () => {
+      pendingFocus.current = index + 1
+      edit(insertLineAfter(lines, index))
+      setSelected(index + 1)
+    },
+    onRemove: () => {
+      edit(removeLine(lines, index))
+      setSelected(null)
+      if (index > 0) pendingFocus.current = index - 1
+    },
+  })
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <TitleBar left="Lyrics" />
-      <div ref={setScrollEl} className="flex-1 overflow-y-auto bg-note">
-        {ordered.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[12.5px] leading-relaxed text-muted">
-            Draw sections on the timeline first — their lyrics go here.
-          </p>
+      <TitleBar
+        left="Lyrics"
+        actions={
+          <>
+            {onToggleOnVideo && lines.length > 0 && (
+              <button
+                type="button"
+                onClick={onToggleOnVideo}
+                aria-pressed={onVideo}
+                title={onVideo ? 'Hide the lyrics on the video' : 'Show the lyrics on the video'}
+                className="btn-icon press"
+              >
+                {onVideo ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
+            )}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setTiming(true)}
+                title={
+                  lines.length > 0
+                    ? 'Time the lines against the song, one key press per line'
+                    : 'Paste the lyrics and time them against the song'
+                }
+                className="btn-ghost btn-sm press shrink-0"
+              >
+                <TimerIcon size={12} />
+                {lines.length > 0 ? 'Time' : 'Paste lyrics'}
+              </button>
+            )}
+          </>
+        }
+      />
+      <div ref={scrollRef} className="flex-1 overflow-y-auto bg-note">
+        {lines.length === 0 ? (
+          <div className="px-4 py-6">
+            <div className="empty">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                {readOnly
+                  ? 'This track has no lyrics.'
+                  : 'No lyrics yet. Paste the whole lyric, then press → as each line begins — the lines file themselves under the sections they fall in.'}
+              </p>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setTiming(true)}
+                  className="btn-signal press"
+                >
+                  <TimerIcon size={12} />
+                  Paste lyrics
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
-          <div className="space-y-1 px-2.5 py-3">
-            {ordered.map((sec) => {
+          <div className="space-y-2 px-2 py-3">
+            {groups.map((g, gi) => {
+              const sec = g.section
+              // A reader is here for the words: a section with none is one
+              // heading of noise to them, and a fact to the person editing.
+              if (readOnly && g.lines.length === 0) return null
+              if (!sec) {
+                return (
+                  <section key={`orphans-${gi}`} className="rounded-md px-1 py-1">
+                    <div className="px-1.5 pb-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+                      Between sections
+                    </div>
+                    <ul>
+                      {g.lines.map((l) => (
+                        <LyricRow key={l.index} {...rowProps(l.index, l.t, l.text)} />
+                      ))}
+                    </ul>
+                  </section>
+                )
+              }
               const color = sec.color ?? colorForId(sec.id)
               const ink = hueText(color, theme)
-              const active = sec.id === activeId
+              const active = sec.id === activeSectionId
               // Karaoke focus: while the song plays, only the sounding
               // section stays lit. At rest the whole sheet reads evenly.
-              const dimmed = isPlaying && activeId !== null && !active
-              const lyrics = sec.lyrics ?? ''
-              if (readOnly && !lyrics.trim()) return null
+              const dimmed = isPlaying && activeSectionId !== null && !active
               return (
                 <section
                   key={sec.id}
                   id={`lyrics-${sec.id}`}
                   aria-label={`${sectionName(sec)} lyrics`}
-                  className={`relative rounded-md py-3 pl-4 pr-3 transition-[background-color,opacity] duration-300 ${
-                    active ? 'bg-rowsel' : ''
-                  } ${dimmed ? 'opacity-50' : ''}`}
+                  className={`relative rounded-md py-1.5 pl-3.5 pr-1 transition-opacity duration-300 ${
+                    dimmed ? 'opacity-50' : ''
+                  }`}
                 >
                   {/* The section's identity rail — its hue, nothing else. */}
                   <span
                     aria-hidden
-                    className="absolute bottom-3 left-1 top-3 w-[2px] rounded-full"
+                    className="absolute bottom-2 left-1 top-2 w-[2px] rounded-full"
                     style={{ background: color }}
                   />
                   <button
                     type="button"
                     onClick={() => onSeek(sec.start)}
                     title={`Play from here (${formatTime(sec.start)})`}
-                    className="press flex w-full min-w-0 items-baseline gap-2 text-left"
+                    className="press flex w-full min-w-0 items-baseline gap-2 px-1 py-0.5 text-left"
                   >
                     <span
                       className="chip max-w-full truncate font-semibold"
@@ -151,22 +305,45 @@ export default function LyricsPanel({
                       />
                     )}
                   </button>
-                  {readOnly ? (
-                    <p className="mt-1.5 max-w-[62ch] whitespace-pre-wrap text-[13.5px] leading-[1.75] text-fg">
-                      {lyrics}
+                  {g.lines.length === 0 ? (
+                    <p className="px-1.5 py-1 text-[11px] italic text-muted">
+                      No lyrics start in this section.
                     </p>
                   ) : (
-                    <GrowingTextarea
-                      value={lyrics}
-                      onChange={(v) => onUpdateLyrics(sec.id, v)}
-                      ariaLabel={`Lyrics for ${sectionName(sec)}`}
-                    />
+                    <ul className="mt-0.5">
+                      {g.lines.map((l) => (
+                        <LyricRow key={l.index} {...rowProps(l.index, l.t, l.text)} />
+                      ))}
+                    </ul>
                   )}
                 </section>
               )
             })}
-            {/* Lets the last section scroll all the way to the panel top. */}
-            <div aria-hidden style={{ height: pad }} />
+
+            {untimed.length > 0 && (
+              <section className="rounded-md px-1 py-1" aria-label="Lines not yet timed">
+                <div className="flex items-center justify-between gap-2 px-1.5 pb-0.5">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+                    Not timed
+                  </span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setTiming(true)}
+                      className="btn-ghost btn-sm press shrink-0"
+                    >
+                      <TimerIcon size={12} />
+                      Time these
+                    </button>
+                  )}
+                </div>
+                <ul>
+                  {untimed.map((l) => (
+                    <LyricRow key={l.index} {...rowProps(l.index, undefined, l.text)} />
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -174,42 +351,203 @@ export default function LyricsPanel({
   )
 }
 
-/** Borderless textarea that grows with its content, so every section's
- *  lyrics sit fully visible in the flow — no inner scrollbars. */
-function GrowingTextarea({
-  value,
-  onChange,
-  ariaLabel,
+/**
+ * One line of the sheet: its stamp, its words, and — on the selected row,
+ * when editing — the controls that retime or remove it. One fixed-height row
+ * whichever state it is in, so selecting a line moves nothing under the
+ * pointer (the page-turn list learned that the hard way).
+ */
+function LyricRow({
+  index,
+  t,
+  text,
+  sounding,
+  selected,
+  readOnly,
+  currentTime,
+  onSeek,
+  onSelect,
+  onText,
+  onStamp,
+  onNudge,
+  onInsertAfter,
+  onRemove,
 }: {
-  value: string
-  onChange: (v: string) => void
-  ariaLabel: string
+  index: number
+  t: number | undefined
+  text: string
+  sounding: boolean
+  selected: boolean
+  readOnly: boolean
+  currentTime: number
+  onSeek: (t: number) => void
+  onSelect: () => void
+  onText: (v: string) => void
+  onStamp: (at: number) => void
+  onNudge: (by: number) => void
+  onInsertAfter: () => void
+  onRemove: () => void
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const fit = () => {
-      el.style.height = 'auto'
-      const h = el.scrollHeight
-      // A 0 reading means we measured before layout (or while hidden) —
-      // leave height auto rather than pinning the field to 0px.
-      if (h > 0) el.style.height = `${h}px`
+  // The time as typed, while the chip is a field. Null when it isn't.
+  const [draft, setDraft] = useState<string | null>(null)
+  const rest = text === ''
+  const editingTime = selected && !readOnly && draft != null
+
+  const commitTime = () => {
+    if (draft == null) return
+    const parsed = parseTime(draft)
+    setDraft(null)
+    if (parsed != null && parsed >= 0 && (t == null || Math.abs(parsed - t) > 1e-6)) {
+      onStamp(parsed)
+      onSeek(parsed)
     }
-    fit()
-    if (el.scrollHeight > 0) return
-    const raf = requestAnimationFrame(fit)
-    return () => cancelAnimationFrame(raf)
-  }, [value])
+  }
+
   return (
-    <textarea
-      ref={ref}
-      rows={1}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Paste lyrics…"
-      aria-label={ariaLabel}
-      className="mt-1.5 block w-full max-w-[62ch] resize-none overflow-hidden rounded-sm bg-transparent text-[13.5px] leading-[1.75] text-fg outline-none transition-colors placeholder:text-muted/60 hover:bg-fg/5 focus:bg-fg/5"
-    />
+    <li
+      id={`lyric-${index}`}
+      className={`flex h-8 items-center gap-1 rounded-sm pl-1 pr-0.5 transition-colors ${
+        sounding
+          ? 'bg-rowsel'
+          : selected && !readOnly
+            ? 'bg-fg/[0.05]'
+            : 'hover:bg-fg/[0.04]'
+      }`}
+    >
+      {editingTime ? (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitTime}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              e.currentTarget.blur()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setDraft(null)
+              e.currentTarget.blur()
+            }
+          }}
+          aria-label="Start time, as m:ss.t"
+          placeholder="m:ss.t"
+          autoFocus
+          className="field w-[64px] shrink-0 px-1 py-0.5 text-center font-mono text-[10.5px] tabular-nums"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (selected && !readOnly) {
+              // Second click on the selected row's chip: type the time.
+              setDraft(t != null ? formatTenths(t) : '')
+              return
+            }
+            onSelect()
+            if (t != null) onSeek(t)
+          }}
+          title={
+            t != null
+              ? selected && !readOnly
+                ? 'Type an exact time'
+                : `Play from ${formatTenths(t)}`
+              : readOnly
+                ? 'Not timed'
+                : 'Not timed — select and press the crosshair to stamp it at the playhead'
+          }
+          className={`chip chip-time press w-[64px] shrink-0 justify-center font-mono text-[10.5px] tabular-nums ${
+            t == null ? 'opacity-50' : ''
+          }`}
+        >
+          {t != null ? formatTenths(t) : '—'}
+        </button>
+      )}
+
+      {readOnly ? (
+        <span
+          className={`min-w-0 flex-1 truncate px-1.5 text-[13px] ${
+            rest ? 'italic text-muted' : 'text-fg'
+          }`}
+        >
+          {rest ? '(clears the screen)' : text}
+        </span>
+      ) : (
+        <input
+          data-line={index}
+          value={text}
+          onChange={(e) => onText(e.target.value)}
+          onFocus={onSelect}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              onInsertAfter()
+            } else if (e.key === 'Backspace' && text === '') {
+              e.preventDefault()
+              onRemove()
+            }
+          }}
+          placeholder="(clears the screen)"
+          aria-label={`Line ${index + 1}`}
+          spellCheck={false}
+          className="field-bare min-w-0 flex-1 px-1.5 py-0.5 text-[13px] text-fg placeholder:italic placeholder:text-muted/60"
+        />
+      )}
+
+      {selected && !readOnly && (
+        <>
+          {t != null && (
+            <button
+              type="button"
+              onClick={() => onSeek(t)}
+              title="Play from this line"
+              aria-label="Play from this line"
+              className="btn-icon press h-6 w-5"
+            >
+              <Play size={11} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onStamp(currentTime)}
+            title="Start this line at the playhead"
+            aria-label="Start this line at the playhead"
+            className="btn-icon press h-6 w-5"
+          >
+            <Crosshair size={12} />
+          </button>
+          {t != null && (
+            <>
+              <button
+                type="button"
+                onClick={() => onNudge(-0.5)}
+                title="Half a second earlier"
+                aria-label="Move this line half a second earlier"
+                className="btn-icon press h-6 w-5"
+              >
+                <Minus size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNudge(0.5)}
+                title="Half a second later"
+                aria-label="Move this line half a second later"
+                className="btn-icon press h-6 w-5"
+              >
+                <Plus size={11} />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Delete this line"
+            aria-label="Delete this line"
+            className="btn-icon press h-6 w-5 text-danger"
+          >
+            <Trash2 size={11} />
+          </button>
+        </>
+      )}
+    </li>
   )
 }
