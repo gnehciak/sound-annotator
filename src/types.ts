@@ -551,6 +551,13 @@ export interface Chord {
   seventh?: boolean
   /** Inversion: 0 (root, the default), 1, 2, or 3 with a seventh. */
   inversion?: number
+  /**
+   * Force the triad major or minor instead of what the key gives the degree
+   * — a borrowed iv in a major key, a secondary-dominant II. Absent is the
+   * diatonic quality. Forced chords take a perfect fifth and, with `seventh`,
+   * a minor seventh (the dominant / m7 shapes those chords are borrowed for).
+   */
+  quality?: 'maj' | 'min'
 }
 
 export interface ProjectChords {

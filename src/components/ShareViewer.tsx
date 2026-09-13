@@ -51,6 +51,7 @@ import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
+import ChordOverlay from './ChordOverlay'
 import StageStrip from './structure/StageStrip'
 import { clampLyricDim, clampLyricScale } from '../lib/lyrics'
 import MiniTransport from './structure/MiniTransport'
@@ -109,6 +110,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [scoreReload, setScoreReload] = useState(0)
   // The timed lyrics on the picture — a reader's own switch, never saved.
   const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
+  const [chordsOnVideo, setChordsOnVideo] = useState(true)
   // …and how big they are: a reader's own size, seeded from the owner's.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
@@ -662,6 +664,15 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           colorBy={lyricsSectionColor ? project.annotations : undefined}
         />
       )}
+      {!lyricFullscreen && chordsOnVideo && isStructure && project.settings?.chords && (
+        <ChordOverlay
+          chords={project.settings.chords}
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          rate={playbackRate}
+        />
+      )}
       {lyricFullscreen ? (
         <>
           {isStructure && (
@@ -831,6 +842,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onUpdate={() => {}}
             onDelete={() => {}}
             chords={project.settings?.chords}
+            chordsOnVideo={isVideoSource(source) ? chordsOnVideo : undefined}
+            onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+            playbackRate={playbackRate}
           />
         </div>
         {lyrics && lyrics.length > 0 && (

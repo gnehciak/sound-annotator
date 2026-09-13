@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { Chord, ProjectChords } from '../../types'
 import {
   MIN_CHORD_BEATS,
+  beatGrid,
   beatQuantum,
   beatTime,
   chordGap,
@@ -83,28 +84,19 @@ export default function ChordLane({
     timeBeat(liveRef.current.chords, tOfClient(clientX))
 
   // ---- the grid ------------------------------------------------------------
-  const grid = useMemo(() => {
-    const bars: { x: number; n: number }[] = []
-    const beats: number[] = []
-    if (pps <= 0 || ve <= vs) return { bars, beats }
-    const { beatsPerBar } = chords
-    const b0 = Math.ceil(timeBeat(chords, vs))
-    const b1 = Math.floor(timeBeat(chords, ve))
-    // Too many beats to draw is too many to read: thin to bars, then to
-    // every few bars, before the lines become a grey wash.
-    const barStep =
-      ppb * beatsPerBar >= 24 ? 1 : ppb * beatsPerBar >= 6 ? 4 : 16
-    for (let b = b0; b <= b1; b++) {
-      const x = xOf(beatTime(chords, b))
-      const bar = Math.floor(b / beatsPerBar)
-      if (b % beatsPerBar === 0) {
-        if (bar % barStep === 0) bars.push({ x, n: bar + 1 })
-      } else if (ppb >= 7) beats.push(x)
-    }
-    return { bars, beats }
-  }, [chords, vs, ve, pps, ppb, xOf])
+  const grid = useMemo(
+    () => beatGrid(chords, vs, ve, xOf, ppb),
+    // xOf is rebuilt every render but only ever depends on vs and pps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chords, vs, ve, pps, ppb],
+  )
 
   const nowBeat = timeBeat(chords, currentTime)
+  // Where the next digit writes: the cursor, or — paused with none placed —
+  // the beat under the playhead, drawn so the insertion point is never a
+  // guess. Playing, the playhead itself is the point and needs no second mark.
+  const insertBeat =
+    isPlaying ? null : cursor ?? snapBeat(nowBeat, 1)
 
   // ---- gestures ------------------------------------------------------------
 
@@ -192,8 +184,7 @@ export default function ChordLane({
       )
     }
 
-  const cursorX =
-    cursor != null && !isPlaying ? xOf(beatTime(chords, cursor)) : null
+  const cursorX = insertBeat != null ? xOf(beatTime(chords, insertBeat)) : null
 
   return (
     <div
@@ -207,27 +198,27 @@ export default function ChordLane({
       className="bevel-inset relative touch-none overflow-hidden rounded-b-sm border border-t-0 border-line bg-inset"
       style={{ height: CHORD_LANE_H, cursor: readOnly ? 'pointer' : 'text' }}
     >
-      {/* Beat grid: bars strong and numbered, beats a faint hairline. */}
-      {grid.beats.map((x) => (
+      {/* Beat grid: bar lines solid and numbered, beats a faint hairline. */}
+      {grid.beats.map((b) => (
         <span
-          key={`b${x}`}
+          key={`b${b.x}`}
           aria-hidden
-          className="absolute inset-y-0 w-px bg-line/35"
-          style={{ left: x }}
+          className="absolute inset-y-0 w-px bg-fg/[0.13]"
+          style={{ left: b.x }}
         />
       ))}
       {grid.bars.map((bar) => (
-        <span key={`bar${bar.n}`} aria-hidden>
+        <span key={`bar${bar.bar}`} aria-hidden>
           <span
-            className="absolute inset-y-0 w-px bg-line-strong/70"
-            style={{ left: bar.x }}
+            className="absolute inset-y-0 w-[2px] bg-fg/50"
+            style={{ left: bar.x - 0.5 }}
           />
           {ppb * chords.beatsPerBar >= 30 && (
             <span
-              className="absolute bottom-[2px] font-mono text-[8px] tabular-nums leading-none text-muted/80"
-              style={{ left: bar.x + 3 }}
+              className="absolute bottom-[2px] font-mono text-[9px] font-semibold tabular-nums leading-none text-fg/60"
+              style={{ left: bar.x + 4 }}
             >
-              {bar.n}
+              {bar.bar}
             </span>
           )}
         </span>
@@ -287,7 +278,7 @@ export default function ChordLane({
             {w > 20 && (
               <span className="pointer-events-none absolute inset-y-0 left-[7px] flex items-center gap-1.5 whitespace-nowrap">
                 <span
-                  className="text-[22px] font-bold leading-none tracking-[-0.01em]"
+                  className="numeral text-[24px] leading-none"
                   style={{ color: hueText(color, theme) }}
                 >
                   {spelled.roman}

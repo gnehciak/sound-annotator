@@ -62,6 +62,7 @@ import {
 } from './lib/score'
 import type { LyricLine, NoteQuote, ScoreMark, ScoreTurn } from './types'
 import LyricOverlay from './components/LyricOverlay'
+import ChordOverlay from './components/ChordOverlay'
 import StageStrip from './components/structure/StageStrip'
 import { clampLyricDim, clampLyricScale, shiftLyrics } from './lib/lyrics'
 import { QuoteScoreProvider } from './lib/quotePreview'
@@ -544,6 +545,9 @@ export default function App() {
   // Whether the timed lyrics are drawn on the picture. A viewing choice, so
   // session state like the score's zoom — never written to the track.
   const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
+  // The chord bar along the foot of the video — a viewing choice, like the
+  // lyrics, never saved to the track.
+  const [chordsOnVideo, setChordsOnVideo] = useState(true)
   const lyrics = current?.settings?.lyrics
   // The overlay's type size: the track's own setting when this session may
   // write it, else (a link editor) a session override, like the score view.
@@ -2356,6 +2360,17 @@ export default function App() {
           colorBy={lyricsSectionColor ? current?.annotations : undefined}
         />
       )}
+      {/* The chord bar along the foot — the structure board's progression
+          scrolling past a now line, the way the chord-tutorial videos do. */}
+      {!lyricFullscreen && chordsOnVideo && isStructure && current?.settings?.chords && (
+        <ChordOverlay
+          chords={current.settings.chords}
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          rate={playbackRate}
+        />
+      )}
       {lyricFullscreen ? (
         <>
           {/* The song's shape along the foot — where in the song we are. */}
@@ -2938,6 +2953,9 @@ export default function App() {
                 chords={current.settings?.chords}
                 chordsReadOnly={!canEditSettings}
                 onChordsChange={changeChords}
+                chordsOnVideo={isVideoSource(current.source) ? chordsOnVideo : undefined}
+                onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+                playbackRate={playbackRate}
               />
             </div>
 

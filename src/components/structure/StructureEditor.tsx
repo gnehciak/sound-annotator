@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,12 +32,16 @@ import { clamp, hexA, windowDrag } from './drag'
 import ChordLane from './ChordLane'
 import { ChordFooter, ChordSetupRow } from './ChordControls'
 import {
+  beatGrid,
+  chordAfter,
   chordBefore,
   defaultChords,
   snapBeat,
   timeBeat,
+  toggleQuality,
   writeChord,
 } from '../../lib/chords'
+import { useSmoothClock } from '../../lib/useSmoothClock'
 
 /**
  * The song-structure board: the whole editing surface of a 'structure'
@@ -68,6 +73,8 @@ interface Props {
   duration: number
   currentTime: number
   isPlaying: boolean
+  /** Playback rate, for the frame-rate playhead. Absent is 1. */
+  playbackRate?: number
   readOnly: boolean
   onSeek: (t: number) => void
   /** Create a section (id minted by the caller of the gesture). */
@@ -90,6 +97,9 @@ interface Props {
     next: ProjectChords | undefined,
     opts?: { coalesceKey?: string },
   ) => void
+  /** Whether the chord bar is drawn on the video (video tracks only). */
+  chordsOnVideo?: boolean
+  onToggleChordsOnVideo?: () => void
 }
 
 type Tool = 'select' | 'cut'
@@ -144,6 +154,9 @@ export default function StructureEditor({
   chords,
   chordsReadOnly = false,
   onChordsChange,
+  chordsOnVideo,
+  onToggleChordsOnVideo,
+  playbackRate = 1,
 }: Props) {
   const theme = useResolvedTheme()
   const [tool, setTool] = useState<Tool>('select')
@@ -274,6 +287,34 @@ export default function StructureEditor({
     setSelectedChordId(null)
   }
 
+  /** The insertion point: the cursor while paused, else the beat under the
+   *  playhead — the same beat the lane draws, and what a live pass types at. */
+  const insertPoint = () =>
+    chords
+      ? cursor != null && !isPlaying
+        ? cursor
+        : snapBeat(timeBeat(chords, liveRef.current.currentTime), 1)
+      : 0
+
+  /**
+   * ⌫ and Delete, the way a text editor's work when nothing is selected:
+   * Backspace takes the chord before the point (and, paused, moves the point
+   * to where it began, so the next ⌫ takes the one before that); Delete takes
+   * the chord at or after it and leaves the point where it is. Both work
+   * while playing too — a wrong chord in a live pass is taken back the same
+   * way a wrong letter is.
+   */
+  const editorDelete = (key: 'Backspace' | 'Delete'): boolean => {
+    if (!chords || !canEditChords) return false
+    const at = insertPoint()
+    const target =
+      key === 'Backspace' ? chordBefore(chords.chords, at) : chordAfter(chords.chords, at)
+    if (!target) return false
+    deleteChord(target.id)
+    if (key === 'Backspace' && !isPlaying) setCursor(target.beat)
+    return true
+  }
+
   // Timeline geometry: one rect for the ruler + lane column.
   const timelineRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -383,14 +424,19 @@ export default function StructureEditor({
         e.preventDefault()
         onDelete(selectedId)
         selectSec(null)
-      } else if (chords && canEditChords && cursor != null && !isPlaying) {
-        // Backspace at the cursor takes back the chord just typed.
-        const prev = chordBefore(chords.chords, cursor)
-        if (prev) {
-          e.preventDefault()
-          deleteChord(prev.id)
-          setCursor(prev.beat)
-        }
+      } else if (editorDelete(e.key)) e.preventDefault()
+    } else if (k === 'm' && chords && canEditChords) {
+      // Flip the selected chord — or the one just typed — between major and
+      // minor: a borrowed iv, a secondary-dominant II.
+      const target = selectedChord ?? chordBefore(chords.chords, insertPoint())
+      if (target) {
+        e.preventDefault()
+        changeChords({
+          ...chords,
+          chords: chords.chords.map((c) =>
+            c.id === target.id ? toggleQuality(c, chords.key, chords.mode) : c,
+          ),
+        })
       }
     } else if (e.key === 'Escape' && !e.defaultPrevented) {
       if (selectedChordId) selectChord(null)
@@ -743,8 +789,14 @@ export default function StructureEditor({
     return { major, minor }
   }, [width, vs, ve, pps])
 
-  const playheadX = xOf(currentTime)
-  const playheadVisible = currentTime >= vs && currentTime <= ve
+  // The chord grid's bar lines, drawn faintly through the section lane too,
+  // so a section edge can be read against the bars it falls on.
+  const barLines = useMemo(
+    () => (chords ? beatGrid(chords, vs, ve, xOf, (pps * 60) / chords.bpm).bars : []),
+    // xOf is rebuilt every render but only ever depends on vs and pps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chords, vs, ve, pps],
+  )
 
   const laneCursor = readOnly
     ? 'pointer'
@@ -926,10 +978,12 @@ export default function StructureEditor({
             <div className="absolute inset-y-0 -left-[3px] w-[7px] cursor-ew-resize" />
             <div className="absolute inset-y-0 -right-[3px] w-[7px] cursor-ew-resize" />
           </div>
-          <div
-            aria-hidden
+          <SmoothPlayhead
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            rate={playbackRate}
+            place={(t) => `${clamp(t / dur, 0, 1) * 100}%`}
             className="absolute inset-y-0 w-px bg-accent"
-            style={{ left: `${clamp(currentTime / dur, 0, 1) * 100}%` }}
           />
         </div>
       </div>
@@ -981,6 +1035,14 @@ export default function StructureEditor({
               aria-hidden
               className="absolute inset-y-0 w-px bg-line/40"
               style={{ left: tk.x }}
+            />
+          ))}
+          {barLines.map((b) => (
+            <span
+              key={`bar${b.bar}`}
+              aria-hidden
+              className="absolute inset-y-0 w-px bg-fg/[0.14]"
+              style={{ left: b.x }}
             />
           ))}
 
@@ -1106,15 +1168,15 @@ export default function StructureEditor({
         )}
 
         {/* Playhead — the one signal-colored mark: "now". */}
-        {playheadVisible && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 z-20 w-[2px] -translate-x-1/2 bg-accent"
-            style={{ left: playheadX }}
-          >
-            <span className="absolute -left-[4px] top-0 h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[rgb(var(--accent))]" />
-          </div>
-        )}
+        <SmoothPlayhead
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          rate={playbackRate}
+          place={(t) => (t >= vs && t <= ve ? `${(t - vs) * pps}px` : null)}
+          className="pointer-events-none absolute inset-y-0 z-20 w-[2px] -translate-x-1/2 bg-accent"
+        >
+          <span className="absolute -left-[4px] top-0 h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[rgb(var(--accent))]" />
+        </SmoothPlayhead>
       </div>
 
       {/* Resize grip — drag to grow/shrink the section lane. */}
@@ -1142,6 +1204,8 @@ export default function StructureEditor({
             setSelectedChordId(null)
             setCursor(null)
           }}
+          onVideo={chordsOnVideo}
+          onToggleOnVideo={onToggleChordsOnVideo}
         />
       ) : (
         canEditChords && (
@@ -1284,6 +1348,53 @@ export default function StructureEditor({
       </div>
       )}
     </section>
+  )
+}
+
+/**
+ * A playhead on the frame-rate clock: the players report time four times a
+ * second, and a mark bound to that steps across the board. This one writes
+ * its own `left` every frame from useSmoothClock and re-renders nothing —
+ * `place` maps a time to a CSS left (or null to hide) and is read through a
+ * ref, so the board's zoom can change under it without restarting the clock.
+ */
+function SmoothPlayhead({
+  currentTime,
+  isPlaying,
+  rate,
+  place,
+  className,
+  children,
+}: {
+  currentTime: number
+  isPlaying: boolean
+  rate: number
+  place: (t: number) => string | null
+  className: string
+  children?: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const placeRef = useRef(place)
+  const lastT = useRef(currentTime)
+  const apply = (t: number) => {
+    const el = ref.current
+    if (!el) return
+    const left = placeRef.current(t)
+    el.style.display = left == null ? 'none' : ''
+    if (left != null) el.style.left = left
+  }
+  useLayoutEffect(() => {
+    placeRef.current = place
+    apply(lastT.current)
+  })
+  useSmoothClock(currentTime, isPlaying, rate, (t) => {
+    lastT.current = t
+    apply(t)
+  })
+  return (
+    <div ref={ref} aria-hidden className={className}>
+      {children}
+    </div>
   )
 }
 

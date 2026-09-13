@@ -522,6 +522,7 @@ function sanitizeChords(v: unknown): ProjectChords | undefined {
         degree: Math.round(degree),
       }
       if (c.seventh === true) chord.seventh = true
+      if (c.quality === 'maj' || c.quality === 'min') chord.quality = c.quality
       const inversion = num(c.inversion)
       if (inversion != null && inversion >= 1)
         chord.inversion = Math.min(chord.seventh ? 3 : 2, Math.round(inversion))
