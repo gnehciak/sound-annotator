@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileDown,
   RotateCcw,
+  Minimize2,
 } from 'lucide-react'
 import type { PlayerHandle, Project } from '../types'
 import ScoreButton from './ScoreButton'
@@ -49,6 +50,9 @@ import { usePlayerArea } from '../lib/playerArea'
 import { useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
+import LyricOverlay from './LyricOverlay'
+import StageStrip from './structure/StageStrip'
+import { clampLyricScale } from '../lib/lyrics'
 import MiniTransport from './structure/MiniTransport'
 import { isStructureProject } from '../lib/sections'
 import {
@@ -103,6 +107,30 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // Per-session score display, over whatever the owner saved (see below).
   const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
   const [scoreReload, setScoreReload] = useState(0)
+  // The timed lyrics on the picture — a reader's own switch, never saved.
+  const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
+  // …and how big they are: a reader's own size, seeded from the owner's.
+  const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
+  const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
+  // The full-screen lyric stage — see App for the shape; the same here.
+  const playerBoxRef = useRef<HTMLDivElement>(null)
+  const [lyricFullscreen, setLyricFullscreen] = useState(false)
+  useEffect(() => {
+    const on = () =>
+      setLyricFullscreen(
+        document.fullscreenElement != null &&
+          document.fullscreenElement === playerBoxRef.current,
+      )
+    document.addEventListener('fullscreenchange', on)
+    return () => document.removeEventListener('fullscreenchange', on)
+  }, [])
+  const toggleLyricFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {})
+      return
+    }
+    void playerBoxRef.current?.requestFullscreen?.().catch(() => {})
+  }, [])
   const [notesPad, setNotesPad] = useState(0)
   const [searchOpen, setSearchOpen] = useState(false)
   // Resolved view prefs. State initializes from localStorage; on project load
@@ -392,6 +420,18 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         e.preventDefault()
         step(5)
         break
+      case 'f':
+      case 'F':
+        // Read off the project here rather than the derived consts below,
+        // which are declared after this hook (and after the loading returns).
+        if (
+          project &&
+          isStructureProject(project) &&
+          project.settings?.lyrics?.length &&
+          isVideoSource(project.source)
+        )
+          toggleLyricFullscreen()
+        break
       case 'ArrowUp':
         e.preventDefault()
         step(-1)
@@ -501,6 +541,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // the owner's saved choice and never written back.
   const score = project.settings?.score
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
+  const lyrics = project.settings?.lyrics
+  const lyricsScale = clampLyricScale(lyricsScaleOverride ?? project.settings?.lyricsScale)
+  const lyricsStyle = lyricsStyleOverride ?? project.settings?.lyricsStyle
   const buildScoreLayer = (placement: 'pane' | 'frame') =>
     score ? (
       // A reader gets the following, never the timing of it, and sees the
@@ -589,13 +632,46 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
    */
   const videoOverlay = (
     <>
-      <VideoOverlays
-        annotations={project.annotations}
-        currentTime={currentTime}
-        readOnly
-        onTogglePlay={() => (isPlaying ? pause() : play())}
-      />
-      {transport}
+      {!lyricFullscreen && (
+        <VideoOverlays
+          annotations={project.annotations}
+          currentTime={currentTime}
+          readOnly
+          onTogglePlay={() => (isPlaying ? pause() : play())}
+        />
+      )}
+      {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
+        <LyricOverlay
+          lines={lyrics}
+          currentTime={currentTime}
+          scale={lyricsScale}
+          style={lyricsStyle}
+          isPlaying={isPlaying}
+        />
+      )}
+      {lyricFullscreen ? (
+        <>
+          {isStructure && (
+            <StageStrip
+              sections={project.annotations}
+              duration={duration}
+              currentTime={currentTime}
+              onSeek={seek}
+            />
+          )}
+          <button
+            type="button"
+            onClick={toggleLyricFullscreen}
+            title="Exit full screen (Esc)"
+            aria-label="Exit full screen"
+            className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Minimize2 size={15} />
+          </button>
+        </>
+      ) : (
+        transport
+      )}
     </>
   )
 
@@ -681,6 +757,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                         : 'shrink-0'
                     }
                   >
+                    <div ref={playerBoxRef} className="lyric-fs">
                     <PlayerPane
                       ref={playerRef}
                       source={source}
@@ -698,6 +775,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       onCreateRange={() => {}}
                       onUpdateRegion={() => {}}
                     />
+                    </div>
                   </div>
                   {/* Audio only: the folded transport. Video carries the
                       floating one inside the frame. */}
@@ -742,15 +820,26 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             chords={project.settings?.chords}
           />
         </div>
-        {annotations.some((a) => a.lyrics?.trim()) && (
+        {lyrics && lyrics.length > 0 && (
           <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
             <LyricsPanel
+              lines={lyrics}
               sections={annotations}
               currentTime={currentTime}
               isPlaying={isPlaying}
               readOnly
+              onVideo={isVideoSource(source) ? lyricsOnVideo : undefined}
+              onToggleOnVideo={
+                isVideoSource(source) ? () => setLyricsOnVideo((v) => !v) : undefined
+              }
+              scale={lyricsScale}
+              onScale={setLyricsScaleOverride}
+              style={lyricsStyle}
+              onStyle={setLyricsStyleOverride}
+              onFullscreen={isVideoSource(source) ? toggleLyricFullscreen : undefined}
               onSeek={seek}
-              onUpdateLyrics={() => {}}
+              onPlayPause={() => (isPlaying ? pause() : play())}
+              onChange={() => {}}
             />
           </div>
         )}

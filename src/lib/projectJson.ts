@@ -23,6 +23,7 @@
 import type {
   Annotation,
   Chord,
+  LyricLine,
   NoteBlock,
   NoteOverlay,
   NoteQuote,
@@ -35,6 +36,7 @@ import type {
   ScoreTurn,
 } from '../types'
 import { withBlocks } from './noteBlocks'
+import { MAX_LYRIC_CHARS, MAX_LYRIC_LINES, withMigratedLyrics } from './lyrics'
 import { clampQuote, MAX_QUOTES } from './overlays'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
@@ -298,6 +300,29 @@ function sanitizeAnnotation(v: unknown): Annotation | null {
   return withBlocks(ann)
 }
 
+/**
+ * The lyric lines: words in document order, each with an optional stamp. A
+ * line is a string first — an entry with no usable `text` is dropped on its
+ * own, and a stamp that isn't a non-negative number is dropped from its line
+ * rather than taking the words with it. Capped like the marks are, and for
+ * the same reason: this rides the project's jsonb on every save.
+ */
+function sanitizeLyrics(v: unknown): LyricLine[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const lines: LyricLine[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const text = (raw as Record<string, unknown>).text
+    if (typeof text !== 'string') continue
+    const line: LyricLine = { text: text.trim().slice(0, MAX_LYRIC_CHARS) }
+    const t = num((raw as Record<string, unknown>).t)
+    if (t != null && t >= 0) line.t = t
+    lines.push(line)
+    if (lines.length >= MAX_LYRIC_LINES) break
+  }
+  return lines
+}
+
 const NOTE_ORDERS = new Set(['timeline', 'auto', 'live'])
 const SCORE_MODES = new Set(['off', 'score', 'overlay'])
 const SCORE_FITS = new Set(['height', 'width'])
@@ -518,8 +543,9 @@ function sanitizeChords(v: unknown): ProjectChords | undefined {
  * open as a song-structure board — round-trips without this file having to
  * know it. Only `noteOrder` is checked against its enum (an unknown value
  * would silently break the notes-list sorting); everything non-primitive
- * (nested objects, arrays) is dropped, which is why the score and the chord
- * track — the two object-valued keys — get explicit passes of their own.
+ * (nested objects, arrays) is dropped, which is why the score, the lyrics
+ * and the chord track — the three nested keys — get explicit passes of their
+ * own.
  */
 function sanitizeSettings(v: unknown): ProjectSettings | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
@@ -541,6 +567,10 @@ function sanitizeSettings(v: unknown): ProjectSettings | undefined {
   if (score) settings.score = score
   const chords = sanitizeChords((v as Record<string, unknown>).chords)
   if (chords) settings.chords = chords
+  // Kept even when empty: an empty list is "no lyrics", and it is what stops
+  // a file's legacy per-section blocks from being folded in over it.
+  const lyrics = sanitizeLyrics((v as Record<string, unknown>).lyrics)
+  if (lyrics) settings.lyrics = lyrics
   return Object.keys(settings).length > 0
     ? (settings as ProjectSettings)
     : undefined
@@ -590,12 +620,14 @@ export function parseProjectJson(text: string): Project {
     seen.add(a.id)
   }
 
-  return {
+  // A file written before lyrics were timed lines carries them per section;
+  // fold those in exactly as a row read from the database is.
+  return withMigratedLyrics({
     id: newId(),
     title: str(data.title)?.trim() || 'Untitled track',
     source: sanitizeSource(data.source),
     annotations,
     updatedAt: Date.now(),
     settings: sanitizeSettings(data.settings),
-  }
+  })
 }

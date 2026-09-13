@@ -60,7 +60,10 @@ import {
   shiftTurns,
   type ScoreView,
 } from './lib/score'
-import type { NoteQuote, ScoreMark, ScoreTurn } from './types'
+import type { LyricLine, NoteQuote, ScoreMark, ScoreTurn } from './types'
+import LyricOverlay from './components/LyricOverlay'
+import StageStrip from './components/structure/StageStrip'
+import { clampLyricScale, shiftLyrics } from './lib/lyrics'
 import { QuoteScoreProvider } from './lib/quotePreview'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
@@ -93,6 +96,7 @@ import {
   Trash2,
   Undo2,
   Redo2,
+  Minimize2,
 } from 'lucide-react'
 import { useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
@@ -537,6 +541,36 @@ export default function App() {
   const [scoreReload, setScoreReload] = useState(0)
   // The sync workspace (timing the page turns) — open on one track at a time.
   const [syncingScore, setSyncingScore] = useState(false)
+  // Whether the timed lyrics are drawn on the picture. A viewing choice, so
+  // session state like the score's zoom — never written to the track.
+  const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
+  const lyrics = current?.settings?.lyrics
+  // The overlay's type size: the track's own setting when this session may
+  // write it, else (a link editor) a session override, like the score view.
+  const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
+  const lyricsScale = clampLyricScale(lyricsScaleOverride ?? current?.settings?.lyricsScale)
+  const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
+  const lyricsStyle = lyricsStyleOverride ?? current?.settings?.lyricsStyle
+  // The full-screen lyric stage: the player box under the Fullscreen API.
+  // Read back from the document rather than assumed, since the browser
+  // handles Esc itself and the state has to follow it out.
+  const [lyricFullscreen, setLyricFullscreen] = useState(false)
+  useEffect(() => {
+    const on = () =>
+      setLyricFullscreen(
+        document.fullscreenElement != null &&
+          document.fullscreenElement === playerBoxRef.current,
+      )
+    document.addEventListener('fullscreenchange', on)
+    return () => document.removeEventListener('fullscreenchange', on)
+  }, [])
+  const toggleLyricFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {})
+      return
+    }
+    void playerBoxRef.current?.requestFullscreen?.().catch(() => {})
+  }, [])
   // The score page on screen, reported up by the layer. A pin anchored to the
   // score has to land on a page, and this is which one.
   const [scorePage, setScorePage] = useState(1)
@@ -551,6 +585,8 @@ export default function App() {
     setScoreOverride({})
     setScoreReload(0)
     setSyncingScore(false)
+    setLyricsScaleOverride(null)
+    setLyricsStyleOverride(null)
   }
   const scoreView: ScoreView = { ...scoreViewOf(score), ...scoreOverride }
 
@@ -575,6 +611,47 @@ export default function App() {
       })
     },
     [patchProjectSettings, score],
+  )
+
+  /**
+   * Rewrite the lyric lines — a stamp, a nudge, a paste, a typed word. Unlike
+   * the settings knobs this is content, so it goes through `commit` and is
+   * undoable; typing coalesces per line, a stamp is its own step, so ⌘Z after
+   * a live pass takes back one press rather than the whole pass.
+   */
+  const changeLyrics = useCallback(
+    (lines: LyricLine[], opts?: { coalesceKey?: string }) => {
+      if (!canEditSettings || !current) return
+      const id = current.id
+      commit(
+        (ps) =>
+          ps.map((p) =>
+            p.id === id
+              ? { ...p, settings: { ...p.settings, lyrics: lines }, updatedAt: now() }
+              : p,
+          ),
+        opts,
+      )
+    },
+    [canEditSettings, current, commit],
+  )
+
+  /** Resize the lyrics on the video — the track's setting where this session
+   *  may write it, this session's own otherwise. */
+  const changeLyricsScale = useCallback(
+    (scale: number) => {
+      if (canEditSettings) patchProjectSettings({ lyricsScale: scale })
+      else setLyricsScaleOverride(scale)
+    },
+    [canEditSettings, patchProjectSettings],
+  )
+
+  const changeLyricsStyle = useCallback(
+    (style: string) => {
+      if (canEditSettings) patchProjectSettings({ lyricsStyle: style })
+      else setLyricsStyleOverride(style)
+    },
+    [canEditSettings, patchProjectSettings],
   )
 
   /** Retime the page turns (the sync workspace's only write). */
@@ -1380,13 +1457,15 @@ export default function App() {
       const slide = (t: number) => Math.min(Math.max(t + delta, 0), len)
       const score = current.settings?.score
       const chords = current.settings?.chords
+      const lyricLines = current.settings?.lyrics
+      // The lyric stamps ride the same clock as the turns, and move with them.
       commitProject(current.id, {
         source: {
           ...current.source,
           clipStart: next.start,
           clipEnd: next.end,
         },
-        ...(score?.turns?.length || (chords && delta !== 0)
+        ...(score?.turns?.length || lyricLines?.length || (chords && delta !== 0)
           ? {
               settings: {
                 ...current.settings,
@@ -1396,6 +1475,9 @@ export default function App() {
                 // The chord grid's downbeat rides the same clock; its beats
                 // are relative to it, so shifting the one moves them all.
                 ...(chords ? { chords: shiftChords(chords, delta) } : {}),
+                ...(lyricLines?.length
+                  ? { lyrics: shiftLyrics(lyricLines, slide) }
+                  : {}),
               },
             }
           : {}),
@@ -1978,6 +2060,12 @@ export default function App() {
       case 'O':
         if (!effectiveViewOnly && !isStructure) markOut()
         break
+      // The full-screen lyric stage — a song board with words on a video.
+      case 'f':
+      case 'F':
+        if (isStructure && lyrics?.length && current?.source && isVideoSource(current.source))
+          toggleLyricFullscreen()
+        break
     }
   })
 
@@ -2211,16 +2299,54 @@ export default function App() {
    */
   const videoOverlay = (
     <>
-      <VideoOverlays
-        annotations={current?.annotations ?? []}
-        currentTime={currentTime}
-        selectedId={selectedNoteId}
-        readOnly={effectiveViewOnly}
-        onMovePin={moveFramePin}
-        onMoveCover={moveCover}
-        onTogglePlay={() => (isPlaying ? pause() : play())}
-      />
-      {transport}
+      {/* Full screen is the picture and the words alone: the note layer and
+          the transport stand down (Space and the picture's own click still
+          pause), and only a small way out stays on screen beside Esc. */}
+      {!lyricFullscreen && (
+        <VideoOverlays
+          annotations={current?.annotations ?? []}
+          currentTime={currentTime}
+          selectedId={selectedNoteId}
+          readOnly={effectiveViewOnly}
+          onMovePin={moveFramePin}
+          onMoveCover={moveCover}
+          onTogglePlay={() => (isPlaying ? pause() : play())}
+        />
+      )}
+      {/* The sung line, over the stage layer and under the transport. */}
+      {(lyricsOnVideo || lyricFullscreen) && lyrics && lyrics.length > 0 && (
+        <LyricOverlay
+          lines={lyrics}
+          currentTime={currentTime}
+          scale={lyricsScale}
+          style={lyricsStyle}
+          isPlaying={isPlaying}
+        />
+      )}
+      {lyricFullscreen ? (
+        <>
+          {/* The song's shape along the foot — where in the song we are. */}
+          {isStructure && current && (
+            <StageStrip
+              sections={current.annotations}
+              duration={duration}
+              currentTime={currentTime}
+              onSeek={seek}
+            />
+          )}
+          <button
+            type="button"
+            onClick={toggleLyricFullscreen}
+            title="Exit full screen (Esc)"
+            aria-label="Exit full screen"
+            className="on-video-pop press absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center text-white/80 opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          >
+            <Minimize2 size={15} />
+          </button>
+        </>
+      ) : (
+        transport
+      )}
     </>
   )
 
@@ -2683,7 +2809,7 @@ export default function App() {
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
                   >
-                    <div ref={playerBoxRef}>
+                    <div ref={playerBoxRef} className="lyric-fs">
                       <PlayerPane
                         ref={playerRef}
                         source={current.source}
@@ -2782,18 +2908,35 @@ export default function App() {
               />
             </div>
 
-            {/* Lyrics — whole-section lyrics beside the board (wide screens).
-                Typing coalesces into one undo step per section. */}
+            {/* Lyrics — the timed lines beside the board (wide screens), filed
+                under the sections they start in, with the timing workspace
+                behind its Time key. Keyed per track so a half-run pass never
+                carries over to the next song. Lyrics live in `settings`, so
+                writing them takes the settings rights — a link editor reads. */}
             <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
               <LyricsPanel
+                key={current.id}
+                lines={lyrics ?? []}
                 sections={current.annotations}
                 currentTime={currentTime}
                 isPlaying={isPlaying}
-                readOnly={effectiveViewOnly}
-                onSeek={seek}
-                onUpdateLyrics={(id, lyrics) =>
-                  updateAnnotation(id, { lyrics }, { coalesceKey: `lyrics:${id}` })
+                readOnly={!canEditSettings}
+                onVideo={isVideoSource(current.source) ? lyricsOnVideo : undefined}
+                onToggleOnVideo={
+                  isVideoSource(current.source)
+                    ? () => setLyricsOnVideo((v) => !v)
+                    : undefined
                 }
+                scale={lyricsScale}
+                onScale={changeLyricsScale}
+                style={lyricsStyle}
+                onStyle={changeLyricsStyle}
+                onFullscreen={
+                  isVideoSource(current.source) ? toggleLyricFullscreen : undefined
+                }
+                onSeek={seek}
+                onPlayPause={() => (isPlaying ? pause() : play())}
+                onChange={changeLyrics}
               />
             </div>
             </div>
@@ -2845,7 +2988,7 @@ export default function App() {
                     ref={setPlayerArea}
                     className="flex min-h-0 flex-1 flex-col justify-center"
                   >
-                    <div ref={playerBoxRef}>
+                    <div ref={playerBoxRef} className="lyric-fs">
                       <PlayerPane
                         ref={playerRef}
                         source={current.source}

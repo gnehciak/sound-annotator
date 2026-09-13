@@ -163,7 +163,7 @@ the note intact. So a minimal note is:
 | `question` | boolean | `true` turns the note into a listening-task question: its text is the prompt, and a shared `?view=` link opens as a worksheet with an answer box under each question and a PDF answer sheet at the end. |
 | `structure` | boolean | `true` marks the note as a structural section, drawing a bracket down the overview timeline beside its span. Give it an `end`. |
 | `sectionName` | string | The label on that bracket. Only meaningful with `structure: true`, or on a song-structure board (§7). |
-| `lyrics` | string | Plain-text lyrics for a section, shown in the structure board's Lyrics panel. Whole-section granularity — not line-synced. Structure sections only. |
+| `lyrics` | string | **Legacy — don't write it.** Whole-section lyrics as one block of text, from before lyrics were timed lines. A file carrying it still imports: each block's lines are folded into `settings.lyrics` (§7), spread evenly across the section. Write `settings.lyrics` instead. |
 | `overlay` | object | Puts the note **on the video** for its moment — a pinned caption, and/or a cover image. Video tracks only. See §9; you can hand-write the pin, but not the cover. |
 
 <!-- /fields -->
@@ -243,15 +243,47 @@ is fine; a hundred full-page scans in one file is not.
 | `noteOrder` | string | Default ordering of the notes list: `"timeline"`, `"auto"`, or `"live"`. Any other value is dropped. |
 | `overviewOpen` | boolean | Whether the overview timeline strip opens by default. |
 | `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
-| `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). One of the two nested objects settings accept. |
-| `chords` | object | The chord track of a song-structure board — see [§10](#10-chords--the-progression). The other nested object. |
+| `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). One of the three nested values settings accept. |
+| `chords` | object | The chord track of a song-structure board — see [§10](#10-chords--the-progression). |
+| `lyrics` | array | The track's lyrics as timed lines — see below. The other nested value settings accept. |
+| `lyricsStyle` | string | How the lyrics are drawn on the video: `"caption"` (a quiet line at the foot, the default), `"pop"` (a lyric video — brush capitals mid-frame, a word at a time), `"rise"` (a letter at a time) or `"karaoke"` (the line fills as it is sung). Anything else reads as `"caption"`. |
+| `lyricsScale` | number | How big the lyrics are on the video, as a multiplier on their frame-relative size. `1` is the default; the app's A−/A+ keys walk `0.6`–`2.6`, and anything outside that is clamped. |
 
 <!-- /fields -->
 
 Settings are lenient by design: **any** key holding a string, finite number, or
 boolean passes through, so a knob added to the app later still round-trips
 through older files. Nested objects and arrays are dropped — `score` and
-`chords` are the two exceptions, and each is validated field by field.
+`lyrics` and `chords` are the exceptions, and each is validated entry by entry.
+
+### `lyrics` — the timed lines
+
+The song's words, one entry per line, **in the order the song sings them**,
+each with the second it starts:
+
+```json
+"lyrics": [
+  { "t": 12.4, "text": "Is this the real life?" },
+  { "t": 15.1, "text": "Is this just fantasy?" },
+  { "t": 18.0, "text": "" },
+  { "text": "Caught in a landslide" }
+]
+```
+
+| field | type | notes |
+| --- | --- | --- |
+| `text` | string | **Required.** The words of one line, up to 400 characters. An empty string is a *rest*: at its `t` the lyric on the video clears — put one before a solo, or between stanzas. |
+| `t` | number | Clip seconds the line starts sounding (see the clip warning in §4) — the same clock as the notes, so a `clipStart` shifts it with them. Fractions are fine and tenths are shown. **Omit it** for a line not yet timed: the line is kept, listed under "Not timed" on the lyric sheet, and never drawn on the video. |
+
+Lines are drawn over the video as the playhead reaches them (the line sounding,
+with the next one fainter beneath), and on the structure board's lyric sheet
+they file themselves under whichever section each one *starts* in — so on a
+song-structure board (`kind: "structure"`) the sections' `start`/`end` are
+what decide which words sit under "Chorus". Keep the array in document order
+even when the times are known: the timing rides on each line rather than
+reordering the list. An entry without a string `text` is dropped on its own; a
+`t` that isn't a non-negative number is dropped from its line rather than
+taking the words with it. Up to 2,000 lines.
 
 ---
 

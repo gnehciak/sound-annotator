@@ -50,6 +50,7 @@ import { colorForId, hueText } from './noteColors'
 import { isVideoSource, sourceLabel, sourceLinkUrl } from './source'
 import { quotePageOf, quotesOf } from './overlays'
 import { scoreLabel } from './score'
+import { timedLines } from './lyrics'
 import { publicId } from './ids'
 import type { QuoteImage } from './quoteImages'
 
@@ -456,6 +457,19 @@ export function buildStudyDoc(
   // Time order, which is the order the notes are already in: a study document
   // is read alongside the recording, so the next row is the next thing that
   // happens.
+  // The lyric lines that start inside a note's span, quoted on one line the
+  // way a lyric is quoted in prose. (A structure board's sections are
+  // structure notes and leave the grid above, so this is the listening
+  // guide's notes reaching into a song's timed lyrics.)
+  const lyricLines = timedLines(project.settings?.lyrics ?? [])
+  const lyricsIn = (note: Annotation): string | undefined => {
+    const end = note.end ?? note.start
+    const words = lyricLines
+      .filter((l) => l.text && note.start <= l.t && l.t < end)
+      .map((l) => l.text)
+    return words.length > 0 ? words.join(' / ') : note.lyrics?.trim() || undefined
+  }
+
   const rows: StudyRow[] = []
   for (const note of notes) {
     if (note.structure) continue
@@ -474,7 +488,7 @@ export function buildStudyDoc(
       examples: examplesOf(note, quotes.get(note.id) ?? []),
       analysis: richBlocks(primaryTextHtml(note)),
       spec: specOf(note),
-      ...(note.lyrics?.trim() ? { lyrics: note.lyrics.trim() } : {}),
+      ...(lyricsIn(note) ? { lyrics: lyricsIn(note) } : {}),
     }
     rows.push(row)
   }

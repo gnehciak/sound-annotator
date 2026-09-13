@@ -4,6 +4,7 @@
 import { api, ApiError } from './api'
 import { withBlocks } from './noteBlocks'
 import { withMigratedOverlay } from './overlays'
+import { withMigratedLyrics } from './lyrics'
 import type { EditLockClaim } from './editLock'
 import type { Annotation, BrowseItem, Project } from '../types'
 
@@ -14,7 +15,10 @@ import type { Annotation, BrowseItem, Project } from '../types'
  * mark a project dirty.
  */
 export function toProject(id: string, data: Record<string, unknown>): Project {
-  return {
+  // The per-section lyric blocks that predate timed lines fold into
+  // `settings.lyrics` here, for the same read-side-only reason as the
+  // per-note migrations below.
+  return withMigratedLyrics({
     id,
     // Server-assigned short id for pre-short-id projects; see lib/ids.ts.
     alias: typeof data.alias === 'string' ? data.alias : undefined,
@@ -50,7 +54,7 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
         ? (data.stems as Project['stems'])
         : undefined,
     deletedAt: typeof data.deletedAt === 'number' ? data.deletedAt : undefined,
-  }
+  })
 }
 
 /** Load every live project owned by this user, newest first — the trash is a
