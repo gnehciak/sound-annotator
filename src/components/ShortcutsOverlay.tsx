@@ -30,6 +30,7 @@ const NAV_EDIT: Group = {
   title: 'Navigation',
   items: [
     { keys: ['Home', 'End'], label: 'Jump to start / end' },
+    { keys: ['F'], label: 'Full-screen lyrics (song board)' },
     { keys: ['V'], label: 'Toggle view-only mode' },
     { keys: ['?'], label: 'Show this help' },
   ],
@@ -39,6 +40,7 @@ const NAV_VIEW: Group = {
   title: 'Navigation',
   items: [
     { keys: ['Home', 'End'], label: 'Jump to start / end' },
+    { keys: ['F'], label: 'Full-screen lyrics (song board)' },
     { keys: ['?'], label: 'Show this help' },
   ],
 }

@@ -566,6 +566,13 @@ export interface ProjectSettings {
    * text from being migrated in again).
    */
   lyrics?: LyricLine[]
+  /**
+   * How big the lyrics are on the video, as a multiplier on their
+   * frame-relative size — 1 is the default; LYRIC_SCALES in lib/lyrics.ts is
+   * the range the A−/A+ keys walk. A teacher sets it for the class; anyone
+   * who can't write settings resizes for their own session instead.
+   */
+  lyricsScale?: number
 }
 
 /**

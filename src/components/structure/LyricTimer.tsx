@@ -277,8 +277,8 @@ export default function LyricTimer({
                     className="press flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
                   >
                     <span
-                      className={`w-[52px] shrink-0 font-mono text-[10.5px] tabular-nums ${
-                        line.t == null ? 'opacity-50' : ''
+                      className={`w-[44px] shrink-0 font-mono text-[9.5px] tabular-nums opacity-70 ${
+                        line.t == null ? 'opacity-40' : ''
                       }`}
                     >
                       {line.t != null ? formatTenths(line.t) : '—'}

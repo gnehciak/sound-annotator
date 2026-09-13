@@ -550,7 +550,17 @@ entrance; a rest simply unmounts it. It rides PlayerPane's `overlay` slot
 between the note stage layer and the transport, inert like both, and only
 on video sources — an audio track's waveform is the picture. Whether it shows
 is the reader's own switch (the eye in the sheet's title bar), session state
-like the score's zoom.
+like the score's zoom. How *big* it is, `settings.lyricsScale`, belongs to
+the track (a teacher sizes it for the room) — but anyone who can't write
+settings resizes for their own session instead, so a reader at the back can
+still turn it up. **Full screen (`F`, the ⛶ key beside the eye) is the picture
+and the words alone**: the player *box* (`.lyric-fs`, the div around
+PlayerPane) goes under the Fullscreen API — the box rather than the player's
+own frame, so nothing inside remounts and a YouTube iframe doesn't restart —
+and while `document.fullscreenElement` is that box the note layer and the
+transport stand down (Space and the picture's own click still pause). The
+state is read back from `fullscreenchange`, never assumed, because Esc is the
+browser's and has to be followed out.
 
 **The sheet files each line under the section it starts in** (`groupBySection`):
 every section is listed, lyrics or not — "Solo: no lyrics" is a fact worth

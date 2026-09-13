@@ -245,6 +245,7 @@ is fine; a hundred full-page scans in one file is not.
 | `playOnce` | boolean | When on, a note's Play chip plays just that passage and pauses at its end. |
 | `score` | object | A PDF score for the track — see [§9](#9-score--the-printed-music). One of the two nested values settings accept. |
 | `lyrics` | array | The track's lyrics as timed lines — see below. The other nested value settings accept. |
+| `lyricsScale` | number | How big the lyrics are on the video, as a multiplier on their frame-relative size. `1` is the default; the app's A−/A+ keys walk `0.6`–`2.6`, and anything outside that is clamped. |
 
 <!-- /fields -->
 

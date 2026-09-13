@@ -17,6 +17,28 @@ export const DEFAULT_LYRIC_LEAD = 0.3
 export const MAX_LYRIC_LINES = 2000
 export const MAX_LYRIC_CHARS = 400
 
+/**
+ * The overlay's type sizes: multipliers on its frame-relative size, the stops
+ * the A−/A+ keys walk. Wide enough at the top for a projector at the back of
+ * a classroom, and low enough at the bottom to keep a long line on one row.
+ */
+export const LYRIC_SCALES = [0.6, 0.8, 1, 1.25, 1.5, 1.8, 2.2, 2.6]
+
+export function clampLyricScale(v: number | undefined | null): number {
+  if (v == null || !Number.isFinite(v)) return 1
+  return Math.min(LYRIC_SCALES[LYRIC_SCALES.length - 1], Math.max(LYRIC_SCALES[0], v))
+}
+
+/** The stop one up (`dir` 1) or one down from `scale` — from its nearest stop,
+ *  so a value a file hands us that sits between two still steps cleanly. */
+export function stepLyricScale(scale: number, dir: 1 | -1): number {
+  const cur = clampLyricScale(scale)
+  let nearest = 0
+  for (let k = 1; k < LYRIC_SCALES.length; k++)
+    if (Math.abs(LYRIC_SCALES[k] - cur) < Math.abs(LYRIC_SCALES[nearest] - cur)) nearest = k
+  return LYRIC_SCALES[Math.min(LYRIC_SCALES.length - 1, Math.max(0, nearest + dir))]
+}
+
 /** Tenths are the resolution the stamps are shown at, so it is what they keep. */
 const tenths = (t: number) => Math.round(Math.max(0, t) * 10) / 10
 

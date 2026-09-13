@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AArrowDown,
+  AArrowUp,
   Crosshair,
   Eye,
   EyeOff,
+  Maximize2,
   Minus,
   Play,
   Plus,
@@ -14,10 +17,12 @@ import { formatTenths, formatTime, parseTime } from '../../lib/format'
 import {
   groupBySection,
   insertLineAfter,
+  LYRIC_SCALES,
   nudgeLine,
   removeLine,
   setLineText,
   stampLine,
+  stepLyricScale,
   timedIndexAt,
   timedLines,
 } from '../../lib/lyrics'
@@ -63,6 +68,11 @@ interface Props {
    */
   onVideo?: boolean
   onToggleOnVideo?: () => void
+  /** The overlay's type size (see LYRIC_SCALES) and the way to change it. */
+  scale?: number
+  onScale?: (scale: number) => void
+  /** Take the picture and the words full screen — video tracks only. */
+  onFullscreen?: () => void
   onSeek: (t: number) => void
   onPlayPause: () => void
   onChange: (lines: LyricLine[], opts?: { coalesceKey?: string }) => void
@@ -76,6 +86,9 @@ export default function LyricsPanel({
   readOnly,
   onVideo,
   onToggleOnVideo,
+  scale = 1,
+  onScale,
+  onFullscreen,
   onSeek,
   onPlayPause,
   onChange,
@@ -189,16 +202,55 @@ export default function LyricsPanel({
         left="Lyrics"
         actions={
           <>
+            {/* The picture's controls — size, show/hide, full screen — only
+                once there are words to put on it, and only on a video. */}
             {onToggleOnVideo && lines.length > 0 && (
-              <button
-                type="button"
-                onClick={onToggleOnVideo}
-                aria-pressed={onVideo}
-                title={onVideo ? 'Hide the lyrics on the video' : 'Show the lyrics on the video'}
-                className="btn-icon press"
-              >
-                {onVideo ? <Eye size={14} /> : <EyeOff size={14} />}
-              </button>
+              <>
+                {onScale && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onScale(stepLyricScale(scale, -1))}
+                      disabled={scale <= LYRIC_SCALES[0]}
+                      title="Smaller lyrics on the video"
+                      aria-label="Smaller lyrics on the video"
+                      className="btn-icon press disabled:opacity-30"
+                    >
+                      <AArrowDown size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onScale(stepLyricScale(scale, 1))}
+                      disabled={scale >= LYRIC_SCALES[LYRIC_SCALES.length - 1]}
+                      title="Bigger lyrics on the video"
+                      aria-label="Bigger lyrics on the video"
+                      className="btn-icon press disabled:opacity-30"
+                    >
+                      <AArrowUp size={15} />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={onToggleOnVideo}
+                  aria-pressed={onVideo}
+                  title={onVideo ? 'Hide the lyrics on the video' : 'Show the lyrics on the video'}
+                  className="btn-icon press"
+                >
+                  {onVideo ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+                {onFullscreen && (
+                  <button
+                    type="button"
+                    onClick={onFullscreen}
+                    title="Full screen — just the video and the lyrics (F, Esc to leave)"
+                    aria-label="Full screen lyrics"
+                    className="btn-icon press"
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+                )}
+              </>
             )}
             {!readOnly && (
               <button
@@ -432,7 +484,7 @@ function LyricRow({
           aria-label="Start time, as m:ss.t"
           placeholder="m:ss.t"
           autoFocus
-          className="field w-[64px] shrink-0 px-1 py-0.5 text-center font-mono text-[10.5px] tabular-nums"
+          className="field w-[54px] shrink-0 px-1 py-0.5 text-center font-mono text-[9.5px] tabular-nums"
         />
       ) : (
         <button
@@ -455,8 +507,10 @@ function LyricRow({
                 ? 'Not timed'
                 : 'Not timed — select and press the crosshair to stamp it at the playhead'
           }
-          className={`chip chip-time press w-[64px] shrink-0 justify-center font-mono text-[10.5px] tabular-nums ${
-            t == null ? 'opacity-50' : ''
+          // A stamp, not a chip: the words are the sheet and the time is a
+          // margin note beside them, small and quiet until it is wanted.
+          className={`press w-[44px] shrink-0 text-left font-mono text-[9.5px] tabular-nums text-muted transition-colors hover:text-fg ${
+            t == null ? 'opacity-60' : ''
           }`}
         >
           {t != null ? formatTenths(t) : '—'}
