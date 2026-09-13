@@ -177,7 +177,13 @@ progression can be typed in live. Typing is *type-over* (`writeChord`): a
 chord starting at the cursor is retyped in place, one sounding across it is
 cut there. With a chord selected the same keys retype it; ⌫ deletes the
 selection or takes back the chord just typed. The typed length follows the
-last resize, so a two-chords-a-bar song types itself. Degrees are coloured
+last resize, so a two-chords-a-bar song types itself. `M` flips a chord
+between major and minor (`quality`, stored only when it differs from the
+key's own — a borrowed iv, a II7). The board's playhead and the **chord bar
+on the video** (`ChordOverlay`, the tutorial-channel strip scrolling past a
+now line) both move on `useSmoothClock`, a frame-rate clock over the players'
+250 ms ticks that writes a style per frame and re-renders nothing. Numerals
+are set in `.numeral`, a serif face, because I, IV and vi are chord symbols. Degrees are coloured
 `DEGREE_COLORS` (colour-is-data: a IV is the same green in every key).
 Chord edits are **undoable** (`changeChords` in App goes through `commit`),
 unlike the score's display knobs, because a wrong digit in a run wants ⌘Z —

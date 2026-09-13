@@ -506,6 +506,7 @@ Each chord:
 | `len` | number | How long it sounds, in beats. At least `0.5`. |
 | `degree` | number | The scale degree, `1`–`7`. The chord's quality comes from the mode: in C major `2` is Dm, in A minor `2` is B°. |
 | `seventh` | boolean | Add the diatonic seventh (`5` in C major becomes G7; `1` becomes Cmaj7). |
+| `quality` | string | `"maj"` or `"min"` to force the triad's quality instead of the key's — a borrowed `4` minor in a major key (iv), a `2` major (II). Omit for the diatonic chord. A forced chord takes a perfect fifth and, with `seventh`, a minor seventh. |
 | `inversion` | number | `1` or `2` (`3` with a seventh). Omit for root position. |
 
 ```json

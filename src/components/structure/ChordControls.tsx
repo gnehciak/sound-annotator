@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Crosshair, Minus, Music2, Plus, Trash2 } from 'lucide-react'
+import { Crosshair, Eye, EyeOff, Minus, Music2, Plus, Trash2 } from 'lucide-react'
 import type { Chord, ChordMode, ProjectChords } from '../../types'
 import {
   BEATS_PER_BAR_OPTIONS,
@@ -15,6 +15,7 @@ import {
   spellChord,
   tapTempo,
   timeBeat,
+  withQuality,
 } from '../../lib/chords'
 import { formatTime, parseTime } from '../../lib/format'
 import { hueText } from '../../lib/noteColors'
@@ -63,12 +64,18 @@ export function ChordSetupRow({
   readOnly,
   onChange,
   onRemove,
+  onVideo,
+  onToggleOnVideo,
 }: {
   chords: ProjectChords
   currentTime: number
   readOnly: boolean
   onChange: Change
   onRemove: () => void
+  /** Whether the chord bar is drawn on the video — absent on an audio track,
+   *  whose waveform is the picture. A viewing choice, never saved. */
+  onVideo?: boolean
+  onToggleOnVideo?: () => void
 }) {
   const theme = useResolvedTheme()
   const tapsRef = useRef<number[]>([])
@@ -120,7 +127,7 @@ export function ChordSetupRow({
         {spelled ? (
           <>
             <span
-              className="text-[18px] font-bold leading-none"
+              className="numeral text-[20px] leading-none"
               style={{ color: nowColor ? hueText(nowColor, theme) : undefined }}
             >
               {spelled.roman}
@@ -262,6 +269,18 @@ export function ChordSetupRow({
 
       <div className="flex-1" />
 
+      {onVideo !== undefined && onToggleOnVideo && (
+        <button
+          type="button"
+          onClick={onToggleOnVideo}
+          aria-pressed={onVideo}
+          title={onVideo ? 'Hide the chord bar on the video' : 'Show the chord bar on the video'}
+          className="btn-icon press shrink-0"
+        >
+          {onVideo ? <Eye size={14} /> : <EyeOff size={14} />}
+        </button>
+      )}
+
       {!readOnly && (
         <button
           type="button"
@@ -312,7 +331,7 @@ export function ChordFooter({
         style={{ background: color }}
       />
       <span
-        className="w-[96px] shrink-0 truncate text-[17px] font-bold leading-none"
+        className="numeral w-[96px] shrink-0 truncate text-[19px] leading-none"
         style={{ color: hueText(color, theme) }}
         title={`${spelled.roman}${spelled.figure} — ${spelled.name}`}
       >
@@ -333,7 +352,7 @@ export function ChordFooter({
               onClick={() => patch({ degree: d, inversion: undefined })}
               aria-pressed={chord.degree === d}
               title={`${s.roman} — ${s.name} (${d})`}
-              className="seg-item press h-[22px] min-w-[26px] px-1 text-[10.5px] normal-case tracking-normal"
+              className="seg-item numeral press h-[22px] min-w-[26px] px-1 text-[12px] normal-case tracking-normal"
               style={
                 chord.degree === d
                   ? { color: hueText(degreeColor(d), theme) }
@@ -344,6 +363,34 @@ export function ChordFooter({
             </button>
           )
         })}
+      </div>
+
+      {/* Major / minor: the key's own quality lights by default; forcing the
+          other borrows the chord (a iv in a major key, a II7). M flips it. */}
+      <div role="group" aria-label="Chord quality" className="seg">
+        {(['maj', 'min'] as const).map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() =>
+              onChange({
+                ...chords,
+                chords: chords.chords.map((c) =>
+                  c.id === chord.id ? withQuality(c, q, chords.key, chords.mode) : c,
+                ),
+              })
+            }
+            aria-pressed={
+              spelled.triad === q ||
+              (q === 'maj' && spelled.triad === 'aug') ||
+              (q === 'min' && spelled.triad === 'dim')
+            }
+            title={q === 'maj' ? 'Major (M)' : 'Minor (M)'}
+            className="seg-item press h-[22px] px-1.5"
+          >
+            {q === 'maj' ? 'Maj' : 'Min'}
+          </button>
+        ))}
       </div>
 
       <button
