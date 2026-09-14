@@ -28,8 +28,12 @@ export type Route =
   | { page: 'track'; id: string; key: string | null; admin: boolean }
   /** A `?view=` share link: the read-only viewer, no sign-in. */
   | { page: 'share'; id: string }
-  /** The admin console and which of its two tabs is showing. */
-  | { page: 'admin'; tab: 'projects' | 'users' }
+  /** The admin console and which of its tabs is showing; `path` is the
+   *  Storage tab's folder, so a folder deep in the store is a link too. */
+  | { page: 'admin'; tab: AdminTab; path?: string }
+
+export type AdminTab = 'projects' | 'users' | 'storage'
+const ADMIN_TABS: readonly AdminTab[] = ['projects', 'users', 'storage']
 
 /** The library root — the app's home, and the fallback for a dead link. */
 export const HOME: Route = { page: 'library', folder: null }
@@ -53,8 +57,13 @@ export function parseRoute(search: string = window.location.search): Route {
       key: p.get('key'),
       admin: p.get('admin') === '1',
     }
-  if (p.get('admin') === '1')
-    return { page: 'admin', tab: p.get('tab') === 'users' ? 'users' : 'projects' }
+  if (p.get('admin') === '1') {
+    const t = p.get('tab') as AdminTab | null
+    const tab = t && ADMIN_TABS.includes(t) ? t : 'projects'
+    return tab === 'storage'
+      ? { page: 'admin', tab, path: p.get('path') || '' }
+      : { page: 'admin', tab }
+  }
   if (p.get('trash') === '1') return { page: 'trash' }
   if (p.get('browse') === '1') return { page: 'browse' }
   return { page: 'library', folder: p.get('folder') || null }
@@ -83,7 +92,8 @@ export function routeSearch(r: Route): string {
       break
     case 'admin':
       p.set('admin', '1')
-      if (r.tab === 'users') p.set('tab', 'users')
+      if (r.tab !== 'projects') p.set('tab', r.tab)
+      if (r.tab === 'storage' && r.path) p.set('path', r.path)
       break
   }
   const q = p.toString()
