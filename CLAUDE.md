@@ -94,9 +94,12 @@ server-side by `isAdmin` (`api/_lib/auth.ts`), by *email* so it survives a
 change of uid — which has already earned its keep once, at the move off Clerk.
 Unset means nobody, which is the right default for a role that can hard-delete
 other people's work. The console
-(`?admin=1`) has two tabs, both 404 rather than 403 for everyone else:
-`api/admin/projects.ts` (every live project, guests included) and
-`api/admin/users.ts` (every account, with its project counts). Guests can never
+(`?admin=1`) has three tabs, all 404 rather than 403 for everyone else:
+`api/admin/projects.ts` (every live project, guests included),
+`api/admin/users.ts` (every account, with its project counts) and
+`api/admin/blobs.ts` (the Blob store as a file explorer — one level per
+call, every folder sized by walking what's beneath it, read-only; the folder
+is a route, `&tab=storage&path=`). Guests can never
 appear as users, so that endpoint reports them as a separate tally, and
 surfaces owner ids whose account is gone; both exist so the numbers on the two
 tabs reconcile instead of quietly disagreeing. **`ADMIN_EMAILS` is a

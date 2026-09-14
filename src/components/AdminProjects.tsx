@@ -7,8 +7,9 @@ import { deleteProjectImages } from '../lib/imageCloud'
 import type { Project } from '../types'
 import HomeDot from './HomeDot'
 import AdminUsers from './AdminUsers'
+import AdminBlobs from './AdminBlobs'
 import { publicId } from '../lib/ids'
-import { navigate, useRoute } from '../lib/nav'
+import { navigate, useRoute, type AdminTab } from '../lib/nav'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -17,7 +18,6 @@ interface AdminProject extends Project {
 }
 
 type Filter = 'all' | 'guest' | 'account'
-type Tab = 'projects' | 'users'
 
 /**
  * Every project in the database — students' guest work and account libraries
@@ -38,8 +38,9 @@ export default function AdminProjects() {
   // different enough to be worth a link, and Back should leave one for the
   // other rather than the console entirely.
   const route = useRoute()
-  const tab: Tab = route.page === 'admin' && route.tab === 'users' ? 'users' : 'projects'
-  const setTab = (t: Tab) => navigate({ page: 'admin', tab: t })
+  const tab: AdminTab = route.page === 'admin' ? route.tab : 'projects'
+  const storagePath = route.page === 'admin' && route.tab === 'storage' ? route.path ?? '' : ''
+  const setTab = (t: AdminTab) => navigate({ page: 'admin', tab: t })
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -136,10 +137,10 @@ export default function AdminProjects() {
               the console, not the app. */}
           <HomeDot size={10} />
           <h1 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
-            {tab === 'projects' ? 'All projects' : 'All users'}
+            {tab === 'projects' ? 'All projects' : tab === 'users' ? 'All users' : 'Storage'}
           </h1>
           <div className="seg">
-            {(['projects', 'users'] as const).map((t) => (
+            {(['projects', 'users', 'storage'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -178,6 +179,11 @@ export default function AdminProjects() {
 
         {tab === 'users' ? (
           <AdminUsers />
+        ) : tab === 'storage' ? (
+          <AdminBlobs
+            path={storagePath}
+            onOpen={(path) => navigate({ page: 'admin', tab: 'storage', path })}
+          />
         ) : shown.length === 0 ? (
           <p className="empty text-sm text-muted">
             Nothing here.
@@ -262,12 +268,14 @@ export default function AdminProjects() {
           </div>
         )}
 
-        <p className="mt-4 font-mono text-[11px] leading-relaxed text-muted">
-          Editing writes straight into the project — on a guest’s track, they’ll
-          see your changes. To mark without touching their work, use View, then
-          “Make a copy”. Deleting also removes that project’s audio and images
-          from storage.
-        </p>
+        {tab === 'projects' && (
+          <p className="mt-4 font-mono text-[11px] leading-relaxed text-muted">
+            Editing writes straight into the project — on a guest’s track, they’ll
+            see your changes. To mark without touching their work, use View, then
+            “Make a copy”. Deleting also removes that project’s audio and images
+            from storage.
+          </p>
+        )}
       </div>
     </div>
   )
