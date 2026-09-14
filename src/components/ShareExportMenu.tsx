@@ -20,6 +20,8 @@ import {
 import type { Project, ProjectShare } from '../types'
 import ExportPdfButton from './ExportPdfButton'
 import ExportDocxButton from './ExportDocxButton'
+import { ClipExportRow } from './ClipExport'
+import type { ClipRange } from '../lib/clipDownload'
 import { downloadProjectJson } from '../lib/projectJson'
 import { isListeningTask, questionsOf } from '../lib/questions'
 import { publicId } from '../lib/ids'
@@ -33,6 +35,9 @@ interface Props {
   canShare: boolean
   /** PDF renders the notes list; structure boards have none to print. */
   canPdf: boolean
+  /** The audio clip export: where its fields start out (the selected note's
+   *  range, or the playhead) and the track length. Absent hides the row. */
+  clip?: { initial: ClipRange; duration: number }
   /** Persist a sharing change; flags travel together so one rung of the ladder
    *  is one write. Unused (never called) when !canShare. */
   onChange: (patch: {
@@ -97,6 +102,7 @@ export default function ShareExportMenu({
   project,
   canShare,
   canPdf,
+  clip,
   onChange,
 }: Props) {
   const [open, setOpen] = useState(false)
@@ -762,6 +768,21 @@ export default function ShareExportMenu({
               <Braces size={12} /> JSON
             </button>
           </div>
+          {/* The audio clip: a passage of the recording as an m4a, cut on the
+              server. Inline rather than one more button, because it needs a
+              range typed — and it seeds from the note that is open, so for
+              the common case the range is already there. */}
+          {clip && (
+            <div className="strip flex flex-col gap-2 border-t border-line/70 px-3.5 py-2.5">
+              <Label>Clip</Label>
+              <ClipExportRow
+                project={project}
+                initial={clip.initial}
+                duration={clip.duration}
+                onDone={close}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

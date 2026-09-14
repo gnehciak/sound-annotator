@@ -1,14 +1,28 @@
 {
-  "regions": ["syd1"],
+  "regions": [
+    "syd1"
+  ],
   "headers": [
     {
       "source": "/track-schema.md",
       "headers": [
-        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
       ]
     }
   ],
   "crons": [
-    { "path": "/api/cron/purge-trash", "schedule": "0 15 * * *" }
-  ]
+    {
+      "path": "/api/cron/purge-trash",
+      "schedule": "0 15 * * *"
+    }
+  ],
+  "functions": {
+    "api/projects/*/clip.ts": {
+      "includeFiles": "api/_bin/**"
+    }
+  },
+  "buildCommand": "npm run build && node scripts/fetch-media-bin.mjs"
 }

@@ -195,6 +195,41 @@ touches one that exists. `sanitizeChords` in `projectJson.ts` drops
 overlapping chords rather than trimming them, and §10 of the schema doc is
 the published shape.
 
+**A passage of the audio is a file** (`api/projects/[id]/clip.ts`,
+`api/_lib/media.ts`, `src/lib/clipDownload.ts`, `components/ClipExport.tsx`):
+`GET …/clip?start=&end=` answers with an m4a of that span, for a student to
+carry into a presentation. Who may ask is exactly who may read the project,
+and a trashed track's clips go dark with its links. Times are on the clip
+clock like every note, mapped back through `clipStart` on the server. Three
+entry points, all the same call: a ⤓ key on every range note's row (editor
+and share viewer alike — it is a reader's action), the selected section's
+footer on the song-structure board, and a From/To row in the export menu (a
+popover in the viewer's sub-bar) for a passage no note brackets, seeded from
+the open note or the playhead. **The bytes come from the origin, never from
+us**: a Drive video and an audio URL are read by ffmpeg straight from their
+URL; YouTube goes through **yt-dlp, run inside the function**, which is the
+part with history worth knowing. YouTube bot-walls every anonymous request
+from a datacenter address, whatever client yt-dlp impersonates, so the
+function carries a signed-in session's cookies (`YT_COOKIES_B64`, sensitive,
+the youtube.com lines of a Netscape cookie file — use a throwaway Google
+account, since heavy automated use can get the account limited). A signed-in
+session is then served SABR-only, with no plain audio stream left, so the
+binary is the maintainers' **SABR pre-release** (yt-dlp/yt-dlp#13515), which
+needs a proof-of-origin token from the bgutil script — and both yt-dlp's
+challenge solver and that script need a JavaScript runtime, which is why this
+is a **Node** function spawning binaries rather than a Python one (Vercel's
+Python runtime has neither Node nor Deno; the Node function hands over its
+own `process.execPath`). `scripts/fetch-media-bin.mjs` fetches yt-dlp and a
+static ffmpeg into `api/_bin` at build (gitignored, delivered by
+`includeFiles`) and `npm ci`s the token generator there so `canvas` gets Linux
+binaries; the committed parts are its `build/` and the plugin's Python. The
+format selector falls through SABR → any audio → format 18 (the 360p mp4 a
+signed-in session always gets, whose audio ffmpeg lifts out), so a broken
+pre-release costs a second, not the feature. A whole recording is fetched
+once per warm instance into `/tmp` and cut with `-c:a copy`; only the clip
+travels. Locally the binaries on PATH are used, without cookies or the plugin:
+a residential address is served the plain streams.
+
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are
 already out in the world, so the route is a query param on one page: `?` the

@@ -18,6 +18,7 @@
 // Both verbs are public, which is the only thing they have in common.
 import { sql, type ProjectRow } from './_lib/db.js'
 import { err, json } from './_lib/respond.js'
+import { driveOriginUrl } from './_lib/driveUrl.js'
 
 interface Tick {
   id: string
@@ -47,10 +48,7 @@ function ticksOf(annotations: unknown): { ticks: Tick[]; count: number } {
  * is what gets a file past ~100 MB served instead of Drive's virus-scan
  * interstitial.
  */
-const driveOriginUrl = (fileId: string) =>
-  `https://drive.usercontent.google.com/download?id=${encodeURIComponent(
-    fileId,
-  )}&export=download&confirm=t`
+// driveOriginUrl lives in _lib/driveUrl.ts now that the clip export shares it.
 
 /** Drive file ids, same floor as src/lib/drive.ts. */
 const FILE_ID = /^[a-zA-Z0-9_-]{16,}$/

@@ -13,6 +13,8 @@ import {
   AtSign,
   Copy,
   Trash2,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import type { Annotation } from '../types'
 import { formatTime, noteLabel } from '../lib/format'
@@ -69,6 +71,13 @@ interface Props {
   canReference?: boolean
   onDuplicate?: () => void
   onDelete?: () => void
+  /**
+   * Range notes: download the passage's audio as an m4a clip (the clip
+   * export). Present in the read-only presentations too — it is a reader's
+   * action, the one a student takes to carry the passage into a presentation.
+   * Resolves once the browser has the file; rejects with the reason.
+   */
+  onDownloadClip?: () => Promise<void>
   /** Seek (and pin) to this note's moment — the timecode button. */
   onPlay: () => void
   /**
@@ -121,6 +130,7 @@ export default function AnnotationItem({
   canReference = false,
   onDuplicate,
   onDelete,
+  onDownloadClip,
   onPlay,
   onPlayPassage,
   passageArmed = false,
@@ -189,6 +199,25 @@ export default function AnnotationItem({
   // carry opacity-50, which a fade-in would fight, so they just appear.
   const [enterAnim] = useState(() => active || selected)
 
+  // ---- clip download -------------------------------------------------------
+  // Busy while the server cuts it (a few seconds); a failure is shown on the
+  // key itself for a moment, since the row has no room for a line of text.
+  const [clipBusy, setClipBusy] = useState(false)
+  const [clipError, setClipError] = useState<string | null>(null)
+  const runClip = async () => {
+    if (!onDownloadClip || clipBusy) return
+    setClipBusy(true)
+    setClipError(null)
+    try {
+      await onDownloadClip()
+    } catch (e) {
+      setClipError(e instanceof Error ? e.message : 'The clip could not be made.')
+      setTimeout(() => setClipError(null), 8000)
+    } finally {
+      setClipBusy(false)
+    }
+  }
+
   // ---- context menu ------------------------------------------------------
   // Note it deliberately does *not* select the note: opening it would swap the
   // inspector to this note, and "Reference this note" would then have nowhere
@@ -219,6 +248,15 @@ export default function AnnotationItem({
   }
   if (onDuplicate) {
     menuItems.push({ key: 'duplicate', label: 'Duplicate note', icon: Copy, onSelect: onDuplicate })
+  }
+  if (onDownloadClip && isRange) {
+    menuItems.push({
+      key: 'clip',
+      label: 'Download audio clip',
+      icon: Download,
+      hint: label,
+      onSelect: () => void runClip(),
+    })
   }
   if (onDelete) {
     menuItems.push({
@@ -544,6 +582,31 @@ export default function AnnotationItem({
         })}
 
         <div className="flex-1" />
+
+        {/* Range notes: the passage as an audio file, one press. Sits at the
+            row's far edge, clear of the chips, and never takes focus (see the
+            timecode chip for why). */}
+        {isRange && onDownloadClip && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              stop(e)
+              void runClip()
+            }}
+            disabled={clipBusy}
+            aria-busy={clipBusy || undefined}
+            title={clipError ?? `Download ${label} as an audio clip (m4a)`}
+            aria-label={`Download ${label} as an audio clip`}
+            className={`btn-icon press shrink-0 ${clipError ? 'text-danger' : ''}`}
+          >
+            {clipBusy ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Download size={13} />
+            )}
+          </button>
+        )}
       </div>
 
       {/* body preview — text rendered read-only, then a summary line per block.
