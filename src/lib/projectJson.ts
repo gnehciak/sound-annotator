@@ -67,6 +67,10 @@ interface ProjectJsonEnvelope {
 
 /** Serialize a project to the portable JSON document (pretty-printed). */
 export function projectToJson(p: Project): string {
+  // A listing row carries cues, not notes; writing it out would produce a
+  // file of empty notes that imports cleanly. Callers hydrate first (App's
+  // hydrateTrack) — this is the backstop.
+  if (p.cuesOnly) throw new Error('Cannot export a track whose notes are not loaded')
   const envelope: ProjectJsonEnvelope = {
     format: PROJECT_JSON_FORMAT,
     version: PROJECT_JSON_VERSION,

@@ -88,6 +88,7 @@ them into a file has no effect: the importer ignores every one.
 | `stems` | Separated audio written only by AI section detection; bytes, not document content. |
 | `deletedAt` | Trash state. Server-set only. |
 | `myRole` | What the *current caller* may do here, stamped on every read. A property of who is asking, not of the track. |
+| `cuesOnly` | Marks a library-listing row that carries only each note's timing, not its text. Client state; a file always carries the full notes. |
 
 <!-- /fields -->
 

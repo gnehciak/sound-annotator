@@ -43,6 +43,23 @@ never written). The SPA calls Vercel Functions in `/api`
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
 the server-stamped edit lock (see `api/projects/[id]/index.ts`).
 
+**The library listing carries cues, not notes** (`GET /api/projects`, since
+2026-09-14). A home page that shipped every note of every track cost the
+largest account ~6 MB per open, when a tile draws one tick per note and a
+folder card counts them. So the listing selects every column but
+`annotations` and builds a per-note `{ id, start, end, color }` list in SQL;
+`rowToProject` puts that list where the notes go and stamps `cuesOnly`, and
+`toProject` keeps the stamp. A `cuesOnly` project is a **placeholder**: the
+editor never opens one (App's route effect fetches the full row through
+`hydrateTrack` first and shows the loader meanwhile; a cold deep link fetches
+it beside the listing), copy and export go through the same call, and
+`saveProject` **omits `annotations`** while the stamp is set — the PUT merges
+only the keys a payload carries, which is what lets a rename or a move from a
+tile save without wiping notes the client never had. `projectToJson` throws on
+one as a backstop. Anything new that reads a listed project's note *content*
+must hydrate first; anything that reads only its cues or count can use the
+list as it is.
+
 **Sharing is two independent halves, and there is only ever one URL.** The
 *link* (`shared` / `editable_by_link` / `published`) says what anyone holding
 `?view=<publicId>` may do; the *people* list (`project_shares`, one row per

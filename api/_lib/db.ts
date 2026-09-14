@@ -18,7 +18,13 @@ export interface ProjectRow {
   owner_id: string
   title: string
   source: unknown
-  annotations: unknown
+  /** The notes. Absent (not null) on a row from the library listing, which
+   *  selects every column but this one — see `cues`. */
+  annotations?: unknown
+  /** Listing rows only: one `{ id, start, end?, color? }` per note, built in
+   *  SQL from `annotations` (api/projects/index.ts) — what a tile draws its
+   *  cue line and its count from, at a fraction of the bytes. */
+  cues?: unknown
   updated_at: string | number // bigint arrives as a string
   shared: boolean
   editable_by_link: boolean
@@ -77,7 +83,6 @@ export function rowToProject(
     ownerId: r.owner_id,
     title: r.title,
     source: r.source ?? undefined,
-    annotations: r.annotations ?? [],
     updatedAt: Number(r.updated_at) || 0,
     shared: r.shared === true,
     editableByLink: r.editable_by_link === true,
@@ -87,6 +92,13 @@ export function rowToProject(
     publishedByName: r.published_by_name ?? undefined,
     deletedAt: r.deleted_at == null ? undefined : Number(r.deleted_at),
   }
+  // A listing row carries the notes' cues in place of the notes, and says so:
+  // `cuesOnly` is what stops the client saving, exporting or copying the
+  // placeholders as if they were the notes (src/lib/projectStore.ts).
+  if (r.annotations === undefined) {
+    p.annotations = Array.isArray(r.cues) ? r.cues : []
+    p.cuesOnly = true
+  } else p.annotations = r.annotations ?? []
   // Saved stem URLs surface as a read-only field (PUT never accepts them —
   // the analyze endpoint is their only writer).
   const stems = (r.analysis as { stems?: Record<string, string> } | null)?.stems

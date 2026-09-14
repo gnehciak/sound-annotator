@@ -15,10 +15,28 @@ import type { Annotation, BrowseItem, Project } from '../types'
  * mark a project dirty.
  */
 export function toProject(id: string, data: Record<string, unknown>): Project {
+  // A listing row carries cues in place of notes (api/projects/index.ts):
+  // there is nothing in them to migrate, and the migrations must not run on
+  // them either — a lyric migration that saw no section lyrics would still be
+  // reasoning about notes it hasn't got. Everything else is read as usual.
+  const cuesOnly = data.cuesOnly === true
+  const notes: Annotation[] = Array.isArray(data.annotations)
+    ? cuesOnly
+      ? (data.annotations as Partial<Annotation>[]).map((c) => ({
+          id: String(c.id),
+          start: typeof c.start === 'number' ? c.start : 0,
+          ...(typeof c.end === 'number' ? { end: c.end } : {}),
+          ...(typeof c.color === 'string' ? { color: c.color } : {}),
+          contentHtml: '',
+          createdAt: 0,
+        }))
+      : (data.annotations as Annotation[]).map((a) => withMigratedOverlay(withBlocks(a)))
+    : []
   // The per-section lyric blocks that predate timed lines fold into
   // `settings.lyrics` here, for the same read-side-only reason as the
   // per-note migrations below.
-  return withMigratedLyrics({
+  const migrate = cuesOnly ? (p: Project) => p : withMigratedLyrics
+  return migrate({
     id,
     // Server-assigned short id for pre-short-id projects; see lib/ids.ts.
     alias: typeof data.alias === 'string' ? data.alias : undefined,
@@ -29,9 +47,8 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
     // and the single anchored pin that predates the score view to the two
     // independent ones. Both are read-side only — a row keeps its old shape
     // until something writes it back.
-    annotations: Array.isArray(data.annotations)
-      ? (data.annotations as Annotation[]).map((a) => withMigratedOverlay(withBlocks(a)))
-      : [],
+    annotations: notes,
+    ...(cuesOnly ? { cuesOnly: true } : {}),
     updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
     shared: data.shared === true,
     editableByLink: data.editableByLink === true,
@@ -59,7 +76,10 @@ export function toProject(id: string, data: Record<string, unknown>): Project {
 
 /** Load every live project owned by this user, newest first — the trash is a
  *  separate listing (fetchTrashedProjects). (The uid rides in the session
- *  token; the parameter survives for call-site compatibility.) */
+ *  token; the parameter survives for call-site compatibility.)
+ *  Every project comes back `cuesOnly` — see that field on Project: the
+ *  listing carries the notes' cues, not the notes. Open, copy or export one
+ *  through the full row (fetchProject) rather than this. */
 export async function fetchProjects(_uid: string): Promise<Project[]> {
   const rows = await api<Record<string, unknown>[]>('/api/projects')
   return rows
@@ -75,6 +95,20 @@ export async function fetchTrashedProjects(): Promise<Project[]> {
   return rows
     .map((r) => toProject(String(r.id), r))
     .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
+}
+
+/**
+ * The full row of one project — notes and all — for the caller the API
+ * already lets read it (owner, invitee, link holder, admin). This is how a
+ * `cuesOnly` listing row becomes a project that can be opened. Throws on a
+ * missing or forbidden row, unlike fetchSharedProject, since a track the
+ * library just listed has no business being absent.
+ */
+export async function fetchProject(id: string): Promise<Project> {
+  const data = await api<Record<string, unknown>>(
+    `/api/projects/${encodeURIComponent(id)}`,
+  )
+  return toProject(id, data)
 }
 
 /**
@@ -116,7 +150,6 @@ export async function saveProject(
     ownerId: p.ownerId ?? uid,
     title: p.title,
     source: p.source,
-    annotations: p.annotations,
     updatedAt: p.updatedAt,
     shared: p.shared === true,
     editableByLink: p.editableByLink === true,
@@ -124,6 +157,10 @@ export async function saveProject(
     folderId: p.folderId ?? null,
     settings: p.settings,
   }
+  // A listing row holds cues where the notes should be. The API merges only
+  // the keys a payload carries, so leaving `annotations` out is what lets a
+  // rename or a move from a tile save without wiping the notes it never had.
+  if (!p.cuesOnly) payload.annotations = p.annotations
   if (lock) payload.lock = lock
   await api(`/api/projects/${encodeURIComponent(p.id)}`, {
     method: 'PUT',
