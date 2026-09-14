@@ -10,6 +10,8 @@ import {
   MousePointer2,
   Scissors,
   Trash2,
+  Download,
+  Loader2,
   ZoomIn,
   ZoomOut,
   Maximize,
@@ -87,6 +89,8 @@ interface Props {
     opts?: { coalesceKey?: string },
   ) => void
   onDelete: (id: string) => void
+  /** Download a section's audio as an m4a clip (the clip export). */
+  onDownloadClip?: (section: Annotation) => Promise<void>
   /** The chord track, when the project has one. */
   chords?: ProjectChords
   /** Whether the chord track may be edited — narrower than `readOnly`, since
@@ -151,6 +155,7 @@ export default function StructureEditor({
   onSplit,
   onUpdate,
   onDelete,
+  onDownloadClip,
   chords,
   chordsReadOnly = false,
   onChordsChange,
@@ -164,6 +169,7 @@ export default function StructureEditor({
   // undone) simply matches nothing, and read-only mode masks it entirely.
   const [rawSelectedId, setSelectedId] = useState<string | null>(null)
   const selectedId = readOnly ? null : rawSelectedId
+  const [clipBusy, setClipBusy] = useState(false)
   // One selection across both lanes: picking a section drops the chord and
   // vice versa, so ⌫ and the footer never have two things to mean.
   const [rawSelectedChordId, setSelectedChordId] = useState<string | null>(null)
@@ -1328,6 +1334,26 @@ export default function StructureEditor({
             />
           </div>
           <div className="flex-1" />
+          {onDownloadClip && (
+            <button
+              type="button"
+              onClick={() => {
+                if (clipBusy) return
+                setClipBusy(true)
+                onDownloadClip(selected).finally(() => setClipBusy(false))
+              }}
+              disabled={clipBusy}
+              title="Download this section's audio as an m4a clip"
+              aria-label="Download this section as an audio clip"
+              className="btn-icon press"
+            >
+              {clipBusy ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Download size={13} />
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {

@@ -41,6 +41,8 @@ import SplitHandle from './SplitHandle'
 import ExportPdfButton from './ExportPdfButton'
 import ExportJsonButton from './ExportJsonButton'
 import CopyProjectButton from './CopyProjectButton'
+import { ClipExportButton } from './ClipExport'
+import { downloadClip } from '../lib/clipDownload'
 import HomeDot from './HomeDot'
 import { homeHref } from '../lib/nav'
 import { useNotesView } from '../lib/useNotesView'
@@ -755,6 +757,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           </>
         )}
         <ExportJsonButton project={project} />
+        {/* A passage of the audio as a file — the export a student takes into
+            a presentation. Any kind of track: a section is a passage too. */}
+        <ClipExportButton
+          project={project}
+          currentTime={currentTime}
+          duration={duration}
+        />
         <CopyProjectButton project={project} />
         <a
           href={homeHref()}
@@ -1077,6 +1086,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               passageId={passageId}
               playOnce={playOnce}
               onSeekNote={seekToNote}
+              onDownloadClip={(a) =>
+                downloadClip(project, { start: a.start, end: a.end ?? a.start })
+              }
               mentionItems={getMentionItems}
               questionNumbers={qNumbers}
               answers={isTask ? studentAnswers : undefined}

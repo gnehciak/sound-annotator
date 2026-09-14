@@ -50,6 +50,8 @@ interface Props {
   onReference?: (id: string) => void
   onDuplicate?: (id: string) => void
   onDelete?: (id: string) => void
+  /** Range notes: download the passage's audio (see AnnotationItem). */
+  onDownloadClip?: (a: Annotation) => Promise<void>
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
   /** Question numbering (note id → 1-based Q number) for the Q chips. */
@@ -84,6 +86,7 @@ export default function AnnotationList({
   onReference,
   onDuplicate,
   onDelete,
+  onDownloadClip,
   onSeekNote,
   mentionItems,
   questionNumbers,
@@ -414,6 +417,9 @@ export default function AnnotationList({
           canReference={!!selectedId && selectedId !== a.id}
           onDuplicate={onDuplicate ? () => onDuplicate(a.id) : undefined}
           onDelete={onDelete ? () => onDelete(a.id) : undefined}
+          onDownloadClip={
+            onDownloadClip && a.end != null ? () => onDownloadClip(a) : undefined
+          }
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}
           questionNumber={questionNumbers?.get(a.id)}

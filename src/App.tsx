@@ -149,6 +149,7 @@ import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
+import { downloadClip, seedRange } from './lib/clipDownload'
 import { defaultChords, shiftChords } from './lib/chords'
 import type { ProjectChords } from './types'
 import { questionNumbers } from './lib/questions'
@@ -1756,6 +1757,15 @@ export default function App() {
 
   // One-shot passage play (a range note's loop segment): seek to the note's
   // start, play, pause at its end.
+  /** The clip export for a range note or a section: its span, as a file. */
+  const downloadNoteClip = useCallback(
+    (a: Annotation) =>
+      current && a.end != null
+        ? downloadClip(current, { start: a.start, end: a.end })
+        : Promise.resolve(),
+    [current],
+  )
+
   const { passageId, playPassage, cancelPassage } = usePassagePlayback({
     currentTime,
     seek,
@@ -2712,6 +2722,13 @@ export default function App() {
             project={current}
             canShare={!isForeign && !isGuest}
             canPdf={!isStructure}
+            clip={{
+              initial:
+                selectedNote?.end != null
+                  ? { start: selectedNote.start, end: selectedNote.end }
+                  : seedRange(currentTime, duration),
+              duration,
+            }}
             onChange={(patch) => patchProject(current.id, patch)}
           />
         )}
@@ -2961,6 +2978,7 @@ export default function App() {
                 onSplit={splitSection}
                 onUpdate={updateAnnotation}
                 onDelete={deleteAnnotation}
+                onDownloadClip={downloadNoteClip}
                 chords={current.settings?.chords}
                 chordsReadOnly={!canEditSettings}
                 onChordsChange={changeChords}
@@ -3220,6 +3238,7 @@ export default function App() {
                     isPlaying={isPlaying}
                     playbackRate={playbackRate}
                     readOnly={effectiveViewOnly}
+                    onDownloadClip={downloadNoteClip}
                     filtered={isFiltered}
                     scrollRef={notesScrollRef}
                     noteOrder={noteOrder}

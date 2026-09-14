@@ -32,3 +32,6 @@ dist-ssr
 .vercel
 .env*
 !.env.example
+
+# Server media tooling — fetched and built by scripts/fetch-media-bin.mjs
+api/_bin/
