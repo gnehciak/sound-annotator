@@ -90,10 +90,12 @@ export async function GET(request: Request): Promise<Response> {
   const source = (row.source ?? {}) as Source
   try {
     let buf: Buffer
+    let from = 'origin'
     if (source.type === 'youtube' && source.videoId) {
       const offset = source.clipStart ?? 0
-      const file = await fetchYouTubeAudio(source.videoId)
-      buf = await cutClip(file, start + offset, end + offset, { copy: true })
+      const audio = await fetchYouTubeAudio(source.videoId)
+      from = audio.from
+      buf = await cutClip(audio.file, start + offset, end + offset, { copy: true })
     } else if (source.type === 'drive' && source.driveFileId) {
       const offset = source.clipStart ?? 0
       buf = await cutClip(driveOriginUrl(source.driveFileId), start + offset, end + offset, {
@@ -112,6 +114,9 @@ export async function GET(request: Request): Promise<Response> {
         'Content-Length': String(buf.length),
         'Content-Disposition': `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
         'Cache-Control': 'private, no-store',
+        // Where the recording came from: this instance's /tmp, the Blob
+        // cache, YouTube itself, or the source's own origin (Drive, audio URL).
+        'X-Audio-From': from,
       },
     })
   } catch (e) {

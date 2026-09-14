@@ -31,17 +31,29 @@
 // The binaries live under api/_bin (fetched at build, gitignored) and reach
 // the function through `includeFiles` in vercel.json. The bundle is
 // read-only and its files aren't executable, so each is copied to /tmp on
-// first use. Fluid Compute keeps /tmp between invocations on a warm instance,
-// which is what makes the audio cache worth having: a class exporting thirty
-// clips of one song costs one YouTube fetch per instance, not thirty.
+// first use.
+//
+// A recording is fetched from YouTube **once**, then kept in two places. In
+// Blob, under `cache/youtube/<videoId>.<ext>` (api/_lib/mediaCache.ts) —
+// private access, so no URL to a whole song ever exists — shared by every
+// project that points at that video, whoever made it: the teacher's track,
+// thirty students' copies and next year's class all read one object. And in
+// /tmp, which Fluid Compute keeps between invocations on a warm instance, so
+// a class exporting thirty clips of one song costs one Blob read per
+// instance and no YouTube fetch at all. The store write rides `waitUntil`
+// after the response, so the first clip of a song pays nothing for it.
 //
 // Locally (macOS dev) the binaries on PATH are used, without the token
 // plugin: a signed-out residential address is served the plain streams and
 // needs neither cookies nor a token.
+import { get, list, put } from '@vercel/blob'
+import { waitUntil } from '@vercel/functions'
 import { spawn } from 'node:child_process'
 import {
   chmodSync,
   copyFileSync,
+  createReadStream,
+  createWriteStream,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -53,6 +65,9 @@ import {
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { MEDIA_CACHE_PREFIX } from './mediaCache.js'
 
 const BIN_DIR = path.join(process.cwd(), 'api/_bin')
 const BUNDLED = process.platform === 'linux'
@@ -147,14 +162,21 @@ function cookieFile(): string | null {
 
 /** One in-flight fetch per video per instance, so parallel exports of the
  *  same song wait on one download rather than starting thirty. */
-const inflight = new Map<string, Promise<string>>()
+const inflight = new Map<string, Promise<FetchedAudio>>()
 
 /**
  * The whole recording's audio for a YouTube video, as a path in /tmp — an
  * m4a (audio-only over SABR) or, on the fallback path, an mp4 whose audio
  * track ffmpeg will lift out. Cached per warm instance.
  */
-export function fetchYouTubeAudio(videoId: string): Promise<string> {
+export type AudioOrigin = 'instance' | 'store' | 'youtube'
+export interface FetchedAudio {
+  file: string
+  /** Where it came from — surfaced as a response header for diagnosis. */
+  from: AudioOrigin
+}
+
+export function fetchYouTubeAudio(videoId: string): Promise<FetchedAudio> {
   if (!/^[\w-]{11}$/.test(videoId)) throw new MediaError(400, 'Not a YouTube video id')
   const cached = findCached(videoId)
   if (cached) {
@@ -162,14 +184,101 @@ export function fetchYouTubeAudio(videoId: string): Promise<string> {
     // exactly the one to keep.
     const now = new Date()
     utimesSync(cached, now, now)
-    return Promise.resolve(cached)
+    return Promise.resolve({ file: cached, from: 'instance' })
   }
   let p = inflight.get(videoId)
   if (!p) {
-    p = download(videoId).finally(() => inflight.delete(videoId))
+    p = fromStore(videoId)
+      .then(async (hit): Promise<FetchedAudio> =>
+        hit ? { file: hit, from: 'store' } : { file: await download(videoId), from: 'youtube' },
+      )
+      .finally(() => inflight.delete(videoId))
     inflight.set(videoId, p)
   }
   return p
+}
+
+/**
+ * Where the cache lives. A *private* store when one is wired up
+ * (`BLOB_CACHE_READ_WRITE_TOKEN`, a second Blob store created with private
+ * access), so no URL to a whole song exists at all. Otherwise the app's own
+ * public store, where the object is found by prefix and its URL carries a
+ * random suffix — unguessable, which is the same credential every share link
+ * and note image in this app already rests on. The main store is public-only:
+ * private access on it is refused by the SDK, measured 2026-09-14.
+ */
+function store(): { token: string; access: 'private' | 'public' } | null {
+  const cache = process.env.BLOB_CACHE_READ_WRITE_TOKEN
+  if (cache) return { token: cache, access: 'private' }
+  const main = process.env.BLOB_READ_WRITE_TOKEN
+  return main ? { token: main, access: 'public' } : null
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.m4a': 'audio/mp4',
+  '.mp4': 'video/mp4',
+  '.webm': 'audio/webm',
+  '.opus': 'audio/ogg',
+}
+
+/** The recording from Blob into /tmp, or null when nobody has fetched this
+ *  video yet. Any failure reads as a miss: the store is a cache, and a
+ *  YouTube fetch is the right answer to a cache that won't answer. */
+async function fromStore(videoId: string): Promise<string | null> {
+  const st = store()
+  if (!st) return null
+  try {
+    // The name is `<videoId>.<ext>` or, with the public store's random
+    // suffix, `<videoId>-<suffix>.<ext>`; ids are fixed-width, so the bare id
+    // is prefix enough and never the prefix of another.
+    const page = await list({ prefix: `${MEDIA_CACHE_PREFIX}${videoId}`, limit: 5, token: st.token })
+    const hit = page.blobs.find((b) => !b.pathname.endsWith('.part'))
+    if (!hit) return null
+    const got = await get(hit.url, { access: st.access, token: st.token })
+    if (!got) return null
+    mkdirSync(AUDIO_CACHE, { recursive: true })
+    const dst = path.join(AUDIO_CACHE, `${videoId}${path.extname(hit.pathname) || '.m4a'}`)
+    const part = `${dst}.${process.pid}.part`
+    await pipeline(Readable.fromWeb(got.stream as import('stream/web').ReadableStream), createWriteStream(part))
+    renameSync(part, dst)
+    console.log(`[clip] ${videoId}: from the store (${hit.size} bytes)`)
+    return dst
+  } catch (e) {
+    console.error(`[clip] ${videoId}: store read failed, fetching instead:`, e)
+    return null
+  }
+}
+
+/** Keep a just-fetched recording for everyone else, after the response has
+ *  gone out. A failure is logged and costs nothing but the next fetch. */
+function toStore(videoId: string, file: string): void {
+  const st = store()
+  if (!st) return
+  const ext = path.extname(file)
+  const pathname = `${MEDIA_CACHE_PREFIX}${videoId}${ext}`
+  const job = (async () => {
+    // Two fresh instances asked for the same never-seen song at once both
+    // fetched it; only the first to get here keeps its copy. The suffix
+    // below means a second write would be a second object, not a replace.
+    const already = await list({ prefix: `${MEDIA_CACHE_PREFIX}${videoId}`, limit: 1, token: st.token })
+    if (already.blobs.length) return
+    const b = await put(pathname, createReadStream(file), {
+      access: st.access,
+      token: st.token,
+      // On the public store the suffix is what keeps the URL unguessable; the
+      // lookup is by prefix, so the name needn't be exact. A private store
+      // needs neither, but the same shape costs nothing.
+      addRandomSuffix: true,
+      contentType: CONTENT_TYPES[ext] ?? 'application/octet-stream',
+    })
+    console.log(`[clip] ${videoId}: stored as ${b.pathname}`)
+  })().catch((e) => console.error(`[clip] ${videoId}: store write failed:`, e))
+  try {
+    waitUntil(job)
+  } catch {
+    // Not inside a Vercel function (local dev): the write still runs, only
+    // nothing holds the process open for it.
+  }
 }
 
 function findCached(videoId: string): string | null {
@@ -216,6 +325,7 @@ async function download(videoId: string): Promise<string> {
       throw new MediaError(404, 'That video is not available to download.')
     throw new MediaError(502, "YouTube didn't hand over the audio. Try again in a moment.")
   }
+  toStore(videoId, file)
   return file
 }
 

@@ -225,10 +225,17 @@ static ffmpeg into `api/_bin` at build (gitignored, delivered by
 binaries; the committed parts are its `build/` and the plugin's Python. The
 format selector falls through SABR → any audio → format 18 (the 360p mp4 a
 signed-in session always gets, whose audio ffmpeg lifts out), so a broken
-pre-release costs a second, not the feature. A whole recording is fetched
-once per warm instance into `/tmp` and cut with `-c:a copy`; only the clip
-travels. Locally the binaries on PATH are used, without cookies or the plugin:
-a residential address is served the plain streams.
+pre-release costs a second, not the feature. **A recording is fetched from
+YouTube once**, then kept in Blob under `cache/youtube/<videoId>.<ext>`
+(`api/_lib/mediaCache.ts`) with *private* access — no URL to a whole song
+ever exists — and shared by every project pointing at that video, whoever
+made it; a warm instance also keeps it in `/tmp`, so a class exporting thirty
+clips of one song is one Blob read. The store write rides `waitUntil` after
+the response. That prefix is owned by no project, so no purge sweeps it: the
+cron ages it out after `MEDIA_CACHE_TTL_MS` instead. The clip is cut with
+`-c:a copy`; only the clip travels. Locally the binaries on PATH are used
+(`YTDLP_PATH` / `FFMPEG_PATH` override), without cookies or the plugin: a
+residential address is served the plain streams.
 
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are
