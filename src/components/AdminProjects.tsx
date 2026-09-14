@@ -9,7 +9,7 @@ import HomeDot from './HomeDot'
 import AdminUsers from './AdminUsers'
 import AdminBlobs from './AdminBlobs'
 import { publicId } from '../lib/ids'
-import { navigate, useRoute, type AdminTab } from '../lib/nav'
+import { navigate, pageTitle, useRoute, type AdminTab } from '../lib/nav'
 
 interface AdminProject extends Project {
   noteCount: number
@@ -41,6 +41,9 @@ export default function AdminProjects() {
   const tab: AdminTab = route.page === 'admin' ? route.tab : 'projects'
   const storagePath = route.page === 'admin' && route.tab === 'storage' ? route.path ?? '' : ''
   const setTab = (t: AdminTab) => navigate({ page: 'admin', tab: t })
+  useEffect(() => {
+    document.title = pageTitle(route)
+  }, [route])
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {

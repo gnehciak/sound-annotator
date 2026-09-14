@@ -110,6 +110,7 @@ import {
   canonicalizeProjectParam,
   homeHref,
   navigate,
+  pageTitle,
   resolveProject,
   useRoute,
 } from './lib/nav'
@@ -394,14 +395,23 @@ export default function App() {
   // Deriving from `current` (not just currentId) self-heals a dangling id.
   const view: 'home' | 'track' = current ? 'track' : 'home'
 
-  // Tab title follows the page: "{track} — Sound Annotator" in the editor
-  // (kept live through renames — `current` is replaced on every edit), the
-  // bare app name on the library. ShareViewer handles `?view=` links itself.
+  // Tab title follows the route (see pageTitle): the track's name in the
+  // editor, kept live through renames; the folder's name inside one; and
+  // Library, Browse or Trash otherwise. It used to key off `current` alone,
+  // which is null on every page that isn't a track — so all four of those
+  // wore the same bare "Sound Annotator" and clicking between them changed
+  // nothing. ShareViewer and the admin console title themselves.
+  const currentTitle = current ? current.title || 'Untitled track' : null
+  const folderName =
+    route.page === 'library' && route.folder
+      ? (folders.find((f) => f.id === route.folder)?.name ?? null)
+      : null
   useEffect(() => {
-    document.title = current
-      ? `${current.title || 'Untitled track'} — Sound Annotator`
-      : 'Sound Annotator'
-  }, [current])
+    document.title = pageTitle(
+      route,
+      route.page === 'track' ? currentTitle : folderName,
+    )
+  }, [route, currentTitle, folderName])
 
   // Keep the help modal mounted through its fade-out.
   const help = usePresence(showHelp)

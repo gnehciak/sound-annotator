@@ -100,6 +100,39 @@ export function routeSearch(r: Route): string {
   return q ? `?${q}` : ''
 }
 
+const APP_NAME = 'Sound Annotator'
+
+/**
+ * The tab title for a route — one function, so every page names itself the
+ * same way and no page can be forgotten.
+ *
+ * It follows the route rather than whatever React happens to be rendering,
+ * because the tab is how someone with a dozen of them open finds this one, and
+ * "Sound Annotator" on the library, a folder, Browse and the trash alike is no
+ * help at all. `name` is what the route alone can't say: a track's title, a
+ * folder's name. A track route whose project hasn't loaded yet gets the bare
+ * app name rather than a guess, so the tab never flashes "Library" on the way
+ * into an editor.
+ */
+export function pageTitle(r: Route, name?: string | null): string {
+  const titled = (label: string) => `${label} — ${APP_NAME}`
+  switch (r.page) {
+    case 'library':
+      return titled(r.folder ? name || 'Folder' : 'Library')
+    case 'browse':
+      return titled('Browse')
+    case 'trash':
+      return titled('Trash')
+    case 'track':
+    case 'share':
+      return name ? titled(name) : APP_NAME
+    case 'admin':
+      return titled(
+        r.tab === 'users' ? 'Users · Admin' : r.tab === 'storage' ? 'Storage · Admin' : 'Admin',
+      )
+  }
+}
+
 /**
  * The full href for a route. Built on `location.pathname`, not "/", so a
  * deployment served from a sub-path keeps its prefix.

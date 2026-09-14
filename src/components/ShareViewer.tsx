@@ -74,7 +74,7 @@ import ExportDocxButton from './ExportDocxButton'
 import { usePresence } from '../lib/usePresence'
 import ShortcutsOverlay from './ShortcutsOverlay'
 import type { MentionItem } from './MentionList'
-import { canonicalizeProjectParam, routeHref } from '../lib/nav'
+import { canonicalizeProjectParam, pageTitle, routeHref } from '../lib/nav'
 
 type Status = 'loading' | 'ready' | 'notfound'
 
@@ -235,7 +235,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       setProject(p)
       setStatus(p ? 'ready' : 'notfound')
       if (p) {
-        document.title = `${p.title} — Sound Annotator`
+        document.title = pageTitle({ page: 'share', id: projectId }, p.title || 'Untitled track')
         // Arrived on a legacy uuid link? Swap the address bar to the short id.
         canonicalizeProjectParam('view', p)
       }
