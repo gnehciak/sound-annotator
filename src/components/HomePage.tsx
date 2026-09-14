@@ -25,7 +25,6 @@ import {
 } from 'lucide-react'
 import type { Folder, Project } from '../types'
 import { formatRelativeTime } from '../lib/format'
-import { downloadProjectJson } from '../lib/projectJson'
 import { colorForId, hueText } from '../lib/noteColors'
 import { useContextMenu } from '../lib/useContextMenu'
 import ContextMenu from './ContextMenu'
@@ -70,6 +69,10 @@ interface Props {
   onMoveTrack: (id: string, folderId: string | null) => void
   /** Clone a track into the user's library — resolves once the copy is saved. */
   onCopyTrack: (project: Project) => Promise<void>
+  /** Download a track's portable JSON file. App's, not the tile's, because
+   *  the tile's project is the listing's sketch (Project.cuesOnly) and the
+   *  file needs the notes fetched first. */
+  onExportTrack: (project: Project) => Promise<void>
   /** Import a track from an exported JSON file into the open folder — resolves
       once the import is saved; rejects with a user-facing message. */
   onImportTrack: (file: File) => Promise<void>
@@ -161,6 +164,7 @@ export default function HomePage({
   onEmptyTrash,
   onMoveTrack,
   onCopyTrack,
+  onExportTrack,
   onImportTrack,
   onShareTrack,
   onCreateFolder,
@@ -637,6 +641,7 @@ export default function HomePage({
                           onDelete={() => onDeleteTrack(p.id)}
                           onMove={(folderId) => onMoveTrack(p.id, folderId)}
                           onCopy={() => onCopyTrack(p)}
+                          onExport={() => onExportTrack(p)}
                           onShare={() => onShareTrack(p.id)}
                         />
                       ))}
@@ -1242,6 +1247,7 @@ function TrashView({
               }}
               onMove={() => {}}
               onCopy={async () => {}}
+              onExport={async () => {}}
               onShare={() => {}}
             />
           ))}
@@ -1265,6 +1271,7 @@ function TrackTile({
   onDelete,
   onMove,
   onCopy,
+  onExport,
   onShare,
 }: {
   project: Project
@@ -1286,6 +1293,7 @@ function TrackTile({
   onDelete: () => void
   onMove: (folderId: string | null) => void
   onCopy: () => Promise<void>
+  onExport: () => Promise<void>
   onShare: () => void
 }) {
   const n = p.annotations.length
@@ -1437,6 +1445,7 @@ function TrackTile({
               open={menuOpen}
               onOpenChange={setMenuOpen}
               onCopy={onCopy}
+              onExport={onExport}
               onShare={onShare}
               onMove={onMove}
               onDelete={onDelete}
@@ -1532,6 +1541,7 @@ function TrackActionsMenu({
   open,
   onOpenChange,
   onCopy,
+  onExport,
   onShare,
   onMove,
   onDelete,
@@ -1547,6 +1557,7 @@ function TrackActionsMenu({
   open: boolean
   onOpenChange: (open: boolean) => void
   onCopy: () => Promise<void>
+  onExport: () => Promise<void>
   onShare: () => void
   onMove: (folderId: string | null) => void
   onDelete: () => void
@@ -1726,7 +1737,10 @@ function TrackActionsMenu({
           <button
             type="button"
             onClick={() => {
-              downloadProjectJson(p)
+              onExport().catch((err) => {
+                console.error('Export failed:', err)
+                alert('Export failed — check your connection and try again.')
+              })
               setOpen(false)
             }}
             className={actionCls}

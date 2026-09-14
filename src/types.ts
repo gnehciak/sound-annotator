@@ -326,6 +326,16 @@ export interface Project {
    */
   myRole?: 'owner' | 'editor' | 'viewer'
   /**
+   * True on a project that came off the library listing, which carries each
+   * note's cue (id, start, end, colour) in `annotations` and none of its
+   * content — enough for a tile's cue line and a folder's tally, at a fraction
+   * of the bytes. Such a project is a placeholder: never save its notes,
+   * export it, or copy it — fetch the full row first (App's `hydrateTrack`),
+   * which clears this. `saveProject` omits `annotations` while it is set, so
+   * a rename or a move from the tile can't wipe the notes. Never sent.
+   */
+  cuesOnly?: boolean
+  /**
    * Id of the home-page folder this track lives in, or null/absent for the
    * root library ("unfiled"). Folders live in their own `folders` collection
    * (see lib/folderStore.ts); an id pointing at a deleted folder is treated

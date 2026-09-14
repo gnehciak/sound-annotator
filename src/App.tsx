@@ -28,6 +28,7 @@ import {
   saveWindowMode,
 } from './lib/storage'
 import {
+  fetchProject,
   fetchProjects,
   fetchTrashedProjects,
   fetchSharedProject,
@@ -76,7 +77,7 @@ import {
   sourceLinkUrl,
 } from './lib/source'
 import { copySharedProject } from './lib/copyProject'
-import { parseProjectJson } from './lib/projectJson'
+import { downloadProjectJson, parseProjectJson } from './lib/projectJson'
 import { blocksOf, makeTextBlock } from './lib/noteBlocks'
 import {
   sectionsToAnnotations,
@@ -226,6 +227,10 @@ export default function App() {
     reset: resetHistory,
   } = useProjectHistory()
   const [loadingProjects, setLoadingProjects] = useState(true)
+  // The track being fetched in full on its way to the editor — the listing
+  // gives a tile its cues and nothing else (Project.cuesOnly), so opening one
+  // is a round trip. Set while it's in flight; the loader screen shows for it.
+  const [openingId, setOpeningId] = useState<string | null>(null)
 
   // Home-page folders. Outside the undo history (folder CRUD and track moves
   // are not undoable); persisted immediately via folderStore.
@@ -941,6 +946,11 @@ export default function App() {
       }
     }
 
+    // Land on the home page — unless the URL deep-links (`?track=`) to a
+    // track. The listing carries no note content (Project.cuesOnly), so the
+    // deep-linked track is fetched in full beside it rather than after it:
+    // the same GET answers for one we own and for one we've been let into.
+    const urlId = route.page === 'track' ? route.id : null
     Promise.all([
       fetchProjects(user.uid),
       // Folders are non-critical chrome: a failed read (offline blip, rules
@@ -956,21 +966,25 @@ export default function App() {
         console.error('Failed to load the trash:', err)
         return [] as Project[]
       }),
+      urlId ? fetchSharedProject(urlId) : Promise.resolve(null),
     ])
-      .then(async ([loaded, loadedFolders, loadedTrash]) => {
+      .then(([loaded, loadedFolders, loadedTrash, linked]) => {
         if (cancelled) return
         setFolders(loadedFolders)
         setTrashed(loadedTrash)
-        // Land on the home page — unless the URL deep-links (`?track=`) to a
-        // track we actually own; a dead link falls back home and is cleaned.
-        const urlId = route.page === 'track' ? route.id : null
-        // A deep link to a track we don't own may be an editable share link
-        // ("Edit" from the viewer): fetch it and join it to the session list.
-        // It stays out of the home library and is gone on the next sign-in.
         let all = loaded
-        if (urlId && !resolveProject(loaded, urlId)) {
-          const foreign = await fetchSharedProject(urlId)
-          if (cancelled) return
+        const own = resolveProject(loaded, urlId)
+        if (own) {
+          // Ours: the full row stands in for its listing placeholder. If the
+          // fetch failed, the placeholder must not open in its place — a
+          // track with no notes on screen reads as a track that lost them —
+          // so it's dropped from the landing below and we fall back home.
+          if (linked) all = loaded.map((p) => (p.id === own.id ? linked : p))
+        } else if (urlId) {
+          // A deep link to a track we don't own may be an editable share link
+          // ("Edit" from the viewer): join it to the session list. It stays
+          // out of the home library and is gone on the next sign-in.
+          const foreign = linked
           // A foreign project joins the session when its link says it may
           // (editableByLink), when it's a guest's, or when the admin console
           // sent us here with `&admin=1`. Admin-ness isn't decided here: the
@@ -992,7 +1006,7 @@ export default function App() {
         // The address bar may carry a legacy project's short alias rather
         // than its id, so resolve rather than compare (lib/nav.ts).
         const landed = resolveProject(all, urlId)
-        const deepLink = landed?.id ?? null
+        const deepLink = landed && !landed.cuesOnly ? landed.id : null
         if (urlId && !deepLink) navigate(HOME, 'replace')
         // Arrived on a legacy project's 36-character uuid link: show the short
         // one instead, so what's in the address bar is what's worth copying.
@@ -1017,14 +1031,40 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isGuest, resetHistory])
 
+  // The full row of a track the listing only sketched (Project.cuesOnly),
+  // spliced into the list in place of its placeholder — and the one way a
+  // placeholder ever becomes a project the editor, a copy or an export may
+  // read. Already-full projects come straight back. Local state the tile may
+  // have changed since the listing (a rename, a move) is kept over the row's;
+  // notes and settings come from the row, which is the only place they are.
+  const hydrateTrack = useCallback(
+    async (id: string): Promise<Project> => {
+      const stub = projectsRef.current.find((p) => p.id === id)
+      if (stub && !stub.cuesOnly) return stub
+      const full = await fetchProject(id)
+      const local = projectsRef.current.find((p) => p.id === id)
+      if (!local) return full // gone meanwhile (trashed from another tab)
+      const merged: Project = { ...local, annotations: full.annotations, settings: full.settings }
+      delete merged.cuesOnly
+      // A placeholder the tile hadn't touched is clean once filled; one it had
+      // renamed stays dirty, so the debounced save still carries the rename.
+      if (persistedRef.current.get(id) === local) persistedRef.current.set(id, merged)
+      setProjects((ps) => ps.map((p) => (p.id === id ? merged : p)))
+      return merged
+    },
+    [setProjects],
+  )
+
   // The one place the editor follows the URL. Every navigation — a click, or
   // Back/forward/swipe — changes `route`, and this reconciles the open track
   // to it; nothing else calls resetHistory for navigation's sake. An id that
   // no longer resolves (deleted track, stale link) falls back home and cleans
-  // the address bar.
+  // the address bar. A track the listing only sketched is fetched in full
+  // first, and a navigation that lands elsewhere while that's in flight wins.
   //
   // Skipped for a guest: they own exactly one project, reached only by the
   // link they hold, and rewriting that URL would drop the `key` in it.
+  const openingRef = useRef<string | null>(null)
   useEffect(() => {
     if (!hydratedRef.current || isGuest) return
     const wanted = route.page === 'track' ? route.id : null
@@ -1034,10 +1074,27 @@ export default function App() {
       return
     }
     const id = target?.id ?? null
+    openingRef.current = id
     if (id === currentIdRef.current) return
-    setSelectedNoteId(null)
-    resetHistory(projectsRef.current, id)
-  }, [route, isGuest, resetHistory])
+    const land = () => {
+      setSelectedNoteId(null)
+      resetHistory(projectsRef.current, id)
+    }
+    if (!target?.cuesOnly) {
+      land()
+      return
+    }
+    setOpeningId(id)
+    hydrateTrack(target.id)
+      .then(() => {
+        if (openingRef.current === id) land()
+      })
+      .catch((err) => {
+        console.error('Failed to open track:', err)
+        if (openingRef.current === id) navigate(HOME, 'replace')
+      })
+      .finally(() => setOpeningId((o) => (o === id ? null : o)))
+  }, [route, isGuest, resetHistory, hydrateTrack])
 
   // A folder that isn't there any more (deleted on another device, or a link
   // from someone else's library) is a dead deep link: show the root and say so
@@ -1141,6 +1198,10 @@ export default function App() {
     // Never sweep a foreign (link-edited) track: its images live under the
     // *owner's* Storage path, which we can't even list.
     if (current.ownerId && current.ownerId !== user.uid) return
+    // A placeholder's notes reference nothing, and a sweep that believed it
+    // would delete every image the track has. Never reached — the editor only
+    // opens a hydrated track — but the cost of being wrong is the reason.
+    if (current.cuesOnly) return
     if (sweptImagesRef.current.has(current.id)) return
     sweptImagesRef.current.add(current.id)
     // Cover images are note images too, but they hang off the note's `overlay`
@@ -1224,11 +1285,11 @@ export default function App() {
   //
   // The URL always carries the project's *public* id (its short alias, for
   // rows that predate short ids) — see lib/ids.ts.
+  // Opening is a navigation and nothing else: the route effect above lands
+  // the track, fetching it in full first if the listing only sketched it.
   function openTrack(id: string) {
     const p = projects.find((x) => x.id === id)
     if (!p) return
-    setSelectedNoteId(null)
-    resetHistory(projects, id)
     navigate({ page: 'track', id: publicId(p), key: null, admin: false })
   }
   function goHome() {
@@ -1392,11 +1453,20 @@ export default function App() {
   const copyTrack = useCallback(
     async (project: Project) => {
       if (!user) return
-      const copy = await copySharedProject(user.uid, project)
+      // The tile's project may be the listing's placeholder — the copy
+      // re-hosts every image the notes reference, so it needs the notes.
+      const copy = await copySharedProject(user.uid, await hydrateTrack(project.id))
       persistedRef.current.set(copy.id, copy)
       setProjects((ps) => [copy, ...ps])
     },
-    [user, setProjects],
+    [user, setProjects, hydrateTrack],
+  )
+
+  // Export a track from its tile as the portable JSON file — through the full
+  // row, for the same reason as the copy above.
+  const exportTrack = useCallback(
+    async (project: Project) => downloadProjectJson(await hydrateTrack(project.id)),
+    [hydrateTrack],
   )
 
   // Import a track from an exported JSON file (see lib/projectJson.ts): parse
@@ -2430,12 +2500,12 @@ export default function App() {
       }))
     : []
 
-  if (loadingProjects) {
+  if (loadingProjects || openingId) {
     return (
       <div className="flex h-full animate-fade-in flex-col items-center justify-center gap-3 bg-ink text-muted">
         <span className="animate-now-pulse text-2xl text-accentink">◉</span>
         <span className="font-mono text-xs uppercase tracking-[0.2em]">
-          Loading your tracks…
+          {loadingProjects ? 'Loading your tracks…' : 'Opening…'}
         </span>
       </div>
     )
@@ -2775,6 +2845,7 @@ export default function App() {
           onEmptyTrash={emptyTrash}
           onMoveTrack={moveTrackToFolder}
           onCopyTrack={copyTrack}
+          onExportTrack={exportTrack}
           onImportTrack={importTrack}
           onShareTrack={enableTrackShare}
           onCreateFolder={createFolder}
