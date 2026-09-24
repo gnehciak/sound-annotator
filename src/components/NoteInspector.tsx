@@ -79,6 +79,10 @@ interface Props {
   scorePage?: number
   /** The track has a score, but it's switched off. */
   scoreHidden?: boolean
+  /** The quote key is armed: the next drag on a page of the score draws one. */
+  drawingQuote?: boolean
+  /** Arm (or disarm) that. The host owns it — the score layer has to see it. */
+  onDrawQuote?: (on: boolean) => void
   /**
    * Mirror of the body editor's imperative handle, so the host can write into
    * the open note from outside it — a note's context menu offering to
@@ -117,6 +121,8 @@ export default function NoteInspector({
   allowOverlays = false,
   scorePage,
   scoreHidden,
+  drawingQuote,
+  onDrawQuote,
   editorApiRef,
 }: Props) {
   const blocks = useMemo(() => blocksOf(annotation), [annotation])
@@ -289,6 +295,8 @@ export default function NoteInspector({
           uploadImage={uploadImage}
           scorePage={scorePage}
           scoreHidden={scoreHidden}
+          drawingQuote={drawingQuote}
+          onDrawQuote={onDrawQuote}
         />
       )}
 

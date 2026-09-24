@@ -53,6 +53,10 @@ interface Props {
   scorePage?: number
   /** The track has a score, but it's switched off — so a score pin won't show. */
   scoreHidden?: boolean
+  /** The quote key is armed: the next drag on a page of the score draws one. */
+  drawingQuote?: boolean
+  /** Arm or put down that key. Owned by the host — the score layer draws it. */
+  onDrawQuote?: (on: boolean) => void
 }
 
 /**
@@ -100,6 +104,8 @@ export default function NoteOverlayControls({
   uploadImage,
   scorePage,
   scoreHidden,
+  drawingQuote,
+  onDrawQuote,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<number | null>(null)
@@ -262,12 +268,16 @@ export default function NoteOverlayControls({
     // A press that never travelled is a click: place it centre, or take it off.
     if (!press.dragged) {
       if (press.what === 'quote') {
-        // Adds one, dead centre of the page the score is showing — the same
-        // "no aim given, so put it where it can't be missed" the pin's click
-        // makes. Never a toggle: a note can carry several now, so a press that
-        // took one *off* would be guessing which, and the gallery's own ✕ is
-        // the unambiguous way to remove the one you mean.
-        if (roomForQuote) patch({ quotes: withQuoteAdded(annotation, quoteAt(0.5, 0.5, scorePage ?? 1)) })
+        // A click **arms the crosshair**: the score takes the next drag and
+        // the rectangle is drawn where the bars are, which is one gesture
+        // saying which bars, where and how big. Dropping a default rectangle
+        // to be resized afterwards made the reader say the same thing three
+        // times. Pressing again puts the key down.
+        //
+        // Never a toggle over the *quotes*: a note can carry several now, so a
+        // press that took one off would be guessing which, and the gallery's
+        // own ✕ is the unambiguous way to remove the one you mean.
+        if (onDrawQuote && roomForQuote) onDrawQuote(!drawingQuote)
         return
       }
       // Toggle the pin belonging to the surface in view, not "any pin": with
@@ -456,25 +466,32 @@ export default function NoteOverlayControls({
             title={
               !roomForQuote
                 ? `A note can quote ${MAX_QUOTES} places; remove one to add another`
-                : scoreHidden
-                  ? `Quote the middle of page ${scorePage} — switch the column to the score to aim it`
-                  : 'Drag onto a page of the score to quote that region — click to quote the middle of the page'
+                : drawingQuote
+                  ? 'Drawing — drag on the page to quote it, or click here to stop'
+                  : 'Click, then draw the region on the score — or drag this onto a page'
             }
             aria-label="Quote another region of the score"
-            className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset bg-inset transition-colors active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-45 ${
-              placing?.what === 'quote'
-                ? 'border-accent'
+            aria-pressed={!!drawingQuote}
+            className={`press grid h-[34px] w-[34px] shrink-0 cursor-grab touch-none place-items-center rounded-full border bevel-inset transition-colors active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-45 ${
+              placing?.what === 'quote' || drawingQuote
+                ? 'border-accent bg-accent/12'
                 : quoted
-                  ? 'border-line-strong'
-                  : 'border-line hover:border-line-strong'
+                  ? 'border-line-strong bg-inset'
+                  : 'border-line bg-inset hover:border-line-strong'
             }`}
           >
-            <span
-              style={{ borderColor: quoted ? color : undefined }}
-              className={`block h-[15px] w-[18px] rounded-[3px] border-[1.5px] ${
-                quoted ? '' : 'border-dashed border-muted'
-              }`}
-            />
+            {/* Armed, the key shows the tool it has handed you rather than the
+                thing it makes: a crosshair is what the pointer has become. */}
+            {drawingQuote ? (
+              <Crosshair size={16} className="text-accent" />
+            ) : (
+              <span
+                style={{ borderColor: quoted ? color : undefined }}
+                className={`block h-[15px] w-[18px] rounded-[3px] border-[1.5px] ${
+                  quoted ? '' : 'border-dashed border-muted'
+                }`}
+              />
+            )}
           </button>
         )}
 
