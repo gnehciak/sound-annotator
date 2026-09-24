@@ -5,6 +5,7 @@ import {
   Copy,
   Eraser,
   Highlighter,
+  MonitorSmartphone,
   MousePointer2,
   PenLine,
   SendToBack,
@@ -62,6 +63,7 @@ export default function ScoreToolbar({
   onDuplicate,
   onRaise,
   onLower,
+  personal = false,
 }: {
   tool: MarkTool
   onTool: (tool: MarkTool) => void
@@ -76,6 +78,13 @@ export default function ScoreToolbar({
   /** Order is z-order — see `raiseMark` / `lowerMark` in lib/score. */
   onRaise: () => void
   onLower: () => void
+  /**
+   * These are a reader's own marks, kept in this browser (lib/personalMarks).
+   * Said on the pill itself: a student who draws all lesson and opens the
+   * link at home to find a blank page deserved to be told where the marks
+   * live before they made them.
+   */
+  personal?: boolean
 }) {
   const drawing = tool !== null && tool !== 'select'
   const [colorsOpen, setColorsOpen] = useState(false)
@@ -229,6 +238,18 @@ export default function ScoreToolbar({
           </>
         )}
 
+        {personal && (
+          <>
+            <span className="mx-0.5 h-5 w-px shrink-0 bg-line/70" />
+            <span
+              title="Your own marks — kept in this browser only, and not saved to the track. Another device, or clearing this browser's data, starts blank."
+              className="flex shrink-0 cursor-help items-center gap-1 px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted"
+            >
+              <MonitorSmartphone size={12} />
+              Yours
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
