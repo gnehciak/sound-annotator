@@ -871,7 +871,7 @@ until the pages have been re-sized. Changing the fit resets the zoom, since
 "fit" that shows a corner of a page is not a fit.
 
 **Drawing on the score** (`score.marks`, `src/components/ScoreMarks.tsx` +
-`ScoreToolbar.tsx`): highlights, boxes, circles, arrows and freehand ink, in
+`ScoreToolbar.tsx`): highlights, boxes, circles, arrows, freehand ink and words, in
 `settings` with the rest of the score — so they belong to the *track*, and what
 the teacher draws is what the class opens. Every coordinate is a fraction of
 the page, like a score pin and for the same reason. Drawn in SVG at the page's
@@ -901,9 +901,57 @@ still in your hand: the shape you have this second is the one most likely to be
 recoloured or taken off again.
 
 **Order is z-order** — later in the list is nearer the reader, which is what
-`markAt` walks backwards through and what `raiseMark` / `lowerMark` rewrite. The
-same verbs are on a mark's right-click menu, where the pointer has already said
-which mark it means.
+`markAt` walks backwards through and what `raiseMarks` / `lowerMarks` rewrite
+(keeping a selection's own order among itself). The same verbs are on a mark's
+right-click menu, where the pointer has already said which mark it means — or,
+when that mark is part of a selection, the whole selection.
+
+**The selection is a set** (`selectedIds`). A marquee on empty paper catches
+every mark it *meets* rather than encloses — demanding a whole long highlight be
+inside the box makes a marquee the most frustrating tool on the page; ⇧-click
+toggles one in or out; pressing a selected mark drags them all; the verbs,
+Delete and the colour act on all of them. Grips only on a lone selection:
+resizing three marks from one corner is a question with no good answer. **⌥ +
+an arrow nudges** the selection by 1% (5% with ⇧) — plain arrows are the
+transport's everywhere, so marks get the one modified pair nothing else claims
+— coalesced, so holding the key is one undo step. A multi-mark gesture is still
+**one** `onCommit`/`onMarks` call (`upsertMarks`), so one save and one undo.
+
+**⇧ constrains in pixels, not fractions** (`squareCorner`, `snapAngle`): a page
+is taller than it is wide, so a "square" of equal fractions is a tall rectangle
+on screen and a 45° line in fractions leans. Boxes, circles and highlights go
+square; an arrow snaps to 15°.
+
+**The eraser** takes off whatever it is dragged across, hit by the same boxes as
+selection, and the sweep is one undo step. **Text marks** (`kind: 'text'`) are
+words on the page — typed into a real textarea laid exactly where and as large
+as they will sit, Enter to set, ⇧Enter for a second line, Escape to throw the
+edit away, double-click to retype. Sized by `weight` as a fraction of the page's
+*width* (`textSizeOf`) like a stroke, and `w`/`h` are measured once when the words
+are set (`measureText`) so hit-testing needs no font; restyling to a new size
+scales the box by the ratio of the two sizes. Their ink goes through
+`hueText(…, 'light')`, since the palette was chosen to survive as a *stroke* and a
+yellow word does not. One face and one baseline (`TEXT_FONT`, `TEXT_ASCENT`,
+`TEXT_LEADING`) for every renderer — SVG, a canvas and pdf-lib each default to a
+different baseline, and a word that moves half a line between the screen and the
+handout is in the wrong bar. The typing box has an idempotence guard (`settled`):
+setting the words unmounts it, and its blur asks to set them again from the same
+closure, which committed them twice and made Escape commit what it discarded.
+
+**A tool in hand must not cost the reader the page.** The marks surface is
+`touch-none` and stops the first finger's event to start a stroke, which used to
+make a pinch impossible with a pen in hand. ScoreSurface now hears two fingers in
+the **capture** phase, so nothing on the page can hide them: a pinch zooms, and —
+only when `claimTouch` says something has taken touch, or the browser's own pan
+would double it — the two fingers pan. The second finger makes the surface drop
+the stroke the first began (`yielded`). A **middle-button drag** pans with any
+tool or none, and suppresses Chrome's autoscroll compass on the way. The wheel
+already scrolled through an armed surface (it bubbles to the scroller).
+
+The colour is **one swatch** that opens the six (`Popover`, lifted to `!z-[90]` so
+it clears the full-screen portal at z-80): the pill has to fit a narrow pane with
+a tool's sizes and a selection's verbs beside it, and six dots were a third of
+its width for a choice made once in a while.
 
 **Drawing is undoable.** It wasn't: marks and page turns went through
 `patchProjectSettings`, App's *raw* setter, so a page of highlighter was the one

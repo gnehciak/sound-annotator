@@ -3,14 +3,18 @@ import {
   BringToFront,
   Circle,
   Copy,
+  Eraser,
   Highlighter,
   MousePointer2,
   PenLine,
   SendToBack,
   Square,
   Trash2,
+  Type,
 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { ScoreMarkKind } from '../types'
+import Popover from './Popover'
 import { MARK_COLORS } from '../lib/score'
 import type { MarkStyle, MarkTool } from './ScoreMarks'
 
@@ -20,13 +24,14 @@ const TOOLS: { kind: ScoreMarkKind; label: string; icon: typeof Square }[] = [
   { kind: 'ellipse', label: 'Circle', icon: Circle },
   { kind: 'arrow', label: 'Arrow', icon: ArrowUpRight },
   { kind: 'ink', label: 'Draw', icon: PenLine },
+  { kind: 'text', label: 'Text — click to type, double-click words to retype', icon: Type },
 ]
 
 /** Stroke weights, as the toolbar names them. */
 const WEIGHTS = [
-  { value: 1, label: 'Fine', dot: 2 },
-  { value: 2, label: 'Medium', dot: 3.5 },
-  { value: 3, label: 'Broad', dot: 5 },
+  { value: 1, label: 'Fine', size: 'Small', dot: 2 },
+  { value: 2, label: 'Medium', size: 'Medium', dot: 3.5 },
+  { value: 3, label: 'Broad', size: 'Large', dot: 5 },
 ]
 
 /**
@@ -52,6 +57,7 @@ export default function ScoreToolbar({
   style,
   onStyle,
   canDelete,
+  selectedCount = 1,
   onDelete,
   onDuplicate,
   onRaise,
@@ -63,6 +69,8 @@ export default function ScoreToolbar({
   onStyle: (style: MarkStyle) => void
   /** A mark is selected: the verbs below act on it, and the colours restyle it. */
   canDelete: boolean
+  /** How many marks the verbs will act on, for their labels. */
+  selectedCount?: number
   onDelete: () => void
   onDuplicate: () => void
   /** Order is z-order — see `raiseMark` / `lowerMark` in lib/score. */
@@ -70,12 +78,18 @@ export default function ScoreToolbar({
   onLower: () => void
 }) {
   const drawing = tool !== null && tool !== 'select'
+  const [colorsOpen, setColorsOpen] = useState(false)
+  const colorRef = useRef<HTMLButtonElement>(null)
   return (
     <div className="flex justify-center px-3">
       <div className="glass-pop pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1 rounded-xl px-1.5 py-1.5">
         <ToolButton
           active={tool === 'select' || tool === null}
-          label={tool === null ? 'Reading — pick a tool to draw' : 'Select and move marks'}
+          label={
+            tool === null
+              ? 'Reading — pick a tool to draw'
+              : 'Select and move marks — drag a box round several, ⇧-click to add, ⌥+arrows to nudge'
+          }
           onClick={() => onTool(tool === 'select' ? null : 'select')}
         >
           <MousePointer2 size={14} />
@@ -93,32 +107,72 @@ export default function ScoreToolbar({
             <Icon size={14} />
           </ToolButton>
         ))}
+        {/* The eraser: drag across marks to take them off, the sweep one undo
+            step. Select-then-delete works too, but it is two gestures for the
+            thing people reach for straight after a highlighter. */}
+        <ToolButton
+          active={tool === 'eraser'}
+          label="Eraser — drag across marks to take them off"
+          onClick={() => onTool(tool === 'eraser' ? null : 'eraser')}
+        >
+          <Eraser size={14} />
+        </ToolButton>
 
         <span className="mx-0.5 h-5 w-px shrink-0 bg-line/70" />
 
-        <div className="flex items-center gap-0.5">
-          {MARK_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => onStyle({ ...style, color })}
-              aria-label={`Draw in this colour`}
-              aria-pressed={style.color === color}
-              title="Colour"
-              className={`press h-5 w-5 shrink-0 rounded-full border transition-transform ${
-                style.color === color
-                  ? 'scale-110 border-fg-strong'
-                  : 'border-line/70 hover:scale-105'
-              }`}
-              style={{ backgroundColor: color }}
-            />
-          ))}
-        </div>
+        {/* The colour is one swatch that opens the six, not the six in a row:
+            the pill has to fit a narrow pane with a tool's sizes *and* a
+            selection's verbs beside it, and six dots were a third of its
+            width for a choice made once in a while. */}
+        <button
+          ref={colorRef}
+          type="button"
+          onClick={() => setColorsOpen((o) => !o)}
+          aria-label="Colour"
+          aria-expanded={colorsOpen}
+          title={canDelete ? 'Colour — recolours the selection' : 'Colour'}
+          className="btn-icon press h-7 w-7"
+        >
+          <span
+            className="block h-4 w-4 rounded-full ring-1 ring-black/15"
+            style={{ backgroundColor: style.color }}
+          />
+        </button>
+        <Popover
+          open={colorsOpen}
+          anchorRef={colorRef}
+          onClose={() => setColorsOpen(false)}
+          width={6 * 24 + 16}
+          // Above the full-screen score, which is a portal of its own at z-80.
+          className="!z-[90] p-2"
+        >
+          <div className="flex items-center justify-between">
+            {MARK_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => {
+                  onStyle({ ...style, color })
+                  setColorsOpen(false)
+                }}
+                aria-label="Draw in this colour"
+                aria-pressed={style.color === color}
+                title="Colour"
+                className={`press h-5 w-5 shrink-0 rounded-full border transition-transform ${
+                  style.color === color
+                    ? 'scale-110 border-fg-strong'
+                    : 'border-line/70 hover:scale-105'
+                }`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </Popover>
 
         {/* Weight only matters to a stroke — a highlighter's breadth is the
             box you drag, so offering it there would be a knob that does
             nothing. */}
-        {drawing && tool !== 'highlight' && (
+        {drawing && tool !== 'highlight' && tool !== 'eraser' && (
           <>
             <span className="mx-0.5 h-5 w-px shrink-0 bg-line/70" />
             <div className="flex items-center gap-0.5">
@@ -127,9 +181,9 @@ export default function ScoreToolbar({
                   key={w.value}
                   type="button"
                   onClick={() => onStyle({ ...style, weight: w.value })}
-                  aria-label={`${w.label} stroke`}
+                  aria-label={tool === 'text' ? `${w.size} text` : `${w.label} stroke`}
                   aria-pressed={style.weight === w.value}
-                  title={`${w.label} stroke`}
+                  title={tool === 'text' ? `${w.size} text` : `${w.label} stroke`}
                   className={`btn-icon press h-6 w-6 ${
                     style.weight === w.value ? 'text-fg-strong' : 'text-muted'
                   }`}
@@ -162,7 +216,11 @@ export default function ScoreToolbar({
             <button
               type="button"
               onClick={onDelete}
-              title="Delete the selected mark (Delete)"
+              title={
+                selectedCount > 1
+                  ? `Delete the ${selectedCount} selected marks (Delete)`
+                  : 'Delete the selected mark (Delete)'
+              }
               aria-label="Delete the selected mark"
               className="btn-icon press h-6 w-6 text-danger"
             >

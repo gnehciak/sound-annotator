@@ -670,11 +670,12 @@ export default function App() {
    * already a single deliberate act and belongs in its own undo step.
    */
   const changeMarks = useCallback(
-    (marks: ScoreMark[]) => {
+    (marks: ScoreMark[], opts?: { coalesceKey?: string }) => {
       if (!score) return
-      commitProjectSettings({
-        score: { ...score, marks: marks.length > 0 ? marks : undefined },
-      })
+      commitProjectSettings(
+        { score: { ...score, marks: marks.length > 0 ? marks : undefined } },
+        opts,
+      )
     },
     [commitProjectSettings, score],
   )

@@ -40,7 +40,7 @@ import { MAX_LYRIC_CHARS, MAX_LYRIC_LINES, withMigratedLyrics } from './lyrics'
 import { clampQuote, MAX_QUOTES } from './overlays'
 import { parseDriveFileId } from './drive'
 import { newId } from './ids'
-import { MARK_COLORS, MARK_KINDS, sortTurns } from './score'
+import { MARK_COLORS, MARK_KINDS, MAX_MARK_TEXT, sortTurns } from './score'
 import {
   BEATS_PER_BAR_OPTIONS,
   CHORD_MODES,
@@ -447,6 +447,13 @@ function sanitizeMarks(v: unknown): ScoreMark[] | undefined {
       const points = sanitizePoints(m.points)
       if (!points) continue
       mark.points = points
+    }
+    if (kind === 'text') {
+      // Words or nothing: a text mark with none is an invisible box to trip
+      // over, so it is dropped rather than kept empty.
+      const text = str(m.text)?.slice(0, MAX_MARK_TEXT)
+      if (!text?.trim()) continue
+      mark.text = text
     }
     marks.push(mark)
   }
