@@ -453,8 +453,8 @@ requirement.
 
 ### `marks` — what is drawn on the pages
 
-Highlights, boxes, circles, arrows and freehand ink, drawn on the score in the
-editor and carried with the track. Every coordinate is a **fraction of the
+Highlights, boxes, circles, arrows, freehand ink and words, drawn on the score
+in the editor and carried with the track. Every coordinate is a **fraction of the
 page**, `0`–`1`, so a mark holds its place however the page is sized, refitted
 or expanded — the page box changes and the numbers don't.
 
@@ -462,12 +462,13 @@ or expanded — the page box changes and the numbers don't.
 | --- | --- | --- |
 | `id` | string | Minted if absent. |
 | `page` | number | 1-based page this mark is drawn on. |
-| `kind` | string | `"highlight"`, `"box"`, `"ellipse"`, `"arrow"` or `"ink"`. Anything else is dropped — there is no honest default shape. |
+| `kind` | string | `"highlight"`, `"box"`, `"ellipse"`, `"arrow"`, `"ink"` or `"text"`. Anything else is dropped — there is no honest default shape. |
 | `color` | string | CSS hex, e.g. `"#ff5252"`. |
 | `x`, `y` | number | The mark's top-left corner as page fractions. For an arrow, its **tail**. |
 | `w`, `h` | number | Its width and height as page fractions. For an arrow, the offset from tail to **head**, which may be negative. |
-| `weight` | number | Stroke weight, `1` (fine) to `3` (broad). Defaults to `2`. Ignored by `"highlight"`, whose breadth is its box. |
+| `weight` | number | Stroke weight, `1` (fine) to `3` (broad). Defaults to `2`. Ignored by `"highlight"`, whose breadth is its box. On `"text"` it is the type size instead: small, medium, large. |
 | `points` | array | `"ink"` only — the stroke, flattened `[x0, y0, x1, y1, …]` in the same page fractions. Needs at least two points. |
+| `text` | string | `"text"` only — the words, line breaks as `\n`, at most 280 characters. `x`/`y` is the top-left of the first line and `w`/`h` the box the words fill; the app re-measures when they are retyped, so a rough box is fine. A text mark with no words is dropped. |
 
 ```json
 "marks": [

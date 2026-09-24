@@ -387,7 +387,7 @@ export interface Project {
 export type ScoreMode = 'off' | 'view'
 
 /** A pen mark drawn on the score: what shape it is. */
-export type ScoreMarkKind = 'highlight' | 'box' | 'ellipse' | 'arrow' | 'ink'
+export type ScoreMarkKind = 'highlight' | 'box' | 'ellipse' | 'arrow' | 'ink' | 'text'
 
 /**
  * One mark drawn on a page of the score — a highlighted bar, a circled
@@ -425,7 +425,16 @@ export interface ScoreMark {
    * one array is a third of the bytes of 60 two-key objects.
    */
   points?: number[]
-  /** Stroke weight, 1 (fine) to 3 (broad). Absent is 2. */
+  /**
+   * 'text' only: the words, as typed, line breaks kept. `x`/`y` is the top-left
+   * of the first line and `w`/`h` the box the words fill at their size —
+   * measured when they were set, so hit-testing and the grips need no font.
+   */
+  text?: string
+  /**
+   * Stroke weight, 1 (fine) to 3 (broad). Absent is 2. On 'text' it is the
+   * type size instead — small, medium, large (see `textSizeOf`).
+   */
   weight?: number
 }
 

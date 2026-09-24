@@ -291,6 +291,9 @@ export function QuoteDrawSurface({
     null,
   )
   const from = useRef<{ x: number; y: number } | null>(null)
+  // Fingers down. A second one is a pinch or a pan, never a rectangle — the
+  // one being drawn is dropped and the score's own gesture takes the page.
+  const fingers = useRef(new Set<number>())
   const hue = hueText(color, 'light')
 
   const at = (e: ReactPointerEvent) => {
@@ -303,6 +306,14 @@ export function QuoteDrawSurface({
   }
 
   const begin = (e: ReactPointerEvent) => {
+    if (e.pointerType === 'touch') {
+      fingers.current.add(e.pointerId)
+      if (fingers.current.size > 1) {
+        from.current = null
+        setRect(null)
+        return
+      }
+    }
     if (e.button !== 0) return
     const p = at(e)
     if (!p) return
@@ -330,8 +341,9 @@ export function QuoteDrawSurface({
     })
   }
 
-  const end = () => {
-    const drawn = rect
+  const end = (e: ReactPointerEvent) => {
+    fingers.current.delete(e.pointerId)
+    const drawn = from.current ? rect : null
     from.current = null
     setRect(null)
     // A click rather than a drag: nothing is drawn, and the surface stays

@@ -189,6 +189,7 @@ export const MARK_KINDS: ScoreMarkKind[] = [
   'ellipse',
   'arrow',
   'ink',
+  'text',
 ]
 
 /** Stroke weight when a mark doesn't say. */
@@ -221,10 +222,22 @@ export function upsertMark(
   marks: ScoreMark[] | undefined,
   mark: ScoreMark,
 ): ScoreMark[] {
-  const list = marks ?? []
-  const at = list.findIndex((m) => m.id === mark.id)
-  if (at === -1) return [...list, mark]
-  return list.map((m, i) => (i === at ? mark : m))
+  return upsertMarks(marks, [mark])
+}
+
+/**
+ * Add or replace several at once — one write, so a gesture over a selection
+ * (a move, a restyle, a nudge) is one save and one undo step, not one each.
+ * A replaced mark keeps its place in the list, which is its place in z-order.
+ */
+export function upsertMarks(
+  marks: ScoreMark[] | undefined,
+  next: ScoreMark[],
+): ScoreMark[] {
+  const byId = new Map(next.map((m) => [m.id, m]))
+  const list = (marks ?? []).map((m) => byId.get(m.id) ?? m)
+  const known = new Set(list.map((m) => m.id))
+  return [...list, ...next.filter((m) => !known.has(m.id))]
 }
 
 /**
@@ -232,34 +245,40 @@ export function upsertMark(
  * new mark is appended and why `markAt` walks backwards. These two are how a
  * reader says so — a highlight drawn last over an arrow, or an arrow that has
  * ended up under the wash it was meant to point at.
+ *
+ * Over a selection they keep the selection's own order: bringing three marks
+ * to the front puts all three above everything else without shuffling them
+ * among themselves, which is what every drawing program has taught people to
+ * expect.
  */
-export function raiseMark(marks: ScoreMark[] | undefined, id: string): ScoreMark[] {
+export function raiseMarks(marks: ScoreMark[] | undefined, ids: string[]): ScoreMark[] {
+  const set = new Set(ids)
   const list = marks ?? []
-  const mark = list.find((m) => m.id === id)
-  return mark ? [...list.filter((m) => m.id !== id), mark] : list
+  return [...list.filter((m) => !set.has(m.id)), ...list.filter((m) => set.has(m.id))]
 }
 
-export function lowerMark(marks: ScoreMark[] | undefined, id: string): ScoreMark[] {
+export function lowerMarks(marks: ScoreMark[] | undefined, ids: string[]): ScoreMark[] {
+  const set = new Set(ids)
   const list = marks ?? []
-  const mark = list.find((m) => m.id === id)
-  return mark ? [mark, ...list.filter((m) => m.id !== id)] : list
+  return [...list.filter((m) => set.has(m.id)), ...list.filter((m) => !set.has(m.id))]
 }
 
 /**
- * Copy a mark, offset a little so the copy is visibly *a copy* rather than
- * something that looks like nothing happened, and put it on top — which is
- * where the thing you just made belongs. Returns the new list and the new id,
- * since the caller wants to select what it just made.
+ * Copy a selection, offset a little so the copies are visibly *copies* rather
+ * than something that looks like nothing happened, and put them on top —
+ * which is where the things you just made belong. Returns the new ids too,
+ * since the caller selects what it just made.
  */
-export function duplicateMark(
+export function duplicateMarks(
   marks: ScoreMark[] | undefined,
-  id: string,
-): { marks: ScoreMark[]; id: string } | null {
+  ids: string[],
+): { marks: ScoreMark[]; ids: string[] } {
+  const set = new Set(ids)
   const list = marks ?? []
-  const mark = list.find((m) => m.id === id)
-  if (!mark) return null
-  const copy = { ...moveMark(mark, DUPLICATE_OFFSET, DUPLICATE_OFFSET), id: newId() }
-  return { marks: [...list, copy], id: copy.id }
+  const copies = list
+    .filter((m) => set.has(m.id))
+    .map((m) => ({ ...moveMark(m, DUPLICATE_OFFSET, DUPLICATE_OFFSET), id: newId() }))
+  return { marks: [...list, ...copies], ids: copies.map((c) => c.id) }
 }
 
 /** How far a duplicate sits from its original, as a fraction of the page. */
@@ -270,7 +289,35 @@ export function removeMark(
   marks: ScoreMark[] | undefined,
   id: string,
 ): ScoreMark[] {
-  return (marks ?? []).filter((m) => m.id !== id)
+  return removeMarks(marks, [id])
+}
+
+/** Drop several — the eraser's sweep, or a selection deleted at once. */
+export function removeMarks(
+  marks: ScoreMark[] | undefined,
+  ids: string[],
+): ScoreMark[] {
+  const set = new Set(ids)
+  return (marks ?? []).filter((m) => !set.has(m.id))
+}
+
+/**
+ * Every mark whose box meets a rectangle — what a marquee selects. *Meets*
+ * rather than *inside*: a drag that catches the corner of a long highlight
+ * has caught it, and demanding the whole thing be enclosed makes a marquee
+ * the most frustrating tool on the page.
+ */
+export function marksInRect(
+  marks: ScoreMark[],
+  r: { x: number; y: number; w: number; h: number },
+): ScoreMark[] {
+  const [rx0, rx1] = [Math.min(r.x, r.x + r.w), Math.max(r.x, r.x + r.w)]
+  const [ry0, ry1] = [Math.min(r.y, r.y + r.h), Math.max(r.y, r.y + r.h)]
+  return marks.filter((m) => {
+    const [x0, x1] = [Math.min(m.x, m.x + m.w), Math.max(m.x, m.x + m.w)]
+    const [y0, y1] = [Math.min(m.y, m.y + m.h), Math.max(m.y, m.y + m.h)]
+    return x0 <= rx1 && x1 >= rx0 && y0 <= ry1 && y1 >= ry0
+  })
 }
 
 /** Move a mark by a delta in page fractions, taking its stroke along. */
@@ -284,6 +331,153 @@ export function moveMark(mark: ScoreMark, dx: number, dy: number): ScoreMark {
           points: mark.points.map((n, i) => n + (i % 2 === 0 ? dx : dy)),
         }
       : {}),
+  }
+}
+
+// ---- drawing geometry ------------------------------------------------------
+// Shared by every renderer of a mark — the page on screen, a quote's crop and
+// the marked-up PDF — because a mark that is one thickness on screen and
+// another in the handout is two marks.
+
+/**
+ * A mark's stroke in the units of a page `width` wide. Scaled off the width so
+ * a line drawn on a page fitted to a narrow panel doesn't become a smear when
+ * the same page is expanded; the floor keeps a fine line visible at all.
+ */
+export function strokeOf(weight: number | undefined, width: number, floor = 1.25): number {
+  return Math.max(floor, ((weight ?? DEFAULT_MARK_WEIGHT) * width) / 620)
+}
+
+/**
+ * An arrow's two head wings, for a shaft from (x, y) to (x + w, y + h) in any
+ * units. The head is capped against the shaft: on a short arrow a fixed head
+ * is the whole arrow, and on a long one it disappears. Null for an arrow too
+ * short to have a direction.
+ */
+export function arrowWings(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  stroke: number,
+): [[number, number], [number, number]] | null {
+  const length = Math.hypot(w, h)
+  if (length < 1) return null
+  const head = Math.min(stroke * 4.5, length * 0.4)
+  const angle = Math.atan2(h, w)
+  const wing = (spread: number): [number, number] => [
+    x + w - head * Math.cos(angle - spread),
+    y + h - head * Math.sin(angle - spread),
+  ]
+  return [wing(0.42), wing(-0.42)]
+}
+
+/** A highlighter's wash: its opacity over the page, multiplied. */
+export const HIGHLIGHT_OPACITY = 0.34
+
+// ---- text ------------------------------------------------------------------
+// A text mark is words on the page — "cresc. from here", "2nd time only" —
+// the one thing a teacher's own copy of a score always has. Sized as a
+// fraction of the page's *width*, like a stroke, so the words keep their size
+// against the music through every refit and expand.
+
+/** The face every renderer draws text marks in: the screen, a crop, the PDF. */
+export const TEXT_FONT = 'Helvetica, Arial, sans-serif'
+
+/** Line height, as a multiple of the type size. */
+export const TEXT_LEADING = 1.2
+
+/**
+ * Where a line's baseline sits below its top, as a multiple of the size.
+ * Stated rather than left to each renderer's idea of a baseline: SVG, a
+ * canvas and pdf-lib all default to different ones, and a word that moves
+ * half a line between the screen and the handout is a word in the wrong bar.
+ */
+export const TEXT_ASCENT = 0.82
+
+/** Type size for a weight, as a fraction of the page's width. */
+export function textSizeOf(weight: number | undefined): number {
+  return TEXT_SIZES[Math.min(3, Math.max(1, Math.round(weight ?? DEFAULT_MARK_WEIGHT)))]
+}
+const TEXT_SIZES: Record<number, number> = { 1: 0.02, 2: 0.027, 3: 0.036 }
+
+/** How long a text mark may be — words on a score, not an essay. */
+export const MAX_MARK_TEXT = 280
+
+/**
+ * The box a text mark's words fill, in page fractions, for a page of the
+ * given pixel size. Measured once, when the words are set, so nothing that
+ * hit-tests or draws grips has to know about fonts.
+ */
+export function measureText(
+  text: string,
+  weight: number | undefined,
+  page: { width: number; height: number },
+): { w: number; h: number } {
+  const size = textSizeOf(weight) * page.width
+  const lines = text.split('\n')
+  let widest = 0
+  const ctx = measurer()
+  if (ctx) {
+    ctx.font = `${size}px ${TEXT_FONT}`
+    for (const line of lines) widest = Math.max(widest, ctx.measureText(line).width)
+  } else {
+    // No canvas (a test, a worker): Helvetica averages a little over half an
+    // em per character, which is near enough to hit-test by.
+    widest = Math.max(...lines.map((l) => l.length)) * size * 0.55
+  }
+  return {
+    w: Math.max(widest, size * 0.5) / page.width,
+    h: (lines.length * size * TEXT_LEADING) / page.height,
+  }
+}
+
+let measuring: CanvasRenderingContext2D | null | undefined
+function measurer(): CanvasRenderingContext2D | null {
+  if (measuring !== undefined) return measuring
+  measuring =
+    typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d')
+  return measuring
+}
+
+// ---- constraint ------------------------------------------------------------
+// Shift while drawing. Worked in *pixels*, not fractions: a page is taller
+// than it is wide, so a "square" in page fractions is a tall rectangle on the
+// screen, and a 45° line in fractions leans.
+
+/**
+ * The corner a Shift-drag reaches: equal sides on screen, following whichever
+ * way the pointer went furthest, so the square grows under the hand rather
+ * than lagging behind it on one axis.
+ */
+export function squareCorner(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  page: { width: number; height: number },
+): { x: number; y: number } {
+  const dx = (to.x - from.x) * page.width
+  const dy = (to.y - from.y) * page.height
+  const side = Math.max(Math.abs(dx), Math.abs(dy))
+  return {
+    x: from.x + (Math.sign(dx || 1) * side) / page.width,
+    y: from.y + (Math.sign(dy || 1) * side) / page.height,
+  }
+}
+
+/** A Shift-drawn line snaps to the nearest 15° on screen, keeping its length. */
+export function snapAngle(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  page: { width: number; height: number },
+): { x: number; y: number } {
+  const dx = (to.x - from.x) * page.width
+  const dy = (to.y - from.y) * page.height
+  const length = Math.hypot(dx, dy)
+  const step = Math.PI / 12
+  const angle = Math.round(Math.atan2(dy, dx) / step) * step
+  return {
+    x: from.x + (Math.cos(angle) * length) / page.width,
+    y: from.y + (Math.sin(angle) * length) / page.height,
   }
 }
 
@@ -332,7 +526,9 @@ export type MarkHandle = 'nw' | 'ne' | 'sw' | 'se' | 'tail' | 'head'
  * stretched.
  */
 export function handlesOf(mark: ScoreMark): { id: MarkHandle; x: number; y: number }[] {
-  if (mark.kind === 'ink') return []
+  // Text is sized by its weight, like a font menu — dragging a corner would
+  // either stretch the letters or ask what that means, and neither is text.
+  if (mark.kind === 'ink' || mark.kind === 'text') return []
   if (mark.kind === 'arrow')
     return [
       { id: 'tail', x: mark.x, y: mark.y },

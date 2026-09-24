@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   BringToFront,
@@ -36,15 +36,17 @@ import {
   ZOOM_STEP,
   clampZoom,
   addTurn,
-  duplicateMark,
-  lowerMark,
+  duplicateMarks,
+  lowerMarks,
   markAt,
   marksOnPage,
   pageAt,
-  raiseMark,
-  removeMark,
+  moveMark,
+  raiseMarks,
+  removeMarks,
   scoreBytesUrl,
-  upsertMark,
+  textSizeOf,
+  upsertMarks,
   type ScoreView,
 } from '../lib/score'
 import ScoreSync from './ScoreSync'
@@ -173,7 +175,7 @@ export default function ScoreLayer({
   /** Reports the page on screen, so the host can stamp a new pin onto it. */
   onPageChange?: (page: number) => void
   /** Save the drawn marks. Absent means nobody here may draw. */
-  onMarks?: (marks: ScoreMark[]) => void
+  onMarks?: (marks: ScoreMark[], opts?: { coalesceKey?: string }) => void
   /** Whether to offer the drawing tools at all (pane and expanded only). */
   canDraw?: boolean
   /**
@@ -207,7 +209,7 @@ export default function ScoreLayer({
     color: MARK_COLORS[0],
     weight: DEFAULT_MARK_WEIGHT,
   })
-  const [selectedMark, setSelectedMark] = useState<string | null>(null)
+  const [selectedMarks, setSelectedMarks] = useState<string[]>([])
   // Drawing needs a surface big enough to aim at, so the tools are offered in
   // the pane and expanded but never in the video frame — and never while the
   // sync workspace is up, where every press is meant to be a page turn.
@@ -308,51 +310,88 @@ export default function ScoreLayer({
   // A selection survives scrolling now — several pages are on screen at once,
   // so "still visible" is no longer the same question as "still on this page".
   // It only has to still exist.
-  const activeMark =
-    drawable && (score.marks ?? []).some((m) => m.id === selectedMark)
-      ? selectedMark
-      : null
+  // Keyed by one string so the array only changes when the selection does: a
+  // new array every render would give each page a new prop and defeat the
+  // page memo on the one path — scrolling — where it matters most.
+  const activeKey = drawable
+    ? selectedMarks.filter((id) => (score.marks ?? []).some((m) => m.id === id)).join(',')
+    : ''
+  const activeMarks = useMemo(() => (activeKey ? activeKey.split(',') : []), [activeKey])
 
-  const commitMark = useCallback(
-    (mark: ScoreMark) => onMarks?.(upsertMark(score.marks, mark)),
+  const commitMarks = useCallback(
+    (marks: ScoreMark[]) => onMarks?.(upsertMarks(score.marks, marks)),
     [onMarks, score.marks],
   )
-  const deleteMark = useCallback(() => {
-    if (!activeMark) return
-    onMarks?.(removeMark(score.marks, activeMark))
-    setSelectedMark(null)
-  }, [onMarks, score.marks, activeMark])
+  const eraseMarks = useCallback(
+    (ids: string[]) => {
+      onMarks?.(removeMarks(score.marks, ids))
+      setSelectedMarks((sel) => sel.filter((id) => !ids.includes(id)))
+    },
+    [onMarks, score.marks],
+  )
+  const deleteSelected = useCallback(() => {
+    if (!activeKey) return
+    onMarks?.(removeMarks(score.marks, activeKey.split(',')))
+    setSelectedMarks([])
+  }, [onMarks, score.marks, activeKey])
 
   /**
-   * The pen's colour and weight — and the selected mark's, when there is one.
+   * The pen's colour and weight — and the selection's, when there is one.
    * Picking a colour with something selected means "make *that* this colour":
-   * the alternative is deleting a mark and drawing it again to change its
+   * the alternative is deleting marks and drawing them again to change their
    * mind, which is the thing a selection is supposed to save you.
+   *
+   * Words scale with their weight, so a text mark restyled to a new size has
+   * its box scaled to match — measured again would need the page's pixels,
+   * and the ratio of the two sizes is exactly the ratio of the two boxes.
    */
   const restyle = useCallback(
     (next: MarkStyle) => {
       setMarkStyle(next)
-      const mark = (score.marks ?? []).find((m) => m.id === activeMark)
-      if (mark && onMarks)
-        onMarks(upsertMark(score.marks, { ...mark, color: next.color, weight: next.weight }))
+      if (!activeKey || !onMarks) return
+      const ids = new Set(activeKey.split(','))
+      const changed = (score.marks ?? [])
+        .filter((m) => ids.has(m.id))
+        .map((m) => {
+          if (m.kind !== 'text' || next.weight === m.weight) return { ...m, color: next.color, weight: next.weight }
+          const k = textSizeOf(next.weight) / textSizeOf(m.weight)
+          return { ...m, color: next.color, weight: next.weight, w: m.w * k, h: m.h * k }
+        })
+      onMarks(upsertMarks(score.marks, changed))
     },
-    [activeMark, onMarks, score.marks],
+    [activeKey, onMarks, score.marks],
   )
   const raiseSelected = useCallback(() => {
-    if (activeMark) onMarks?.(raiseMark(score.marks, activeMark))
-  }, [activeMark, onMarks, score.marks])
+    if (activeKey) onMarks?.(raiseMarks(score.marks, activeKey.split(',')))
+  }, [activeKey, onMarks, score.marks])
   const lowerSelected = useCallback(() => {
-    if (activeMark) onMarks?.(lowerMark(score.marks, activeMark))
-  }, [activeMark, onMarks, score.marks])
+    if (activeKey) onMarks?.(lowerMarks(score.marks, activeKey.split(',')))
+  }, [activeKey, onMarks, score.marks])
   const duplicateSelected = useCallback(() => {
-    if (!activeMark) return
-    const made = duplicateMark(score.marks, activeMark)
-    if (!made) return
+    if (!activeKey) return
+    const made = duplicateMarks(score.marks, activeKey.split(','))
     onMarks?.(made.marks)
-    // Select the copy, not the original: the copy is the one you are about to
-    // move, and it is sitting directly on top of what it was made from.
-    setSelectedMark(made.id)
-  }, [activeMark, onMarks, score.marks])
+    // Select the copies, not the originals: the copies are what you are about
+    // to move, and they sit directly on top of what they were made from.
+    setSelectedMarks(made.ids)
+  }, [activeKey, onMarks, score.marks])
+
+  /**
+   * ⌥ + an arrow nudges the selection by 1% of the page (5% with ⇧). The plain
+   * arrows are the transport's everywhere (see below), so a mark gets the
+   * modified pair — the one combination nothing else on this page claims.
+   * Coalesced, so holding the key to walk a mark across a bar is one undo
+   * step rather than one per repeat.
+   */
+  const nudgeSelected = useCallback(
+    (dx: number, dy: number) => {
+      if (!activeKey || !onMarks) return
+      const ids = new Set(activeKey.split(','))
+      const moved = (score.marks ?? []).filter((m) => ids.has(m.id)).map((m) => moveMark(m, dx, dy))
+      onMarks(upsertMarks(score.marks, moved), { coalesceKey: `nudge:${activeKey}` })
+    },
+    [activeKey, onMarks, score.marks],
+  )
 
   // Expanded, the score owns Escape and the page keys; with a tool armed it
   // owns Escape and Delete wherever it is. Capture + preventDefault rather
@@ -368,11 +407,19 @@ export default function ScoreLayer({
   useEffect(() => {
     if (!expanded && !drawable && !drawingQuote) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
       // The same exemption useHotkeys makes, and for the same reason: the sync
       // panel has a text field in it, where Escape is not a way out of the
       // workspace and the digits are being typed rather than aimed.
       if (isTypingTarget(e.target)) return
+      const arrow = NUDGES[e.key]
+      if (e.altKey && !e.metaKey && !e.ctrlKey && arrow && activeKey) {
+        const by = e.shiftKey ? 0.05 : 0.01
+        nudgeSelected(arrow[0] * by, arrow[1] * by)
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'Escape') {
         // Putting the pen down first: with a tool armed that is what Escape
         // most obviously undoes, and leaving the score entirely while still
@@ -381,15 +428,12 @@ export default function ScoreLayer({
         if (drawingQuote) onCancelQuoteDraw?.()
         else if (activeTool !== null) {
           setTool(null)
-          setSelectedMark(null)
+          setSelectedMarks([])
         } else if (syncing) onSyncing?.(false)
         else if (expanded) setExpanded(false)
         else return
-      } else if (
-        (e.key === 'Delete' || e.key === 'Backspace') &&
-        activeMark
-      )
-        deleteMark()
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeKey)
+        deleteSelected()
       else if (expanded && e.key === 'PageDown') step(1)
       else if (expanded && e.key === 'PageUp') step(-1)
       else return
@@ -407,8 +451,9 @@ export default function ScoreLayer({
     syncing,
     onSyncing,
     activeTool,
-    activeMark,
-    deleteMark,
+    activeKey,
+    deleteSelected,
+    nudgeSelected,
   ])
 
   // ---- the page's context menu -------------------------------------------
@@ -466,36 +511,40 @@ export default function ScoreLayer({
     // the toolbar's verbs need the mark selected first, and the reader who
     // right-clicked one has already said which they mean.
     if (onMarks && menuMark) {
+      // The right-clicked mark, or the whole selection when it is part of one:
+      // pointing at one of three selected marks and choosing "Delete" means
+      // the three, as it does in every program that has a selection.
+      const ids = activeMarks.includes(menuMark.id) ? activeMarks : [menuMark.id]
+      const many = ids.length > 1
       menuItems.push(
         {
           key: 'raise-mark',
           label: 'Bring to front',
           icon: BringToFront,
-          onSelect: () => onMarks(raiseMark(score.marks, menuMark.id)),
+          onSelect: () => onMarks(raiseMarks(score.marks, ids)),
         },
         {
           key: 'lower-mark',
           label: 'Send to back',
           icon: SendToBack,
-          onSelect: () => onMarks(lowerMark(score.marks, menuMark.id)),
+          onSelect: () => onMarks(lowerMarks(score.marks, ids)),
         },
         {
           key: 'duplicate-mark',
           label: 'Duplicate',
           icon: Copy,
           onSelect: () => {
-            const made = duplicateMark(score.marks, menuMark.id)
-            if (!made) return
+            const made = duplicateMarks(score.marks, ids)
             onMarks(made.marks)
-            setSelectedMark(made.id)
+            setSelectedMarks(made.ids)
           },
         },
         {
           key: 'delete-mark',
-          label: 'Delete this mark',
+          label: many ? `Delete these ${ids.length} marks` : 'Delete this mark',
           icon: Trash2,
           danger: true,
-          onSelect: () => onMarks(removeMark(score.marks, menuMark.id)),
+          onSelect: () => eraseMarks(ids),
         },
       )
     }
@@ -620,9 +669,10 @@ export default function ScoreLayer({
           size={size}
           tool={activeTool}
           style={markStyle}
-          selectedId={activeMark}
-          onSelect={setSelectedMark}
-          onCommit={commitMark}
+          selectedIds={activeMarks}
+          onSelect={setSelectedMarks}
+          onCommit={commitMarks}
+          onErase={eraseMarks}
         />
         {/* Drawing a new quote: the page takes the pointer under a crosshair
             until a rectangle is drawn or Escape puts the key down. Over the
@@ -663,8 +713,9 @@ export default function ScoreLayer({
       score.marks,
       activeTool,
       markStyle,
-      activeMark,
-      commitMark,
+      activeMarks,
+      commitMarks,
+      eraseMarks,
       pinsOnPage,
       quotesOnPage,
       selectedId,
@@ -695,6 +746,7 @@ export default function ScoreLayer({
         // background with no room to scroll, so it stays one fitted page.
         continuous={reading}
         interactive={reading}
+        claimTouch={activeTool !== null || drawingQuote}
         onUserPage={showUserPage}
         onZoom={setZoom}
         // Both layers live inside the page box, which is what makes their
@@ -760,8 +812,9 @@ export default function ScoreLayer({
         onTool={setTool}
         style={markStyle}
         onStyle={restyle}
-        canDelete={!!activeMark}
-        onDelete={deleteMark}
+        canDelete={activeMarks.length > 0}
+        selectedCount={activeMarks.length}
+        onDelete={deleteSelected}
         onDuplicate={duplicateSelected}
         onRaise={raiseSelected}
         onLower={lowerSelected}
@@ -1188,4 +1241,12 @@ async function fetchScore(url: string, signal: AbortSignal): Promise<ArrayBuffer
     throw new Error(message ?? `The score could not be fetched (${res.status}).`)
   }
   return res.arrayBuffer()
+}
+
+/** ⌥ + an arrow, as a direction to nudge the selected marks in. */
+const NUDGES: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
 }

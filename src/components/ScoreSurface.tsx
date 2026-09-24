@@ -60,6 +60,11 @@ interface Props {
   onUserPage?: (page: number) => void
   onZoom?: (zoom: number) => void
   /**
+   * Something on the pages has claimed touch — a drawing tool is in hand — so
+   * the browser won't pan a two-finger drag by itself and this must.
+   */
+  claimTouch?: boolean
+  /**
    * Drawn inside a page's box, so it moves and scales with the page. Given the
    * page number and its pixel size — a mark or a pin is stored as a fraction
    * and has to be turned back into pixels to be drawn without distorting it.
@@ -93,6 +98,7 @@ export default function ScoreSurface({
   interactive,
   onUserPage,
   onZoom,
+  claimTouch = false,
   overlay,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -416,32 +422,83 @@ export default function ScoreSurface({
     return () => el.removeEventListener('wheel', onWheel)
   }, [interactive, onZoom, zoomAround])
 
-  // Touch pinch: two pointers, and the ratio of the distance between them.
+  // Two fingers: a pinch zooms about their midpoint, and — while a drawing
+  // tool has the page — moving them together pans it. Heard in the *capture*
+  // phase, so an armed tool's surface, which stops the first finger's event
+  // to start a stroke, can't hide it from this: that is what used to make a
+  // pinch impossible with a pen in hand. The surface drops its stroke when the
+  // second finger lands (ScoreMarks), and this takes it from there.
   const touches = useRef(new Map<number, { x: number; y: number }>())
-  const pinch = useRef<number | null>(null)
-  const touchHandlers = interactive && onZoom
+  const pinch = useRef<{ gap: number; mid: { x: number; y: number } } | null>(null)
+  // A middle-button drag pans the page, pen in hand or not — the one gesture
+  // for moving a document that no tool on it claims.
+  const panning = useRef<{ id: number; x: number; y: number } | null>(null)
+  const [grabbing, setGrabbing] = useState(false)
+
+  const endTouch = (e: React.PointerEvent) => {
+    touches.current.delete(e.pointerId)
+    if (touches.current.size < 2) pinch.current = null
+  }
+  const touchHandlers = interactive
     ? {
-        onPointerDown: (e: React.PointerEvent) => {
+        onPointerDownCapture: (e: React.PointerEvent) => {
+          if (e.pointerType === 'mouse' && e.button === 1) {
+            e.preventDefault()
+            e.stopPropagation()
+            panning.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+            setGrabbing(true)
+            try {
+              scrollRef.current?.setPointerCapture(e.pointerId)
+            } catch {
+              /* the pan still tracks while the pointer is over the page */
+            }
+            return
+          }
           if (e.pointerType !== 'touch') return
           touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
         },
-        onPointerMove: (e: React.PointerEvent) => {
+        onPointerMoveCapture: (e: React.PointerEvent) => {
+          const pan = panning.current
+          if (pan && pan.id === e.pointerId) {
+            scrollRef.current?.scrollBy(pan.x - e.clientX, pan.y - e.clientY)
+            panning.current = { ...pan, x: e.clientX, y: e.clientY }
+            return
+          }
           if (e.pointerType !== 'touch' || !touches.current.has(e.pointerId)) return
           touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
           if (touches.current.size !== 2) return
           const [a, b] = [...touches.current.values()]
           const gap = Math.hypot(a.x - b.x, a.y - b.y)
-          if (pinch.current != null && pinch.current > 0)
-            zoomAround(gap / pinch.current, (a.x + b.x) / 2, (a.y + b.y) / 2)
-          pinch.current = gap
+          const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+          const was = pinch.current
+          if (was && was.gap > 0) {
+            if (onZoom) zoomAround(gap / was.gap, mid.x, mid.y)
+            // The browser pans a two-finger drag itself when nothing on the
+            // page has claimed touch; only a claimed page needs it done here,
+            // or the two would add up to twice the distance.
+            if (claimTouch) scrollRef.current?.scrollBy(was.mid.x - mid.x, was.mid.y - mid.y)
+          }
+          pinch.current = { gap, mid }
         },
-        onPointerUp: (e: React.PointerEvent) => {
-          touches.current.delete(e.pointerId)
-          if (touches.current.size < 2) pinch.current = null
+        onPointerUpCapture: (e: React.PointerEvent) => {
+          if (panning.current?.id === e.pointerId) {
+            panning.current = null
+            setGrabbing(false)
+            return
+          }
+          endTouch(e)
         },
-        onPointerCancel: (e: React.PointerEvent) => {
-          touches.current.delete(e.pointerId)
-          if (touches.current.size < 2) pinch.current = null
+        onPointerCancelCapture: (e: React.PointerEvent) => {
+          if (panning.current?.id === e.pointerId) {
+            panning.current = null
+            setGrabbing(false)
+          }
+          endTouch(e)
+        },
+        // Chrome opens its autoscroll compass on a middle press, which would
+        // fight the pan for the page.
+        onAuxClick: (e: React.MouseEvent) => {
+          if (e.button === 1) e.preventDefault()
         },
       }
     : {}
@@ -462,7 +519,7 @@ export default function ScoreSurface({
       {...touchHandlers}
       className={`h-full w-full ${
         interactive ? 'pointer-events-auto overflow-auto overscroll-contain' : 'overflow-hidden'
-      }`}
+      } ${grabbing ? 'cursor-grabbing' : ''}`}
       // A pinch must reach the wheel handler rather than the browser's own
       // page zoom, and a two-finger pan must not be hijacked as a swipe.
       style={interactive ? { touchAction: 'pan-x pan-y' } : undefined}
