@@ -10,9 +10,11 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
+  Redo2,
   SendToBack,
   Trash2,
   TriangleAlert,
+  Undo2,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -591,6 +593,11 @@ export default function ScoreLayer({
       zoom={reading ? zoom : undefined}
       onZoom={zoomBy}
       onResetZoom={() => setZoom(1)}
+      history={
+        drawable && onUndo && onRedo
+          ? { canUndo: !!canUndo, canRedo: !!canRedo, onUndo, onRedo }
+          : undefined
+      }
     />
   )
 
@@ -758,10 +765,6 @@ export default function ScoreLayer({
         onDuplicate={duplicateSelected}
         onRaise={raiseSelected}
         onLower={lowerSelected}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={onUndo}
-        onRedo={onRedo}
       />
     </div>
   ) : null
@@ -899,6 +902,7 @@ function ScoreChrome({
   zoom,
   onZoom,
   onResetZoom,
+  history,
 }: {
   page: number
   pageCount: number
@@ -918,6 +922,13 @@ function ScoreChrome({
   zoom?: number
   onZoom: (factor: number) => void
   onResetZoom: () => void
+  /**
+   * The app's undo, where drawing happens. In this strip rather than in the
+   * drawing tools: it has to be reachable with the pen put down as well as in
+   * hand, and the tools' pill is already as wide as a narrow pane allows —
+   * with a mark selected it wrapped Redo onto a line of its own.
+   */
+  history?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }
 }) {
   // On the picture: white glyphs standing on a gradient that fades into the
   // frame, because what is behind is anything at all. On the score: the app's
@@ -933,6 +944,32 @@ function ScoreChrome({
           : 'glass-strip pointer-events-auto absolute inset-x-0 top-0 z-20 flex items-center justify-center gap-1 border-b border-line/70 px-2 py-1.5'
       }
     >
+      {/* Pinned to the strip's left edge, so the page nav stays centred on
+          the page it is turning. */}
+      {history && (
+        <span className="absolute left-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={history.onUndo}
+            disabled={!history.canUndo}
+            aria-label="Undo"
+            title="Undo (⌘Z)"
+            className={btn}
+          >
+            <Undo2 size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={history.onRedo}
+            disabled={!history.canRedo}
+            aria-label="Redo"
+            title="Redo (⇧⌘Z)"
+            className={btn}
+          >
+            <Redo2 size={15} />
+          </button>
+        </span>
+      )}
       <button
         type="button"
         onClick={() => onStep(-1)}

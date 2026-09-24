@@ -911,10 +911,13 @@ thing in the app ⌘Z could not touch. They go through `commitProjectSettings`
 now — the same primitive the notes use, one step per mark (each is committed
 once, on release) and coalesced for the turns, where a held key walks one along
 the clock. Display state stays raw and deliberately outside history: a ⌘Z after
-switching the column to the score should not put the player back. The tools
-carry Undo/Redo buttons of their own, because full screen this layer is a portal
-over everything and the header's buttons are out of reach at exactly the moment
-someone is drawing.
+switching the column to the score should not put the player back. The score's
+top strip carries Undo/Redo of its own, pinned left of the page nav, because
+full screen this layer is a portal over everything and the header's buttons are
+out of reach at exactly the moment someone is drawing. The strip rather than the
+tools' pill: undo has to be there with the pen put down too, and the pill is
+already as wide as a narrow pane allows (with a mark selected it wrapped Redo
+onto a line of its own).
 
 **Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
 clip time — the same clock the notes use, so App's `setClip` shifts it along
