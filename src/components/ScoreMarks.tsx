@@ -46,6 +46,12 @@ export interface MarkStyle {
 interface Props {
   /** The marks on the page being drawn — the caller filters by page. */
   marks: ScoreMark[]
+  /**
+   * Marks drawn beneath these that this surface may not touch: the track's
+   * own, under a reader's private layer (lib/personalMarks). Never selectable,
+   * never erased — the reader sees what the teacher drew, and draws over it.
+   */
+  underlay?: ScoreMark[]
   /** The page these marks belong to; stamped onto anything drawn here. */
   page: number
   /** The drawn page's pixel size, so shapes keep their proportions. */
@@ -106,6 +112,7 @@ interface Typing {
  */
 export default function ScoreMarks({
   marks,
+  underlay,
   page,
   size,
   tool,
@@ -486,6 +493,7 @@ export default function ScoreMarks({
         {/* In list order, which *is* z-order: later is nearer the reader.
             That is what `markAt` walks backwards through, and what the
             bring-to-front and send-to-back verbs rewrite. */}
+        {underlay?.map((m) => <Mark key={`u:${m.id}`} mark={m} size={size} selected={false} />)}
         {shown.map((m) => (
           <Mark key={m.id} mark={m} size={size} selected={selected.has(m.id)} />
         ))}

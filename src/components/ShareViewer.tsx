@@ -15,6 +15,7 @@ import ScoreViewSwitch from './ScoreViewSwitch'
 import { scoreBytesUrl, scoreView as scoreViewOf, type ScoreView } from '../lib/score'
 import { QuoteScoreProvider } from '../lib/quotePreview'
 import { downloadMarkedScore } from '../lib/exportMarkedScore'
+import { usePersonalMarks } from '../lib/personalMarks'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
   loadVolume,
@@ -50,7 +51,7 @@ import { useNotesView } from '../lib/useNotesView'
 import { usePassagePlayback } from '../lib/usePassagePlayback'
 import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { usePlayerArea } from '../lib/playerArea'
-import { useHotkeys } from '../lib/useHotkeys'
+import { isTypingTarget, useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
@@ -111,6 +112,27 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // Per-session score display, over whatever the owner saved (see below).
   const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
   const [scoreReload, setScoreReload] = useState(0)
+  // The reader's own marks on the score: kept in this browser, drawn over the
+  // track's, never written back (lib/personalMarks).
+  const mine = usePersonalMarks(project?.id ?? null)
+  // Their own undo, since the viewer has no project history to share one
+  // with. The same keys the editor uses; a text field keeps its own.
+  const { undo: undoMine, redo: redoMine } = mine
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const k = e.key.toLowerCase()
+      const isUndo = k === 'z' && !e.shiftKey
+      const isRedo = (k === 'z' && e.shiftKey) || k === 'y'
+      if (!isUndo && !isRedo) return
+      if (e.defaultPrevented || isTypingTarget(e.target)) return
+      e.preventDefault()
+      if (isRedo) redoMine()
+      else undoMine()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undoMine, redoMine])
   // The timed lyrics on the picture — a reader's own switch, never saved.
   const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
   const [chordsOnVideo, setChordsOnVideo] = useState(true)
@@ -593,6 +615,14 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
         annotations={annotations}
         onPlayNote={playFromNote}
         readOnly
+        // A reader can't draw on the track, but can on their own copy of it.
+        canDraw
+        personalMarks={mine.marks}
+        onPersonalMarks={mine.commit}
+        canUndo={mine.canUndo}
+        canRedo={mine.canRedo}
+        onUndo={mine.undo}
+        onRedo={mine.redo}
       />
     ) : null
   const scorePane = scoreView.mode === 'view' ? buildScoreLayer('pane') : null
@@ -605,10 +635,13 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       videoSource={isVideoSource(source)}
       onView={(patch) => setScoreOverride((o) => ({ ...o, ...patch }))}
       onReload={() => setScoreReload((n) => n + 1)}
+      // Their copy: the teacher's marks and their own, burned in together.
       onDownload={
-        score ? () => downloadMarkedScore(score, score.marks ?? [], project.title) : undefined
+        score
+          ? () => downloadMarkedScore(score, [...(score.marks ?? []), ...mine.marks], project.title)
+          : undefined
       }
-      markCount={score?.marks?.length ?? 0}
+      markCount={(score?.marks?.length ?? 0) + mine.marks.length}
     />
   )
   const scoreSwitch = score ? (

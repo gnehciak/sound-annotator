@@ -991,6 +991,23 @@ returns — after a text mark's ink came out black. Verified by rendering the
 result back with pdf.js at all four rotations and sampling where each mark
 should be.
 
+**A reader draws on their own copy** (`lib/personalMarks.ts`). Marks belong to
+the track, which is right for the teacher and left a student with a `?view=`
+link unable to circle a bar. So the share viewer gets the tools too, writing to
+a layer of the reader's own: `ScoreLayer`'s `personalMarks` / `onPersonalMarks`,
+used only when `onMarks` is absent. The track's marks are drawn beneath it as
+ScoreMarks' `underlay` — seen, never selectable, never erased — and every edit
+verb in the layer goes through one pair (`ownMarks` / `writeMarks`) so nothing
+has to know which layer it is editing. It lives in this browser's localStorage
+under the project's real id, read back through the import sanitizer
+(`sanitizeMarks`), capped at 500 — the same *convenience, not guarantee*
+footing as a guest's track list, which is why the pill says **Yours** and its
+tooltip says another device starts blank. Its own undo (the viewer has no
+project history), coalesced like the app's, on ⌘Z and the strip; *Clear my
+marks* on the page menu is one undoable step, so it doesn't ask. The reader's
+download burns in both layers — it is their copy. Quote crops carry the
+track's marks only: the note's picture is the note's.
+
 **A pen in hand takes the quote frames out of the way**: they sit over the
 marks, so with any tool armed they are inert (no play, no drag) — otherwise a
 highlight inside a quoted region could not be picked up, the press played the

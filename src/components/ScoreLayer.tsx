@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Eraser,
   ListMusic,
   Loader2,
   MapPin,
@@ -106,6 +107,8 @@ export default function ScoreLayer({
   onPlayNote,
   onPageChange,
   onMarks,
+  personalMarks,
+  onPersonalMarks,
   canDraw = false,
   canUndo,
   canRedo,
@@ -176,6 +179,14 @@ export default function ScoreLayer({
   onPageChange?: (page: number) => void
   /** Save the drawn marks. Absent means nobody here may draw. */
   onMarks?: (marks: ScoreMark[], opts?: { coalesceKey?: string }) => void
+  /**
+   * A reader's own layer (lib/personalMarks) — drawn over the track's marks,
+   * which stay beneath it inert. Only where the reader may not draw on the
+   * track itself: with `onMarks` present these are ignored, since the owner's
+   * pen already writes where everyone sees it.
+   */
+  personalMarks?: ScoreMark[]
+  onPersonalMarks?: (marks: ScoreMark[], opts?: { coalesceKey?: string }) => void
   /** Whether to offer the drawing tools at all (pane and expanded only). */
   canDraw?: boolean
   /**
@@ -213,7 +224,14 @@ export default function ScoreLayer({
   // Drawing needs a surface big enough to aim at, so the tools are offered in
   // the pane and expanded but never in the video frame — and never while the
   // sync workspace is up, where every press is meant to be a page turn.
-  const drawable = canDraw && !!onMarks && !syncing && reading
+  // Which marks the pen writes, and where. The track's own for anyone who may
+  // write the track; otherwise a reader's layer of their own, with the track's
+  // drawn beneath it — seen, never selectable, never moved.
+  const personal = !onMarks && !!onPersonalMarks
+  const ownMarks = personal ? personalMarks : score.marks
+  const writeMarks = personal ? onPersonalMarks : onMarks
+  const underlay = personal ? score.marks : undefined
+  const drawable = canDraw && !!writeMarks && !syncing && reading
 
   // A shorter replacement (or a different score) must never leave the reader
   // parked on a page that no longer exists. Clamped as it is read rather than
@@ -314,26 +332,26 @@ export default function ScoreLayer({
   // new array every render would give each page a new prop and defeat the
   // page memo on the one path — scrolling — where it matters most.
   const activeKey = drawable
-    ? selectedMarks.filter((id) => (score.marks ?? []).some((m) => m.id === id)).join(',')
+    ? selectedMarks.filter((id) => (ownMarks ?? []).some((m) => m.id === id)).join(',')
     : ''
   const activeMarks = useMemo(() => (activeKey ? activeKey.split(',') : []), [activeKey])
 
   const commitMarks = useCallback(
-    (marks: ScoreMark[]) => onMarks?.(upsertMarks(score.marks, marks)),
-    [onMarks, score.marks],
+    (marks: ScoreMark[]) => writeMarks?.(upsertMarks(ownMarks, marks)),
+    [writeMarks, ownMarks],
   )
   const eraseMarks = useCallback(
     (ids: string[]) => {
-      onMarks?.(removeMarks(score.marks, ids))
+      writeMarks?.(removeMarks(ownMarks, ids))
       setSelectedMarks((sel) => sel.filter((id) => !ids.includes(id)))
     },
-    [onMarks, score.marks],
+    [writeMarks, ownMarks],
   )
   const deleteSelected = useCallback(() => {
     if (!activeKey) return
-    onMarks?.(removeMarks(score.marks, activeKey.split(',')))
+    writeMarks?.(removeMarks(ownMarks, activeKey.split(',')))
     setSelectedMarks([])
-  }, [onMarks, score.marks, activeKey])
+  }, [writeMarks, ownMarks, activeKey])
 
   /**
    * The pen's colour and weight — and the selection's, when there is one.
@@ -348,33 +366,33 @@ export default function ScoreLayer({
   const restyle = useCallback(
     (next: MarkStyle) => {
       setMarkStyle(next)
-      if (!activeKey || !onMarks) return
+      if (!activeKey || !writeMarks) return
       const ids = new Set(activeKey.split(','))
-      const changed = (score.marks ?? [])
+      const changed = (ownMarks ?? [])
         .filter((m) => ids.has(m.id))
         .map((m) => {
           if (m.kind !== 'text' || next.weight === m.weight) return { ...m, color: next.color, weight: next.weight }
           const k = textSizeOf(next.weight) / textSizeOf(m.weight)
           return { ...m, color: next.color, weight: next.weight, w: m.w * k, h: m.h * k }
         })
-      onMarks(upsertMarks(score.marks, changed))
+      writeMarks(upsertMarks(ownMarks, changed))
     },
-    [activeKey, onMarks, score.marks],
+    [activeKey, writeMarks, ownMarks],
   )
   const raiseSelected = useCallback(() => {
-    if (activeKey) onMarks?.(raiseMarks(score.marks, activeKey.split(',')))
-  }, [activeKey, onMarks, score.marks])
+    if (activeKey) writeMarks?.(raiseMarks(ownMarks, activeKey.split(',')))
+  }, [activeKey, writeMarks, ownMarks])
   const lowerSelected = useCallback(() => {
-    if (activeKey) onMarks?.(lowerMarks(score.marks, activeKey.split(',')))
-  }, [activeKey, onMarks, score.marks])
+    if (activeKey) writeMarks?.(lowerMarks(ownMarks, activeKey.split(',')))
+  }, [activeKey, writeMarks, ownMarks])
   const duplicateSelected = useCallback(() => {
     if (!activeKey) return
-    const made = duplicateMarks(score.marks, activeKey.split(','))
-    onMarks?.(made.marks)
+    const made = duplicateMarks(ownMarks, activeKey.split(','))
+    writeMarks?.(made.marks)
     // Select the copies, not the originals: the copies are what you are about
     // to move, and they sit directly on top of what they were made from.
     setSelectedMarks(made.ids)
-  }, [activeKey, onMarks, score.marks])
+  }, [activeKey, writeMarks, ownMarks])
 
   /**
    * ⌥ + an arrow nudges the selection by 1% of the page (5% with ⇧). The plain
@@ -385,12 +403,12 @@ export default function ScoreLayer({
    */
   const nudgeSelected = useCallback(
     (dx: number, dy: number) => {
-      if (!activeKey || !onMarks) return
+      if (!activeKey || !writeMarks) return
       const ids = new Set(activeKey.split(','))
-      const moved = (score.marks ?? []).filter((m) => ids.has(m.id)).map((m) => moveMark(m, dx, dy))
-      onMarks(upsertMarks(score.marks, moved), { coalesceKey: `nudge:${activeKey}` })
+      const moved = (ownMarks ?? []).filter((m) => ids.has(m.id)).map((m) => moveMark(m, dx, dy))
+      writeMarks(upsertMarks(ownMarks, moved), { coalesceKey: `nudge:${activeKey}` })
     },
-    [activeKey, onMarks, score.marks],
+    [activeKey, writeMarks, ownMarks],
   )
 
   // Expanded, the score owns Escape and the page keys; with a tool armed it
@@ -502,7 +520,7 @@ export default function ScoreLayer({
   // a highlight and saying "not that one" is the one thing the drawing tools
   // make you set up for.
   const menuMark = menuOn
-    ? markAt(marksOnPage(score.marks, menuOn.page), menuOn.x, menuOn.y)
+    ? markAt(marksOnPage(ownMarks, menuOn.page), menuOn.x, menuOn.y)
     : null
   const menuItems: ContextMenuItem[] = []
   if (menuOn) {
@@ -510,7 +528,7 @@ export default function ScoreLayer({
     // Everything that can be done to a mark, where the pointer already is —
     // the toolbar's verbs need the mark selected first, and the reader who
     // right-clicked one has already said which they mean.
-    if (onMarks && menuMark) {
+    if (writeMarks && menuMark) {
       // The right-clicked mark, or the whole selection when it is part of one:
       // pointing at one of three selected marks and choosing "Delete" means
       // the three, as it does in every program that has a selection.
@@ -521,21 +539,21 @@ export default function ScoreLayer({
           key: 'raise-mark',
           label: 'Bring to front',
           icon: BringToFront,
-          onSelect: () => onMarks(raiseMarks(score.marks, ids)),
+          onSelect: () => writeMarks(raiseMarks(ownMarks, ids)),
         },
         {
           key: 'lower-mark',
           label: 'Send to back',
           icon: SendToBack,
-          onSelect: () => onMarks(lowerMarks(score.marks, ids)),
+          onSelect: () => writeMarks(lowerMarks(ownMarks, ids)),
         },
         {
           key: 'duplicate-mark',
           label: 'Duplicate',
           icon: Copy,
           onSelect: () => {
-            const made = duplicateMarks(score.marks, ids)
-            onMarks(made.marks)
+            const made = duplicateMarks(ownMarks, ids)
+            writeMarks(made.marks)
             setSelectedMarks(made.ids)
           },
         },
@@ -547,6 +565,20 @@ export default function ScoreLayer({
           onSelect: () => eraseMarks(ids),
         },
       )
+    }
+    // A reader's whole layer, gone in one step — and undoable, so the menu
+    // doesn't have to ask whether they're sure.
+    if (personal && writeMarks && (ownMarks?.length ?? 0) > 0) {
+      menuItems.push({
+        key: 'clear-mine',
+        label: 'Clear my marks',
+        icon: Eraser,
+        separated: menuItems.length > 0,
+        onSelect: () => {
+          writeMarks([])
+          setSelectedMarks([])
+        },
+      })
     }
     if (onMovePin && !readOnly) {
       menuItems.push({
@@ -664,7 +696,8 @@ export default function ScoreLayer({
     (n: number, size: { width: number; height: number }) => (
       <>
         <ScoreMarks
-          marks={marksOnPage(score.marks, n)}
+          marks={marksOnPage(ownMarks, n)}
+          underlay={underlay && marksOnPage(underlay, n)}
           page={n}
           size={size}
           tool={activeTool}
@@ -717,7 +750,8 @@ export default function ScoreLayer({
       </>
     ),
     [
-      score.marks,
+      ownMarks,
+      underlay,
       activeTool,
       markStyle,
       activeMarks,
@@ -825,6 +859,7 @@ export default function ScoreLayer({
         onDuplicate={duplicateSelected}
         onRaise={raiseSelected}
         onLower={lowerSelected}
+        personal={personal}
       />
     </div>
   ) : null

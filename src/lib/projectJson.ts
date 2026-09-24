@@ -415,7 +415,7 @@ function sanitizeTurns(v: unknown): ScoreTurn[] | undefined {
  * honest default shape, and a highlight silently standing in for something
  * else would be worse on the page than nothing.
  */
-function sanitizeMarks(v: unknown): ScoreMark[] | undefined {
+export function sanitizeMarks(v: unknown): ScoreMark[] | undefined {
   if (!Array.isArray(v)) return undefined
   const marks: ScoreMark[] = []
   for (const raw of v.slice(0, MAX_MARKS)) {
