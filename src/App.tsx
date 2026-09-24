@@ -67,6 +67,7 @@ import ChordOverlay from './components/ChordOverlay'
 import StageStrip from './components/structure/StageStrip'
 import { clampLyricDim, clampLyricScale, shiftLyrics } from './lib/lyrics'
 import { QuoteScoreProvider } from './lib/quotePreview'
+import { downloadMarkedScore } from './lib/exportMarkedScore'
 import { fetchVideoTitle } from './lib/youtube'
 import { looksLikeDriveLink } from './lib/drive'
 import {
@@ -2479,6 +2480,10 @@ export default function App() {
             }
           : undefined
       }
+      onDownload={
+        score ? () => downloadMarkedScore(score, score.marks ?? [], current.title) : undefined
+      }
+      markCount={score?.marks?.length ?? 0}
     />
   ) : null
 
@@ -2604,7 +2609,10 @@ export default function App() {
     // Every quote on screen — the covers on the list's rows, the thumbnail in
     // the inspector — is a crop of this track's score, and this is where the
     // one score anything is quoting is known. See lib/quotePreview.
-    <QuoteScoreProvider url={score ? scoreBytesUrl(score, scoreReload) : null}>
+    <QuoteScoreProvider
+      url={score ? scoreBytesUrl(score, scoreReload) : null}
+      marks={score?.marks}
+    >
     <div className="flex h-full flex-col text-fg">
       {/* Guests have no account to hold their work — their links are the only
           way back to it, so the bar sits above everything, not in a menu. */}

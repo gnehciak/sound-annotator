@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import {
+  Download,
   ExternalLink,
   ListMusic,
   Loader2,
@@ -38,6 +39,8 @@ export default function ScoreButton({
   onScore,
   onUpload,
   onSync,
+  onDownload,
+  markCount = 0,
 }: {
   score?: ProjectScore
   view: ScoreView
@@ -52,6 +55,10 @@ export default function ScoreButton({
   onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
   /** Open the sync workspace. Absent when the caller may not retime the score. */
   onSync?: () => void
+  /** Download the PDF with the marks burned in (lib/exportMarkedScore). */
+  onDownload?: () => Promise<void>
+  /** How many marks that download will carry, for its label. */
+  markCount?: number
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -108,6 +115,8 @@ export default function ScoreButton({
                 onSync()
               })
             }
+            onDownload={onDownload}
+            markCount={markCount}
           />
         ) : (
           <ScoreAttach
@@ -262,6 +271,8 @@ function ScoreSettings({
   onScore,
   onUpload,
   onSync,
+  onDownload,
+  markCount,
 }: {
   score: ProjectScore
   view: ScoreView
@@ -271,8 +282,25 @@ function ScoreSettings({
   onScore?: (next: ProjectScore | null) => void
   onUpload?: (file: File, onProgress: (fraction: number) => void) => Promise<string>
   onSync?: () => void
+  onDownload?: () => Promise<void>
+  markCount?: number
 }) {
   const [replacing, setReplacing] = useState(false)
+  // The download is a fetch and a rewrite of the whole PDF — a second or two
+  // on a long score — so the row says it is working, and says so if it fails
+  // rather than leaving a press that did nothing.
+  const [downloading, setDownloading] = useState<'idle' | 'busy' | 'failed'>('idle')
+  const download = async () => {
+    if (!onDownload || downloading === 'busy') return
+    setDownloading('busy')
+    try {
+      await onDownload()
+      setDownloading('idle')
+    } catch (err) {
+      console.error('Marked score download failed:', err)
+      setDownloading('failed')
+    }
+  }
   const link = scoreLinkUrl(score)
   const turns = score.turns?.length ?? 0
 
@@ -402,6 +430,32 @@ function ScoreSettings({
               This score turns its own pages.
             </p>
           )
+        )}
+        {onDownload && (
+          <button
+            type="button"
+            onClick={() => void download()}
+            disabled={downloading === 'busy'}
+            title={
+              markCount
+                ? 'The PDF with everything drawn on it — the engraving stays sharp; only the marks are added'
+                : 'The PDF, as it is'
+            }
+            className={`pop-row rounded ${downloading === 'failed' ? 'text-danger' : ''}`}
+          >
+            {downloading === 'busy' ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Download size={13} />
+            )}
+            {downloading === 'failed'
+              ? 'Couldn’t read the score — try again'
+              : downloading === 'busy'
+                ? 'Preparing the PDF…'
+                : markCount
+                  ? `Download with the markings (${markCount})`
+                  : 'Download the PDF'}
+          </button>
         )}
         {score.kind === 'drive' && (
           <button type="button" onClick={onReload} className="pop-row rounded">
