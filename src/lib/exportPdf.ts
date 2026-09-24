@@ -246,7 +246,7 @@ const WIN_ANSI_EXTRA = new Set(
 
 /** Drop what the font can't draw. A missing glyph reads as a limit; a wrong
  *  one reads as a bug, and a thrown error loses the whole document. */
-function encodable(s: string): string {
+export function encodable(s: string): string {
   let out = ''
   for (const ch of s) {
     const code = ch.codePointAt(0) ?? 0

@@ -434,7 +434,17 @@ pass: small crops asked for one note at a time while a list scrolls, so it
 shares one open document (released after a minute's quiet), one raster per page
 and one cache of crops across every row, and renders them one at a time —
 twenty notes mounting at once would otherwise start twenty pdf.js renders in
-the same instant. Both go through `cropImage`, and every crop comes back as a
+the same instant. Both go through `cropImage`, which also **draws the page's marks into the
+crop** (`lib/markRaster.ts`): the raster is the PDF alone and the marks are the
+app's, laid over it, so a note quoting the bar someone highlighted used to print
+the bar without the highlight — in the handout, the answer sheet and its own
+row. `drawMarks` uses the same geometry as the SVG (`strokeOf`, `arrowWings`,
+the text metrics in lib/score), so the two can't drift. The screen pass keeps
+each page raster *clean* and draws the marks per crop, keying the crop cache on
+`marksSignature` of that page's marks only — a highlight moved on page 4
+recrops nothing on page 2. `QuoteScoreProvider` carries the track's marks for
+it (never a reader's private ones: the note's picture is the note's). Every crop
+comes back as a
 **JPEG**: the export's consumers are a PDF and a .docx, which want bytes rather
 than a styled window, and the same bytes are what an `<img>` on a row takes.
 Reading a note's own inline pictures that way is cross-origin — fine, since the
@@ -966,6 +976,25 @@ out of reach at exactly the moment someone is drawing. The strip rather than the
 tools' pill: undo has to be there with the pen put down too, and the pill is
 already as wide as a narrow pane allows (with a mark selected it wrapped Redo
 onto a line of its own).
+
+**The score downloads with its marks burned in** (`lib/exportMarkedScore.ts`,
+the score menu's *Download with the markings*). Drawn onto the original PDF with
+pdf-lib rather than re-rasterised, so the engraving stays vector and the file
+stays the size it was. Marks are fractions of the page *as pdf.js draws it* —
+the crop box turned by `/Rotate` — so `toUser` maps them back into user space,
+turn and all, and every shape is drawn as points through it (an ellipse as a
+64-gon, since pdf-lib's is axis-aligned in user space and a turned page is
+not); text gets `rotate: degrees(turn)` to run along the drawn page's x axis.
+Standard-font text goes through `encodable` like the study PDF. `hex()` reads
+both colour shapes the app produces — `#rrggbb` and the `rgb(r g b)` `hueText`
+returns — after a text mark's ink came out black. Verified by rendering the
+result back with pdf.js at all four rotations and sampling where each mark
+should be.
+
+**A pen in hand takes the quote frames out of the way**: they sit over the
+marks, so with any tool armed they are inert (no play, no drag) — otherwise a
+highlight inside a quoted region could not be picked up, the press played the
+note instead.
 
 **Page turns** (`score.turns`, `ScoreSync.tsx`): a sorted `{ t, page }[]` in
 clip time — the same clock the notes use, so App's `setClip` shifts it along

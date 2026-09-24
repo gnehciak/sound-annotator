@@ -27,14 +27,17 @@ import {
   createElement,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react'
 
 import { openPdf, type LoadedPdf } from './pdf'
 import { quotePageOf } from './overlays'
+import { marksOnPage } from './score'
+import { marksSignature } from './markRaster'
 import { cropImage } from './quoteImages'
-import type { NoteQuote } from '../types'
+import type { NoteQuote, ScoreMark } from '../types'
 
 /** Width a page is rasterised at, in CSS pixels. */
 const PAGE_PX = 760
@@ -68,16 +71,27 @@ const IDLE_RELEASE_MS = 60_000
  * one open in the inspector all quote the *same* score, and it is the host —
  * App, the share viewer — that knows which.
  */
-const QuoteScoreContext = createContext<string | null>(null)
+const QuoteScoreContext = createContext<{ url: string | null; marks?: ScoreMark[] }>({
+  url: null,
+})
 
 export function QuoteScoreProvider({
   url,
+  marks,
   children,
 }: {
   url: string | null
+  /**
+   * What is drawn on the score, so a quote's picture carries it — the marks
+   * are the app's, laid over the PDF, and the raster a crop is cut from is the
+   * PDF alone. Only the track's own: a reader's private marks are theirs, and
+   * the note's picture is the note's.
+   */
+  marks?: ScoreMark[]
   children: ReactNode
 }) {
-  return createElement(QuoteScoreContext.Provider, { value: url }, children)
+  const value = useMemo(() => ({ url, marks }), [url, marks])
+  return createElement(QuoteScoreContext.Provider, { value }, children)
 }
 
 /** A crop ready to draw: a data URL and the shape it is. */
@@ -98,8 +112,15 @@ export interface QuotePreview {
  * render per page rather than one of each per note.
  */
 export function useQuotePreview(quote: NoteQuote | undefined): QuotePreview | null {
-  const url = useContext(QuoteScoreContext)
-  const key = quote && url ? cropKey(url, quote) : null
+  const { url, marks } = useContext(QuoteScoreContext)
+  // Only the marks on the quote's own page matter to it — and only their
+  // fingerprint goes in the key, so a highlight moved on page 4 doesn't recrop
+  // every quote of page 2.
+  const onPage = useMemo(
+    () => (quote ? marksOnPage(marks, quotePageOf(quote)) : []),
+    [marks, quote],
+  )
+  const key = quote && url ? `${cropKey(url, quote)}|${marksSignature(onPage)}` : null
   // The crop *and* what it is of, together: a crop that resolves after the row
   // moved on to another note must not be drawn on it. Reset during render as
   // the key changes (React's documented shape for state derived from a prop)
@@ -113,13 +134,13 @@ export function useQuotePreview(quote: NoteQuote | undefined): QuotePreview | nu
   useEffect(() => {
     if (!key || !quote || !url || crops.get(key)) return
     let alive = true
-    void quoteCrop(url, quote).then((crop) => {
+    void quoteCrop(url, quote, onPage, key).then((crop) => {
       if (alive) setShown({ key, crop })
     })
     return () => {
       alive = false
     }
-  }, [key, quote, url])
+  }, [key, quote, url, onPage])
 
   return shown.key === key ? shown.crop : null
 }
@@ -148,15 +169,22 @@ let queue: Promise<unknown> = Promise.resolve()
  * document and the page raster below cache their own failures, so a retry is a
  * map lookup rather than another trip to the network.
  */
-async function quoteCrop(url: string, quote: NoteQuote): Promise<QuotePreview | null> {
+async function quoteCrop(
+  url: string,
+  quote: NoteQuote,
+  marks: ScoreMark[],
+  key: string,
+): Promise<QuotePreview | null> {
+  // The raster is the clean page, kept once however its marks change; the
+  // marks are drawn into each crop as it is cut.
   const canvas = await pageRaster(url, quotePageOf(quote))
   // A raster evicted between resolving and being read has had its backing
   // store freed; cropping that would cache a blank picture for good.
   const crop =
     canvas && canvas.width > 0
-      ? cropImage(canvas, canvas.width, canvas.height, quote, CROP_MAX_PX)
+      ? cropImage(canvas, canvas.width, canvas.height, quote, CROP_MAX_PX, marks)
       : null
-  if (crop) remember(crops, cropKey(url, quote), crop, MAX_CROPS)
+  if (crop) remember(crops, key, crop, MAX_CROPS)
   return crop
 }
 

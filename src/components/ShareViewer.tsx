@@ -14,6 +14,7 @@ import ScoreLayer from './ScoreLayer'
 import ScoreViewSwitch from './ScoreViewSwitch'
 import { scoreBytesUrl, scoreView as scoreViewOf, type ScoreView } from '../lib/score'
 import { QuoteScoreProvider } from '../lib/quotePreview'
+import { downloadMarkedScore } from '../lib/exportMarkedScore'
 import { fetchSharedProject } from '../lib/projectStore'
 import {
   loadVolume,
@@ -604,6 +605,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       videoSource={isVideoSource(source)}
       onView={(patch) => setScoreOverride((o) => ({ ...o, ...patch }))}
       onReload={() => setScoreReload((n) => n + 1)}
+      onDownload={
+        score ? () => downloadMarkedScore(score, score.marks ?? [], project.title) : undefined
+      }
+      markCount={score?.marks?.length ?? 0}
     />
   )
   const scoreSwitch = score ? (
@@ -713,7 +718,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   return (
     // The quotes on the notes' rows are crops of this track's score; the
     // provider is what tells them which score to cut them out of.
-    <QuoteScoreProvider url={score ? scoreBytesUrl(score, scoreReload) : null}>
+    <QuoteScoreProvider
+      url={score ? scoreBytesUrl(score, scoreReload) : null}
+      marks={score?.marks}
+    >
     <div className="flex h-full flex-col text-fg">
       <header className="flex h-[54px] items-center gap-3 px-4">
         <HomeDot>

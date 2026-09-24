@@ -21,10 +21,11 @@
 //
 // The same crops are wanted on screen, much smaller and one note at a time;
 // lib/quotePreview.ts does that, over `cropImage` below.
-import type { Annotation, NoteQuote, Project } from '../types'
+import type { Annotation, NoteQuote, Project, ScoreMark } from '../types'
 import { openPdf } from './pdf'
 import { quotePageOf, quotesOf } from './overlays'
-import { scoreBytesUrl } from './score'
+import { marksOnPage, scoreBytesUrl } from './score'
+import { drawMarks } from './markRaster'
 // A type-only cycle back the other way (studyDoc takes QuoteImage), which is
 // erased at build; this direction is the real dependency.
 import { noteImageUrls } from './studyDoc'
@@ -228,8 +229,9 @@ async function addScoreQuotes(
       // opened for the document, and pdf.js's on-screen path waits for an
       // animation frame a hidden tab never fires. See RenderOptions.offscreen.
       await doc.render(page, canvas, scale, { offscreen: true })
+      const onPage = marksOnPage(score?.marks, page)
       for (const job of group) {
-        const crop = cropImage(canvas, canvas.width, canvas.height, job.quote)
+        const crop = cropImage(canvas, canvas.width, canvas.height, job.quote, undefined, onPage)
         if (!crop) continue
         const held = cropped.get(job.noteId) ?? new Map<number, QuoteImage>()
         held.set(job.index, crop)
@@ -266,6 +268,13 @@ export function cropImage(
   sourceHeight: number,
   q: { x: number; y: number; w: number; h: number },
   maxPx = QUOTE_MAX_PX,
+  /**
+   * What is drawn on the page this is cut from. The raster is the PDF alone —
+   * the marks are the app's, laid over it — so they are drawn into the crop
+   * here, or a quote of a highlighted bar carries the bar without the
+   * highlight. See lib/markRaster.
+   */
+  marks: ScoreMark[] = [],
 ): QuoteImage | null {
   const sx = Math.round(q.x * sourceWidth)
   const sy = Math.round(q.y * sourceHeight)
@@ -282,6 +291,13 @@ export function cropImage(
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, out.width, out.height)
   ctx.drawImage(source, sx, sy, sw, sh, 0, 0, out.width, out.height)
+  drawMarks(ctx, marks, {
+    pageW: sourceWidth,
+    pageH: sourceHeight,
+    ox: sx,
+    oy: sy,
+    scale: out.width / sw,
+  })
   try {
     return { src: out.toDataURL('image/jpeg', 0.88), width: out.width, height: out.height }
   } catch {

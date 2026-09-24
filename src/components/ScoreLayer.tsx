@@ -691,13 +691,20 @@ export default function ScoreLayer({
             label={noteLabel(note.start, note.end)}
             // Only the open note's rectangles are draggable. Every quote in
             // the track is drawn on its page, and handles on all of them would
-            // make the page a field of things to catch by accident.
-            readOnly={readOnly || note.id !== selectedId}
+            // make the page a field of things to catch by accident. And none of
+            // them while a pen is in hand: a quote frame sits over the marks,
+            // so a highlight inside a quoted region could not be picked up —
+            // the press played the note instead. One pointer, one meaning.
+            readOnly={readOnly || note.id !== selectedId || activeTool !== null}
             onChange={onQuote && ((q) => onQuote(note.id, index, q))}
             // Only where the score is being read. Over the video the layer is
             // inert background, and a rectangle that swallowed the picture's
             // own click-to-pause would cost the class more than it gave them.
-            onPlay={reading && onPlayNote ? () => onPlayNote(note.id) : undefined}
+            onPlay={
+              reading && onPlayNote && activeTool === null
+                ? () => onPlayNote(note.id)
+                : undefined
+            }
           />
         ))}
         <PinLayer
