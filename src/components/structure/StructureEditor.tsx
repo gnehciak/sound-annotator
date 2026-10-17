@@ -1244,6 +1244,152 @@ export default function StructureEditor({
         >
           <span className="absolute -left-[4px] top-0 h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-[rgb(var(--accent))]" />
         </SmoothPlayhead>
+
+        {/* The selected section's (or chord's) controls — a floating glass
+            pill over the foot of the board, not a bar glued to its bottom
+            edge. Absolutely placed so selecting never reflows the board, and
+            mounted only while something is selected, so an idle board carries
+            no chrome. */}
+        {!readOnly && (selected || (chordsVisible && selectedChord && chords)) && (
+          <div
+            role="group"
+            aria-label="Selected section"
+            className="glass-pop animate-fade-in absolute bottom-2 left-1/2 z-40 flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 items-center gap-x-3 overflow-x-auto rounded-[14px] px-3 py-2"
+          >
+            {chordsVisible && selectedChord && chords ? (
+              <ChordFooter
+                chords={chords}
+                chord={selectedChord}
+                onChange={changeChords}
+                onDelete={() => deleteChord(selectedChord.id)}
+              />
+            ) : selected ? (
+              <>
+                <span
+                  aria-hidden
+                  className="h-3.5 w-3.5 shrink-0 rounded-sm"
+                  style={{ background: selected.color ?? colorForId(selected.id) }}
+                />
+                <input
+                  ref={nameRef}
+                  value={selected.sectionName ?? ''}
+                  onChange={(e) =>
+                    onUpdate(
+                      selected.id,
+                      { sectionName: e.target.value },
+                      { coalesceKey: `sec-name:${selected.id}` },
+                    )
+                  }
+                  placeholder="Section name"
+                  aria-label="Section name"
+                  className="field w-36 px-2 py-[4px]"
+                />
+                <div
+                  role="group"
+                  aria-label="Section presets"
+                  className="flex min-w-0 items-center gap-1 overflow-x-auto"
+                >
+                  {SECTION_PRESETS.map((p) => {
+                    const active =
+                      presetFor(selected.sectionName ?? '')?.name === p.name
+                    return (
+                      <button
+                        key={p.name}
+                        type="button"
+                        onClick={() =>
+                          onUpdate(selected.id, {
+                            sectionName: dedupedName(
+                              p.name,
+                              sections.filter((a) => a.id !== selected.id),
+                            ),
+                            color: p.color,
+                          })
+                        }
+                        title={`Name this section “${p.name}”`}
+                        aria-pressed={active}
+                        className="chip chip-outline press text-[9.5px] font-semibold"
+                        style={{
+                          ['--hue' as string]: p.color,
+                          color: active
+                            ? 'rgb(var(--text))'
+                            : 'rgb(var(--text-muted))',
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: p.color }}
+                        />
+                        {p.name}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
+                  <TimeField
+                    label="Section start"
+                    value={selected.start}
+                    onCommit={(t) => {
+                      const end = selected.end ?? selected.start
+                      const { lo } = gapAt((selected.start + end) / 2, selected.id)
+                      onUpdate(selected.id, {
+                        start: round1(
+                          clamp(t, Math.min(lo, selected.start), end - MIN_SECTION),
+                        ),
+                      })
+                    }}
+                  />
+                  –
+                  <TimeField
+                    label="Section end"
+                    value={selected.end ?? selected.start}
+                    onCommit={(t) => {
+                      const end = selected.end ?? selected.start
+                      const { hi } = gapAt((selected.start + end) / 2, selected.id)
+                      onUpdate(selected.id, {
+                        end: round1(
+                          clamp(t, selected.start + MIN_SECTION, Math.max(hi, end)),
+                        ),
+                      })
+                    }}
+                  />
+                </div>
+                {onDownloadClip && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (clipBusy) return
+                      setClipBusy(true)
+                      onDownloadClip(selected).finally(() => setClipBusy(false))
+                    }}
+                    disabled={clipBusy}
+                    title="Download this section's audio as an m4a clip"
+                    aria-label="Download this section as an audio clip"
+                    className="btn-icon press"
+                  >
+                    {clipBusy ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Download size={13} />
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(selected.id)
+                    selectSec(null)
+                  }}
+                  title="Delete section (⌫)"
+                  aria-label="Delete section"
+                  className="btn-icon press hover:text-danger"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Resize grip — drag to grow/shrink the section lane. */}
@@ -1299,145 +1445,6 @@ export default function StructureEditor({
         )
         ))}
 
-      {/* Footer — a FIXED slot so selecting a section never reflows the
-          board: the selected section's controls, or a one-line hint. */}
-      {!readOnly && (
-      <div className="flex h-11 items-center gap-x-3 overflow-x-auto overflow-y-hidden border-t border-line/70 px-3.5">
-      {chordsVisible && selectedChord && chords ? (
-        <ChordFooter
-          chords={chords}
-          chord={selectedChord}
-          onChange={changeChords}
-          onDelete={() => deleteChord(selectedChord.id)}
-        />
-      ) : selected ? (
-        <>
-          <span
-            aria-hidden
-            className="h-3.5 w-3.5 shrink-0 rounded-sm"
-            style={{ background: selected.color ?? colorForId(selected.id) }}
-          />
-          <input
-            ref={nameRef}
-            value={selected.sectionName ?? ''}
-            onChange={(e) =>
-              onUpdate(
-                selected.id,
-                { sectionName: e.target.value },
-                { coalesceKey: `sec-name:${selected.id}` },
-              )
-            }
-            placeholder="Section name"
-            aria-label="Section name"
-            className="field w-36 px-2 py-[4px]"
-          />
-          <div
-            role="group"
-            aria-label="Section presets"
-            className="flex min-w-0 items-center gap-1 overflow-x-auto"
-          >
-            {SECTION_PRESETS.map((p) => {
-              const active =
-                presetFor(selected.sectionName ?? '')?.name === p.name
-              return (
-                <button
-                  key={p.name}
-                  type="button"
-                  onClick={() =>
-                    onUpdate(selected.id, {
-                      sectionName: dedupedName(
-                        p.name,
-                        sections.filter((a) => a.id !== selected.id),
-                      ),
-                      color: p.color,
-                    })
-                  }
-                  title={`Name this section “${p.name}”`}
-                  aria-pressed={active}
-                  className="chip chip-outline press text-[9.5px] font-semibold"
-                  style={{
-                    ['--hue' as string]: p.color,
-                    color: active ? 'rgb(var(--text))' : 'rgb(var(--text-muted))',
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: p.color }}
-                  />
-                  {p.name}
-                </button>
-              )
-            })}
-          </div>
-          <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
-            <TimeField
-              label="Section start"
-              value={selected.start}
-              onCommit={(t) => {
-                const end = selected.end ?? selected.start
-                const { lo } = gapAt((selected.start + end) / 2, selected.id)
-                onUpdate(selected.id, {
-                  start: round1(clamp(t, Math.min(lo, selected.start), end - MIN_SECTION)),
-                })
-              }}
-            />
-            –
-            <TimeField
-              label="Section end"
-              value={selected.end ?? selected.start}
-              onCommit={(t) => {
-                const end = selected.end ?? selected.start
-                const { hi } = gapAt((selected.start + end) / 2, selected.id)
-                onUpdate(selected.id, {
-                  end: round1(clamp(t, selected.start + MIN_SECTION, Math.max(hi, end))),
-                })
-              }}
-            />
-          </div>
-          <div className="flex-1" />
-          {onDownloadClip && (
-            <button
-              type="button"
-              onClick={() => {
-                if (clipBusy) return
-                setClipBusy(true)
-                onDownloadClip(selected).finally(() => setClipBusy(false))
-              }}
-              disabled={clipBusy}
-              title="Download this section's audio as an m4a clip"
-              aria-label="Download this section as an audio clip"
-              className="btn-icon press"
-            >
-              {clipBusy ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Download size={13} />
-              )}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              onDelete(selected.id)
-              selectSec(null)
-            }}
-            title="Delete section (⌫)"
-            aria-label="Delete section"
-            className="btn-icon press hover:text-danger"
-          >
-            <Trash2 size={13} />
-          </button>
-        </>
-      ) : (
-        <p className="truncate text-[12px] text-muted">
-          {chords && canEditChords
-            ? 'Drag across the track to draw a section · press 1–7 to write a chord at the cursor, ⇧ for the seventh.'
-            : 'Drag across the track to draw a section — click one to name it.'}
-        </p>
-      )}
-      </div>
-      )}
     </section>
   )
 }
