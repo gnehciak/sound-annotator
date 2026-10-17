@@ -41,6 +41,7 @@ import ChordLane from './ChordLane'
 import { ChordFooter, ChordSetupRow } from './ChordControls'
 import {
   beatGrid,
+  beatTime,
   chordAfter,
   chordBefore,
   defaultChords,
@@ -364,6 +365,24 @@ export default function StructureEditor({
 
   const pps = width > 0 && ve > vs ? width / (ve - vs) : 1
   const xOf = (t: number) => (t - vs) * pps
+
+  // The floating section editor is anchored over the thing that was clicked —
+  // the selected section's (or chord's) midpoint on the timeline — rather than
+  // the board's centre, clamped so it stays within the lane. Positioned
+  // imperatively (no set-state-in-effect) so a re-render never fights it.
+  const pillRef = useRef<HTMLDivElement>(null)
+  const pillAnchorT =
+    chordsVisible && selectedChord && chords
+      ? beatTime(chords, selectedChord.beat + selectedChord.len / 2)
+      : selected
+        ? (selected.start + (selected.end ?? selected.start)) / 2
+        : null
+  useLayoutEffect(() => {
+    const el = pillRef.current
+    if (!el || pillAnchorT == null) return
+    const w = el.offsetWidth
+    el.style.left = `${clamp(xOf(pillAnchorT) - w / 2, 2, Math.max(2, width - w - 2))}px`
+  })
 
   // Latest values for the window-level drag listeners (they outlive renders).
   const liveRef = useRef({ sections, ordered, vs, ve, dur, pps, currentTime })
@@ -1065,8 +1084,22 @@ export default function StructureEditor({
         </div>
       </div>
 
+      {/* Resize grip — drag to grow/shrink the section lane. It sits above
+          the ruler now that the floating section editor floats over the lane's
+          foot; dragging down still grows the lane (it extends downward). */}
+      <div
+        onPointerDown={onLaneResizeDown}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline height"
+        title="Drag to resize the timeline height"
+        className="group mx-3.5 mb-0.5 mt-0.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
+      >
+        <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
+      </div>
+
       {/* Ruler + section lane. */}
-      <div ref={timelineRef} className="relative mx-3.5 mt-1">
+      <div ref={timelineRef} className="relative mt-0 mx-3.5">
         <div
           onPointerDown={(e) => {
             if (e.button === 0) scrubDrag(e.clientX)
@@ -1263,9 +1296,10 @@ export default function StructureEditor({
             no chrome. */}
         {!readOnly && (selected || (chordsVisible && selectedChord && chords)) && (
           <div
+            ref={pillRef}
             role="group"
             aria-label="Selected section"
-            className="glass-pop animate-fade-in absolute bottom-2 left-1/2 z-40 flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 items-center gap-x-3 overflow-x-auto rounded-[14px] px-3 py-2"
+            className="glass-pop animate-fade-in absolute bottom-2 left-0 z-40 flex max-w-[calc(100%-1.25rem)] items-center gap-x-3 overflow-x-auto rounded-[14px] px-3 py-2"
           >
             {chordsVisible && selectedChord && chords ? (
               <ChordFooter
@@ -1429,18 +1463,6 @@ export default function StructureEditor({
             ) : null}
           </div>
         )}
-      </div>
-
-      {/* Resize grip — drag to grow/shrink the section lane. */}
-      <div
-        onPointerDown={onLaneResizeDown}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize timeline height"
-        title="Drag to resize the timeline height"
-        className="group mx-3.5 mb-1.5 mt-0.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
-      >
-        <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
       </div>
 
       {/* The chord track's grid: key, tempo, metre, downbeat. A board with
