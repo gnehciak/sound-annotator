@@ -1084,20 +1084,6 @@ export default function StructureEditor({
         </div>
       </div>
 
-      {/* Resize grip — drag to grow/shrink the section lane. It sits above
-          the ruler now that the floating section editor floats over the lane's
-          foot; dragging down still grows the lane (it extends downward). */}
-      <div
-        onPointerDown={onLaneResizeDown}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize timeline height"
-        title="Drag to resize the timeline height"
-        className="group mx-3.5 mb-0.5 mt-0.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
-      >
-        <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
-      </div>
-
       {/* Ruler + section lane. */}
       <div ref={timelineRef} className="relative mt-0 mx-3.5">
         <div
@@ -1290,16 +1276,17 @@ export default function StructureEditor({
         </SmoothPlayhead>
 
         {/* The selected section's (or chord's) controls — a floating glass
-            pill over the foot of the board, not a bar glued to its bottom
-            edge. Absolutely placed so selecting never reflows the board, and
-            mounted only while something is selected, so an idle board carries
-            no chrome. */}
+            pill that hovers just *above* the ruler, over the section it's
+            editing, rather than sitting on the lane and hiding the blocks.
+            Anchored horizontally in a layout effect (pillAnchorT), so it points
+            at what you clicked; absolutely placed so selecting never reflows the
+            board, and mounted only while something is selected. */}
         {!readOnly && (selected || (chordsVisible && selectedChord && chords)) && (
           <div
             ref={pillRef}
             role="group"
             aria-label="Selected section"
-            className="glass-pop animate-fade-in absolute bottom-2 left-0 z-40 flex max-w-[calc(100%-1.25rem)] items-center gap-x-3 overflow-x-auto rounded-[14px] px-3 py-2"
+            className="glass-pop animate-fade-in absolute bottom-full left-0 z-40 mb-1.5 flex max-w-[calc(100%-1.25rem)] items-center gap-x-3 overflow-x-auto rounded-[14px] px-3 py-2"
           >
             {chordsVisible && selectedChord && chords ? (
               <ChordFooter
@@ -1463,6 +1450,20 @@ export default function StructureEditor({
             ) : null}
           </div>
         )}
+      </div>
+
+      {/* Resize grip — drag to grow/shrink the section lane. It sits below the
+          lanes now that the floating section editor hovers above the ruler;
+          dragging down grows the lane (it extends downward from the ruler). */}
+      <div
+        onPointerDown={onLaneResizeDown}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline height"
+        title="Drag to resize the timeline height"
+        className="group mx-3.5 mb-0.5 mt-0.5 flex h-3 cursor-ns-resize touch-none items-center justify-center"
+      >
+        <div className="h-[3px] w-9 rounded-full bg-line-strong/40 transition-colors group-hover:bg-line-strong" />
       </div>
 
       {/* The chord track's grid: key, tempo, metre, downbeat. A board with
