@@ -15,6 +15,8 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Music2,
+  Captions,
 } from 'lucide-react'
 import type { Annotation, ProjectChords } from '../../types'
 import { formatTime, noteLabel, parseTime } from '../../lib/format'
@@ -104,6 +106,11 @@ interface Props {
   /** Whether the chord bar is drawn on the video (video tracks only). */
   chordsOnVideo?: boolean
   onToggleChordsOnVideo?: () => void
+  /** Whether the companion lyrics column is shown beside the board. A view
+   *  choice owned by App (the column is its sibling), surfaced here so the
+   *  board's lane switches sit together. Absent hides the Lyrics toggle. */
+  lyricsVisible?: boolean
+  onToggleLyrics?: () => void
 }
 
 type Tool = 'select' | 'cut'
@@ -161,10 +168,21 @@ export default function StructureEditor({
   onChordsChange,
   chordsOnVideo,
   onToggleChordsOnVideo,
+  lyricsVisible,
+  onToggleLyrics,
   playbackRate = 1,
 }: Props) {
   const theme = useResolvedTheme()
   const [tool, setTool] = useState<Tool>('select')
+  // Whether the chord track's lane + setup row are shown on the board. A
+  // display choice (the chord data is untouched), kept per-track by the
+  // `key={current.id}` remount: a fresh board with no chords starts clean,
+  // a board that already carries chords shows them.
+  const [chordsVisible, setChordsVisible] = useState(() => !!chords)
+  const hideChords = () => {
+    setChordsVisible(false)
+    setSelectedChordId(null)
+  }
   // Selection is derived defensively: an id that no longer exists (deleted,
   // undone) simply matches nothing, and read-only mode masks it entirely.
   const [rawSelectedId, setSelectedId] = useState<string | null>(null)
@@ -848,8 +866,50 @@ export default function StructureEditor({
     </button>
   )
 
+  const laneBtn = (
+    on: boolean,
+    icon: React.ReactNode,
+    label: string,
+    title: string,
+    onClick: () => void,
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      title={title}
+      className="seg-item press h-[24px] gap-1.5 text-[10px] tracking-[0.12em]"
+    >
+      {icon}
+      <span className="hidden lg:inline">{label}</span>
+    </button>
+  )
+
   const headerActions = (
     <div className="flex min-w-0 items-center gap-2.5">
+      {/* Lane switches — show or hide the board's optional surfaces so a
+          teacher can focus on one thing at a time. View-only: the chord and
+          lyric data are untouched. */}
+      {((chords || canEditChords) || onToggleLyrics) && (
+        <div role="group" aria-label="Board lanes" className="seg">
+          {(chords || canEditChords) &&
+            laneBtn(
+              chordsVisible,
+              <Music2 size={12} />,
+              'Chords',
+              'Show or hide the chord track — its lane, key and tempo (the chords themselves are kept)',
+              () => (chordsVisible ? hideChords() : setChordsVisible(true)),
+            )}
+          {onToggleLyrics &&
+            laneBtn(
+              !!lyricsVisible,
+              <Captions size={12} />,
+              'Lyrics',
+              'Show or hide the lyrics column beside the board',
+              onToggleLyrics,
+            )}
+        </div>
+      )}
       {!readOnly && (
         <div
           role="group"
@@ -1152,7 +1212,7 @@ export default function StructureEditor({
           )}
         </div>
 
-        {chords && (
+        {chords && chordsVisible && (
           <ChordLane
             chords={chords}
             vs={vs}
@@ -1199,8 +1259,10 @@ export default function StructureEditor({
       </div>
 
       {/* The chord track's grid: key, tempo, metre, downbeat. A board with
-          no chord track yet offers to start one; a reader sees nothing. */}
-      {chords ? (
+          no chord track yet offers to start one; a reader sees nothing. Hidden
+          wholesale when the Chords lane is switched off. */}
+      {chordsVisible &&
+        (chords ? (
         <ChordSetupRow
           chords={chords}
           currentTime={currentTime}
@@ -1235,13 +1297,13 @@ export default function StructureEditor({
             </span>
           </div>
         )
-      )}
+        ))}
 
       {/* Footer — a FIXED slot so selecting a section never reflows the
           board: the selected section's controls, or a one-line hint. */}
       {!readOnly && (
       <div className="flex h-11 items-center gap-x-3 overflow-x-auto overflow-y-hidden border-t border-line/70 px-3.5">
-      {selectedChord && chords ? (
+      {chordsVisible && selectedChord && chords ? (
         <ChordFooter
           chords={chords}
           chord={selectedChord}

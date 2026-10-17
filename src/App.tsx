@@ -602,6 +602,17 @@ export default function App() {
   // lyrics, never saved to the track.
   const [chordsOnVideo, setChordsOnVideo] = useState(true)
   const lyrics = current?.settings?.lyrics
+  // Whether the lyrics column is shown beside the song-structure board. A
+  // viewing choice (never written to the track), reset per track: a board
+  // that already carries lyrics opens with them, a fresh one stays clean so
+  // the timeline gets the room. The chord lane has the mirror switch, kept
+  // inside StructureEditor.
+  const [showLyrics, setShowLyrics] = useState(false)
+  useEffect(() => {
+    setShowLyrics((current?.settings?.lyrics?.length ?? 0) > 0)
+    // Only on a track switch — a toggle within a session must stick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id])
   // The overlay's type size: the track's own setting when this session may
   // write it, else (a link editor) a session override, like the score view.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
@@ -3152,6 +3163,16 @@ export default function App() {
                 onChordsChange={changeChords}
                 chordsOnVideo={isVideoSource(current.source) ? chordsOnVideo : undefined}
                 onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+                lyricsVisible={showLyrics}
+                onToggleLyrics={
+                  // Only offer the switch where the column has something to
+                  // show or someone who can fill it — a reader of a
+                  // lyric-less board gets no dead toggle. The column itself
+                  // is desktop-only (min-[980px]).
+                  (lyrics && lyrics.length > 0) || canEditSettings
+                    ? () => setShowLyrics((v) => !v)
+                    : undefined
+                }
                 playbackRate={playbackRate}
               />
             </div>
@@ -3161,6 +3182,7 @@ export default function App() {
                 behind its Time key. Keyed per track so a half-run pass never
                 carries over to the next song. Lyrics live in `settings`, so
                 writing them takes the settings rights — a link editor reads. */}
+            {showLyrics && (
             <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">
               <LyricsPanel
                 key={current.id}
@@ -3191,6 +3213,7 @@ export default function App() {
                 onChange={changeLyrics}
               />
             </div>
+            )}
             </div>
           ) : (
             /* Two columns: resizable player on the left, notes scroll on the right */
