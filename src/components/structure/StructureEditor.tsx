@@ -17,6 +17,9 @@ import {
   Maximize,
   Music2,
   Captions,
+  ChevronDown,
+  Tag,
+  Check,
 } from 'lucide-react'
 import type { Annotation, ProjectChords } from '../../types'
 import { formatTime, noteLabel, parseTime } from '../../lib/format'
@@ -32,6 +35,7 @@ import {
 } from '../../lib/sections'
 import { useHotkeys } from '../../lib/useHotkeys'
 import TitleBar from '../TitleBar'
+import Popover from '../Popover'
 import { clamp, hexA, windowDrag } from './drag'
 import ChordLane from './ChordLane'
 import { ChordFooter, ChordSetupRow } from './ChordControls'
@@ -179,6 +183,10 @@ export default function StructureEditor({
   // `key={current.id}` remount: a fresh board with no chords starts clean,
   // a board that already carries chords shows them.
   const [chordsVisible, setChordsVisible] = useState(() => !!chords)
+  // The section-preset menu in the floating editor (collapsed from a row of
+  // eight chips that made the pill span the whole board).
+  const [presetOpen, setPresetOpen] = useState(false)
+  const presetRef = useRef<HTMLButtonElement>(null)
   const hideChords = () => {
     setChordsVisible(false)
     setSelectedChordId(null)
@@ -242,6 +250,9 @@ export default function StructureEditor({
     chords && selectedChordId
       ? chords.chords.find((c) => c.id === selectedChordId) ?? null
       : null
+  // The preset the selected section is currently named after, if any — labels
+  // the compact preset trigger in the floating editor.
+  const selectedPreset = selected ? presetFor(selected.sectionName ?? '') : null
 
   // The chords as last rendered, for the drag closures below: a gesture's
   // move handler is created at pointerdown and outlives several renders.
@@ -1284,19 +1295,49 @@ export default function StructureEditor({
                   aria-label="Section name"
                   className="field w-36 px-2 py-[4px]"
                 />
-                <div
-                  role="group"
-                  aria-label="Section presets"
-                  className="flex min-w-0 items-center gap-1 overflow-x-auto"
+                <button
+                  ref={presetRef}
+                  type="button"
+                  onClick={() => setPresetOpen((o) => !o)}
+                  title="Name this section from a preset"
+                  aria-label="Section preset"
+                  aria-expanded={presetOpen}
+                  className="chip chip-outline press shrink-0 text-[10px] font-semibold"
+                  style={
+                    selectedPreset
+                      ? {
+                          ['--hue' as string]: selectedPreset.color,
+                          color: 'rgb(var(--text))',
+                        }
+                      : { color: 'rgb(var(--text-muted))' }
+                  }
+                >
+                  {selectedPreset ? (
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: selectedPreset.color }}
+                    />
+                  ) : (
+                    <Tag size={11} aria-hidden />
+                  )}
+                  {selectedPreset ? selectedPreset.name : 'Preset'}
+                  <ChevronDown size={11} className="shrink-0 opacity-70" aria-hidden />
+                </button>
+                <Popover
+                  open={presetOpen}
+                  anchorRef={presetRef}
+                  onClose={() => setPresetOpen(false)}
+                  width={176}
+                  className="py-1"
                 >
                   {SECTION_PRESETS.map((p) => {
-                    const active =
-                      presetFor(selected.sectionName ?? '')?.name === p.name
+                    const active = selectedPreset?.name === p.name
                     return (
                       <button
                         key={p.name}
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
                           onUpdate(selected.id, {
                             sectionName: dedupedName(
                               p.name,
@@ -1304,27 +1345,25 @@ export default function StructureEditor({
                             ),
                             color: p.color,
                           })
-                        }
-                        title={`Name this section “${p.name}”`}
-                        aria-pressed={active}
-                        className="chip chip-outline press text-[9.5px] font-semibold"
-                        style={{
-                          ['--hue' as string]: p.color,
-                          color: active
-                            ? 'rgb(var(--text))'
-                            : 'rgb(var(--text-muted))',
+                          setPresetOpen(false)
                         }}
+                        className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12px] hover:bg-raised ${
+                          active ? 'text-fg' : 'text-muted'
+                        }`}
                       >
                         <span
                           aria-hidden
-                          className="h-1.5 w-1.5 rounded-full"
+                          className="h-2 w-2 shrink-0 rounded-full"
                           style={{ background: p.color }}
                         />
-                        {p.name}
+                        <span className="flex-1 truncate">{p.name}</span>
+                        {active && (
+                          <Check size={12} className="shrink-0 text-accentink" />
+                        )}
                       </button>
                     )
                   })}
-                </div>
+                </Popover>
                 <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
                   <TimeField
                     label="Section start"
