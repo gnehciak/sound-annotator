@@ -408,6 +408,10 @@ export default function StructureEditor({
     const onDown = (e: PointerEvent) => {
       const node = e.target as Node | null
       if (node && timelineRef.current?.contains(node)) return
+      // The pill's own menus (the preset picker) portal to <body>, so they sit
+      // outside the timeline — a click in one must not drop the very selection
+      // it is editing. Every Popover carries `.pop`, so skip anything inside one.
+      if (node instanceof Element && node.closest('.pop')) return
       setSelectedId(null)
       setSelectedChordId(null)
     }
