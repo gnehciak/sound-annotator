@@ -21,8 +21,3 @@ export function embedUrl(spec: EmbedSpec): string {
   for (const s of spec.stems) q.append('stem', s)
   return `${window.location.origin}${window.location.pathname}?${q}`
 }
-
-/** The `<iframe>` to paste: 1:1, nothing around it. */
-export function embedSnippet(spec: EmbedSpec, size = 160): string {
-  return `<iframe src="${embedUrl(spec)}" width="${size}" height="${size}" style="border:0;border-radius:16px;aspect-ratio:1/1" allow="autoplay" loading="lazy" title="Audio clip"></iframe>`
-}

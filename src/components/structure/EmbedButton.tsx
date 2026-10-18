@@ -1,10 +1,11 @@
 // The section footer's embed key: a confirm popover that builds the
-// `<iframe>` for one section's audio (lib/embed.ts) — which stems to play,
-// a live preview of the square, and the snippet to copy.
+// embed link for one section's audio (lib/embed.ts) — which stems to play,
+// a live preview of the square, and the link to copy.
 import { useRef, useState } from 'react'
 import { Check, Code2, Copy } from 'lucide-react'
 import Popover from '../Popover'
-import { embedSnippet, embedUrl } from '../../lib/embed'
+import { embedUrl } from '../../lib/embed'
+import { formatTime } from '../../lib/format'
 import { STEM_ORDER } from '../../lib/stems'
 
 interface Props {
@@ -27,7 +28,8 @@ export default function EmbedButton({ projectId, start, end, stems, shared }: Pr
   const names = STEM_ORDER.filter((n) => stems.includes(n))
   const chosen = names.filter((n) => picked.includes(n))
   const spec = { id: projectId, start, end, stems: chosen }
-  const snippet = embedSnippet(spec)
+  const link = embedUrl(spec)
+  const length = Math.max(0, end - start)
 
   const toggle = (n: string) =>
     setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]))
@@ -50,15 +52,20 @@ export default function EmbedButton({ projectId, start, end, stems, shared }: Pr
           <div className="flex items-start gap-3">
             {/* The real thing, at preview size — the iframe someone will see. */}
             <iframe
-              key={embedUrl(spec)}
-              src={embedUrl(spec)}
+              key={link}
+              src={link}
               title="Embed preview"
               className="h-20 w-20 shrink-0 rounded-xl border-0"
             />
-            <p className="text-muted">
-              A square play button for just this section. Paste it into any page that takes
-              HTML.
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="font-mono text-[13px] tabular-nums text-fg-strong">
+                {formatTime(start)} – {formatTime(end)}
+              </p>
+              <p className="font-mono text-[11px] tabular-nums text-muted">
+                {length < 60 ? `${Math.round(length)} s` : formatTime(length)} long
+              </p>
+              <p className="text-muted">A square play button for just this section.</p>
+            </div>
           </div>
 
           {names.length > 0 && (
@@ -73,8 +80,11 @@ export default function EmbedButton({ projectId, start, end, stems, shared }: Pr
                     type="button"
                     aria-pressed={picked.includes(n)}
                     onClick={() => toggle(n)}
-                    className="chip chip-outline press capitalize"
+                    className={`chip press capitalize ${
+                      picked.includes(n) ? 'chip-signal' : 'chip-outline'
+                    }`}
                   >
+                    {picked.includes(n) && <Check size={11} strokeWidth={3} aria-hidden />}
                     {n}
                   </button>
                 ))}
@@ -88,17 +98,17 @@ export default function EmbedButton({ projectId, start, end, stems, shared }: Pr
             </p>
           )}
 
-          <textarea
+          <input
             readOnly
-            value={snippet}
+            value={link}
             onFocus={(e) => e.currentTarget.select()}
-            rows={3}
-            className="field resize-none font-mono text-[10px] leading-snug"
+            aria-label="Embed link"
+            className="field font-mono text-[10px]"
           />
           <button
             type="button"
             onClick={() => {
-              void navigator.clipboard.writeText(snippet).then(() => {
+              void navigator.clipboard.writeText(link).then(() => {
                 setCopied(true)
                 setTimeout(() => setCopied(false), 1500)
               })
@@ -106,7 +116,7 @@ export default function EmbedButton({ projectId, start, end, stems, shared }: Pr
             className="btn-signal press justify-center"
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'Copied' : 'Copy embed code'}
+            {copied ? 'Copied' : 'Copy embed link'}
           </button>
         </div>
       </Popover>
