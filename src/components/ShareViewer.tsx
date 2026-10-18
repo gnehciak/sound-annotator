@@ -54,6 +54,7 @@ import { usePlayerArea } from '../lib/playerArea'
 import { isTypingTarget, useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
 import StemMixer from './StemMixer'
+import { useResolvedStems } from '../lib/stems'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
 import ChordOverlay from './ChordOverlay'
@@ -145,6 +146,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // The chord bar over the video follows the board's lane: hide the lane, the
   // overlay goes too (reported up by StructureEditor).
   const [chordsShown, setChordsShown] = useState(false)
+  // Stems: the track's own, or a teacher's board of the same YouTube video,
+  // so a reader can isolate parts even on a copy that was never analysed.
+  const stems = useResolvedStems(project)
   // …and how big they are: a reader's own size, seeded from the owner's.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
@@ -901,10 +905,10 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               mixer rides on its left like the editor's — a reader may isolate
               the parts the owner's analysis separated. */}
           <div className="flex min-h-0 shrink-0 gap-3">
-            {isVideoSource(source) && project.stems && (
+            {isVideoSource(source) && stems && (
               <StemMixer
                 key={`rail-${project.id}`}
-                stems={project.stems}
+                stems={stems}
                 playerRef={playerRef}
                 isPlaying={isPlaying}
                 volume={muted ? 0 : volume}

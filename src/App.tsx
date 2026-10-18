@@ -134,6 +134,7 @@ import ScoreButton from './components/ScoreButton'
 import ScoreLayer from './components/ScoreLayer'
 import ScoreViewSwitch from './components/ScoreViewSwitch'
 import StemMixer from './components/StemMixer'
+import { useResolvedStems } from './lib/stems'
 import AudioUrlForm from './components/AudioUrlForm'
 import AnnotationList from './components/AnnotationList'
 import TitleBar from './components/TitleBar'
@@ -401,6 +402,10 @@ export default function App() {
   // Song-structure projects open the visual section board instead of the
   // notes workspace; their annotations are the sections (lib/sections.ts).
   const isStructure = isStructureProject(current)
+  // The stems to drive the mixer: the track's own, or — for a YouTube board
+  // with none — a teacher's board of the same video, so a student reuses them
+  // without a paid run of their own (see lib/stems).
+  const stems = useResolvedStems(current)
 
   // Home vs editor: no router — the home page is simply "no open track".
   // Deriving from `current` (not just currentId) self-heals a dangling id.
@@ -3166,10 +3171,10 @@ export default function App() {
                     onToggleMute={toggleMute}
                   >
                     {/* Stem mixer — hear one part while studying the form. */}
-                    {current.stems && (
+                    {stems && (
                       <StemMixer
                         key={current.id}
-                        stems={current.stems}
+                        stems={stems}
                         playerRef={playerRef}
                         isPlaying={isPlaying}
                         volume={muted ? 0 : volume}
@@ -3193,10 +3198,10 @@ export default function App() {
               {/* The board, with the stem mixer as a DAW-style track rail on
                   its left (video tracks that have been separated). */}
               <div className="flex min-h-0 shrink-0 gap-3">
-                {isVideoSource(current.source) && current.stems && (
+                {isVideoSource(current.source) && stems && (
                   <StemMixer
                     key={`rail-${current.id}`}
-                    stems={current.stems}
+                    stems={stems}
                     playerRef={playerRef}
                     isPlaying={isPlaying}
                     volume={muted ? 0 : volume}
@@ -3379,10 +3384,10 @@ export default function App() {
                   {/* Stem mixer — only on analyzed tracks (section detection
                       saved their separated stems). Playback-only, so it stays
                       available in view mode. */}
-                  {current.stems && (
+                  {stems && (
                     <StemMixer
                       key={current.id}
-                      stems={current.stems}
+                      stems={stems}
                       playerRef={playerRef}
                       isPlaying={isPlaying}
                       volume={muted ? 0 : volume}
