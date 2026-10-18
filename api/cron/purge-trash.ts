@@ -17,6 +17,30 @@ import {
   MEDIA_CACHE_TTL_MS,
   VIDEO_CACHE_PREFIX,
 } from '../_lib/mediaCache.js'
+import { mediaKey, stemFolder } from '../_lib/stems.js'
+
+/** Whether any live project still points at this recording — the fence for the
+ *  shared stem store's GC. */
+async function stillReferenced(source: unknown): Promise<boolean> {
+  const s = (source ?? {}) as { type?: string; videoId?: string; driveFileId?: string }
+  if (s.type === 'youtube' && s.videoId) {
+    const rows = (await sql`
+      SELECT 1 FROM projects
+      WHERE deleted_at IS NULL AND source->>'type' = 'youtube' AND source->>'videoId' = ${s.videoId}
+      LIMIT 1
+    `) as unknown[]
+    return rows.length > 0
+  }
+  if (s.type === 'drive' && s.driveFileId) {
+    const rows = (await sql`
+      SELECT 1 FROM projects
+      WHERE deleted_at IS NULL AND source->>'type' = 'drive' AND source->>'driveFileId' = ${s.driveFileId}
+      LIMIT 1
+    `) as unknown[]
+    return rows.length > 0
+  }
+  return true // no shared key — nothing shared to collect
+}
 
 /** Delete every blob under a prefix; resolves with how many went. */
 async function deletePrefix(prefix: string): Promise<number> {
@@ -45,10 +69,10 @@ export async function GET(request: Request): Promise<Response> {
 
   const cutoff = Date.now() - TRASH_TTL_MS
   const rows = (await sql`
-    SELECT id, owner_id FROM projects
+    SELECT id, owner_id, source FROM projects
     WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
     LIMIT ${BATCH}
-  `) as Pick<ProjectRow, 'id' | 'owner_id'>[]
+  `) as Pick<ProjectRow, 'id' | 'owner_id' | 'source'>[]
 
   let purged = 0
   let blobs = 0
@@ -79,6 +103,20 @@ export async function GET(request: Request): Promise<Response> {
       WHERE id = ${r.id} AND deleted_at IS NOT NULL AND deleted_at < ${cutoff}
     `
     purged += 1
+
+    // The per-recording stem store (cache/stems/<key>/) is shared by every
+    // project of a video, so unlike the per-project prefixes above it can't be
+    // swept with this row — it goes only when the *last* live project of the
+    // recording is gone. (Paid to make, so GC'd by reference, not aged out like
+    // the re-fetchable video/audio caches.) Best-effort, after the row delete.
+    try {
+      const key = mediaKey(r.source)
+      if (key && !(await stillReferenced(r.source))) {
+        blobs += await deletePrefix(stemFolder(key))
+      }
+    } catch (e) {
+      console.error(`purge-trash: shared-stem GC failed for ${r.id}:`, e)
+    }
   }
 
   if (rows.length === BATCH)

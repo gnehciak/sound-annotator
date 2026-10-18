@@ -30,6 +30,7 @@
 import { put, del } from '@vercel/blob'
 import { waitUntil } from '@vercel/functions'
 import { encodeStemToM4a, extractAudioM4a, findStoredVideo } from '../../_lib/media.js'
+import { mediaKey, sharedStems, stemFolder } from '../../_lib/stems.js'
 import { getUid, isAdmin } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type ProjectRow } from '../../_lib/db.js'
 import { json, err } from '../../_lib/respond.js'
@@ -76,6 +77,10 @@ interface Analysis {
   stemsTotal?: number
   /** The temporary analysis upload (video flow) — deleted at finalize. */
   sourceAudioUrl?: string
+  /** The recording's shared-store key (a video / Drive id), so finalize stores
+   *  the stems once per recording rather than per project. Null for an
+   *  audio-URL track, whose stems stay under its own prefix. See _lib/stems. */
+  mediaKey?: string | null
   startedAt?: number
   finalizeAt?: number
   finishedAt?: number
@@ -248,6 +253,9 @@ export async function POST(request: Request): Promise<Response> {
     status: 'running',
     predictionId: data.id,
     startedAt: Date.now(),
+    // The recording's shared-store key, so finalize puts the stems in the
+    // per-video store every project of it reads (null for an audio-URL track).
+    mediaKey: mediaKey(source),
     ...(temp ? { sourceAudioUrl: audioUrl } : {}),
   }
   await saveAnalysis(id, analysis)
@@ -362,7 +370,7 @@ async function finalize(
     }
     const out = (output ?? {}) as Record<string, unknown>
     const result = await parseAnalyzerResult(out.analyzer_result)
-    const stems = await copyStems(uid, id, out)
+    const stems = await copyStems(uid, id, out, analysis.mediaKey ?? null)
 
     // The dropped audio was only ever fuel for the analysis — its deletion is
     // the promise the video flow makes. Best-effort: a failure here leaves
@@ -389,32 +397,49 @@ async function finalize(
   }
 }
 
-/** Compress each Demucs stem and store it in the owner's Blob space, bumping
- *  the row's `stemsDone` as each lands (the progress the polls report). The
- *  analyzer hands back lossless WAVs (~90% of the whole Blob store on its own),
- *  so each is transcoded to a compressed m4a on the way in — a study aid for
- *  the stem mixer, not a master. Per-stem best-effort: sections must never fail
- *  because one stem did, and a stem that won't compress is copied raw rather
- *  than lost. */
+/** Compress each Demucs stem and store it, bumping the row's `stemsDone` as
+ *  each lands (the progress the polls report). The analyzer hands back lossless
+ *  WAVs (~90% of the whole Blob store on its own), so each is transcoded to a
+ *  compressed m4a on the way in — a study aid for the stem mixer, not a master.
+ *
+ *  `key` is the recording's shared-store key (a video id): with one, the stems
+ *  go to the per-recording store (cache/stems/<key>/) that every project of the
+ *  video shares, and a recording already separated is reused rather than
+ *  re-stored — no second download or transcode. Without one (an audio-URL
+ *  track), they stay under the owner's own prefix, the legacy location.
+ *
+ *  Per-stem best-effort: sections must never fail because one stem did, and a
+ *  stem that won't compress is copied raw rather than lost. */
 async function copyStems(
   uid: string,
   projectId: string,
   output: Record<string, unknown>,
+  key: string | null,
 ): Promise<Record<string, string>> {
+  // Already separated for this recording? Reuse the shared copies.
+  if (key) {
+    const existing = await sharedStems(key)
+    if (existing) return existing
+  }
+  // The shared store keeps URLs unguessable with a random suffix; the legacy
+  // per-project path is deterministic and overwrites in place.
+  const dir = key ? stemFolder(key) : `users/${uid}/stems/${projectId}/`
+  const shared = !!key
   const copied = await Promise.all(
-    STEM_KEYS.map(async (key) => {
-      const uri = output[key]
+    STEM_KEYS.map(async (stemKey) => {
+      const uri = output[stemKey]
       if (typeof uri !== 'string') return null
-      const name = key.replace('demucs_', '')
+      const name = stemKey.replace('demucs_', '')
       try {
         let url: string
         try {
           // The common path: pull the WAV straight into ffmpeg and keep the
           // small m4a. ~30× smaller than the lossless source.
           const m4a = await encodeStemToM4a(uri)
-          const blob = await put(`users/${uid}/stems/${projectId}/${name}.m4a`, m4a, {
+          const blob = await put(`${dir}${name}.m4a`, m4a, {
             access: 'public',
-            allowOverwrite: true,
+            addRandomSuffix: shared,
+            allowOverwrite: !shared,
             contentType: 'audio/mp4',
           })
           url = blob.url
@@ -425,9 +450,10 @@ async function copyStems(
           if (!res.ok || !res.body) return null
           const ext =
             new URL(uri).pathname.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'wav'
-          const blob = await put(`users/${uid}/stems/${projectId}/${name}.${ext}`, res.body, {
+          const blob = await put(`${dir}${name}.${ext}`, res.body, {
             access: 'public',
-            allowOverwrite: true,
+            addRandomSuffix: shared,
+            allowOverwrite: !shared,
             contentType: res.headers.get('content-type') ?? undefined,
           })
           url = blob.url
