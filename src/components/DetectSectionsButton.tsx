@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileAudio, Loader2, Sparkles, X } from 'lucide-react'
+import { FileAudio, Loader2, Split, X } from 'lucide-react'
 import {
   startSectionDetection,
   pollSectionDetection,
@@ -170,24 +170,36 @@ export default function DetectSectionsButton({
 
   return (
     <>
+      {/* A `seg` pill matching the Chords / Lyrics lane switches beside it, so
+          the board header reads as one family of controls. The split icon ties
+          it to the stems it separates. */}
+      <div
+        className={`seg shrink-0 ${
+          phase.kind === 'error'
+            ? 'border-danger/60'
+            : busy
+              ? 'border-accent/60'
+              : ''
+        }`}
+      >
       <button
         type="button"
         onClick={() => void detect()}
         disabled={busy}
         title={title}
         aria-label="Detect song sections with AI"
-        className={`btn-ghost btn-sm press shrink-0 disabled:pointer-events-none ${
+        className={`seg-item press disabled:pointer-events-none ${
           phase.kind === 'error'
-            ? 'border-danger/60 text-danger hover:border-danger hover:text-danger'
+            ? 'text-danger hover:text-danger'
             : busy
-              ? 'border-accent/60 text-accentink'
+              ? 'text-accentink'
               : ''
         }`}
       >
         {busy ? (
           <Loader2 size={12} className="animate-spin" />
         ) : (
-          <Sparkles size={12} />
+          <Split size={12} />
         )}
         {label}
         {/* Progress track: upload % while the file streams up, then one tick
@@ -207,6 +219,7 @@ export default function DetectSectionsButton({
           </span>
         )}
       </button>
+      </div>
 
       {phase.kind === 'prompting' && (
         <AnalysisAudioPrompt

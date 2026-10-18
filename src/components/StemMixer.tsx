@@ -27,6 +27,10 @@ interface Props {
   /** Drop the standalone panel chrome (border/fill/padding) so the mixer can
    *  nest inside another surface — e.g. folded into the structure transport. */
   bare?: boolean
+  /** Lay the stems out as a vertical rail — a column of track toggles, like a
+   *  DAW's track list — rather than a horizontal strip. Used beside the song
+   *  structure board. */
+  rail?: boolean
 }
 
 /**
@@ -52,6 +56,7 @@ export default function StemMixer({
   playbackRate,
   onActiveChange,
   bare = false,
+  rail = false,
 }: Props) {
   const [active, setActive] = useState<Set<string>>(new Set())
   // Buffering state per stem: 'canplay' promotes to ready, a network/decode
@@ -172,6 +177,76 @@ export default function StemMixer({
   }, [])
 
   if (names.length === 0) return null
+
+  // DAW-style track rail: a vertical column of stem toggles beside the board.
+  if (rail) {
+    return (
+      <div className="glass hidden w-[132px] shrink-0 flex-col gap-1.5 overflow-y-auto p-2.5 sm:flex">
+        <span
+          className={`mb-0.5 flex items-center gap-1.5 px-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] ${
+            anyActive ? 'text-accentink' : 'text-muted'
+          }`}
+          title="Separated by AI section detection — pick parts to hear them isolated"
+        >
+          <AudioLines size={12} />
+          Stems
+        </span>
+        {names.map((name) => {
+          const on = active.has(name)
+          const isFailed = failed.has(name)
+          const loading = on && !ready.has(name) && !isFailed
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => toggle(name)}
+              aria-pressed={on}
+              aria-busy={loading}
+              title={
+                isFailed
+                  ? `The ${name} stem failed to load — press to retry`
+                  : loading
+                    ? `Loading the ${name} stem…`
+                    : on
+                      ? `Mute the ${name} stem`
+                      : `Hear the ${name} stem (silences the original mix)`
+              }
+              className="chip chip-outline press w-full justify-start gap-2 font-semibold tracking-[0.14em]"
+              style={{
+                ['--hue' as string]: isFailed
+                  ? 'rgb(var(--danger))'
+                  : on
+                    ? 'rgb(var(--accent-ink))'
+                    : 'rgb(var(--text-muted))',
+              }}
+            >
+              {loading ? (
+                <Loader2 size={11} className="shrink-0 animate-spin" />
+              ) : (
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full border"
+                  style={{ background: on ? 'var(--hue)' : 'transparent', borderColor: 'var(--hue)' }}
+                />
+              )}
+              <span className="truncate">{name}</span>
+            </button>
+          )
+        })}
+        {anyActive && (
+          <button
+            type="button"
+            onClick={clear}
+            title="Back to the original mix"
+            className="btn-ghost btn-sm press mt-auto w-full justify-center"
+          >
+            <X size={11} />
+            Original
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div

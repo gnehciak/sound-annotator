@@ -3145,22 +3145,11 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Video: the stem mixer stands on its own strip under the
-                      frame. Audio: the folded transport (Play + clock +
-                      volume) with the mixer folded in below. */}
-                  {isVideoSource(current.source) ? (
-                    current.stems && (
-                      <StemMixer
-                        key={current.id}
-                        stems={current.stems}
-                        playerRef={playerRef}
-                        isPlaying={isPlaying}
-                        volume={muted ? 0 : volume}
-                        playbackRate={playbackRate}
-                        onActiveChange={setActiveStems}
-                      />
-                    )
-                  ) : (
+                  {/* Video: the floating transport lives in the frame, and the
+                      stem mixer is a DAW-style rail beside the board below (not
+                      here). Audio: the folded transport (Play + clock + volume)
+                      with the mixer folded in. */}
+                  {!isVideoSource(current.source) && (
                   <MiniTransport
                     isPlaying={isPlaying}
                     currentTime={currentTime}
@@ -3196,6 +3185,22 @@ export default function App() {
                 </div>
               </div>
 
+              {/* The board, with the stem mixer as a DAW-style track rail on
+                  its left (video tracks that have been separated). */}
+              <div className="flex min-h-0 shrink-0 gap-3">
+                {isVideoSource(current.source) && current.stems && (
+                  <StemMixer
+                    key={`rail-${current.id}`}
+                    stems={current.stems}
+                    playerRef={playerRef}
+                    isPlaying={isPlaying}
+                    volume={muted ? 0 : volume}
+                    playbackRate={playbackRate}
+                    onActiveChange={setActiveStems}
+                    rail
+                  />
+                )}
+                <div className="flex min-w-0 flex-1 flex-col">
               {/* keyed per track so tool/zoom/selection state resets on switch */}
               <StructureEditor
                 key={current.id}
@@ -3229,6 +3234,8 @@ export default function App() {
                 }
                 playbackRate={playbackRate}
               />
+                </div>
+              </div>
             </div>
 
             {/* Lyrics — the timed lines beside the board (wide screens), filed
