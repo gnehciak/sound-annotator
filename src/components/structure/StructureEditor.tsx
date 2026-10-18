@@ -118,6 +118,10 @@ interface Props {
   /** Whether the chord bar is drawn on the video (video tracks only). */
   chordsOnVideo?: boolean
   onToggleChordsOnVideo?: () => void
+  /** Reports whether the chord lane is currently shown, so the host can keep
+   *  the chord bar overlaid on the video in step — hiding the lane hides the
+   *  overlay too. A display choice, like the lane itself. */
+  onChordsVisibleChange?: (visible: boolean) => void
   /** Whether the companion lyrics column is shown beside the board. A view
    *  choice owned by App (the column is its sibling), surfaced here so the
    *  board's lane switches sit together. Absent hides the Lyrics toggle. */
@@ -185,6 +189,7 @@ export default function StructureEditor({
   onChordsChange,
   chordsOnVideo,
   onToggleChordsOnVideo,
+  onChordsVisibleChange,
   lyricsVisible,
   onToggleLyrics,
   detectButton,
@@ -206,6 +211,12 @@ export default function StructureEditor({
     setChordsVisible(false)
     setSelectedChordId(null)
   }
+  // Keep the host's video chord overlay in step with the lane: show the lane,
+  // the bar can ride the video; hide it, the overlay goes too.
+  useEffect(() => {
+    onChordsVisibleChange?.(chordsVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chordsVisible])
   // Selection is derived defensively: an id that no longer exists (deleted,
   // undone) simply matches nothing, and read-only mode masks it entirely.
   const [rawSelectedId, setSelectedId] = useState<string | null>(null)

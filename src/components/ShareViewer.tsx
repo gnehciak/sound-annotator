@@ -142,6 +142,9 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // The timed lyrics on the picture — a reader's own switch, never saved.
   const [lyricsOnVideo, setLyricsOnVideo] = useState(true)
   const [chordsOnVideo, setChordsOnVideo] = useState(true)
+  // The chord bar over the video follows the board's lane: hide the lane, the
+  // overlay goes too (reported up by StructureEditor).
+  const [chordsShown, setChordsShown] = useState(false)
   // …and how big they are: a reader's own size, seeded from the owner's.
   const [lyricsScaleOverride, setLyricsScaleOverride] = useState<number | null>(null)
   const [lyricsStyleOverride, setLyricsStyleOverride] = useState<string | null>(null)
@@ -710,7 +713,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
           colorBy={lyricsSectionColor ? project.annotations : undefined}
         />
       )}
-      {!lyricFullscreen && chordsOnVideo && isStructure && project.settings?.chords && (
+      {!lyricFullscreen && chordsShown && chordsOnVideo && isStructure && project.settings?.chords && (
         <ChordOverlay
           chords={project.settings.chords}
           currentTime={currentTime}
@@ -727,7 +730,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               currentTime={currentTime}
               onSeek={seek}
             >
-              {chordsOnVideo && project.settings?.chords && (
+              {chordsShown && chordsOnVideo && project.settings?.chords && (
                 <ChordOverlay
                   chords={project.settings.chords}
                   currentTime={currentTime}
@@ -925,6 +928,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             chords={project.settings?.chords}
             chordsOnVideo={isVideoSource(source) ? chordsOnVideo : undefined}
             onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+            onChordsVisibleChange={setChordsShown}
             playbackRate={playbackRate}
           />
             </div>

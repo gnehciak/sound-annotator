@@ -627,6 +627,10 @@ export default function App() {
   // The chord bar along the foot of the video — a viewing choice, like the
   // lyrics, never saved to the track.
   const [chordsOnVideo, setChordsOnVideo] = useState(true)
+  // Whether the board's chord lane is shown (reported up by StructureEditor).
+  // The video overlay rides on it: hiding the lane hides the bar over the
+  // video too, so "Chords off" means off everywhere.
+  const [chordsShown, setChordsShown] = useState(false)
   const lyrics = current?.settings?.lyrics
   // Whether the lyrics column is shown beside the song-structure board. A
   // viewing choice (never written to the track), reset off per track so every
@@ -2616,7 +2620,7 @@ export default function App() {
       )}
       {/* The chord bar along the foot — the structure board's progression
           scrolling past a now line, the way the chord-tutorial videos do. */}
-      {!lyricFullscreen && chordsOnVideo && isStructure && current?.settings?.chords && (
+      {!lyricFullscreen && chordsShown && chordsOnVideo && isStructure && current?.settings?.chords && (
         <ChordOverlay
           chords={current.settings.chords}
           currentTime={currentTime}
@@ -2636,7 +2640,7 @@ export default function App() {
             >
               {/* The chord bar rides above the song's shape, sized to the
                   frame, so the projector shows the changes coming. */}
-              {chordsOnVideo && current.settings?.chords && (
+              {chordsShown && chordsOnVideo && current.settings?.chords && (
                 <ChordOverlay
                   chords={current.settings.chords}
                   currentTime={currentTime}
@@ -3221,6 +3225,7 @@ export default function App() {
                 onChordsChange={changeChords}
                 chordsOnVideo={isVideoSource(current.source) ? chordsOnVideo : undefined}
                 onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+                onChordsVisibleChange={setChordsShown}
                 detectButton={detectSectionsButton}
                 lyricsVisible={showLyrics}
                 onToggleLyrics={
