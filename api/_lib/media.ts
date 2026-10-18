@@ -626,3 +626,46 @@ export async function cutClip(
     }
   }
 }
+
+/**
+ * The bitrate the Demucs stems are compressed to. They are study aids played
+ * through a plain `<audio>` element (StemMixer), not masters, so AAC at this
+ * rate is transparent enough for picking a part out — and ~30× smaller than
+ * the lossless WAV the analyzer hands back (which was ~90% of the whole Blob
+ * store). Stereo; Demucs separates in stereo.
+ */
+const STEM_BITRATE = '128k'
+
+/**
+ * Re-encode a Demucs stem to a compressed AAC m4a. `input` is the analyzer's
+ * expiring WAV URL (or a local file), read straight by ffmpeg; the small m4a
+ * comes back as a Buffer for the caller to store. Used both when a fresh
+ * analysis lands (api/projects/[id]/analyze.ts) and by the retro-compression
+ * script (scripts/compress-stems.mjs) for the WAV stems already in the store.
+ */
+export async function encodeStemToM4a(input: string): Promise<Buffer> {
+  const out = path.join(TMP, `stem-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
+  const args = [
+    '-y', '-hide_banner', '-loglevel', 'error', '-nostdin',
+    ...(input.startsWith('http') ? ['-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1'] : []),
+    '-i', input,
+    '-vn', '-sn', '-dn',
+    '-c:a', 'aac', '-b:a', STEM_BITRATE,
+    '-movflags', '+faststart',
+    out,
+  ]
+  const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
+  if (r.code !== 0 || !existsSync(out)) {
+    console.error(`[stem] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
+    throw new MediaError(502, 'Could not compress the stem.')
+  }
+  try {
+    return readFileSync(out)
+  } finally {
+    try {
+      unlinkSync(out)
+    } catch {
+      /* fine */
+    }
+  }
+}

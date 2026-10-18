@@ -22,6 +22,12 @@
   "functions": {
     "api/projects/*/clip.ts": {
       "includeFiles": "api/_bin/**"
+    },
+    "api/projects/*/video.ts": {
+      "includeFiles": "api/_bin/**"
+    },
+    "api/projects/*/analyze.ts": {
+      "includeFiles": "api/_bin/**"
     }
   },
   "buildCommand": "npm run build && node scripts/fetch-media-bin.mjs"

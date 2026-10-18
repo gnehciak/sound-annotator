@@ -29,6 +29,7 @@
 // next time the button is pressed.
 import { put, del } from '@vercel/blob'
 import { waitUntil } from '@vercel/functions'
+import { encodeStemToM4a } from '../../_lib/media.js'
 import { getUid, isAdmin } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type ProjectRow } from '../../_lib/db.js'
 import { json, err } from '../../_lib/respond.js'
@@ -361,10 +362,13 @@ async function finalize(
   }
 }
 
-/** Stream each Demucs stem from Replicate's expiring output into the owner's
- *  Blob space, bumping the row's `stemsDone` as each lands (the progress the
- *  polls report). Per-stem best-effort: sections must never fail because one
- *  stem copy did. */
+/** Compress each Demucs stem and store it in the owner's Blob space, bumping
+ *  the row's `stemsDone` as each lands (the progress the polls report). The
+ *  analyzer hands back lossless WAVs (~90% of the whole Blob store on its own),
+ *  so each is transcoded to a compressed m4a on the way in — a study aid for
+ *  the stem mixer, not a master. Per-stem best-effort: sections must never fail
+ *  because one stem did, and a stem that won't compress is copied raw rather
+ *  than lost. */
 async function copyStems(
   uid: string,
   projectId: string,
@@ -374,21 +378,33 @@ async function copyStems(
     STEM_KEYS.map(async (key) => {
       const uri = output[key]
       if (typeof uri !== 'string') return null
+      const name = key.replace('demucs_', '')
       try {
-        const res = await fetch(uri)
-        if (!res.ok || !res.body) return null
-        const name = key.replace('demucs_', '')
-        const ext =
-          new URL(uri).pathname.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'wav'
-        const blob = await put(
-          `users/${uid}/stems/${projectId}/${name}.${ext}`,
-          res.body,
-          {
+        let url: string
+        try {
+          // The common path: pull the WAV straight into ffmpeg and keep the
+          // small m4a. ~30× smaller than the lossless source.
+          const m4a = await encodeStemToM4a(uri)
+          const blob = await put(`users/${uid}/stems/${projectId}/${name}.m4a`, m4a, {
+            access: 'public',
+            allowOverwrite: true,
+            contentType: 'audio/mp4',
+          })
+          url = blob.url
+        } catch {
+          // Compression failed (a decode quirk, a timeout): keep the stem by
+          // copying the raw file, so the mixer still has every part.
+          const res = await fetch(uri)
+          if (!res.ok || !res.body) return null
+          const ext =
+            new URL(uri).pathname.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'wav'
+          const blob = await put(`users/${uid}/stems/${projectId}/${name}.${ext}`, res.body, {
             access: 'public',
             allowOverwrite: true,
             contentType: res.headers.get('content-type') ?? undefined,
-          },
-        )
+          })
+          url = blob.url
+        }
         // Atomic in-SQL increment: the six copies land in any order, and a
         // read-modify-write here would lose counts to races.
         await sql`
@@ -398,7 +414,7 @@ async function copyStems(
             to_jsonb(COALESCE((analysis->>'stemsDone')::int, 0) + 1)
           ) WHERE id = ${projectId} AND analysis->>'status' = 'finalizing'
         `.catch(() => {})
-        return [name, blob.url] as const
+        return [name, url] as const
       } catch {
         return null
       }
