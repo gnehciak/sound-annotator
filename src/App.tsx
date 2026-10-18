@@ -1790,6 +1790,25 @@ export default function App() {
   }
 
   /**
+   * Patch several annotations in one undoable step — used by the structure
+   * board's push-drag, where moving one section shoves the neighbours it runs
+   * into. One commit (and one coalesce key) so the whole shove is a single ⌘Z.
+   */
+  function updateAnnotations(
+    patches: { id: string; patch: Partial<Annotation> }[],
+    opts?: { coalesceKey?: string },
+  ) {
+    if (!current || patches.length === 0) return
+    const byId = new Map(patches.map((p) => [p.id, p.patch]))
+    commitAnnotations(
+      current.id,
+      (anns) =>
+        anns.map((a) => (byId.has(a.id) ? { ...a, ...byId.get(a.id)! } : a)),
+      opts?.coalesceKey ? { coalesceKey: opts.coalesceKey } : undefined,
+    )
+  }
+
+  /**
    * Land a pin dragged across the video frame. The drag itself is local to
    * VideoOverlays (one save per release, not per pointer move); a run of drags
    * on the same pin collapses into one undo step.
@@ -3156,6 +3175,7 @@ export default function App() {
                 onCreate={createSection}
                 onSplit={splitSection}
                 onUpdate={updateAnnotation}
+                onUpdateMany={updateAnnotations}
                 onDelete={deleteAnnotation}
                 onDownloadClip={downloadNoteClip}
                 chords={current.settings?.chords}

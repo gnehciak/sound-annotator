@@ -95,6 +95,13 @@ interface Props {
     patch: Partial<Annotation>,
     opts?: { coalesceKey?: string },
   ) => void
+  /** Patch several sections in one undoable step — the dragged section plus
+   *  every neighbour it pushes out of the way. Absent falls back to a move
+   *  that's blocked at a neighbour's edge. */
+  onUpdateMany?: (
+    patches: { id: string; patch: Partial<Annotation> }[],
+    opts?: { coalesceKey?: string },
+  ) => void
   onDelete: (id: string) => void
   /** Download a section's audio as an m4a clip (the clip export). */
   onDownloadClip?: (section: Annotation) => Promise<void>
@@ -166,6 +173,7 @@ export default function StructureEditor({
   onCreate,
   onSplit,
   onUpdate,
+  onUpdateMany,
   onDelete,
   onDownloadClip,
   chords,
@@ -622,13 +630,35 @@ export default function StructureEditor({
     selectSec(sec.id)
     const end = sec.end ?? sec.start
     const len = end - sec.start
-    const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
-    const boundLo = Math.min(lo, sec.start)
-    const boundHi = Math.max(hi, end)
     const grab = t - sec.start
     const magnets = magnetsExcept(sec.id)
     const x0 = e.clientX
     let moved = false
+
+    // Dragging a section *pushes* the ones it runs into rather than stopping
+    // at their edge: neighbours slide out of the way, cascading down the lane,
+    // and spring back when the drag pulls away. The push is recomputed each
+    // frame from this snapshot of where everything started (never accumulated),
+    // and a section can only shove its neighbours as far as the board's ends —
+    // which is exactly what boundLo/boundHi cap, so the chain always fits.
+    const lenOf = (a: Annotation) => (a.end ?? a.start) - a.start
+    const sumLen = (arr: Annotation[]) => arr.reduce((s, a) => s + lenOf(a), 0)
+    const snap = liveRef.current.ordered
+    const idx = snap.findIndex((a) => a.id === sec.id)
+    const lefts = snap.slice(0, idx)
+    const rights = snap.slice(idx + 1)
+    const push = !!onUpdateMany
+    let boundLo: number
+    let boundHi: number
+    if (push) {
+      boundLo = sumLen(lefts)
+      boundHi = liveRef.current.dur - len - sumLen(rights)
+    } else {
+      const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
+      boundLo = Math.min(lo, sec.start)
+      boundHi = Math.max(hi, end) - len
+    }
+
     beginDrag(
       (ev) => {
         if (!moved && Math.abs(ev.clientX - x0) < 3) return
@@ -640,13 +670,44 @@ export default function StructureEditor({
         const ns = clamp(
           snapTime(raw, pps, [...magnets, ...magnets.map((m) => m - len)]),
           boundLo,
-          boundHi - len,
+          boundHi,
         )
-        onUpdate(
-          sec.id,
-          { start: round1(ns), end: round1(ns + len) },
-          { coalesceKey: `sec-move:${sec.id}` },
-        )
+        if (!push) {
+          onUpdate(
+            sec.id,
+            { start: round1(ns), end: round1(ns + len) },
+            { coalesceKey: `sec-move:${sec.id}` },
+          )
+          return
+        }
+        const patches = [
+          { id: sec.id, patch: { start: round1(ns), end: round1(ns + len) } },
+        ]
+        // Shove each right-hand neighbour the dragged section overlaps, then
+        // the next it in turn overlaps. `r.start` is its *snapshot* position,
+        // so a neighbour no longer overlapped snaps back to where it began
+        // rather than keeping a spot it was pushed to earlier in the drag.
+        let floor = ns + len
+        for (const r of rights) {
+          const rs = Math.max(r.start, floor)
+          patches.push({
+            id: r.id,
+            patch: { start: round1(rs), end: round1(rs + lenOf(r)) },
+          })
+          floor = rs + lenOf(r)
+        }
+        // And the left-hand neighbours, cascading the other way.
+        let ceil = ns
+        for (let i = lefts.length - 1; i >= 0; i--) {
+          const l = lefts[i]
+          const le = Math.min(l.end ?? l.start, ceil)
+          patches.push({
+            id: l.id,
+            patch: { start: round1(le - lenOf(l)), end: round1(le) },
+          })
+          ceil = le - lenOf(l)
+        }
+        onUpdateMany!(patches, { coalesceKey: `sec-move:${sec.id}` })
       },
       undefined,
       'grabbing',
