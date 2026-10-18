@@ -603,13 +603,13 @@ export default function App() {
   const [chordsOnVideo, setChordsOnVideo] = useState(true)
   const lyrics = current?.settings?.lyrics
   // Whether the lyrics column is shown beside the song-structure board. A
-  // viewing choice (never written to the track), reset per track: a board
-  // that already carries lyrics opens with them, a fresh one stays clean so
-  // the timeline gets the room. The chord lane has the mirror switch, kept
-  // inside StructureEditor.
+  // viewing choice (never written to the track), reset off per track so every
+  // board opens on the timeline alone and the lyrics are brought in when
+  // wanted — even one that carries lyrics. The chord lane has the mirror
+  // switch, kept inside StructureEditor.
   const [showLyrics, setShowLyrics] = useState(false)
   useEffect(() => {
-    setShowLyrics((current?.settings?.lyrics?.length ?? 0) > 0)
+    setShowLyrics(false)
     // Only on a track switch — a toggle within a session must stick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])

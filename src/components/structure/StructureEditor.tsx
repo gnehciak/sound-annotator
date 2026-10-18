@@ -189,9 +189,10 @@ export default function StructureEditor({
   const [tool, setTool] = useState<Tool>('select')
   // Whether the chord track's lane + setup row are shown on the board. A
   // display choice (the chord data is untouched), kept per-track by the
-  // `key={current.id}` remount: a fresh board with no chords starts clean,
-  // a board that already carries chords shows them.
-  const [chordsVisible, setChordsVisible] = useState(() => !!chords)
+  // `key={current.id}` remount. Starts off even on a board that already carries
+  // chords, so every board opens on the timeline alone and the lane is switched
+  // in when wanted. The Chords button in the header brings it back.
+  const [chordsVisible, setChordsVisible] = useState(false)
   // The section-preset menu in the floating editor (collapsed from a row of
   // eight chips that made the pill span the whole board).
   const [presetOpen, setPresetOpen] = useState(false)
