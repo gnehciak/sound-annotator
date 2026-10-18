@@ -398,6 +398,23 @@ export default function StructureEditor({
     el.style.left = `${clamp(xOf(pillAnchorT) - w / 2, 2, Math.max(2, width - w - 2))}px`
   })
 
+  // Hide the floating editor on defocus: a pointer landing outside the timeline
+  // — on the header the pill floats over, the minimap, or anywhere off the
+  // board — drops the selection. Clicks *inside* the timeline keep their own
+  // meaning (a block selects, the empty lane deselects, the pill's own controls
+  // do their thing), since the pill is itself a child of the timeline.
+  useEffect(() => {
+    if (selectedId == null && selectedChordId == null) return
+    const onDown = (e: PointerEvent) => {
+      const node = e.target as Node | null
+      if (node && timelineRef.current?.contains(node)) return
+      setSelectedId(null)
+      setSelectedChordId(null)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [selectedId, selectedChordId])
+
   // Latest values for the window-level drag listeners (they outlive renders).
   const liveRef = useRef({ sections, ordered, vs, ve, dur, pps, currentTime })
   useEffect(() => {
