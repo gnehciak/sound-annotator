@@ -22,18 +22,16 @@ export function clipRangeError(r: ClipRange, duration?: number): string | null {
 }
 
 /**
- * Fetch the clip and hand it to the browser as a download. Throws ApiError
- * with the server's message on failure, so the caller can show it.
+ * Fetch a clip's bytes. Throws ApiError with the server's message on failure,
+ * so the caller can show it. `stems` cuts those parts (the mixer's soloed
+ * ones, or the download popover's picks) instead of the full mix — one is
+ * copied, several are mixed down; empty/absent = the full mix.
  */
-export async function downloadClip(
-  project: { id: string; title: string },
+export async function fetchClip(
+  projectId: string,
   range: ClipRange,
-  opts?: {
-    /** Cut these stems (the mixer's soloed parts) instead of the full mix.
-     *  One is copied; several are mixed down. Empty/absent = the full mix. */
-    stems?: string[]
-  },
-): Promise<void> {
+  stems: string[] = [],
+): Promise<Blob> {
   const headers = new Headers()
   const key = currentGuestKey()
   if (key) headers.set('X-Guest-Key', key)
@@ -41,9 +39,9 @@ export async function downloadClip(
     start: range.start.toFixed(3),
     end: range.end.toFixed(3),
   })
-  for (const s of opts?.stems ?? []) q.append('stem', s)
+  for (const s of stems) q.append('stem', s)
   const res = await fetch(
-    `/api/projects/${encodeURIComponent(project.id)}/clip?${q}`,
+    `/api/projects/${encodeURIComponent(projectId)}/clip?${q}`,
     { headers },
   )
   if (!res.ok) {
@@ -53,8 +51,21 @@ export async function downloadClip(
       .catch(() => res.statusText)
     throw new ApiError(res.status, message)
   }
-  const blob = await res.blob()
-  const stemTag = opts?.stems?.length ? ` ${opts.stems.join('+')}` : ''
+  return res.blob()
+}
+
+/**
+ * Fetch the clip and hand it to the browser as a download. `blob` skips the
+ * fetch when the caller already has those exact bytes (the popover's preview).
+ */
+export async function downloadClip(
+  project: { id: string; title: string },
+  range: ClipRange,
+  opts?: { stems?: string[]; blob?: Blob },
+): Promise<void> {
+  const stems = opts?.stems ?? []
+  const blob = opts?.blob ?? (await fetchClip(project.id, range, stems))
+  const stemTag = stems.length ? ` ${stems.join('+')}` : ''
   const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.m4a`
     .replace(/[\\/:*?"<>|]+/g, '.')
   const url = URL.createObjectURL(blob)

@@ -3234,11 +3234,10 @@ export default function App() {
                 onUpdate={updateAnnotation}
                 onUpdateMany={updateAnnotations}
                 onDelete={deleteAnnotation}
-                onDownloadClip={downloadNoteClip}
-                embed={{
-                  projectId: publicId(current),
+                clip={{
+                  project: current,
                   stems: Object.keys(stems ?? {}),
-                  shared: !!(current.shared || current.published || current.editableByLink),
+                  activeStems,
                 }}
                 chords={current.settings?.chords}
                 chordsReadOnly={!canEditSettings}
