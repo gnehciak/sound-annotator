@@ -19,6 +19,7 @@ import { getProjectRow } from '../../_lib/db.js'
 import { driveOriginUrl } from '../../_lib/driveUrl.js'
 import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
 import { cutClip, cutStemClip, fetchYouTubeAudio, MediaError } from '../../_lib/media.js'
+import { resolveStems } from '../../_lib/stems.js'
 import { err } from '../../_lib/respond.js'
 import { shareRoleFor } from '../../_lib/shares.js'
 
@@ -96,7 +97,9 @@ export async function GET(request: Request): Promise<Response> {
   // resolve we fall through to the full mix below.
   const wantStems = params.getAll('stem')
   if (wantStems.length > 0) {
-    const stems = (row.analysis as { stems?: Record<string, string> } | null)?.stems ?? {}
+    // Own stems, or a same-video project's — so a guest board that reuses a
+    // teacher's stems to play can clip them too (see resolveStems).
+    const stems = (await resolveStems(row)) ?? {}
     const urls = wantStems.map((n) => stems[n]).filter((u): u is string => typeof u === 'string')
     if (urls.length > 0) {
       const offset =

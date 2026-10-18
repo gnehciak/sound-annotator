@@ -12,26 +12,15 @@
 // Who may ask is who may read the project (the clip export's gate). A guest's
 // own board is born `shared`, so their key isn't even needed.
 import { getUid, isAdmin } from '../../_lib/auth.js'
-import { getProjectRow, sql } from '../../_lib/db.js'
+import { getProjectRow } from '../../_lib/db.js'
 import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
 import { err, json } from '../../_lib/respond.js'
 import { shareRoleFor } from '../../_lib/shares.js'
+import { resolveStems } from '../../_lib/stems.js'
 
 function idFrom(request: Request): string {
   const parts = new URL(request.url).pathname.split('/').filter(Boolean)
   return decodeURIComponent(parts[2] ?? '') // /api/projects/<id>/stems
-}
-
-interface Source {
-  type?: string
-  videoId?: string
-}
-
-function stemsOf(analysis: unknown): Record<string, string> | null {
-  const s = (analysis as { stems?: unknown } | null)?.stems
-  if (s && typeof s === 'object' && Object.keys(s as object).length > 0)
-    return s as Record<string, string>
-  return null
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -56,27 +45,7 @@ export async function GET(request: Request): Promise<Response> {
   }
   if (!allowed) return err(403, 'Not shared')
 
-  // Its own stems win.
-  const own = stemsOf(row.analysis)
-  if (own) return json({ stems: own, from: 'self' })
-
-  // Otherwise, for a YouTube track, borrow another project's stems for the
-  // same video — the newest finished analysis.
-  const source = (row.source ?? {}) as Source
-  if (source.type === 'youtube' && source.videoId) {
-    const rows = (await sql`
-      SELECT analysis
-      FROM projects
-      WHERE deleted_at IS NULL
-        AND source->>'type' = 'youtube'
-        AND source->>'videoId' = ${source.videoId}
-        AND jsonb_typeof(analysis->'stems') = 'object'
-      ORDER BY (analysis->>'finishedAt')::bigint DESC NULLS LAST
-      LIMIT 1
-    `) as { analysis: unknown }[]
-    const borrowed = rows[0] ? stemsOf(rows[0].analysis) : null
-    if (borrowed) return json({ stems: borrowed, from: 'shared' })
-  }
-
-  return json({ stems: null })
+  // Its own stems, or a same-video project's (see resolveStems).
+  const stems = await resolveStems(row)
+  return json({ stems })
 }
