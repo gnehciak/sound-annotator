@@ -671,35 +671,72 @@ export async function encodeStemToM4a(input: string): Promise<Buffer> {
 }
 
 /**
- * Lift the audio track out of a video file (our downloaded YouTube copy, an
- * http(s) URL ffmpeg can read) as an m4a, keeping the AAC frames as they are
- * (`-c:a copy`) — the merged mp4 is always AAC, so this is instant. Used by
- * section detection to feed the downloaded video to the analyzer without a
- * second YouTube fetch or a manual audio upload.
+ * Lift the audio track out of a video file as an m4a. Used by section detection
+ * to feed the downloaded YouTube copy to the analyzer without a second YouTube
+ * fetch or a manual audio upload.
+ *
+ * `input` is normally the stored copy's http URL — but we download it to /tmp
+ * first and hand ffmpeg a *local* file rather than letting ffmpeg read the URL
+ * itself. A merged mp4 can carry its `moov` atom at the end of the file, which
+ * ffmpeg can only reach by seeking the remote resource mid-read; that is
+ * fragile over http (and the reason this failed in the wild). A local file is
+ * fully seekable, so the extract is reliable whatever the mp4's layout. The
+ * audio is kept as-is (`-c:a copy`, instant) with a re-encode fallback for the
+ * rare container whose audio isn't already a clean AAC stream.
  */
 export async function extractAudioM4a(input: string): Promise<Buffer> {
+  let local = input
+  let downloaded: string | null = null
+  if (input.startsWith('http')) {
+    let res: Response
+    try {
+      res = await fetch(input)
+    } catch {
+      throw new MediaError(502, 'Could not read the downloaded video’s audio.')
+    }
+    if (!res.ok || !res.body)
+      throw new MediaError(502, 'Could not read the downloaded video’s audio.')
+    downloaded = path.join(TMP, `vidsrc-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`)
+    await pipeline(
+      Readable.fromWeb(res.body as import('stream/web').ReadableStream),
+      createWriteStream(downloaded),
+    )
+    local = downloaded
+  }
+
   const out = path.join(TMP, `aud-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
-  const args = [
+  const build = (reencode: boolean) => [
     '-y', '-hide_banner', '-loglevel', 'error', '-nostdin',
-    ...(input.startsWith('http') ? ['-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1'] : []),
-    '-i', input,
+    '-i', local,
     '-vn', '-sn', '-dn',
-    '-c:a', 'copy',
+    ...(reencode ? ['-c:a', 'aac', '-b:a', '192k'] : ['-c:a', 'copy']),
     '-movflags', '+faststart',
     out,
   ]
-  const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
-  if (r.code !== 0 || !existsSync(out)) {
-    console.error(`[audio] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
-    throw new MediaError(502, 'Could not read the downloaded video’s audio.')
-  }
   try {
+    let r = await run(ffmpeg(), build(false), FFMPEG_TIMEOUT_MS)
+    if (r.code !== 0 || !existsSync(out)) {
+      // The audio wasn't a clean AAC stream to copy — re-encode it.
+      try {
+        unlinkSync(out)
+      } catch {
+        /* fine */
+      }
+      r = await run(ffmpeg(), build(true), FFMPEG_TIMEOUT_MS)
+    }
+    if (r.code !== 0 || !existsSync(out)) {
+      console.error(`[audio] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
+      throw new MediaError(502, 'Could not read the downloaded video’s audio.')
+    }
     return readFileSync(out)
   } finally {
-    try {
-      unlinkSync(out)
-    } catch {
-      /* fine */
+    for (const f of [out, downloaded]) {
+      if (!f) continue
+      try {
+        unlinkSync(f)
+      } catch {
+        /* fine */
+      }
     }
   }
 }
