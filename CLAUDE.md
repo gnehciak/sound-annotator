@@ -266,6 +266,12 @@ Safari's `<audio src>` demands) and keeps it for replays. The confirm popover
 picks the stems, which ride through as the clip route's `stem` params. An
 iframe on another site carries no session cookie, so the embed plays only
 while the track's link is on, and the popover warns when it is off.
+Canva (and anything unfurling through Iframely/oEmbed) decides whether a
+URL may be embedded by reading the page's HTML, so `middleware.ts` hands
+`/?embed=` to `api/embed.ts`, which serves index.html with an oEmbed
+discovery link and a Twitter player card injected, and answers the oEmbed
+request itself (`?url=`). Routing Middleware rather than a vercel.json
+rewrite, because `/` is a static file and static files beat rewrites.
 
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are

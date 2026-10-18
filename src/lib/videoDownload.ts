@@ -29,12 +29,14 @@ export const DEFAULT_QUALITY: VideoQuality = 720
 export interface VideoProbe {
   available: boolean
   size?: number
+  /** The server has no row for this project yet (it hasn't been saved). */
+  unsaved?: boolean
 }
 
 /** Is a downloaded copy already stored? Cheap (one Blob list on the server). */
 export async function probeLocalVideo(projectId: string): Promise<VideoProbe> {
   const res = await fetch(`${localVideoUrl(projectId)}?probe=1`)
-  if (!res.ok) return { available: false }
+  if (!res.ok) return { available: false, unsaved: res.status === 404 }
   return (await res.json().catch(() => ({ available: false }))) as VideoProbe
 }
 
@@ -128,7 +130,14 @@ export interface LocalVideo {
  *
  * `enabled` gates the probe to YouTube tracks; everything is inert otherwise.
  */
-export function useLocalVideo(projectId: string | null, enabled: boolean): LocalVideo {
+export function useLocalVideo(
+  projectId: string | null,
+  /** The YouTube id, or null when this isn't a YouTube track. */
+  videoId: string | null,
+  /** App's count of finished saves — see useResolvedStems for why. */
+  savedTick = 0,
+): LocalVideo {
+  const enabled = !!videoId
   const [available, setAvailable] = useState(false)
   const [probing, setProbing] = useState(false)
   const [preferLocal, setPreferLocal] = useState(false)
@@ -138,20 +147,29 @@ export function useLocalVideo(projectId: string | null, enabled: boolean): Local
   // The download outliving a track switch would set state on the wrong board.
   const liveRef = useRef(projectId)
   liveRef.current = projectId
+  // A new track's row isn't on the server until its first save, so the probe
+  // 404s; re-probe after each save until it doesn't. A track opened with its
+  // video already downloaded then opens on that copy, as a reopened one does.
+  const [unsaved, setUnsaved] = useState(false)
+  const retry = unsaved ? savedTick : 0
 
   // A fresh track: forget the last one's copy, then probe this one.
   useEffect(() => {
-    setAvailable(false)
-    setPreferLocal(false)
-    setDownloading(false)
-    setProgress(null)
-    setError(null)
+    if (retry === 0) {
+      setAvailable(false)
+      setPreferLocal(false)
+      setDownloading(false)
+      setProgress(null)
+      setError(null)
+    }
+    setUnsaved(false)
     if (!projectId || !enabled) return
     let cancelled = false
     setProbing(true)
     probeLocalVideo(projectId)
       .then((p) => {
         if (cancelled) return
+        if (p.unsaved) setUnsaved(true)
         setAvailable(p.available)
         // Nothing to watch yet, but a teacher who downloaded it means to watch
         // it — open on the local copy when there is one.
@@ -162,7 +180,7 @@ export function useLocalVideo(projectId: string | null, enabled: boolean): Local
     return () => {
       cancelled = true
     }
-  }, [projectId, enabled])
+  }, [projectId, enabled, videoId, retry])
 
   const start = useCallback(
     (quality: VideoQuality = DEFAULT_QUALITY) => {

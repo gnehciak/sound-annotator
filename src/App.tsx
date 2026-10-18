@@ -269,6 +269,10 @@ export default function App() {
   const hydratedRef = useRef(false)
   const [saveStatus, setSaveStatus] =
     useState<'idle' | 'editing' | 'saving' | 'saved' | 'error'>('idle')
+  // Bumped when a save lands: lookups keyed on the server's row (stems, the
+  // downloaded video) retry on it when they asked before a new track's row
+  // existed.
+  const [savedTick, setSavedTick] = useState(0)
 
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -405,7 +409,7 @@ export default function App() {
   // The stems to drive the mixer: the track's own, or — for a YouTube board
   // with none — a teacher's board of the same video, so a student reuses them
   // without a paid run of their own (see lib/stems).
-  const stems = useResolvedStems(current)
+  const stems = useResolvedStems(current, savedTick)
 
   // Home vs editor: no router — the home page is simply "no open track".
   // Deriving from `current` (not just currentId) self-heals a dangling id.
@@ -527,7 +531,11 @@ export default function App() {
   // stored copy itself is the durable fact, probed on open.
   const isYouTubeTrack =
     current?.source?.type === 'youtube' && !!current.source.videoId
-  const localVideo = useLocalVideo(current?.id ?? null, isYouTubeTrack)
+  const localVideo = useLocalVideo(
+    current?.id ?? null,
+    isYouTubeTrack ? (current?.source?.videoId ?? null) : null,
+    savedTick,
+  )
   // Downloading hosts video bytes at our cost, so it's the owner's (or an
   // admin's) call — the same shape the server enforces. A guest is never
   // signed in, so `user` already excludes them.
@@ -1250,9 +1258,10 @@ export default function App() {
           )
         }),
       )
-        .then(() =>
-          setSaveStatus(flushable.length < dirty.length ? 'idle' : 'saved'),
-        )
+        .then(() => {
+          setSaveStatus(flushable.length < dirty.length ? 'idle' : 'saved')
+          setSavedTick((t) => t + 1)
+        })
         .catch((err) => {
           console.error('Failed to save project:', err)
           setSaveStatus('error')

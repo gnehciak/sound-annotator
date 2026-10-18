@@ -11,23 +11,42 @@ import type { Project } from '../types'
 export const STEM_ORDER = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other']
 
 /**
- * The stems to drive the mixer with: the project's own if present, else (for a
- * YouTube track) another same-video project's, fetched once per track. Returns
+ * The stems to drive the mixer: the project's own if present, else (for a
+ * video track) the shared per-video store's, fetched once per track. Returns
  * undefined while there are none to show.
+ *
+ * `savedTick` is App's count of finished saves. A track made a moment ago has
+ * no row on the server until its first debounced save lands, so the lookup
+ * answers 404; that one answer is retried after each save until the row is
+ * there, which is what puts the mixer up on the first open rather than only
+ * after a reload. A real answer (stems or none) is never re-asked.
  */
-export function useResolvedStems(project: Project | null): Record<string, string> | undefined {
+export function useResolvedStems(
+  project: Project | null,
+  savedTick = 0,
+): Record<string, string> | undefined {
   const own = project?.stems
   const id = project?.id ?? null
-  // Only worth a lookup for a YouTube track with no stems of its own.
-  const canBorrow = !own && project?.source?.type === 'youtube' && !!project.source.videoId
+  const src = project?.source
+  // Only worth a lookup for a video track with no stems of its own.
+  const recording =
+    src?.type === 'youtube' ? src.videoId : src?.type === 'drive' ? src.driveFileId : undefined
+  const canBorrow = !own && !!recording
   const [borrowed, setBorrowed] = useState<Record<string, string> | undefined>()
+  // The row wasn't on the server yet; re-ask on the next save.
+  const [unsaved, setUnsaved] = useState(false)
+  const retry = unsaved ? savedTick : 0
 
   useEffect(() => {
-    setBorrowed(undefined)
+    if (retry === 0) setBorrowed(undefined)
+    setUnsaved(false)
     if (!id || !canBorrow) return
     let cancelled = false
     fetch(`/api/projects/${encodeURIComponent(id)}/stems`)
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 404 && !cancelled) setUnsaved(true)
+        return r.ok ? r.json() : null
+      })
       .then((d: { stems?: Record<string, string> | null } | null) => {
         if (!cancelled && d?.stems && Object.keys(d.stems).length > 0) setBorrowed(d.stems)
       })
@@ -35,7 +54,8 @@ export function useResolvedStems(project: Project | null): Record<string, string
     return () => {
       cancelled = true
     }
-  }, [id, canBorrow])
+    // `recording` too: picking the video is what makes the lookup worth doing.
+  }, [id, canBorrow, recording, retry])
 
   return own ?? borrowed
 }
