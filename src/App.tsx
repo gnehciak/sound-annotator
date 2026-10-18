@@ -2517,6 +2517,30 @@ export default function App() {
     />
   ) : null
 
+  // AI section detection — it fills the structure board, so it's shown in that
+  // timeline's own header (passed down as StructureEditor's `detectButton`).
+  // Admin-only: /analyze spends a Replicate run and writes ~130 MB of stems per
+  // track, so it answers 404 to everyone else — a guest (no account at all) and
+  // an ordinary owner alike. Guests still reach a structure board from the
+  // landing page's workspace switch.
+  const detectSectionsButton =
+    current &&
+    user &&
+    isAdmin &&
+    !isGuest &&
+    !effectiveViewOnly &&
+    !isForeign &&
+    (isVideoSource(current.source) || current.source?.audioUrl) ? (
+      <DetectSectionsButton
+        key={current.id}
+        projectId={current.id}
+        uploadAnalysisAudio={(file, onProgress) =>
+          uploadAnalysisAudio(user.uid, current.id, file, onProgress)
+        }
+        onSections={applyDetectedSections}
+      />
+    ) : null
+
   /**
    * What floats inside the video frame: the note stage layer (covers + pins)
    * with the transport on top of it. Composed in that order deliberately —
@@ -3046,34 +3070,9 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
-                      {scoreButton}
-                      {/* AI section detection — it fills this very board.
-                          Admin-only: /analyze spends a Replicate run and
-                          writes ~130 MB of stems per track, so it answers 404
-                          to everyone else — a guest (no account at all) and an
-                          ordinary owner alike. Guests still reach a structure
-                          board from the landing page's workspace switch. */}
-                      {user &&
-                        isAdmin &&
-                        !isGuest &&
-                        !effectiveViewOnly &&
-                        !isForeign &&
-                        (isVideoSource(current.source) ||
-                          current.source.audioUrl) && (
-                          <DetectSectionsButton
-                            key={current.id}
-                            projectId={current.id}
-                            uploadAnalysisAudio={(file, onProgress) =>
-                              uploadAnalysisAudio(
-                                user.uid,
-                                current.id,
-                                file,
-                                onProgress,
-                              )
-                            }
-                            onSections={applyDetectedSections}
-                          />
-                        )}
+                      {/* No score on the structure board — it's the section
+                          timeline's workspace, not a reading surface. Detect
+                          sections moved into the timeline's own header. */}
                     </>
                   }
                 />
@@ -3183,6 +3182,7 @@ export default function App() {
                 onChordsChange={changeChords}
                 chordsOnVideo={isVideoSource(current.source) ? chordsOnVideo : undefined}
                 onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
+                detectButton={detectSectionsButton}
                 lyricsVisible={showLyrics}
                 onToggleLyrics={
                   // Only offer the switch where the column has something to

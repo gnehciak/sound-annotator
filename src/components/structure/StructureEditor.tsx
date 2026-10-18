@@ -123,6 +123,10 @@ interface Props {
    *  board's lane switches sit together. Absent hides the Lyrics toggle. */
   lyricsVisible?: boolean
   onToggleLyrics?: () => void
+  /** The admin-only "Detect sections" control, built by App (it needs the
+   *  upload + apply wiring). Shown in this header rather than the player's,
+   *  since what it produces *is* this board. Absent for everyone else. */
+  detectButton?: React.ReactNode
 }
 
 type Tool = 'select' | 'cut'
@@ -183,6 +187,7 @@ export default function StructureEditor({
   onToggleChordsOnVideo,
   lyricsVisible,
   onToggleLyrics,
+  detectButton,
   playbackRate = 1,
 }: Props) {
   const theme = useResolvedTheme()
@@ -541,6 +546,35 @@ export default function StructureEditor({
     return { lo, hi }
   }
 
+  // ---- ripple (push) -------------------------------------------------------
+  // A moved section — or a trimmed edge — shoves the neighbours it runs into
+  // instead of stopping at them. These place a run of neighbours against a
+  // moving boundary, each kept its own length and each measured from its
+  // *snapshot* start/end, so the cascade springs back when the boundary pulls
+  // away rather than piling up. `floor`/`ceil` is the first free time on that
+  // side; `rights`/`lefts` are the snapshot neighbours, lane order.
+  const secLen = (a: Annotation) => (a.end ?? a.start) - a.start
+  const sumLen = (arr: Annotation[]) => arr.reduce((s, a) => s + secLen(a), 0)
+  const rippleRight = (rights: Annotation[], floor: number) => {
+    const out: { id: string; patch: Partial<Annotation> }[] = []
+    for (const r of rights) {
+      const rs = Math.max(r.start, floor)
+      out.push({ id: r.id, patch: { start: round1(rs), end: round1(rs + secLen(r)) } })
+      floor = rs + secLen(r)
+    }
+    return out
+  }
+  const rippleLeft = (lefts: Annotation[], ceil: number) => {
+    const out: { id: string; patch: Partial<Annotation> }[] = []
+    for (let i = lefts.length - 1; i >= 0; i--) {
+      const l = lefts[i]
+      const le = Math.min(l.end ?? l.start, ceil)
+      out.push({ id: l.id, patch: { start: round1(le - secLen(l)), end: round1(le) } })
+      ceil = le - secLen(l)
+    }
+    return out
+  }
+
   // ---- gestures ------------------------------------------------------------
 
   function scrubDrag(clientX: number) {
@@ -642,8 +676,6 @@ export default function StructureEditor({
     // frame from this snapshot of where everything started (never accumulated),
     // and a section can only shove its neighbours as far as the board's ends —
     // which is exactly what boundLo/boundHi cap, so the chain always fits.
-    const lenOf = (a: Annotation) => (a.end ?? a.start) - a.start
-    const sumLen = (arr: Annotation[]) => arr.reduce((s, a) => s + lenOf(a), 0)
     const snap = liveRef.current.ordered
     const idx = snap.findIndex((a) => a.id === sec.id)
     const lefts = snap.slice(0, idx)
@@ -683,31 +715,10 @@ export default function StructureEditor({
         }
         const patches = [
           { id: sec.id, patch: { start: round1(ns), end: round1(ns + len) } },
+          // Shove the neighbours on each side out of the moving block's way.
+          ...rippleRight(rights, ns + len),
+          ...rippleLeft(lefts, ns),
         ]
-        // Shove each right-hand neighbour the dragged section overlaps, then
-        // the next it in turn overlaps. `r.start` is its *snapshot* position,
-        // so a neighbour no longer overlapped snaps back to where it began
-        // rather than keeping a spot it was pushed to earlier in the drag.
-        let floor = ns + len
-        for (const r of rights) {
-          const rs = Math.max(r.start, floor)
-          patches.push({
-            id: r.id,
-            patch: { start: round1(rs), end: round1(rs + lenOf(r)) },
-          })
-          floor = rs + lenOf(r)
-        }
-        // And the left-hand neighbours, cascading the other way.
-        let ceil = ns
-        for (let i = lefts.length - 1; i >= 0; i--) {
-          const l = lefts[i]
-          const le = Math.min(l.end ?? l.start, ceil)
-          patches.push({
-            id: l.id,
-            patch: { start: round1(le - lenOf(l)), end: round1(le) },
-          })
-          ceil = le - lenOf(l)
-        }
         onUpdateMany!(patches, { coalesceKey: `sec-move:${sec.id}` })
       },
       undefined,
@@ -721,8 +732,19 @@ export default function StructureEditor({
       e.stopPropagation()
       selectSec(sec.id)
       const end = sec.end ?? sec.start
-      const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
       const magnets = magnetsExcept(sec.id)
+
+      // Trimming an edge *into* a neighbour pushes it, the same ripple as a
+      // move — so a boundary can be dragged across the one beside it. The push
+      // is recomputed each frame from this snapshot, so pulling the edge back
+      // springs the neighbours back; it reaches only as far as the board's end,
+      // which the opposite-side length cap enforces.
+      const snap = liveRef.current.ordered
+      const idx = snap.findIndex((a) => a.id === sec.id)
+      const lefts = snap.slice(0, idx)
+      const rights = snap.slice(idx + 1)
+      const push = !!onUpdateMany
+
       beginDrag(
         (ev) => {
           const { pps, sections } = liveRef.current
@@ -730,19 +752,40 @@ export default function StructureEditor({
           if (!cur) return
           const curEnd = cur.end ?? cur.start
           const raw = snapTime(tOfClient(ev.clientX), pps, magnets)
-          const patch =
-            edge === 'start'
-              ? {
-                  start: round1(
-                    clamp(raw, Math.min(lo, cur.start), curEnd - MIN_SECTION),
-                  ),
-                }
-              : {
-                  end: round1(
-                    clamp(raw, cur.start + MIN_SECTION, Math.max(hi, curEnd)),
-                  ),
-                }
-          onUpdate(sec.id, patch, { coalesceKey: `sec-resize:${sec.id}` })
+          if (!push) {
+            const { lo, hi } = gapAt((sec.start + end) / 2, sec.id)
+            const patch =
+              edge === 'start'
+                ? { start: round1(clamp(raw, Math.min(lo, cur.start), curEnd - MIN_SECTION)) }
+                : { end: round1(clamp(raw, cur.start + MIN_SECTION, Math.max(hi, curEnd))) }
+            onUpdate(sec.id, patch, { coalesceKey: `sec-resize:${sec.id}` })
+            return
+          }
+          if (edge === 'start') {
+            // The start can slide back no further than the left chain stacked
+            // against 0, and forward no nearer than MIN_SECTION to the end.
+            const ns = clamp(raw, sumLen(lefts), curEnd - MIN_SECTION)
+            onUpdateMany!(
+              [
+                { id: sec.id, patch: { start: round1(ns) } },
+                ...rippleLeft(lefts, ns),
+              ],
+              { coalesceKey: `sec-resize:${sec.id}` },
+            )
+          } else {
+            const ne = clamp(
+              raw,
+              cur.start + MIN_SECTION,
+              liveRef.current.dur - sumLen(rights),
+            )
+            onUpdateMany!(
+              [
+                { id: sec.id, patch: { end: round1(ne) } },
+                ...rippleRight(rights, ne),
+              ],
+              { coalesceKey: `sec-resize:${sec.id}` },
+            )
+          }
         },
         undefined,
         'ew-resize',
@@ -979,6 +1022,9 @@ export default function StructureEditor({
 
   const headerActions = (
     <div className="flex min-w-0 items-center gap-2.5">
+      {/* Detect sections — admin-only, built by App. It fills this very
+          board, so it lives in this header rather than the player's. */}
+      {detectButton}
       {/* Lane switches — show or hide the board's optional surfaces so a
           teacher can focus on one thing at a time. View-only: the chord and
           lyric data are untouched. */}
