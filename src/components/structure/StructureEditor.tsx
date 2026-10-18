@@ -38,6 +38,7 @@ import TitleBar from '../TitleBar'
 import Popover from '../Popover'
 import { clamp, hexA, windowDrag } from './drag'
 import ChordLane from './ChordLane'
+import EmbedButton from './EmbedButton'
 import { ChordFooter, ChordSetupRow } from './ChordControls'
 import {
   beatGrid,
@@ -105,6 +106,8 @@ interface Props {
   onDelete: (id: string) => void
   /** Download a section's audio as an m4a clip (the clip export). */
   onDownloadClip?: (section: Annotation) => Promise<void>
+  /** Offer an embed code for the selected section (EmbedButton). */
+  embed?: { projectId: string; stems: string[]; shared: boolean }
   /** The chord track, when the project has one. */
   chords?: ProjectChords
   /** Whether the chord track may be edited — narrower than `readOnly`, since
@@ -184,6 +187,7 @@ export default function StructureEditor({
   onUpdateMany,
   onDelete,
   onDownloadClip,
+  embed,
   chords,
   chordsReadOnly = false,
   onChordsChange,
@@ -1581,6 +1585,16 @@ export default function StructureEditor({
                       <Download size={13} />
                     )}
                   </button>
+                )}
+                {embed && (
+                  <EmbedButton
+                    key={selected.id}
+                    projectId={embed.projectId}
+                    start={selected.start}
+                    end={selected.end ?? selected.start}
+                    stems={embed.stems}
+                    shared={embed.shared}
+                  />
                 )}
                 <button
                   type="button"

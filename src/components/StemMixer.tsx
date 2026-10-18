@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { AudioLines, X } from 'lucide-react'
 import type { PlayerHandle } from '../types'
-
-// Display order for whichever of the six Demucs stems the analysis saved.
-const STEM_ORDER = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other']
+import { STEM_ORDER } from '../lib/stems'
 
 // Sync cadence and the drift beyond which a stem is snapped to the player.
 // Loose enough that normal timeupdate jitter never causes an audible skip,

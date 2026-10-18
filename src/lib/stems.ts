@@ -7,6 +7,9 @@
 import { useEffect, useState } from 'react'
 import type { Project } from '../types'
 
+/** Display order for whichever of the six Demucs stems the analysis saved. */
+export const STEM_ORDER = ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other']
+
 /**
  * The stems to drive the mixer with: the project's own if present, else (for a
  * YouTube track) another same-video project's, fetched once per track. Returns

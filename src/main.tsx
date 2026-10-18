@@ -17,6 +17,7 @@ import { AuthProvider } from './lib/auth'
 import { parseRoute } from './lib/nav'
 import Gate from './components/Gate'
 import ShareViewer from './components/ShareViewer'
+import EmbedPlayer from './components/EmbedPlayer'
 import AdminProjects from './components/AdminProjects'
 import './plugins/register' // registers note plugins (side effect)
 
@@ -42,7 +43,10 @@ createRoot(document.getElementById('root')!).render(
         sign-in — but "Make a copy" inside it can still sign the visitor in,
         which works anywhere now that useAuth() reads a module-level store
         rather than a provider's context. */}
-    {route.page === 'share' ? (
+    {route.page === 'embed' ? (
+      // An iframe on someone else's page: no chrome, no auth, one button.
+      <EmbedPlayer {...route} />
+    ) : route.page === 'share' ? (
       <ShareViewer projectId={route.id} />
     ) : (
       <AuthProvider>

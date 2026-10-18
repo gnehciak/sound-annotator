@@ -28,6 +28,9 @@ export type Route =
   | { page: 'track'; id: string; key: string | null; admin: boolean }
   /** A `?view=` share link: the read-only viewer, no sign-in. */
   | { page: 'share'; id: string }
+  /** An embedded passage: a square play/pause button over a clip, for an
+   *  iframe on another page (lib/embed.ts). A root shell of its own. */
+  | { page: 'embed'; id: string; start: number; end: number; stems: string[] }
   /** The admin console and which of its tabs is showing; `path` is the
    *  Storage tab's folder, so a folder deep in the store is a link too. */
   | { page: 'admin'; tab: AdminTab; path?: string }
@@ -49,6 +52,15 @@ export function parseRoute(search: string = window.location.search): Route {
   const p = new URLSearchParams(search)
   const view = p.get('view')
   if (view) return { page: 'share', id: view }
+  const embed = p.get('embed')
+  if (embed)
+    return {
+      page: 'embed',
+      id: embed,
+      start: Number(p.get('start')) || 0,
+      end: Number(p.get('end')) || 0,
+      stems: p.getAll('stem'),
+    }
   const track = p.get('track')
   if (track)
     return {
@@ -90,6 +102,12 @@ export function routeSearch(r: Route): string {
     case 'share':
       p.set('view', r.id)
       break
+    case 'embed':
+      p.set('embed', r.id)
+      p.set('start', String(r.start))
+      p.set('end', String(r.end))
+      for (const s of r.stems) p.append('stem', s)
+      break
     case 'admin':
       p.set('admin', '1')
       if (r.tab !== 'projects') p.set('tab', r.tab)
@@ -125,6 +143,7 @@ export function pageTitle(r: Route, name?: string | null): string {
       return titled('Trash')
     case 'track':
     case 'share':
+    case 'embed':
       return name ? titled(name) : APP_NAME
     case 'admin':
       return titled(

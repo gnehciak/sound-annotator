@@ -257,6 +257,16 @@ cron ages it out after `MEDIA_CACHE_TTL_MS` instead. The clip is cut with
 (`YTDLP_PATH` / `FFMPEG_PATH` override), without cookies or the plugin: a
 residential address is served the plain streams.
 
+**A section can be embedded** (`?embed=<publicId>&start=&end=[&stem=…]`,
+`lib/embed.ts`, `components/EmbedPlayer.tsx`, the `</>` key in the
+song-structure board's section footer). It is a fourth root shell in
+`main.tsx`: a square with one play/pause button that, on the first press,
+fetches that same clip route as a blob (the route has no Range support, which
+Safari's `<audio src>` demands) and keeps it for replays. The confirm popover
+picks the stems, which ride through as the clip route's `stem` params. An
+iframe on another site carries no session cookie, so the embed plays only
+while the track's link is on, and the popover warns when it is off.
+
 **Every place in the app is a URL** (`src/lib/nav.ts`). There's still no
 `<Router>` — a project id *is* a share credential and `?view=` links are
 already out in the world, so the route is a query param on one page: `?` the
