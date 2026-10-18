@@ -53,6 +53,7 @@ import { useNotesSplit, NOTES_SPLIT_660 } from '../lib/notesSplit'
 import { usePlayerArea } from '../lib/playerArea'
 import { isTypingTarget, useHotkeys } from '../lib/useHotkeys'
 import StructureEditor from './structure/StructureEditor'
+import StemMixer from './StemMixer'
 import LyricsPanel from './structure/LyricsPanel'
 import LyricOverlay from './LyricOverlay'
 import ChordOverlay from './ChordOverlay'
@@ -109,6 +110,11 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
+  // Soloed stems (the mixer silences the main player while any play). A reader
+  // may isolate parts just like the owner — the stems are display data, not an
+  // editing power.
+  const [activeStems, setActiveStems] = useState<string[]>([])
+  const stemActive = activeStems.length > 0
   // Per-session score display, over whatever the owner saved (see below).
   const [scoreOverride, setScoreOverride] = useState<Partial<ScoreView>>({})
   const [scoreReload, setScoreReload] = useState(0)
@@ -847,7 +853,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       audioUrl={audioUrl}
                       regionSpecs={regionSpecs}
                       playbackRate={playbackRate}
-                      volume={muted ? 0 : volume}
+                      volume={stemActive || muted ? 0 : volume}
                       readOnly
                       overlay={isVideoSource(source) ? videoOverlay : undefined}
                       score={isVideoSource(source) ? (scoreOverVideo ?? undefined) : undefined}
@@ -887,7 +893,23 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
-          {/* readOnly: the board never calls the mutation props. */}
+          {/* readOnly: the board never calls the mutation props. The stem
+              mixer rides on its left like the editor's — a reader may isolate
+              the parts the owner's analysis separated. */}
+          <div className="flex min-h-0 shrink-0 gap-3">
+            {isVideoSource(source) && project.stems && (
+              <StemMixer
+                key={`rail-${project.id}`}
+                stems={project.stems}
+                playerRef={playerRef}
+                isPlaying={isPlaying}
+                volume={muted ? 0 : volume}
+                playbackRate={playbackRate}
+                onActiveChange={setActiveStems}
+                rail
+              />
+            )}
+            <div className="flex min-w-0 flex-1 flex-col">
           <StructureEditor
             key={project.id}
             sections={annotations}
@@ -905,6 +927,8 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             onToggleChordsOnVideo={() => setChordsOnVideo((v) => !v)}
             playbackRate={playbackRate}
           />
+            </div>
+          </div>
         </div>
         {lyrics && lyrics.length > 0 && (
           <div className="glass hidden w-[340px] shrink-0 overflow-hidden min-[980px]:flex">

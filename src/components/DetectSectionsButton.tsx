@@ -188,7 +188,7 @@ export default function DetectSectionsButton({
         disabled={busy}
         title={title}
         aria-label="Detect song sections with AI"
-        className={`seg-item press disabled:pointer-events-none ${
+        className={`seg-item press h-[24px] gap-1.5 text-[10px] tracking-[0.12em] disabled:pointer-events-none ${
           phase.kind === 'error'
             ? 'text-danger hover:text-danger'
             : busy

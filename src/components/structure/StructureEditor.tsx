@@ -973,12 +973,17 @@ export default function StructureEditor({
   }, [width, vs, ve, pps])
 
   // The chord grid's bar lines, drawn faintly through the section lane too,
-  // so a section edge can be read against the bars it falls on.
+  // so a section edge can be read against the bars it falls on. They belong to
+  // the chord track, so they come and go with its lane: hiding Chords clears
+  // the bar lines along with the bar itself.
   const barLines = useMemo(
-    () => (chords ? beatGrid(chords, vs, ve, xOf, (pps * 60) / chords.bpm).bars : []),
+    () =>
+      chordsVisible && chords
+        ? beatGrid(chords, vs, ve, xOf, (pps * 60) / chords.bpm).bars
+        : [],
     // xOf is rebuilt every render but only ever depends on vs and pps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chords, vs, ve, pps],
+    [chordsVisible, chords, vs, ve, pps],
   )
 
   const laneCursor = readOnly

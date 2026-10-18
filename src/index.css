@@ -776,6 +776,38 @@ html[data-armed] body::before {
     transform: scaleY(1);
   }
 }
+
+/* A stem chip buffering: the button fills left-to-right and resets, a
+   progress-like sweep in the stem's own hue. Reads as "loading" without a
+   spinner. The chip sets --hue; this samples it. */
+@keyframes stem-load {
+  0% {
+    transform: scaleX(0);
+    opacity: 0.5;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+}
+.stem-loading {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: color-mix(in srgb, var(--hue) 30%, transparent);
+  animation: stem-load 1.05s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stem-loading {
+    animation: none;
+    transform: scaleX(1);
+    opacity: 0.35;
+  }
+}
 .eq {
   display: inline-flex;
   align-items: flex-end;

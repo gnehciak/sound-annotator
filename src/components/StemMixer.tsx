@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { AudioLines, Loader2, X } from 'lucide-react'
+import { AudioLines, X } from 'lucide-react'
 import type { PlayerHandle } from '../types'
 
 // Display order for whichever of the six Demucs stems the analysis saved.
@@ -133,13 +133,33 @@ export default function StemMixer({
     })
   }, [active])
 
-  // Transport state: every created element follows the main player.
+  // Transport: reconcile every created element against "should be playing".
+  // Runs on the active *set* (not just whether any are active) and on load
+  // readiness — so a second stem toggled on while another already plays, or a
+  // stem that finishes buffering after it was switched on, actually starts
+  // rather than sitting paused until you toggle it off and on again. A fresh
+  // element is seeked to the playhead first, so it's in time from its first
+  // frame instead of starting at 0 and waiting for the drift loop.
   useEffect(() => {
+    const shouldPlay = isPlaying && active.size > 0
+    const t = playerRef.current?.getCurrentTime?.()
     for (const el of els.current.values()) {
-      if (isPlaying && anyActive) void el.play().catch(() => {})
-      else el.pause()
+      if (shouldPlay) {
+        if (el.paused) {
+          if (t != null && el.readyState >= 1 && Math.abs(el.currentTime - t) > MAX_DRIFT_S) {
+            try {
+              el.currentTime = t
+            } catch {
+              /* not seekable yet — the drift loop will catch it */
+            }
+          }
+          void el.play().catch(() => {})
+        }
+      } else if (!el.paused) {
+        el.pause()
+      }
     }
-  }, [isPlaying, anyActive])
+  }, [isPlaying, active, ready, playerRef])
 
   useEffect(() => {
     for (const el of els.current.values()) el.volume = volume
@@ -211,7 +231,7 @@ export default function StemMixer({
                       ? `Mute the ${name} stem`
                       : `Hear the ${name} stem (silences the original mix)`
               }
-              className="chip chip-outline press w-full justify-start gap-2 font-semibold tracking-[0.14em]"
+              className="chip chip-outline press relative w-full justify-start gap-2 overflow-hidden font-semibold tracking-[0.14em]"
               style={{
                 ['--hue' as string]: isFailed
                   ? 'rgb(var(--danger))'
@@ -220,16 +240,13 @@ export default function StemMixer({
                     : 'rgb(var(--text-muted))',
               }}
             >
-              {loading ? (
-                <Loader2 size={11} className="shrink-0 animate-spin" />
-              ) : (
-                <span
-                  aria-hidden
-                  className="h-2 w-2 shrink-0 rounded-full border"
-                  style={{ background: on ? 'var(--hue)' : 'transparent', borderColor: 'var(--hue)' }}
-                />
-              )}
-              <span className="truncate">{name}</span>
+              {loading && <span aria-hidden className="stem-loading" />}
+              <span
+                aria-hidden
+                className="relative h-2 w-2 shrink-0 rounded-full border"
+                style={{ background: on ? 'var(--hue)' : 'transparent', borderColor: 'var(--hue)' }}
+              />
+              <span className="relative truncate">{name}</span>
             </button>
           )
         })}
@@ -289,7 +306,7 @@ export default function StemMixer({
                     ? `Mute the ${name} stem`
                     : `Hear the ${name} stem (silences the original mix)`
             }
-            className="chip chip-outline press gap-1.5 font-semibold tracking-[0.14em]"
+            className="chip chip-outline press relative gap-1.5 overflow-hidden font-semibold tracking-[0.14em]"
             style={{
               ['--hue' as string]: isFailed
                 ? 'rgb(var(--danger))'
@@ -298,8 +315,8 @@ export default function StemMixer({
                   : 'rgb(var(--text-muted))',
             }}
           >
-            {loading && <Loader2 size={11} className="animate-spin" />}
-            {name}
+            {loading && <span aria-hidden className="stem-loading" />}
+            <span className="relative">{name}</span>
           </button>
         )
       })}
