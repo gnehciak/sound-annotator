@@ -11,6 +11,7 @@ import {
   Volume2,
   Volume1,
   VolumeX,
+  Maximize2,
 } from 'lucide-react'
 import { formatTime, parseTime } from '../lib/format'
 
@@ -49,6 +50,9 @@ interface Props {
   onSetRate: (rate: number) => void
   onSetVolume: (v: number) => void
   onToggleMute: () => void
+  /** Enter full screen (the whole player box). Only shown on the floating
+   *  video bar; absent on the audio dock, which has no picture to enlarge. */
+  onFullscreen?: () => void
 }
 
 export default function Transport({
@@ -67,6 +71,7 @@ export default function Transport({
   onSetRate,
   onSetVolume,
   onToggleMute,
+  onFullscreen,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
@@ -394,6 +399,22 @@ export default function Transport({
             onSetVolume={onSetVolume}
             onToggleMute={onToggleMute}
           />
+
+          {onFullscreen && (
+            <button
+              type="button"
+              onClick={onFullscreen}
+              title="Full screen (F)"
+              aria-label="Full screen"
+              className={`press flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+                glass
+                  ? 'text-muted hover:bg-fg/10 hover:text-fg'
+                  : 'text-white/85 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <Maximize2 size={14} />
+            </button>
+          )}
         </div>
       </div>
     )

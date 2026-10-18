@@ -2422,6 +2422,7 @@ export default function App() {
       onSetRate={setPlaybackRate}
       onSetVolume={changeVolume}
       onToggleMute={toggleMute}
+      onFullscreen={isVideoSource(current?.source) ? toggleLyricFullscreen : undefined}
     />
   )
 

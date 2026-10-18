@@ -678,6 +678,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
       onSetRate={setPlaybackRate}
       onSetVolume={changeVolume}
       onToggleMute={toggleMute}
+      onFullscreen={isVideoSource(source) ? toggleLyricFullscreen : undefined}
     />
   )
 
