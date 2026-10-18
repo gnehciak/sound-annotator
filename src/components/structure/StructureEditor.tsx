@@ -734,15 +734,16 @@ export default function StructureEditor({
       const end = sec.end ?? sec.start
       const magnets = magnetsExcept(sec.id)
 
-      // Trimming an edge *into* a neighbour pushes it, the same ripple as a
-      // move — so a boundary can be dragged across the one beside it. The push
-      // is recomputed each frame from this snapshot, so pulling the edge back
-      // springs the neighbours back; it reaches only as far as the board's end,
-      // which the opposite-side length cap enforces.
+      // Trimming an edge *cuts into* the neighbour beside it rather than
+      // moving the whole neighbour: the shared boundary slides, so this section
+      // grows while the next shrinks (its far edge stays put). It eats no
+      // further than leaving that neighbour MIN_SECTION, and reads the
+      // neighbour from this snapshot, so pulling the edge back off it lets the
+      // neighbour grow back to where it was.
       const snap = liveRef.current.ordered
       const idx = snap.findIndex((a) => a.id === sec.id)
-      const lefts = snap.slice(0, idx)
-      const rights = snap.slice(idx + 1)
+      const prev = snap[idx - 1] // the neighbour the start edge cuts into
+      const next = snap[idx + 1] // the neighbour the end edge cuts into
       const push = !!onUpdateMany
 
       beginDrag(
@@ -762,29 +763,31 @@ export default function StructureEditor({
             return
           }
           if (edge === 'start') {
-            // The start can slide back no further than the left chain stacked
-            // against 0, and forward no nearer than MIN_SECTION to the end.
-            const ns = clamp(raw, sumLen(lefts), curEnd - MIN_SECTION)
-            onUpdateMany!(
-              [
-                { id: sec.id, patch: { start: round1(ns) } },
-                ...rippleLeft(lefts, ns),
-              ],
-              { coalesceKey: `sec-resize:${sec.id}` },
-            )
+            // Grow left no further than MIN_SECTION into the previous section,
+            // which gives back its tail; shrink no past our own end.
+            const floor = prev ? prev.start + MIN_SECTION : 0
+            const ns = clamp(raw, floor, curEnd - MIN_SECTION)
+            const patches: { id: string; patch: Partial<Annotation> }[] = [
+              { id: sec.id, patch: { start: round1(ns) } },
+            ]
+            if (prev) {
+              // The boundary is the min of where we are and the neighbour's own
+              // end, so sitting off it (in the gap) leaves the neighbour whole.
+              const pEnd = Math.min(prev.end ?? prev.start, ns)
+              patches.push({ id: prev.id, patch: { end: round1(pEnd) } })
+            }
+            onUpdateMany!(patches, { coalesceKey: `sec-resize:${sec.id}` })
           } else {
-            const ne = clamp(
-              raw,
-              cur.start + MIN_SECTION,
-              liveRef.current.dur - sumLen(rights),
-            )
-            onUpdateMany!(
-              [
-                { id: sec.id, patch: { end: round1(ne) } },
-                ...rippleRight(rights, ne),
-              ],
-              { coalesceKey: `sec-resize:${sec.id}` },
-            )
+            const ceil = next ? (next.end ?? next.start) - MIN_SECTION : liveRef.current.dur
+            const ne = clamp(raw, cur.start + MIN_SECTION, ceil)
+            const patches: { id: string; patch: Partial<Annotation> }[] = [
+              { id: sec.id, patch: { end: round1(ne) } },
+            ]
+            if (next) {
+              const nStart = Math.max(next.start, ne)
+              patches.push({ id: next.id, patch: { start: round1(nStart) } })
+            }
+            onUpdateMany!(patches, { coalesceKey: `sec-resize:${sec.id}` })
           }
         },
         undefined,
