@@ -2,6 +2,7 @@ import { forwardRef, type ReactNode } from 'react'
 import type { PlayerHandle, ProjectSource } from '../types'
 import YouTubePlayer from './YouTubePlayer'
 import DrivePlayer from './DrivePlayer'
+import LocalVideoPlayer from './LocalVideoPlayer'
 import AudioPlayer, { type RegionSpec } from './AudioPlayer'
 
 interface Props {
@@ -31,6 +32,13 @@ interface Props {
   onSeek: (t: number) => void
   onCreateRange: (id: string, start: number, end: number) => void
   onUpdateRegion: (id: string, start: number, end: number) => void
+  /**
+   * Play the track's *downloaded* copy instead of the YouTube embed (see
+   * lib/videoDownload.ts). Only honoured for a YouTube source; `onFallback`
+   * lets the local player hand control back to the embed if the copy won't
+   * load. Absent means the embed, as before.
+   */
+  localVideo?: { projectId: string; onFallback?: () => void }
 }
 
 /** Picks the right player for the project's source and forwards the imperative ref. */
@@ -40,6 +48,24 @@ const PlayerPane = forwardRef<PlayerHandle, Props>(function PlayerPane(
 ) {
   const { source, audioUrl } = props
   if (source?.type === 'youtube' && source.videoId) {
+    if (props.localVideo) {
+      return (
+        <LocalVideoPlayer
+          ref={ref}
+          projectId={props.localVideo.projectId}
+          clipStart={source.clipStart}
+          clipEnd={source.clipEnd}
+          playbackRate={props.playbackRate}
+          volume={props.volume}
+          overlay={props.overlay}
+          score={props.score}
+          onTime={props.onTime}
+          onDuration={props.onDuration}
+          onPlayingChange={props.onPlayingChange}
+          onFallback={props.localVideo.onFallback}
+        />
+      )
+    }
     return (
       <YouTubePlayer
         ref={ref}

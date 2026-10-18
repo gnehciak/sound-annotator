@@ -122,6 +122,8 @@ import {
   useRoute,
 } from './lib/nav'
 import PlayerPane from './components/PlayerPane'
+import VideoSourceControl from './components/VideoSourceControl'
+import { useLocalVideo } from './lib/videoDownload'
 import VideoOverlays from './components/VideoOverlays'
 import Transport, { TransportHints } from './components/Transport'
 import TrackOverview from './components/TrackOverview'
@@ -510,6 +512,28 @@ export default function App() {
   // and — when the user can save settings (owner, not locked) — also patch the
   // project doc so the choice travels with the share.
   const canEditSettings = !effectiveViewOnly && !isForeign && !!current
+
+  // "Download the video and play the downloaded copy." Only YouTube has an
+  // iframe worth replacing with a file — a Drive video and an audio URL stream
+  // straight into a media element already. The reader's choice of which to
+  // watch, and a download in flight, are session state (lib/videoDownload); the
+  // stored copy itself is the durable fact, probed on open.
+  const isYouTubeTrack =
+    current?.source?.type === 'youtube' && !!current.source.videoId
+  const localVideo = useLocalVideo(current?.id ?? null, isYouTubeTrack)
+  // Downloading hosts video bytes at our cost, so it's the owner's (or an
+  // admin's) call — the same shape the server enforces. A guest is never
+  // signed in, so `user` already excludes them.
+  const canDownloadVideo = !!user && (!isForeign || isAdmin)
+  // What PlayerPane needs when the reader is watching the downloaded copy.
+  const localVideoProp =
+    isYouTubeTrack && localVideo.available && localVideo.preferLocal && current
+      ? {
+          projectId: current.id,
+          onFallback: () => localVideo.setPreferLocal(false),
+        }
+      : undefined
+
   const settingsSyncedFor = useRef<string | null>(null)
   useEffect(() => {
     if (!current) {
@@ -3070,6 +3094,12 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
+                      {isYouTubeTrack && (
+                        <VideoSourceControl
+                          local={localVideo}
+                          canDownload={canDownloadVideo}
+                        />
+                      )}
                       {/* No score on the structure board — it's the section
                           timeline's workspace, not a reading surface. Detect
                           sections moved into the timeline's own header. */}
@@ -3087,6 +3117,7 @@ export default function App() {
                         ref={playerRef}
                         source={current.source}
                         audioUrl={audioUrl}
+                        localVideo={localVideoProp}
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}
@@ -3268,6 +3299,12 @@ export default function App() {
                           {sourceLabel(current.source)}
                         </a>
                       )}
+                      {isYouTubeTrack && (
+                        <VideoSourceControl
+                          local={localVideo}
+                          canDownload={canDownloadVideo}
+                        />
+                      )}
                       {scoreButton}
                       {/* No section detection here. What it produces is a
                           span-per-section timeline, which *is* the
@@ -3288,6 +3325,7 @@ export default function App() {
                         ref={playerRef}
                         source={current.source}
                         audioUrl={audioUrl}
+                        localVideo={localVideoProp}
                         regionSpecs={regionSpecs}
                         playbackRate={playbackRate}
                         volume={stemActive || muted ? 0 : volume}

@@ -12,7 +12,11 @@
 import { del, list } from '@vercel/blob'
 import { sql, TRASH_TTL_MS, type ProjectRow } from '../_lib/db.js'
 import { json, err } from '../_lib/respond.js'
-import { MEDIA_CACHE_PREFIX, MEDIA_CACHE_TTL_MS } from '../_lib/mediaCache.js'
+import {
+  MEDIA_CACHE_PREFIX,
+  MEDIA_CACHE_TTL_MS,
+  VIDEO_CACHE_PREFIX,
+} from '../_lib/mediaCache.js'
 
 /** Delete every blob under a prefix; resolves with how many went. */
 async function deletePrefix(prefix: string): Promise<number> {
@@ -80,27 +84,40 @@ export async function GET(request: Request): Promise<Response> {
   if (rows.length === BATCH)
     console.log(`purge-trash: hit the ${BATCH} batch cap; more remain for the next run`)
 
-  // The clip export's audio cache (api/_lib/mediaCache.ts) is shared across
-  // projects, so no project's purge above can touch it; it ages out here
-  // instead. Its own try: a store hiccup must not fail the trash sweep.
-  let cache = 0
-  try {
-    const stale = Date.now() - MEDIA_CACHE_TTL_MS
-    // The cache's own store when one is wired up, else the main one
-    // (media.ts's `store()`; the same either-or, spelled out here).
-    const token = process.env.BLOB_CACHE_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN
+  // The media caches (api/_lib/mediaCache.ts) are shared across projects, so no
+  // project's purge above can touch them; they age out here instead. Each has
+  // its own try: a store hiccup must not fail the trash sweep.
+  const stale = Date.now() - MEDIA_CACHE_TTL_MS
+  async function ageOut(prefix: string, token: string | undefined): Promise<number> {
+    let gone = 0
     let cursor: string | undefined
     do {
-      const page = await list({ prefix: MEDIA_CACHE_PREFIX, cursor, limit: 1000, token })
+      const page = await list({ prefix, cursor, limit: 1000, token })
       const old = page.blobs.filter((b) => b.uploadedAt.getTime() < stale).map((b) => b.url)
       if (old.length) {
         await del(old, { token })
-        cache += old.length
+        gone += old.length
       }
       cursor = page.hasMore ? page.cursor : undefined
     } while (cursor)
+    return gone
+  }
+
+  let cache = 0
+  try {
+    // The clip audio cache's own store when one is wired up, else the main one
+    // (media.ts's `store()`; the same either-or, spelled out here).
+    const token = process.env.BLOB_CACHE_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN
+    cache += await ageOut(MEDIA_CACHE_PREFIX, token)
   } catch (e) {
     console.error('purge-trash: audio cache sweep failed:', e)
+  }
+  try {
+    // The downloaded-video cache always lives in the main (public) store, so a
+    // `<video>` can seek against its URL (media.ts's `videoStore()`).
+    cache += await ageOut(VIDEO_CACHE_PREFIX, process.env.BLOB_READ_WRITE_TOKEN)
+  } catch (e) {
+    console.error('purge-trash: video cache sweep failed:', e)
   }
   return json({ purged, blobs, cache })
 }

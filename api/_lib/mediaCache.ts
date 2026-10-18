@@ -8,6 +8,21 @@
 // purpose: no project owns it, so no project's purge may sweep it. The cron
 // ages it out instead (api/cron/purge-trash.ts).
 export const MEDIA_CACHE_PREFIX = 'cache/youtube/'
+/**
+ * The downloaded *video* cache (api/projects/[id]/video.ts), the sibling of the
+ * audio one above: one merged mp4 per YouTube video id, shared by every project
+ * that points at that video, so the whole picture is fetched from YouTube once
+ * and then played from our own origin. Its own prefix for the same reason — no
+ * project owns it, so no project's purge may sweep it; the cron ages it out.
+ *
+ * Unlike the audio cache it is **not** served from the private store: a
+ * `<video>` element seeks by Range, which the proxy answers by fetching the
+ * object's own URL with the client's Range header, so the object needs a
+ * fetchable (public, random-suffix) URL. That URL is unguessable — the same
+ * credential every share link and note image already rests on — and the proxy
+ * never hands it to the client, gating playback by project read-access instead.
+ */
+export const VIDEO_CACHE_PREFIX = 'cache/youtube-video/'
 /** A cached recording older than this is dropped by the cron; the next clip
  *  fetches it again. Age rather than last use — Blob records only the upload
  *  time — so a class favourite is refetched twice a year, which is nothing. */

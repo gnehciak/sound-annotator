@@ -67,7 +67,8 @@ import {
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { MEDIA_CACHE_PREFIX } from './mediaCache.js'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { MEDIA_CACHE_PREFIX, VIDEO_CACHE_PREFIX } from './mediaCache.js'
 
 const BIN_DIR = path.join(process.cwd(), 'api/_bin')
 const BUNDLED = process.platform === 'linux'
@@ -104,7 +105,12 @@ interface RunResult {
   stderr: string
 }
 
-function run(cmd: string, args: string[], timeoutMs: number): Promise<RunResult> {
+function run(
+  cmd: string,
+  args: string[],
+  timeoutMs: number,
+  onOutput?: (chunk: string) => void,
+): Promise<RunResult> {
   return new Promise((resolve) => {
     // The PO-token plugin and yt-dlp's challenge solver both look for `node`
     // — this process's own runtime, which isn't on the function's PATH.
@@ -115,8 +121,15 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<RunResult>
     })
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', (d) => (stdout += d))
-    child.stderr.on('data', (d) => (stderr += d))
+    // yt-dlp prints progress on both streams, so watch both.
+    child.stdout.on('data', (d) => {
+      stdout += d
+      onOutput?.(String(d))
+    })
+    child.stderr.on('data', (d) => {
+      stderr += d
+      onOutput?.(String(d))
+    })
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
     child.on('close', (code) => {
       clearTimeout(timer)
@@ -348,6 +361,229 @@ function evict(): void {
       /* already gone */
     }
   }
+}
+
+// ── The downloaded video ──────────────────────────────────────────────────
+//
+// "Download the video and play the downloaded copy." YouTube's embed is a
+// cross-origin iframe with a scriptable clock but no file behind it; a teacher
+// who wants the picture to keep playing when the embed is geo-blocked, muted
+// ("your account is being used on another device") or simply gone can pull the
+// whole video down once. We fetch video+audio and merge to a single mp4 — the
+// exact pipeline the clip export uses for audio, only selecting a video stream
+// too — store it under VIDEO_CACHE_PREFIX (shared across projects of the same
+// video, like the audio cache), and a plain `<video>` plays it back through a
+// Range proxy. Only ever for YouTube: a Drive video and an audio URL already
+// stream straight into a media element, so there is nothing to download.
+
+/** The merged file is refused over this — the ceiling on a kept picture. The
+ *  work file lands in /tmp (500 MB on Vercel, shared with the audio cache and
+ *  the binaries), so the cap is well under that. */
+export const VIDEO_MAX_BYTES = 350 * 1024 * 1024
+/** Default height cap: 720p keeps a long video from quietly pulling a 4K
+ *  master that would blow the /tmp budget. "best" (no cap) is still offered. */
+export const VIDEO_QUALITY_HEIGHTS = [360, 480, 720, 1080] as const
+const VIDEO_DOWNLOAD_TIMEOUT_MS = 280_000
+
+export type VideoDownloadStage = 'download' | 'merge' | 'save'
+export interface VideoDownloadProgress {
+  stage: VideoDownloadStage
+  /** 0–100 for the stream currently downloading; omitted when unknown. A
+   *  video+audio fetch is two passes (each 0→100), so the percent resets once;
+   *  the caller shows it with the stage label rather than as one smooth bar. */
+  percent?: number
+}
+
+export interface DownloadedVideo {
+  /** The merged file in /tmp. The caller stores it, then removes `workDir`. */
+  file: string
+  workDir: string
+  ext: string
+  mime: string
+  size: number
+  width?: number
+  height?: number
+  duration?: number
+}
+
+interface VideoInfo {
+  width?: unknown
+  height?: unknown
+  duration?: unknown
+}
+
+/**
+ * Download YouTube video `videoId` (with audio) merged to a single mp4 in
+ * /tmp. `maxHeight` caps the picture (undefined = best the site offers). The
+ * caller moves the file into storage and removes the returned `workDir`.
+ */
+export async function downloadYouTubeVideo(
+  videoId: string,
+  opts: { maxHeight?: number; onProgress?: (p: VideoDownloadProgress) => void } = {},
+): Promise<DownloadedVideo> {
+  if (!/^[\w-]{11}$/.test(videoId)) throw new MediaError(400, 'Not a YouTube video id')
+  const workDir = mkdtempSync(path.join(TMP, 'vid-'))
+  const out = path.join(workDir, 'media.%(ext)s')
+
+  const args = [
+    '--newline',
+    '--progress-template', 'download:KPROG %(progress._percent_str)s',
+    '--no-playlist',
+    '--restrict-filenames',
+    '--write-info-json',
+    '--merge-output-format', 'mp4',
+    '-o', out,
+    '--js-runtimes', `node:${process.execPath}`,
+  ]
+  // yt-dlp needs ffmpeg to merge separate video+audio streams. Point it at the
+  // bundled binary (an absolute path) on Vercel, or an explicit FFMPEG_PATH;
+  // locally, say nothing and let it find ffmpeg on PATH — a bare name here
+  // reads as a path that "does not exist" and silently SKIPS the merge, leaving
+  // two unmuxed files behind. (And no --no-warnings, so that warning shows.)
+  const ff = ffmpeg()
+  if (path.isAbsolute(ff)) args.push('--ffmpeg-location', ff)
+  const cookies = cookieFile()
+  if (cookies) args.push('--cookies', cookies)
+
+  const cap = opts.maxHeight ? `[height<=${opts.maxHeight}]` : ''
+  if (BUNDLED) {
+    // SABR video+audio first; then any plain pair; then format 18 (the a+v mp4
+    // every signed-in session is left with). Only the bundled SABR pre-release
+    // reads a SABR stream, which `formats=duplicate` surfaces.
+    args.push('--extractor-args', 'youtube:formats=duplicate')
+    args.push('-f', `bv*[protocol=sabr]${cap}+ba[protocol=sabr]/bv*${cap}+ba/b${cap}/18/b`)
+    args.push('--plugin-dirs', path.join(BIN_DIR, 'plugins'))
+    args.push('--extractor-args', `youtubepot-bgutilscript:server_home=${path.join(BIN_DIR, 'bgutil')}`)
+  } else {
+    args.push('-f', `bv*${cap}+ba/b${cap}/18/b`)
+    // A pip/brew yt-dlp doesn't bundle the challenge-solver script.
+    args.push('--remote-components', 'ejs:github')
+  }
+  args.push(`https://www.youtube.com/watch?v=${videoId}`)
+
+  // Parse yt-dlp's `KPROG 42.3%` lines as they stream in.
+  let obuf = ''
+  const onOutput = opts.onProgress
+    ? (chunk: string) => {
+        obuf += chunk
+        let nl: number
+        while ((nl = obuf.indexOf('\n')) >= 0) {
+          const line = obuf.slice(0, nl)
+          obuf = obuf.slice(nl + 1)
+          const m = line.match(/KPROG\s+([\d.]+)%/)
+          if (m) opts.onProgress!({ stage: 'download', percent: Number(m[1]) })
+          else if (/\[Merger\]|Merging formats/.test(line)) opts.onProgress!({ stage: 'merge' })
+        }
+      }
+    : undefined
+
+  const r = await run(ytDlp(), args, VIDEO_DOWNLOAD_TIMEOUT_MS, onOutput)
+  const files = existsSync(workDir) ? readdirSync(workDir) : []
+  // After a successful merge only `media.mp4` + `media.info.json` remain; a
+  // `.part` or an unmerged `media.fNNN.*` means it didn't finish.
+  const media = files.find(
+    (f) => f.startsWith('media.') && !f.endsWith('.info.json') && !f.endsWith('.part'),
+  )
+  if (r.code !== 0 || !media) {
+    rmSync(workDir, { recursive: true, force: true })
+    const msg = tail(r.stderr)
+    console.error(`[video] yt-dlp (${ytDlp()}) failed for ${videoId}: ${msg}`)
+    if (/private|unavailable|removed|not available|members-only/i.test(msg))
+      throw new MediaError(404, 'That video is not available to download.')
+    throw new MediaError(502, "YouTube didn't hand over the video. Try again in a moment.")
+  }
+
+  const file = path.join(workDir, media)
+  const size = statSync(file).size
+  if (size > VIDEO_MAX_BYTES) {
+    rmSync(workDir, { recursive: true, force: true })
+    throw new MediaError(
+      413,
+      `That video is larger than ${Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB — too big to keep. Try a lower quality.`,
+    )
+  }
+
+  const info = readVideoInfo(workDir)
+  const ext = path.extname(media).slice(1).toLowerCase()
+  return {
+    file,
+    workDir,
+    ext,
+    mime: CONTENT_TYPES[`.${ext}`] ?? 'video/mp4',
+    size,
+    width: typeof info.width === 'number' ? info.width : undefined,
+    height: typeof info.height === 'number' ? info.height : undefined,
+    duration: typeof info.duration === 'number' ? Math.round(info.duration) : undefined,
+  }
+}
+
+function readVideoInfo(dir: string): VideoInfo {
+  try {
+    const f = readdirSync(dir).find((n) => n.endsWith('.info.json'))
+    if (!f) return {}
+    return JSON.parse(readFileSync(path.join(dir, f), 'utf8')) as VideoInfo
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * The downloaded-video store. The main (public) Blob store, where the object's
+ * URL carries a random suffix and stays unguessable — the video cache can't use
+ * the private store the audio cache prefers, because a `<video>` seeks by Range
+ * and the proxy answers that by fetching the object's own URL (see
+ * mediaCache.ts). Null when no Blob token is configured (local dev without one).
+ */
+function videoStore(): string | null {
+  return process.env.BLOB_READ_WRITE_TOKEN || null
+}
+
+export interface StoredVideo {
+  /** The object's fetchable URL — used by the proxy, never sent to the client. */
+  url: string
+  size: number
+  contentType: string
+}
+
+/** The stored copy of `videoId`, or null when nobody has downloaded it yet. */
+export async function findStoredVideo(videoId: string): Promise<StoredVideo | null> {
+  if (!/^[\w-]{11}$/.test(videoId)) return null
+  const token = videoStore()
+  if (!token) return null
+  try {
+    // `<videoId>-<suffix>.mp4`; ids are fixed-width, so the bare id is prefix
+    // enough and never the prefix of another.
+    const page = await list({ prefix: `${VIDEO_CACHE_PREFIX}${videoId}`, limit: 5, token })
+    const hit = page.blobs.find((b) => !b.pathname.endsWith('.part'))
+    if (!hit) return null
+    const ext = path.extname(hit.pathname).toLowerCase()
+    return { url: hit.url, size: hit.size, contentType: CONTENT_TYPES[ext] ?? 'video/mp4' }
+  } catch (e) {
+    console.error(`[video] ${videoId}: store lookup failed:`, e)
+    return null
+  }
+}
+
+/**
+ * Store a just-downloaded video for every project of the same recording. Skips
+ * the write when a copy already exists (two instances can download the same
+ * never-seen video at once; the random suffix means a second write would be a
+ * second object, not a replace). Returns the stored URL, or throws.
+ */
+export async function storeVideo(videoId: string, file: string, ext: string): Promise<StoredVideo> {
+  const token = videoStore()
+  if (!token) throw new MediaError(503, 'Video storage is not configured.')
+  const existing = await findStoredVideo(videoId)
+  if (existing) return existing
+  const contentType = CONTENT_TYPES[`.${ext}`] ?? 'video/mp4'
+  const b = await put(`${VIDEO_CACHE_PREFIX}${videoId}.${ext}`, createReadStream(file), {
+    access: 'public',
+    token,
+    addRandomSuffix: true,
+    contentType,
+  })
+  console.log(`[video] ${videoId}: stored as ${b.pathname}`)
+  return { url: b.url, size: statSync(file).size, contentType }
 }
 
 /**
