@@ -20,9 +20,10 @@ interface Props {
   /** Effective volume (0 while muted); stems track the volume slider. */
   volume: number
   playbackRate: number
-  /** Fires with whether any stem is audible — the parent mutes the main
-   *  player while true. */
-  onActiveChange: (active: boolean) => void
+  /** Fires with the soloed stems, in display order (empty = the full mix is
+   *  playing). The parent mutes the main player while any are active, and the
+   *  clip export cuts exactly these. */
+  onActiveChange: (activeStems: string[]) => void
   /** Drop the standalone panel chrome (border/fill/padding) so the mixer can
    *  nest inside another surface — e.g. folded into the structure transport. */
   bare?: boolean
@@ -111,10 +112,13 @@ export default function StemMixer({
 
   const clear = () => setActive(new Set())
 
-  // Tell the parent when the sound source changes hands.
+  // Tell the parent which stems are soloed — in display order, and keyed on the
+  // set's contents so switching from one stem to another (both "active") still
+  // reports the change, not only crossing empty↔non-empty.
+  const activeKey = STEM_ORDER.filter((n) => active.has(n)).join(',')
   useEffect(() => {
-    onActiveRef.current(anyActive)
-  }, [anyActive])
+    onActiveRef.current(activeKey ? activeKey.split(',') : [])
+  }, [activeKey])
 
   // Mute/unmute per the active set (elements keep playing either way, so a
   // toggle is gapless).

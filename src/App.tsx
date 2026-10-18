@@ -309,8 +309,10 @@ export default function App() {
   const [volume, setVolume] = useState(loadVolume)
   const [muted, setMuted] = useState(false)
   // While any stem is soloed the main player is silenced — the stems are the
-  // sound, the player stays the clock (see StemMixer).
-  const [stemActive, setStemActive] = useState(false)
+  // sound, the player stays the clock (see StemMixer). The names, not just a
+  // boolean, so the clip export can cut exactly the soloed parts.
+  const [activeStems, setActiveStems] = useState<string[]>([])
+  const stemActive = activeStems.length > 0
   // View-only is a per-visit mode, not a preference: a track always opens
   // editable, and flipping to View lasts only while you stay on it (the reset
   // effect below keys on currentId). It used to persist to localStorage, which
@@ -1257,7 +1259,7 @@ export default function App() {
     setCurrentTime(0)
     setDuration(0)
     setIsPlaying(false)
-    setStemActive(false) // the mixer remounts per track (key), silent again
+    setActiveStems([]) // the mixer remounts per track (key), silent again
     setTagFilter(new Set())
     setSearch('')
     setSearchOpen(false)
@@ -1965,9 +1967,9 @@ export default function App() {
   const downloadNoteClip = useCallback(
     (a: Annotation) =>
       current && a.end != null
-        ? downloadClip(current, { start: a.start, end: a.end })
+        ? downloadClip(current, { start: a.start, end: a.end }, { stems: activeStems })
         : Promise.resolve(),
-    [current],
+    [current, activeStems],
   )
 
   const { passageId, playPassage, cancelPassage } = usePassagePlayback({
@@ -2973,6 +2975,7 @@ export default function App() {
                   ? { start: selectedNote.start, end: selectedNote.end }
                   : seedRange(currentTime, duration),
               duration,
+              stems: activeStems,
             }}
             onChange={(patch) => patchProject(current.id, patch)}
           />
@@ -3154,7 +3157,7 @@ export default function App() {
                         isPlaying={isPlaying}
                         volume={muted ? 0 : volume}
                         playbackRate={playbackRate}
-                        onActiveChange={setStemActive}
+                        onActiveChange={setActiveStems}
                       />
                     )
                   ) : (
@@ -3177,7 +3180,7 @@ export default function App() {
                         isPlaying={isPlaying}
                         volume={muted ? 0 : volume}
                         playbackRate={playbackRate}
-                        onActiveChange={setStemActive}
+                        onActiveChange={setActiveStems}
                         bare
                       />
                     )}
@@ -3371,7 +3374,7 @@ export default function App() {
                       isPlaying={isPlaying}
                       volume={muted ? 0 : volume}
                       playbackRate={playbackRate}
-                      onActiveChange={setStemActive}
+                      onActiveChange={setActiveStems}
                     />
                   )}
 

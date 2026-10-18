@@ -37,7 +37,7 @@ interface Props {
   canPdf: boolean
   /** The audio clip export: where its fields start out (the selected note's
    *  range, or the playhead) and the track length. Absent hides the row. */
-  clip?: { initial: ClipRange; duration: number }
+  clip?: { initial: ClipRange; duration: number; stems?: string[] }
   /** Persist a sharing change; flags travel together so one rung of the ladder
    *  is one write. Unused (never called) when !canShare. */
   onChange: (patch: {
@@ -779,6 +779,7 @@ export default function ShareExportMenu({
                 project={project}
                 initial={clip.initial}
                 duration={clip.duration}
+                stems={clip.stems}
                 onDone={close}
               />
             </div>

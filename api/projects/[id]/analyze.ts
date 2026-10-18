@@ -29,7 +29,7 @@
 // next time the button is pressed.
 import { put, del } from '@vercel/blob'
 import { waitUntil } from '@vercel/functions'
-import { encodeStemToM4a } from '../../_lib/media.js'
+import { encodeStemToM4a, extractAudioM4a, findStoredVideo } from '../../_lib/media.js'
 import { getUid, isAdmin } from '../../_lib/auth.js'
 import { sql, getProjectRow, jsonb, type ProjectRow } from '../../_lib/db.js'
 import { json, err } from '../../_lib/respond.js'
@@ -180,7 +180,7 @@ export async function POST(request: Request): Promise<Response> {
   if (existing && existing.status !== 'error') return json(toClient(existing))
 
   const source = row.source as
-    | { type?: string; audioUrl?: string }
+    | { type?: string; audioUrl?: string; videoId?: string }
     | null
     | undefined
   let audioUrl: string
@@ -189,18 +189,45 @@ export async function POST(request: Request): Promise<Response> {
     audioUrl = source.audioUrl
   } else if (source?.type === 'youtube' || source?.type === 'drive') {
     // A video source gives us no audio — YouTube hands apps none, and a Drive
-    // file is a video container behind a link-share we can't count on. Either
-    // way the owner supplies a matching recording, pre-uploaded to their own
-    // analysis prefix. Signalled as a state (not an error) so the client opens
-    // its drop prompt.
+    // file is a video container behind a link-share we can't count on. Three
+    // ways to get it, in order of least cost to the owner:
     const body = (await request.json().catch(() => null)) as
       | { audioUrl?: string }
       | null
-    if (!body?.audioUrl) return json({ status: 'audio-required' })
-    if (!isOwnAnalysisUpload(body.audioUrl, row.owner_id))
-      return err(403, 'Analysis audio must be your own analysis upload')
-    audioUrl = body.audioUrl
-    temp = true
+    if (body?.audioUrl) {
+      // 1. An audio file they uploaded to their own analysis prefix.
+      if (!isOwnAnalysisUpload(body.audioUrl, row.owner_id))
+        return err(403, 'Analysis audio must be your own analysis upload')
+      audioUrl = body.audioUrl
+      temp = true
+    } else {
+      // 2. The downloaded YouTube copy, if one exists — lift its audio out and
+      // analyze that, so a track the teacher already downloaded needs no upload
+      // and no second YouTube fetch. The extracted m4a lands in the same temp
+      // analysis prefix (deleted at finalize) and is the analyzer's input.
+      const stored =
+        source.type === 'youtube' && source.videoId
+          ? await findStoredVideo(source.videoId)
+          : null
+      if (stored) {
+        try {
+          const m4a = await extractAudioM4a(stored.url)
+          const blob = await put(
+            `users/${row.owner_id}/analysis/${id}/from-download.m4a`,
+            m4a,
+            { access: 'public', allowOverwrite: true, contentType: 'audio/mp4' },
+          )
+          audioUrl = blob.url
+          temp = true
+        } catch (e) {
+          return err(502, e instanceof Error ? e.message : 'Could not read the downloaded audio')
+        }
+      } else {
+        // 3. Nothing to go on — ask for an upload (the client's drop prompt).
+        // Signalled as a state, not an error.
+        return json({ status: 'audio-required' })
+      }
+    }
   } else {
     return err(400, 'Section detection needs an audio source')
   }

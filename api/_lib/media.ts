@@ -669,3 +669,75 @@ export async function encodeStemToM4a(input: string): Promise<Buffer> {
     }
   }
 }
+
+/**
+ * Lift the audio track out of a video file (our downloaded YouTube copy, an
+ * http(s) URL ffmpeg can read) as an m4a, keeping the AAC frames as they are
+ * (`-c:a copy`) — the merged mp4 is always AAC, so this is instant. Used by
+ * section detection to feed the downloaded video to the analyzer without a
+ * second YouTube fetch or a manual audio upload.
+ */
+export async function extractAudioM4a(input: string): Promise<Buffer> {
+  const out = path.join(TMP, `aud-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
+  const args = [
+    '-y', '-hide_banner', '-loglevel', 'error', '-nostdin',
+    ...(input.startsWith('http') ? ['-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1'] : []),
+    '-i', input,
+    '-vn', '-sn', '-dn',
+    '-c:a', 'copy',
+    '-movflags', '+faststart',
+    out,
+  ]
+  const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
+  if (r.code !== 0 || !existsSync(out)) {
+    console.error(`[audio] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
+    throw new MediaError(502, 'Could not read the downloaded video’s audio.')
+  }
+  try {
+    return readFileSync(out)
+  } finally {
+    try {
+      unlinkSync(out)
+    } catch {
+      /* fine */
+    }
+  }
+}
+
+/**
+ * Cut `[start, end)` seconds out of one or more stems as an m4a — the clip
+ * export when the stem mixer has parts soloed, so the clip is what the listener
+ * is hearing. One stem is copied (its AAC frames, instant); several are mixed
+ * down (ffmpeg `amix`, which has to re-encode). `urls` are the stems' Blob
+ * URLs; times are already mapped onto the recording by the caller.
+ */
+export async function cutStemClip(urls: string[], start: number, end: number): Promise<Buffer> {
+  if (urls.length === 0) throw new MediaError(400, 'No stem to clip')
+  const out = path.join(TMP, `stemclip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
+  const args = ['-y', '-hide_banner', '-loglevel', 'error', '-nostdin']
+  // Seek each input to the same window, so the mixed parts stay aligned.
+  for (const u of urls) {
+    if (u.startsWith('http')) args.push('-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1')
+    args.push('-ss', start.toFixed(3), '-to', end.toFixed(3), '-i', u)
+  }
+  if (urls.length > 1) {
+    args.push('-filter_complex', `amix=inputs=${urls.length}:normalize=0`, '-c:a', 'aac', '-b:a', '192k')
+  } else {
+    args.push('-c:a', 'copy')
+  }
+  args.push('-vn', '-movflags', '+faststart', out)
+  const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
+  if (r.code !== 0 || !existsSync(out)) {
+    console.error(`[stemclip] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
+    throw new MediaError(502, 'Could not cut the stem clip.')
+  }
+  try {
+    return readFileSync(out)
+  } finally {
+    try {
+      unlinkSync(out)
+    } catch {
+      /* fine */
+    }
+  }
+}

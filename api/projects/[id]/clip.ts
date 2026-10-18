@@ -18,7 +18,7 @@ import { getUid, isAdmin } from '../../_lib/auth.js'
 import { getProjectRow } from '../../_lib/db.js'
 import { driveOriginUrl } from '../../_lib/driveUrl.js'
 import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
-import { cutClip, fetchYouTubeAudio, MediaError } from '../../_lib/media.js'
+import { cutClip, cutStemClip, fetchYouTubeAudio, MediaError } from '../../_lib/media.js'
 import { err } from '../../_lib/respond.js'
 import { shareRoleFor } from '../../_lib/shares.js'
 
@@ -88,6 +88,41 @@ export async function GET(request: Request): Promise<Response> {
   if (!allowed) return err(403, 'Not shared')
 
   const source = (row.source ?? {}) as Source
+
+  // Stem clip: when the mixer has parts soloed, the ⤓ cuts those stems rather
+  // than the full mix. The stems are separated from the whole recording, so
+  // they ride the same clip offset the source does (youtube/drive → clipStart;
+  // an audio track is already 0-based). Unknown stem names are ignored; if none
+  // resolve we fall through to the full mix below.
+  const wantStems = params.getAll('stem')
+  if (wantStems.length > 0) {
+    const stems = (row.analysis as { stems?: Record<string, string> } | null)?.stems ?? {}
+    const urls = wantStems.map((n) => stems[n]).filter((u): u is string => typeof u === 'string')
+    if (urls.length > 0) {
+      const offset =
+        source.type === 'youtube' || source.type === 'drive' ? (source.clipStart ?? 0) : 0
+      try {
+        const buf = await cutStemClip(urls, start + offset, end + offset)
+        const base = (row.title || 'clip').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 70)
+        const tag = wantStems.join('+')
+        const name = `${base} ${tag} ${stamp(start)}-${stamp(end)}.m4a`
+        return new Response(new Uint8Array(buf), {
+          headers: {
+            'Content-Type': 'audio/mp4',
+            'Content-Length': String(buf.length),
+            'Content-Disposition': `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+            'Cache-Control': 'private, no-store',
+            'X-Audio-From': 'stems',
+          },
+        })
+      } catch (e) {
+        if (e instanceof MediaError) return err(e.status, e.message)
+        console.error('[clip] stem clip failed', e)
+        return err(500, 'The stem clip could not be made')
+      }
+    }
+  }
+
   try {
     let buf: Buffer
     let from = 'origin'

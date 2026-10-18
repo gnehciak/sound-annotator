@@ -28,12 +28,15 @@ export function ClipExportRow({
   project,
   initial,
   duration,
+  stems,
   onDone,
 }: {
   project: { id: string; title: string }
   /** Where the fields start out. Read once, on mount. */
   initial: ClipRange
   duration: number
+  /** Soloed stems to cut instead of the full mix (the mixer's selection). */
+  stems?: string[]
   /** The download has been handed to the browser. */
   onDone?: () => void
 }) {
@@ -59,7 +62,7 @@ export function ClipExportRow({
     setBusy(true)
     setError(null)
     try {
-      await downloadClip(project, range)
+      await downloadClip(project, range, { stems })
       onDone?.()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'The clip could not be made.')

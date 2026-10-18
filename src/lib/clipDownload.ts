@@ -28,6 +28,11 @@ export function clipRangeError(r: ClipRange, duration?: number): string | null {
 export async function downloadClip(
   project: { id: string; title: string },
   range: ClipRange,
+  opts?: {
+    /** Cut these stems (the mixer's soloed parts) instead of the full mix.
+     *  One is copied; several are mixed down. Empty/absent = the full mix. */
+    stems?: string[]
+  },
 ): Promise<void> {
   const headers = new Headers()
   const key = currentGuestKey()
@@ -36,6 +41,7 @@ export async function downloadClip(
     start: range.start.toFixed(3),
     end: range.end.toFixed(3),
   })
+  for (const s of opts?.stems ?? []) q.append('stem', s)
   const res = await fetch(
     `/api/projects/${encodeURIComponent(project.id)}/clip?${q}`,
     { headers },
@@ -48,7 +54,8 @@ export async function downloadClip(
     throw new ApiError(res.status, message)
   }
   const blob = await res.blob()
-  const name = `${project.title || 'clip'} ${formatTime(range.start)}-${formatTime(range.end)}.m4a`
+  const stemTag = opts?.stems?.length ? ` ${opts.stems.join('+')}` : ''
+  const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.m4a`
     .replace(/[\\/:*?"<>|]+/g, '.')
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
