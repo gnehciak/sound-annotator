@@ -247,7 +247,12 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   // may read the project stream it (api/projects/[id]/video.ts).
   const isYouTubeTrack =
     project?.source?.type === 'youtube' && !!project.source.videoId
-  const localVideo = useLocalVideo(project?.id ?? null, isYouTubeTrack)
+  // The viewer never saves, so there's no save tick to re-probe on — the copy
+  // the owner downloaded is a settled fact by the time a reader opens the link.
+  const localVideo = useLocalVideo(
+    project?.id ?? null,
+    isYouTubeTrack ? (project?.source?.videoId ?? null) : null,
+  )
   const localVideoProp =
     isYouTubeTrack && localVideo.available && localVideo.preferLocal && project
       ? {
