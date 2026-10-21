@@ -29,6 +29,8 @@ import {
 } from '../lib/storage'
 import { colorForId } from '../lib/noteColors'
 import { isVideoSource, sourceLabel, videoIdOf } from '../lib/source'
+import VideoSourceControl from './VideoSourceControl'
+import { useLocalVideo } from '../lib/videoDownload'
 import { tagsOf } from '../lib/tags'
 import { noteLabel, notePreview } from '../lib/format'
 import PlayerPane from './PlayerPane'
@@ -237,6 +239,26 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
   }
 
   const playerRef = useRef<PlayerHandle>(null)
+  // A YouTube track whose owner has downloaded a copy can be played from our
+  // own origin — the one way a class on a network that blocks YouTube can still
+  // watch. A reader can only *play* the copy, never spend a download (canDownload
+  // false), so VideoSourceControl shows the YouTube/Downloaded toggle when one
+  // exists and nothing otherwise. The GET playback route already lets anyone who
+  // may read the project stream it (api/projects/[id]/video.ts).
+  const isYouTubeTrack =
+    project?.source?.type === 'youtube' && !!project.source.videoId
+  const localVideo = useLocalVideo(project?.id ?? null, isYouTubeTrack)
+  const localVideoProp =
+    isYouTubeTrack && localVideo.available && localVideo.preferLocal && project
+      ? {
+          projectId: project.id,
+          onFallback: () => localVideo.setPreferLocal(false),
+        }
+      : undefined
+  const videoSourceControl =
+    isYouTubeTrack && localVideo.available ? (
+      <VideoSourceControl local={localVideo} canDownload={false} />
+    ) : null
   const notesScrollRef = useRef<HTMLDivElement | null>(null)
   const notesRoRef = useRef<ResizeObserver | null>(null)
 
@@ -840,7 +862,12 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
               left={scoreView.mode === 'view' ? 'Score' : 'Player'}
               right={sourceLabel(source)}
               center={scoreSwitch}
-              actions={scoreButton}
+              actions={
+                <>
+                  {videoSourceControl}
+                  {scoreButton}
+                </>
+              }
             />
             {/* `relative` for the score view, which covers this box. */}
             <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -859,6 +886,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                       ref={playerRef}
                       source={source}
                       audioUrl={audioUrl}
+                      localVideo={localVideoProp}
                       regionSpecs={regionSpecs}
                       playbackRate={playbackRate}
                       volume={stemActive || muted ? 0 : volume}
@@ -984,7 +1012,12 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
             left={scoreView.mode === 'view' ? 'Score' : 'Player'}
             right={sourceLabel(source)}
             center={scoreSwitch}
-            actions={scoreButton}
+            actions={
+              <>
+                {videoSourceControl}
+                {scoreButton}
+              </>
+            }
           />
           {/* `relative` for the score view, which covers this box. */}
           <div className="relative flex min-h-0 flex-1 flex-col gap-3 p-3.5">
@@ -1002,6 +1035,7 @@ export default function ShareViewer({ projectId }: { projectId: string }) {
                     ref={playerRef}
                     source={source}
                     audioUrl={audioUrl}
+                    localVideo={localVideoProp}
                     regionSpecs={regionSpecs}
                     playbackRate={playbackRate}
                     volume={muted ? 0 : volume}
