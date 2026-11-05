@@ -135,7 +135,7 @@ export default function ClipDownloadButton({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title="Download this section's audio as an m4a clip"
+        title="Download this section's audio as an mp3 clip"
         aria-label="Download this section as an audio clip"
         className="btn-icon press"
       >
@@ -183,7 +183,7 @@ export default function ClipDownloadButton({
                 {formatTime(start)} – {formatTime(end)}
               </p>
               <p className="font-mono text-[11px] tabular-nums text-muted">
-                {length < 60 ? `${Math.round(length)} s` : formatTime(length)} · m4a
+                {length < 60 ? `${Math.round(length)} s` : formatTime(length)} · mp3
               </p>
             </div>
           </div>

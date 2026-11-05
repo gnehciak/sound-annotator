@@ -11,7 +11,7 @@ import {
 import { formatTime, parseTime } from '../lib/format'
 
 /**
- * The clip export — a passage of the track's audio as an m4a file, for a
+ * The clip export — a passage of the track's audio as an mp3 file, for a
  * student to drop into a presentation. Two presentations of one row:
  * `ClipExportRow` sits inline in the editor's share/export menu, and
  * `ClipExportButton` wraps it in a popover for the share viewer's sub-bar,
@@ -106,7 +106,7 @@ export function ClipExportRow({
           onClick={() => void go()}
           disabled={busy}
           aria-busy={busy || undefined}
-          title="Download this passage of the audio as an m4a file"
+          title="Download this passage of the audio as an mp3 file"
           className="btn-signal btn-sm press disabled:opacity-100"
         >
           {busy ? (
@@ -145,7 +145,7 @@ export function ClipExportButton({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title="Download a passage of the audio as an m4a clip"
+        title="Download a passage of the audio as an mp3 clip"
         className="btn-ghost press shrink-0"
       >
         <Scissors size={12} />

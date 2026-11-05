@@ -768,7 +768,7 @@ export default function ShareExportMenu({
               <Braces size={12} /> JSON
             </button>
           </div>
-          {/* The audio clip: a passage of the recording as an m4a, cut on the
+          {/* The audio clip: a passage of the recording as an mp3, cut on the
               server. Inline rather than one more button, because it needs a
               range typed — and it seeds from the note that is open, so for
               the common case the range is already there. */}

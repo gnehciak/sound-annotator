@@ -72,7 +72,7 @@ interface Props {
   onDuplicate?: () => void
   onDelete?: () => void
   /**
-   * Range notes: download the passage's audio as an m4a clip (the clip
+   * Range notes: download the passage's audio as an mp3 clip (the clip
    * export). Present in the read-only presentations too — it is a reader's
    * action, the one a student takes to carry the passage into a presentation.
    * Resolves once the browser has the file; rejects with the reason.
@@ -596,7 +596,7 @@ export default function AnnotationItem({
             }}
             disabled={clipBusy}
             aria-busy={clipBusy || undefined}
-            title={clipError ?? `Download ${label} as an audio clip (m4a)`}
+            title={clipError ?? `Download ${label} as an audio clip (mp3)`}
             aria-label={`Download ${label} as an audio clip`}
             className={`btn-icon press shrink-0 ${clipError ? 'text-danger' : ''}`}
           >

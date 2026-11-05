@@ -217,7 +217,7 @@ the published shape.
 
 **A passage of the audio is a file** (`api/projects/[id]/clip.ts`,
 `api/_lib/media.ts`, `src/lib/clipDownload.ts`, `components/ClipExport.tsx`):
-`GET …/clip?start=&end=` answers with an m4a of that span, for a student to
+`GET …/clip?start=&end=` answers with an mp3 of that span, for a student to
 carry into a presentation. Who may ask is exactly who may read the project,
 and a trashed track's clips go dark with its links. Times are on the clip
 clock like every note, mapped back through `clipStart` on the server. Three
@@ -252,8 +252,8 @@ ever exists — and shared by every project pointing at that video, whoever
 made it; a warm instance also keeps it in `/tmp`, so a class exporting thirty
 clips of one song is one Blob read. The store write rides `waitUntil` after
 the response. That prefix is owned by no project, so no purge sweeps it: the
-cron ages it out after `MEDIA_CACHE_TTL_MS` instead. The clip is cut with
-`-c:a copy`; only the clip travels. Locally the binaries on PATH are used
+cron ages it out after `MEDIA_CACHE_TTL_MS` instead. The clip is re-encoded to
+192k MP3 (YouTube's AAC can't be copied into one); only the clip travels. Locally the binaries on PATH are used
 (`YTDLP_PATH` / `FFMPEG_PATH` override), without cookies or the plugin: a
 residential address is served the plain streams.
 

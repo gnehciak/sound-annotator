@@ -1,4 +1,4 @@
-// The clip export: a slice of the track's audio as an m4a file, cut on the
+// The clip export: a slice of the track's audio as an mp3 file, cut on the
 // server (api/projects/[id]/clip.ts) so only the seconds asked for travel.
 import { ApiError, currentGuestKey } from './api'
 import { formatTime } from './format'
@@ -25,7 +25,7 @@ export function clipRangeError(r: ClipRange, duration?: number): string | null {
  * Fetch a clip's bytes. Throws ApiError with the server's message on failure,
  * so the caller can show it. `stems` cuts those parts (the mixer's soloed
  * ones, or the download popover's picks) instead of the full mix — one is
- * copied, several are mixed down; empty/absent = the full mix.
+ * cut alone, several are mixed down; empty/absent = the full mix.
  */
 export async function fetchClip(
   projectId: string,
@@ -66,7 +66,7 @@ export async function downloadClip(
   const stems = opts?.stems ?? []
   const blob = opts?.blob ?? (await fetchClip(project.id, range, stems))
   const stemTag = stems.length ? ` ${stems.join('+')}` : ''
-  const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.m4a`
+  const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.mp3`
     .replace(/[\\/:*?"<>|]+/g, '.')
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

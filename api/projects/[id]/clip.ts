@@ -1,5 +1,5 @@
 // GET /api/projects/:id/clip?start=<s>&end=<s> — a slice of the track's
-// audio as an m4a download, for a student to drop into a presentation.
+// audio as an mp3 download, for a student to drop into a presentation.
 //
 // Who may ask is exactly who may *read* the project (the GET in index.ts):
 // the owner, an admin, anyone invited by email, anyone holding a live link
@@ -108,10 +108,10 @@ export async function GET(request: Request): Promise<Response> {
         const buf = await cutStemClip(urls, start + offset, end + offset)
         const base = (row.title || 'clip').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 70)
         const tag = wantStems.join('+')
-        const name = `${base} ${tag} ${stamp(start)}-${stamp(end)}.m4a`
+        const name = `${base} ${tag} ${stamp(start)}-${stamp(end)}.mp3`
         return new Response(new Uint8Array(buf), {
           headers: {
-            'Content-Type': 'audio/mp4',
+            'Content-Type': 'audio/mpeg',
             'Content-Length': String(buf.length),
             'Content-Disposition': `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
             'Cache-Control': 'private, no-store',
@@ -133,22 +133,20 @@ export async function GET(request: Request): Promise<Response> {
       const offset = source.clipStart ?? 0
       const audio = await fetchYouTubeAudio(source.videoId)
       from = audio.from
-      buf = await cutClip(audio.file, start + offset, end + offset, { copy: true })
+      buf = await cutClip(audio.file, start + offset, end + offset)
     } else if (source.type === 'drive' && source.driveFileId) {
       const offset = source.clipStart ?? 0
-      buf = await cutClip(driveOriginUrl(source.driveFileId), start + offset, end + offset, {
-        copy: false,
-      })
+      buf = await cutClip(driveOriginUrl(source.driveFileId), start + offset, end + offset)
     } else if (source.type === 'audio' && source.audioUrl) {
-      buf = await cutClip(source.audioUrl, start, end, { copy: false })
+      buf = await cutClip(source.audioUrl, start, end)
     } else {
       return err(400, 'This track has no recording to clip')
     }
     const title = (row.title || 'clip').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80)
-    const name = `${title} ${stamp(start)}-${stamp(end)}.m4a`
+    const name = `${title} ${stamp(start)}-${stamp(end)}.mp3`
     return new Response(new Uint8Array(buf), {
       headers: {
-        'Content-Type': 'audio/mp4',
+        'Content-Type': 'audio/mpeg',
         'Content-Length': String(buf.length),
         'Content-Disposition': `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`,
         'Cache-Control': 'private, no-store',

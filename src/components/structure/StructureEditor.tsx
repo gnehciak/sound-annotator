@@ -102,7 +102,7 @@ interface Props {
     opts?: { coalesceKey?: string },
   ) => void
   onDelete: (id: string) => void
-  /** Offer the selected section's audio as an m4a clip (ClipDownloadButton):
+  /** Offer the selected section's audio as an mp3 clip (ClipDownloadButton):
    *  the project, the stems it can cut, and the mixer's soloed ones. */
   clip?: { project: { id: string; title: string }; stems: string[]; activeStems: string[] }
   /** The chord track, when the project has one. */

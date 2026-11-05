@@ -586,20 +586,21 @@ export async function storeVideo(videoId: string, file: string, ext: string): Pr
   return { url: b.url, size: statSync(file).size, contentType }
 }
 
+/** The bitrate a clip download is encoded to. MP3 rather than m4a so the file
+ *  drops into anything a student has, which means a YouTube recording's AAC
+ *  can't be copied across and every clip is a re-encode. */
+const CLIP_BITRATE = '192k'
+
 /**
  * Cut `[start, end)` seconds out of `input` (a local file or an http(s) URL
- * ffmpeg can read) as an m4a. `copy` keeps the AAC frames as they are —
- * right for the YouTube audio we just fetched, and instant; a Drive file or
- * an audio URL of unknown codec is re-encoded instead, which for a clip is
- * still well under a second per minute.
+ * ffmpeg can read) as an mp3.
  */
 export async function cutClip(
   input: string,
   start: number,
   end: number,
-  opts: { copy: boolean },
 ): Promise<Buffer> {
-  const out = path.join(TMP, `clip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
+  const out = path.join(TMP, `clip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`)
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error', '-nostdin',
     ...(input.startsWith('http') ? ['-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1'] : []),
@@ -607,8 +608,7 @@ export async function cutClip(
     '-to', end.toFixed(3),
     '-i', input,
     '-vn', '-sn', '-dn',
-    ...(opts.copy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '160k']),
-    '-movflags', '+faststart',
+    '-c:a', 'libmp3lame', '-b:a', CLIP_BITRATE,
     out,
   ]
   const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
@@ -742,15 +742,14 @@ export async function extractAudioM4a(input: string): Promise<Buffer> {
 }
 
 /**
- * Cut `[start, end)` seconds out of one or more stems as an m4a — the clip
+ * Cut `[start, end)` seconds out of one or more stems as an mp3 — the clip
  * export when the stem mixer has parts soloed, so the clip is what the listener
- * is hearing. One stem is copied (its AAC frames, instant); several are mixed
- * down (ffmpeg `amix`, which has to re-encode). `urls` are the stems' Blob
- * URLs; times are already mapped onto the recording by the caller.
+ * is hearing. Several are mixed down with ffmpeg `amix`. `urls` are the stems'
+ * Blob URLs; times are already mapped onto the recording by the caller.
  */
 export async function cutStemClip(urls: string[], start: number, end: number): Promise<Buffer> {
   if (urls.length === 0) throw new MediaError(400, 'No stem to clip')
-  const out = path.join(TMP, `stemclip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.m4a`)
+  const out = path.join(TMP, `stemclip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`)
   const args = ['-y', '-hide_banner', '-loglevel', 'error', '-nostdin']
   // Seek each input to the same window, so the mixed parts stay aligned.
   for (const u of urls) {
@@ -758,11 +757,9 @@ export async function cutStemClip(urls: string[], start: number, end: number): P
     args.push('-ss', start.toFixed(3), '-to', end.toFixed(3), '-i', u)
   }
   if (urls.length > 1) {
-    args.push('-filter_complex', `amix=inputs=${urls.length}:normalize=0`, '-c:a', 'aac', '-b:a', '192k')
-  } else {
-    args.push('-c:a', 'copy')
+    args.push('-filter_complex', `amix=inputs=${urls.length}:normalize=0`)
   }
-  args.push('-vn', '-movflags', '+faststart', out)
+  args.push('-vn', '-c:a', 'libmp3lame', '-b:a', CLIP_BITRATE, out)
   const r = await run(ffmpeg(), args, FFMPEG_TIMEOUT_MS)
   if (r.code !== 0 || !existsSync(out)) {
     console.error(`[stemclip] ffmpeg failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
