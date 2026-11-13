@@ -104,7 +104,13 @@ interface Props {
   onDelete: (id: string) => void
   /** Offer the selected section's audio as an mp3 clip (ClipDownloadButton):
    *  the project, the stems it can cut, and the mixer's soloed ones. */
-  clip?: { project: { id: string; title: string }; stems: string[]; activeStems: string[] }
+  clip?: {
+    project: { id: string; title: string }
+    stems: string[]
+    activeStems: string[]
+    /** A video track: the popover offers the span as an mp4 too. */
+    video?: boolean
+  }
   /** The chord track, when the project has one. */
   chords?: ProjectChords
   /** Whether the chord track may be edited — narrower than `readOnly`, since
@@ -1569,6 +1575,7 @@ export default function StructureEditor({
                     end={selected.end ?? selected.start}
                     stems={clip.stems}
                     initialStems={clip.activeStems}
+                    video={clip.video}
                   />
                 )}
                 <button

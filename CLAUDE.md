@@ -253,7 +253,19 @@ made it; a warm instance also keeps it in `/tmp`, so a class exporting thirty
 clips of one song is one Blob read. The store write rides `waitUntil` after
 the response. That prefix is owned by no project, so no purge sweeps it: the
 cron ages it out after `MEDIA_CACHE_TTL_MS` instead. The clip is re-encoded to
-192k MP3 (YouTube's AAC can't be copied into one); only the clip travels. Locally the binaries on PATH are used
+192k MP3 (YouTube's AAC can't be copied into one); only the clip travels.
+**A video clip is the same call with `&format=mp4[&height=]`** (video tracks
+only; "Download video clip" under the mp3 button in the section popover, with a
+360/480/720/1080 picker defaulting to 720p, and in a range note's right-click
+menu at 720p): re-encoded to H.264/AAC no taller than the height asked, so the
+cut lands on the frame and a VP9/AV1 source still plays in any slide deck;
+stems are ignored, and it is capped at 5 minutes (`VIDEO_CLIP_MAX_SECONDS`) so
+the encode fits the route's 300 s. Its picture comes from the stored
+whole-video copy when the owner has downloaded one (read by Range, no YouTube
+fetch), else a Drive origin, else yt-dlp pulls the whole video once at that
+height into `/tmp` for the warm instance — **never into the store**, since
+keeping a whole video is the owner's `POST …/video`, not a side effect of a
+reader's clip. Streamed back from a temp file, which is removed on close. Locally the binaries on PATH are used
 (`YTDLP_PATH` / `FFMPEG_PATH` override), without cookies or the plugin: a
 residential address is served the plain streams.
 

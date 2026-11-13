@@ -14,6 +14,7 @@ import {
   Copy,
   Trash2,
   Download,
+  Film,
   Loader2,
 } from 'lucide-react'
 import type { Annotation } from '../types'
@@ -78,6 +79,9 @@ interface Props {
    * Resolves once the browser has the file; rejects with the reason.
    */
   onDownloadClip?: () => Promise<void>
+  /** Range notes on a video track: the same passage as a 720p mp4, offered
+   *  in the right-click menu under the audio clip. */
+  onDownloadVideoClip?: () => Promise<void>
   /** Seek (and pin) to this note's moment — the timecode button. */
   onPlay: () => void
   /**
@@ -131,6 +135,7 @@ export default function AnnotationItem({
   onDuplicate,
   onDelete,
   onDownloadClip,
+  onDownloadVideoClip,
   onPlay,
   onPlayPassage,
   passageArmed = false,
@@ -204,12 +209,12 @@ export default function AnnotationItem({
   // key itself for a moment, since the row has no room for a line of text.
   const [clipBusy, setClipBusy] = useState(false)
   const [clipError, setClipError] = useState<string | null>(null)
-  const runClip = async () => {
-    if (!onDownloadClip || clipBusy) return
+  const runClip = async (fetchIt = onDownloadClip) => {
+    if (!fetchIt || clipBusy) return
     setClipBusy(true)
     setClipError(null)
     try {
-      await onDownloadClip()
+      await fetchIt()
     } catch (e) {
       setClipError(e instanceof Error ? e.message : 'The clip could not be made.')
       setTimeout(() => setClipError(null), 8000)
@@ -256,6 +261,15 @@ export default function AnnotationItem({
       icon: Download,
       hint: label,
       onSelect: () => void runClip(),
+    })
+  }
+  if (onDownloadVideoClip && isRange) {
+    menuItems.push({
+      key: 'video-clip',
+      label: 'Download video clip',
+      icon: Film,
+      hint: '720p',
+      onSelect: () => void runClip(onDownloadVideoClip),
     })
   }
   if (onDelete) {

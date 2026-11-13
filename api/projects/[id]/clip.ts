@@ -1,5 +1,8 @@
 // GET /api/projects/:id/clip?start=<s>&end=<s> — a slice of the track's
 // audio as an mp3 download, for a student to drop into a presentation.
+// `&format=mp4[&height=720]` makes it a video clip instead (video tracks
+// only): H.264/AAC, no taller than `height` (one of VIDEO_QUALITY_HEIGHTS,
+// 720 when absent), stems ignored — see cutVideoClip in api/_lib/media.ts.
 //
 // Who may ask is exactly who may *read* the project (the GET in index.ts):
 // the owner, an admin, anyone invited by email, anyone holding a live link
@@ -18,14 +21,28 @@ import { getUid, isAdmin } from '../../_lib/auth.js'
 import { getProjectRow } from '../../_lib/db.js'
 import { driveOriginUrl } from '../../_lib/driveUrl.js'
 import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
-import { cutClip, cutStemClip, fetchYouTubeAudio, MediaError } from '../../_lib/media.js'
+import {
+  cutClip,
+  cutStemClip,
+  cutVideoClip,
+  fetchYouTubeAudio,
+  MediaError,
+  VIDEO_CLIP_DEFAULT_HEIGHT,
+  VIDEO_CLIP_MAX_SECONDS,
+  VIDEO_QUALITY_HEIGHTS,
+  youTubeVideoInput,
+} from '../../_lib/media.js'
+import { createReadStream, rmSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import { resolveStems } from '../../_lib/stems.js'
 import { err } from '../../_lib/respond.js'
 import { shareRoleFor } from '../../_lib/shares.js'
 
 // A YouTube fetch plus the cut is ~7 s warm; a cold instance copies 120 MB
-// of binaries out of the bundle and mints a PO token first.
-export const maxDuration = 120
+// of binaries out of the bundle and mints a PO token first. A video clip
+// (`format=mp4`) can pull the whole video and then re-encode, hence the room.
+export const maxDuration = 300
 
 /** The longest clip served, in seconds. A presentation wants a passage, not
  *  the concert; the cap is what keeps one link from streaming whole albums
@@ -56,6 +73,60 @@ function stamp(t: number): string {
   const m = Math.floor(t / 60)
   const s = Math.floor(t % 60)
   return `${m}.${String(s).padStart(2, '0')}`
+}
+
+function disposition(name: string): string {
+  return `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
+}
+
+/** The video clip: cut to a file in /tmp, streamed back, then removed. A
+ *  stream rather than a Buffer, since a few minutes of 1080p is tens of MB. */
+async function videoClip(
+  row: { title: string | null },
+  source: Source,
+  start: number,
+  end: number,
+  heightParam: string | null,
+): Promise<Response> {
+  const height = heightParam == null || heightParam === '' ? VIDEO_CLIP_DEFAULT_HEIGHT : Number(heightParam)
+  if (!(VIDEO_QUALITY_HEIGHTS as readonly number[]).includes(height))
+    return err(400, `height is one of ${VIDEO_QUALITY_HEIGHTS.join(', ')}`)
+  if (end - start > VIDEO_CLIP_MAX_SECONDS)
+    return err(400, `A video clip can be at most ${VIDEO_CLIP_MAX_SECONDS / 60} minutes long`)
+  let out: string
+  let from = 'origin'
+  try {
+    const offset = source.clipStart ?? 0
+    if (source.type === 'youtube' && source.videoId) {
+      const v = await youTubeVideoInput(source.videoId, height)
+      from = v.from
+      out = await cutVideoClip(v.input, start + offset, end + offset, height)
+    } else if (source.type === 'drive' && source.driveFileId) {
+      out = await cutVideoClip(driveOriginUrl(source.driveFileId), start + offset, end + offset, height)
+    } else {
+      return err(400, 'This track has no video to clip')
+    }
+  } catch (e) {
+    if (e instanceof MediaError) return err(e.status, e.message)
+    console.error('[clip] video clip failed', e)
+    return err(500, 'The video clip could not be made')
+  }
+  const size = (await stat(out)).size
+  const file = createReadStream(out)
+  const cleanup = () => rmSync(out, { force: true })
+  file.on('close', cleanup)
+  file.on('error', cleanup)
+  const title = (row.title || 'clip').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80)
+  const name = `${title} ${stamp(start)}-${stamp(end)}.mp4`
+  return new Response(Readable.toWeb(file) as ReadableStream, {
+    headers: {
+      'Content-Type': 'video/mp4',
+      'Content-Length': String(size),
+      'Content-Disposition': disposition(name),
+      'Cache-Control': 'private, no-store',
+      'X-Video-From': from,
+    },
+  })
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -89,6 +160,9 @@ export async function GET(request: Request): Promise<Response> {
   if (!allowed) return err(403, 'Not shared')
 
   const source = (row.source ?? {}) as Source
+
+  if (params.get('format') === 'mp4')
+    return videoClip(row, source, start, end, params.get('height'))
 
   // Stem clip: when the mixer has parts soloed, the ⤓ cuts those stems rather
   // than the full mix. The stems are separated from the whole recording, so

@@ -161,7 +161,7 @@ import StructureEditor from './components/structure/StructureEditor'
 import LyricsPanel from './components/structure/LyricsPanel'
 import MiniTransport from './components/structure/MiniTransport'
 import { isStructureProject } from './lib/sections'
-import { downloadClip, seedRange } from './lib/clipDownload'
+import { DEFAULT_VIDEO_CLIP_HEIGHT, downloadClip, seedRange } from './lib/clipDownload'
 import { defaultChords, shiftChords } from './lib/chords'
 import type { ProjectChords } from './types'
 import { questionNumbers } from './lib/questions'
@@ -1989,6 +1989,17 @@ export default function App() {
         : Promise.resolve(),
     [current, activeStems],
   )
+  const downloadNoteVideoClip = useCallback(
+    (a: Annotation) =>
+      current && a.end != null
+        ? downloadClip(
+            current,
+            { start: a.start, end: a.end },
+            { video: { height: DEFAULT_VIDEO_CLIP_HEIGHT } },
+          )
+        : Promise.resolve(),
+    [current],
+  )
 
   const { passageId, playPassage, cancelPassage } = usePassagePlayback({
     currentTime,
@@ -3238,6 +3249,7 @@ export default function App() {
                   project: current,
                   stems: Object.keys(stems ?? {}),
                   activeStems,
+                  video: isVideoSource(current.source),
                 }}
                 chords={current.settings?.chords}
                 chordsReadOnly={!canEditSettings}
@@ -3522,6 +3534,9 @@ export default function App() {
                     playbackRate={playbackRate}
                     readOnly={effectiveViewOnly}
                     onDownloadClip={downloadNoteClip}
+                    onDownloadVideoClip={
+                      isVideoSource(current?.source) ? downloadNoteVideoClip : undefined
+                    }
                     filtered={isFiltered}
                     scrollRef={notesScrollRef}
                     noteOrder={noteOrder}

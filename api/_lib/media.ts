@@ -627,6 +627,107 @@ export async function cutClip(
   }
 }
 
+// ── The video clip ───────────────────────────────────────────────────────
+//
+// The same passage as the mp3, with the picture: an H.264/AAC mp4 at most
+// `maxHeight` tall, the one shape every slide deck and phone plays. Where the
+// picture comes from:
+//  - a Drive video: ffmpeg reads the span straight off the origin, as for audio;
+//  - a YouTube video somebody has already downloaded (the stored copy the
+//    `…/video` route keeps): ffmpeg reads the span off that object by Range,
+//    so nothing is fetched from YouTube at all;
+//  - otherwise yt-dlp pulls the whole video once at ≤ maxHeight into /tmp,
+//    kept for the warm instance (a class cutting thirty clips of one song is
+//    one fetch) but never written to the store — keeping a whole video is the
+//    owner's call (`POST …/video`), not a side effect of a reader's clip.
+
+/** The longest video clip, in seconds. The re-encode runs at a few times
+ *  real time on a function's CPU, so this is what keeps a clip inside the
+ *  route's time limit. */
+export const VIDEO_CLIP_MAX_SECONDS = 300
+export const VIDEO_CLIP_DEFAULT_HEIGHT = 720
+const VIDEO_CLIP_CACHE = path.join(TMP, 'yt-video')
+const VIDEO_CLIP_TIMEOUT_MS = 200_000
+
+const videoInflight = new Map<string, Promise<string>>()
+
+/** A YouTube video, picture and sound, for a clip to be cut from: the stored
+ *  copy's URL when there is one, else a file in /tmp at ≤ `maxHeight`. */
+export async function youTubeVideoInput(
+  videoId: string,
+  maxHeight: number,
+): Promise<{ input: string; from: AudioOrigin }> {
+  if (!/^[\w-]{11}$/.test(videoId)) throw new MediaError(400, 'Not a YouTube video id')
+  const stored = await findStoredVideo(videoId)
+  if (stored) return { input: stored.url, from: 'store' }
+
+  const key = `${videoId}-${maxHeight}`
+  const cached = path.join(VIDEO_CLIP_CACHE, `${key}.mp4`)
+  if (existsSync(cached)) {
+    const now = new Date()
+    utimesSync(cached, now, now)
+    return { input: cached, from: 'instance' }
+  }
+  let p = videoInflight.get(key)
+  if (!p) {
+    p = (async () => {
+      // One video at a time in /tmp: it shares 500 MB with the binaries and
+      // the audio cache, and a whole video is the biggest thing in there.
+      if (existsSync(VIDEO_CLIP_CACHE))
+        for (const f of readdirSync(VIDEO_CLIP_CACHE))
+          if (!f.startsWith(key)) rmSync(path.join(VIDEO_CLIP_CACHE, f), { force: true })
+      const got = await downloadYouTubeVideo(videoId, { maxHeight })
+      try {
+        mkdirSync(VIDEO_CLIP_CACHE, { recursive: true })
+        renameSync(got.file, cached)
+      } finally {
+        rmSync(got.workDir, { recursive: true, force: true })
+      }
+      return cached
+    })().finally(() => videoInflight.delete(key))
+    videoInflight.set(key, p)
+  }
+  return { input: await p, from: 'youtube' }
+}
+
+/**
+ * Cut `[start, end)` seconds out of `input` (a local file or an http(s) URL)
+ * as an mp4 no taller than `maxHeight`. Re-encoded rather than copied, so the
+ * cut lands on the frame asked for (a copy starts on the keyframe before it)
+ * and a VP9/AV1 source still comes out as H.264. Returns the file's path in
+ * /tmp; the caller streams it and removes it.
+ */
+export async function cutVideoClip(
+  input: string,
+  start: number,
+  end: number,
+  maxHeight: number,
+): Promise<string> {
+  const out = path.join(TMP, `vclip-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`)
+  const args = [
+    '-y', '-hide_banner', '-loglevel', 'error', '-nostdin',
+    ...(input.startsWith('http') ? ['-reconnect', '1', '-reconnect_streamed', '1', '-seekable', '1'] : []),
+    '-ss', start.toFixed(3),
+    '-to', end.toFixed(3),
+    '-i', input,
+    '-map', '0:v:0', '-map', '0:a:0?',
+    '-sn', '-dn',
+    // Never upscale; keep both sides even, which H.264 4:2:0 needs.
+    '-vf', `scale=-2:'min(${maxHeight},trunc(ih/2)*2)'`,
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', CLIP_BITRATE,
+    '-movflags', '+faststart',
+    out,
+  ]
+  const r = await run(ffmpeg(), args, VIDEO_CLIP_TIMEOUT_MS)
+  if (r.code !== 0 || !existsSync(out)) {
+    rmSync(out, { force: true })
+    console.error(`[clip] ffmpeg (video) failed: ${r.stderr.replace(/https?:\/\/\S+/g, '<url>').slice(-600)}`)
+    throw new MediaError(502, "Couldn't cut the video clip from that recording.")
+  }
+  return out
+}
+
 /**
  * The bitrate the Demucs stems are compressed to. They are study aids played
  * through a plain `<audio>` element (StemMixer), not masters, so AAC at this

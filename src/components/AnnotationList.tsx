@@ -52,6 +52,8 @@ interface Props {
   onDelete?: (id: string) => void
   /** Range notes: download the passage's audio (see AnnotationItem). */
   onDownloadClip?: (a: Annotation) => Promise<void>
+  /** Range notes on a video track: the passage as an mp4 (see AnnotationItem). */
+  onDownloadVideoClip?: (a: Annotation) => Promise<void>
   onSeekNote: (id: string) => void
   mentionItems: (query: string) => MentionItem[]
   /** Question numbering (note id → 1-based Q number) for the Q chips. */
@@ -87,6 +89,7 @@ export default function AnnotationList({
   onDuplicate,
   onDelete,
   onDownloadClip,
+  onDownloadVideoClip,
   onSeekNote,
   mentionItems,
   questionNumbers,
@@ -419,6 +422,9 @@ export default function AnnotationList({
           onDelete={onDelete ? () => onDelete(a.id) : undefined}
           onDownloadClip={
             onDownloadClip && a.end != null ? () => onDownloadClip(a) : undefined
+          }
+          onDownloadVideoClip={
+            onDownloadVideoClip && a.end != null ? () => onDownloadVideoClip(a) : undefined
           }
           onSeekNote={onSeekNote}
           mentionItems={mentionItems}

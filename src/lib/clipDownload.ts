@@ -1,10 +1,22 @@
-// The clip export: a slice of the track's audio as an mp3 file, cut on the
-// server (api/projects/[id]/clip.ts) so only the seconds asked for travel.
+// The clip export: a slice of the track's audio as an mp3 file — or, on a
+// video track, the same slice as an mp4 with the picture — cut on the server
+// (api/projects/[id]/clip.ts) so only the seconds asked for travel.
 import { ApiError, currentGuestKey } from './api'
 import { formatTime } from './format'
 
 /** Mirrors the server's cap — checked here too so the field can say so. */
 export const MAX_CLIP_SECONDS = 600
+/** A video clip's cap: the re-encode has to finish inside the route's time. */
+export const MAX_VIDEO_CLIP_SECONDS = 300
+/** The heights a video clip can be cut at (the server's VIDEO_QUALITY_HEIGHTS). */
+export const VIDEO_CLIP_HEIGHTS = [360, 480, 720, 1080] as const
+export type VideoClipHeight = (typeof VIDEO_CLIP_HEIGHTS)[number]
+export const DEFAULT_VIDEO_CLIP_HEIGHT: VideoClipHeight = 720
+
+/** A video clip rather than the mp3: the picture too, at most `height` tall. */
+export interface VideoClipOpts {
+  height: VideoClipHeight
+}
 
 export interface ClipRange {
   start: number
@@ -31,6 +43,7 @@ export async function fetchClip(
   projectId: string,
   range: ClipRange,
   stems: string[] = [],
+  video?: VideoClipOpts,
 ): Promise<Blob> {
   const headers = new Headers()
   const key = currentGuestKey()
@@ -39,7 +52,12 @@ export async function fetchClip(
     start: range.start.toFixed(3),
     end: range.end.toFixed(3),
   })
-  for (const s of stems) q.append('stem', s)
+  if (video) {
+    q.set('format', 'mp4')
+    q.set('height', String(video.height))
+  } else {
+    for (const s of stems) q.append('stem', s)
+  }
   const res = await fetch(
     `/api/projects/${encodeURIComponent(projectId)}/clip?${q}`,
     { headers },
@@ -61,12 +79,14 @@ export async function fetchClip(
 export async function downloadClip(
   project: { id: string; title: string },
   range: ClipRange,
-  opts?: { stems?: string[]; blob?: Blob },
+  opts?: { stems?: string[]; blob?: Blob; video?: VideoClipOpts },
 ): Promise<void> {
-  const stems = opts?.stems ?? []
-  const blob = opts?.blob ?? (await fetchClip(project.id, range, stems))
+  const video = opts?.video
+  const stems = video ? [] : (opts?.stems ?? [])
+  const blob = opts?.blob ?? (await fetchClip(project.id, range, stems, video))
   const stemTag = stems.length ? ` ${stems.join('+')}` : ''
-  const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.mp3`
+  const ext = video ? 'mp4' : 'mp3'
+  const name = `${project.title || 'clip'}${stemTag} ${formatTime(range.start)}-${formatTime(range.end)}.${ext}`
     .replace(/[\\/:*?"<>|]+/g, '.')
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

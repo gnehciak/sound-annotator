@@ -2,11 +2,20 @@
 // downloaded before it is — the span and its length, which stems (or the full
 // mix), and a play button that previews exactly that cut. Preview and download
 // fetch the same bytes from the clip route (lib/clipDownload), so a cut that
-// has been previewed downloads instantly from the copy already in hand.
+// has been previewed downloads instantly from the copy already in hand. On a
+// video track a second button under the mp3 one cuts the same span as an mp4
+// with the picture, at the height beside it (720p unless changed).
 import { useEffect, useRef, useState } from 'react'
-import { Check, Download, Loader2, Pause, Play } from 'lucide-react'
+import { Check, Download, Film, Loader2, Pause, Play } from 'lucide-react'
 import Popover from '../Popover'
-import { downloadClip, fetchClip } from '../../lib/clipDownload'
+import {
+  DEFAULT_VIDEO_CLIP_HEIGHT,
+  downloadClip,
+  fetchClip,
+  MAX_VIDEO_CLIP_SECONDS,
+  VIDEO_CLIP_HEIGHTS,
+  type VideoClipHeight,
+} from '../../lib/clipDownload'
 import { formatTime } from '../../lib/format'
 import { STEM_ORDER } from '../../lib/stems'
 
@@ -18,6 +27,8 @@ interface Props {
   stems: string[]
   /** The picks the popover opens with — the mixer's soloed parts. */
   initialStems?: string[]
+  /** A video track: offer the span as an mp4 too. */
+  video?: boolean
 }
 
 export default function ClipDownloadButton({
@@ -26,6 +37,7 @@ export default function ClipDownloadButton({
   end,
   stems,
   initialStems = [],
+  video = false,
 }: Props) {
   const anchor = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -44,7 +56,8 @@ export default function ClipDownloadButton({
   const cache = useRef(new Map<string, Blob>())
   const audio = useRef<HTMLAudioElement | null>(null)
   const ring = useRef<SVGCircleElement>(null)
-  const [busy, setBusy] = useState<'preview' | 'download' | null>(null)
+  const [busy, setBusy] = useState<'preview' | 'download' | 'video' | null>(null)
+  const [height, setHeight] = useState<VideoClipHeight>(DEFAULT_VIDEO_CLIP_HEIGHT)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -124,7 +137,22 @@ export default function ClipDownloadButton({
     }
   }
 
+  async function downloadVideo() {
+    if (busy) return
+    setBusy('video')
+    setError(null)
+    try {
+      await downloadClip(project, { start, end }, { video: { height } })
+      setOpen(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The video clip could not be made.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const length = Math.max(0, end - start)
+  const videoTooLong = length > MAX_VIDEO_CLIP_SECONDS
   const toggle = (n: string) =>
     setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]))
 
@@ -135,8 +163,8 @@ export default function ClipDownloadButton({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        title="Download this section's audio as an mp3 clip"
-        aria-label="Download this section as an audio clip"
+        title={video ? "Download this section as an mp3 or video clip" : "Download this section's audio as an mp3 clip"}
+        aria-label="Download this section as a clip"
         className="btn-icon press"
       >
         <Download size={13} />
@@ -217,12 +245,44 @@ export default function ClipDownloadButton({
           <button
             type="button"
             onClick={() => void download()}
-            disabled={busy === 'download'}
+            disabled={busy === 'download' || busy === 'video'}
             className="btn-signal press justify-center"
           >
             {busy === 'download' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {busy === 'download' ? 'Cutting…' : 'Download clip'}
+            {busy === 'download' ? 'Cutting…' : 'Download MP3'}
           </button>
+
+          {video && (
+            <div className="-mt-1 flex items-stretch gap-1.5">
+              <button
+                type="button"
+                onClick={() => void downloadVideo()}
+                disabled={busy === 'download' || busy === 'video' || videoTooLong}
+                title={
+                  videoTooLong
+                    ? `A video clip can be at most ${MAX_VIDEO_CLIP_SECONDS / 60} minutes long`
+                    : 'Download this section as an mp4 with the picture'
+                }
+                className="btn-ghost press flex-1 justify-center"
+              >
+                {busy === 'video' ? <Loader2 size={13} className="animate-spin" /> : <Film size={13} />}
+                {busy === 'video' ? 'Cutting video…' : 'Download video clip'}
+              </button>
+              <select
+                value={height}
+                onChange={(e) => setHeight(Number(e.target.value) as VideoClipHeight)}
+                disabled={busy === 'video'}
+                aria-label="Video clip quality"
+                className="field w-auto cursor-pointer appearance-none px-2 py-[3px] text-center font-mono text-[11px] tracking-[0.06em]"
+              >
+                {VIDEO_CLIP_HEIGHTS.map((h) => (
+                  <option key={h} value={h}>
+                    {h}p
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </Popover>
     </>
