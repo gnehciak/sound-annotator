@@ -35,3 +35,6 @@ dist-ssr
 
 # Server media tooling — fetched and built by scripts/fetch-media-bin.mjs
 api/_bin/
+
+# Blob migration backups (Nov 2026) — row snapshots, never committed
+.migration-backup/

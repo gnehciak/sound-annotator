@@ -1,12 +1,16 @@
 // POST /api/projects/:id/lock — claim / heartbeat / take-over / release.
 //
-// Lock-only writes are last-write-wins by design (the old rules allowed them
-// unconditionally for anyone who may edit): a take-over simply claims, and
-// the loser's next poll flips its UI to read-only. Only the lock column is
+// A claim (and so a take-over) is last-write-wins by design (the old rules
+// allowed it unconditionally for anyone who may edit): a take-over simply
+// claims, and the loser's next poll flips its UI to read-only. A heartbeat is
+// *not*: it renews the lock only while this session still holds it (or the
+// lock is free or stale), and answers with whoever holds it either way — so
+// a holder's routine renewal can never undo somebody's take-over, and the
+// reply itself tells the loser it lost. Only the lock column is
 // touched, so a claim can never clobber content. `at` is stamped here,
 // server-side — the client's clock is never trusted.
 import { getUid } from '../../_lib/auth.js'
-import { sql, getProjectRow, jsonb, type LockValue } from '../../_lib/db.js'
+import { sql, getProjectRow, jsonb, LOCK_LIVE_MS, type LockValue } from '../../_lib/db.js'
 import { guestKeyFrom, guestKeyOpens } from '../../_lib/guest.js'
 import { json, err } from '../../_lib/respond.js'
 
@@ -16,7 +20,7 @@ function idFrom(request: Request): string {
 }
 
 interface LockBody {
-  action?: 'claim' | 'release'
+  action?: 'claim' | 'heartbeat' | 'release'
   sessionId?: string
   name?: string
 }
@@ -62,6 +66,22 @@ export async function POST(request: Request): Promise<Response> {
     name: typeof body.name === 'string' ? body.name : 'Someone',
     at: Date.now(),
   }
+  if (body.action === 'heartbeat') {
+    const cutoff = lock.at - LOCK_LIVE_MS
+    const renewed = await sql`
+      UPDATE projects SET lock = ${jsonb(lock)}::jsonb
+      WHERE id = ${id} AND (
+        lock IS NULL
+        OR lock->>'sessionId' = ${body.sessionId}
+        OR COALESCE((lock->>'at')::bigint, 0) < ${cutoff}
+      )
+      RETURNING id
+    `
+    if (renewed.length > 0) return json({ lock })
+    const [cur] = await sql`SELECT lock FROM projects WHERE id = ${id}`
+    return json({ lock: (cur?.lock ?? null) as LockValue | null })
+  }
+
   await sql`UPDATE projects SET lock = ${jsonb(lock)}::jsonb WHERE id = ${id}`
   return json({ lock })
 }

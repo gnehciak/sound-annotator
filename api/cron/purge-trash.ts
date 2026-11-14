@@ -151,9 +151,11 @@ export async function GET(request: Request): Promise<Response> {
     console.error('purge-trash: audio cache sweep failed:', e)
   }
   try {
-    // The downloaded-video cache always lives in the main (public) store, so a
-    // `<video>` can seek against its URL (media.ts's `videoStore()`).
-    cache += await ageOut(VIDEO_CACHE_PREFIX, process.env.BLOB_READ_WRITE_TOKEN)
+    // The downloaded-video cache sits beside the audio one — the private cache
+    // store when one is wired up, played through presigned links (media.ts's
+    // `videoStore()`), else the main store.
+    const token = process.env.BLOB_CACHE_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN
+    cache += await ageOut(VIDEO_CACHE_PREFIX, token)
   } catch (e) {
     console.error('purge-trash: video cache sweep failed:', e)
   }

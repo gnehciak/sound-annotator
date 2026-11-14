@@ -53,9 +53,18 @@ function idFrom(request: Request): string {
   return decodeURIComponent(parts[2] ?? '') // /api/projects/<id>
 }
 
+/** The fields the edit-lock poll reads (`?lock=1`): enough to run its state
+ *  machine and to tell whether the content moved, without shipping every note
+ *  on every tick. The poller fetches the whole row only when `updatedAt` says
+ *  there is something new to show. */
+const LOCK_FIELDS = ['id', 'ownerId', 'editableByLink', 'myRole', 'lock', 'updatedAt'] as const
+
 export async function GET(request: Request): Promise<Response> {
   const id = idFrom(request)
   if (!id) return err(400, 'Missing project id')
+  const lockOnly = new URL(request.url).searchParams.get('lock') === '1'
+  const reply = (p: Record<string, unknown>): Response =>
+    json(lockOnly ? Object.fromEntries(LOCK_FIELDS.filter((k) => k in p).map((k) => [k, p[k]])) : p)
   const row = await getProjectRow(id)
   // 404 (vs 403) tells the edit-lock poller "doc not created yet" — a
   // brand-new project has no row until its first save. Ids are unguessable,
@@ -72,20 +81,20 @@ export async function GET(request: Request): Promise<Response> {
   // a class of students costs neither an account lookup nor a shares query.
   if (!uid) {
     if (!trashed && (row.shared || row.editable_by_link || row.published))
-      return json(rowToProject(row, { withLock: true }))
+      return reply(rowToProject(row, { withLock: true }))
     // Trashed reads as gone, not as forbidden: to a link holder the difference
     // between "deleted" and "never existed" is nothing they can act on.
     return trashed ? err(404, 'Not found') : err(403, 'Not shared')
   }
 
   if (row.owner_id === uid)
-    return json(rowToProject(row, { withLock: true, myRole: 'owner' }))
+    return reply(rowToProject(row, { withLock: true, myRole: 'owner' }))
   // The admin console lists every project, so an admin must be able to open one
   // that was never shared — including a trashed one, which the console's
   // permanent delete has to be able to look at first.
   if (trashed)
     return (await isAdmin(uid))
-      ? json(rowToProject(row, { withLock: true }))
+      ? reply(rowToProject(row, { withLock: true }))
       : err(404, 'Not found')
 
   // Invited by email? That's an answer about this person, so it outranks the
@@ -93,10 +102,10 @@ export async function GET(request: Request): Promise<Response> {
   // not as one more anonymous reader.
   const invited = await shareRoleFor(row.id, uid)
   if (invited)
-    return json(rowToProject(row, { withLock: true, myRole: invited }))
+    return reply(rowToProject(row, { withLock: true, myRole: invited }))
   if (row.shared || row.editable_by_link || row.published)
-    return json(rowToProject(row, { withLock: true }))
-  if (await isAdmin(uid)) return json(rowToProject(row, { withLock: true }))
+    return reply(rowToProject(row, { withLock: true }))
+  if (await isAdmin(uid)) return reply(rowToProject(row, { withLock: true }))
   return err(403, 'Not shared')
 }
 

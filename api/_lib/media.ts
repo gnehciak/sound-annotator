@@ -46,7 +46,7 @@
 // Locally (macOS dev) the binaries on PATH are used, without the token
 // plugin: a signed-out residential address is served the plain streams and
 // needs neither cookies nor a token.
-import { get, list, put } from '@vercel/blob'
+import { get, issueSignedToken, list, presignUrl, put } from '@vercel/blob'
 import { waitUntil } from '@vercel/functions'
 import { spawn } from 'node:child_process'
 import {
@@ -528,36 +528,46 @@ function readVideoInfo(dir: string): VideoInfo {
 }
 
 /**
- * The downloaded-video store. The main (public) Blob store, where the object's
- * URL carries a random suffix and stays unguessable — the video cache can't use
- * the private store the audio cache prefers, because a `<video>` seeks by Range
- * and the proxy answers that by fetching the object's own URL (see
- * mediaCache.ts). Null when no Blob token is configured (local dev without one).
+ * The downloaded-video store: the private cache store (`store()` above) when
+ * one is wired up, so no lasting URL to a whole video exists. A `<video>` then
+ * plays it from a short-lived presigned link (`videoLink`) that `GET …/video`
+ * redirects to — straight from the store, in Sydney, rather than through a
+ * function that paid for every byte twice (Blob → function → reader). Without a
+ * cache store it falls back to the main public store, whose object URL carries
+ * a random suffix. Null when no Blob token is configured (local dev without one).
  */
-function videoStore(): string | null {
-  return process.env.BLOB_READ_WRITE_TOKEN || null
+function videoStore(): { token: string; access: 'private' | 'public' } | null {
+  return store()
 }
 
 export interface StoredVideo {
-  /** The object's fetchable URL — used by the proxy, never sent to the client. */
-  url: string
+  pathname: string
   size: number
   contentType: string
+  /** The object's own URL: fetchable as it is only on the public store. */
+  url: string
+  access: 'private' | 'public'
 }
 
 /** The stored copy of `videoId`, or null when nobody has downloaded it yet. */
 export async function findStoredVideo(videoId: string): Promise<StoredVideo | null> {
   if (!/^[\w-]{11}$/.test(videoId)) return null
-  const token = videoStore()
-  if (!token) return null
+  const st = videoStore()
+  if (!st) return null
   try {
     // `<videoId>-<suffix>.mp4`; ids are fixed-width, so the bare id is prefix
     // enough and never the prefix of another.
-    const page = await list({ prefix: `${VIDEO_CACHE_PREFIX}${videoId}`, limit: 5, token })
+    const page = await list({ prefix: `${VIDEO_CACHE_PREFIX}${videoId}`, limit: 5, token: st.token })
     const hit = page.blobs.find((b) => !b.pathname.endsWith('.part'))
     if (!hit) return null
     const ext = path.extname(hit.pathname).toLowerCase()
-    return { url: hit.url, size: hit.size, contentType: CONTENT_TYPES[ext] ?? 'video/mp4' }
+    return {
+      pathname: hit.pathname,
+      url: hit.url,
+      size: hit.size,
+      contentType: CONTENT_TYPES[ext] ?? 'video/mp4',
+      access: st.access,
+    }
   } catch (e) {
     console.error(`[video] ${videoId}: store lookup failed:`, e)
     return null
@@ -565,25 +575,52 @@ export async function findStoredVideo(videoId: string): Promise<StoredVideo | nu
 }
 
 /**
+ * A link that reads the stored video for `ttlMs` and then stops working — what
+ * a `<video>` is redirected to, and what ffmpeg reads a clip from. Range
+ * requests work against it like any Blob URL. On the public fallback store the
+ * object's own URL is all there is.
+ */
+export async function videoLink(stored: StoredVideo, ttlMs: number): Promise<string> {
+  if (stored.access === 'public') return stored.url
+  const st = videoStore()
+  if (!st) throw new MediaError(503, 'Video storage is not configured.')
+  const validUntil = Date.now() + ttlMs
+  const signed = await issueSignedToken({
+    token: st.token,
+    pathname: stored.pathname,
+    operations: ['get', 'head'],
+    validUntil,
+  })
+  const { presignedUrl } = await presignUrl(signed, {
+    operation: 'get',
+    pathname: stored.pathname,
+    validUntil,
+    access: 'private',
+  })
+  return presignedUrl
+}
+
+/**
  * Store a just-downloaded video for every project of the same recording. Skips
  * the write when a copy already exists (two instances can download the same
  * never-seen video at once; the random suffix means a second write would be a
- * second object, not a replace). Returns the stored URL, or throws.
+ * second object, not a replace). Returns the stored copy, or throws.
  */
 export async function storeVideo(videoId: string, file: string, ext: string): Promise<StoredVideo> {
-  const token = videoStore()
-  if (!token) throw new MediaError(503, 'Video storage is not configured.')
+  const st = videoStore()
+  if (!st) throw new MediaError(503, 'Video storage is not configured.')
   const existing = await findStoredVideo(videoId)
   if (existing) return existing
   const contentType = CONTENT_TYPES[`.${ext}`] ?? 'video/mp4'
   const b = await put(`${VIDEO_CACHE_PREFIX}${videoId}.${ext}`, createReadStream(file), {
-    access: 'public',
-    token,
+    access: st.access,
+    token: st.token,
     addRandomSuffix: true,
     contentType,
+    multipart: true,
   })
   console.log(`[video] ${videoId}: stored as ${b.pathname}`)
-  return { url: b.url, size: statSync(file).size, contentType }
+  return { pathname: b.pathname, url: b.url, size: statSync(file).size, contentType, access: st.access }
 }
 
 /** The bitrate a clip download is encoded to. MP3 rather than m4a so the file
@@ -659,7 +696,8 @@ export async function youTubeVideoInput(
 ): Promise<{ input: string; from: AudioOrigin }> {
   if (!/^[\w-]{11}$/.test(videoId)) throw new MediaError(400, 'Not a YouTube video id')
   const stored = await findStoredVideo(videoId)
-  if (stored) return { input: stored.url, from: 'store' }
+  // Ten minutes is ample for one cut; ffmpeg reads only the span it needs.
+  if (stored) return { input: await videoLink(stored, 10 * 60_000), from: 'store' }
 
   const key = `${videoId}-${maxHeight}`
   const cached = path.join(VIDEO_CLIP_CACHE, `${key}.mp4`)

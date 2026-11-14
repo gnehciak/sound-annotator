@@ -8,11 +8,11 @@
 //  GET …/video?probe=1  → { available, size? }. Is a copy stored? Cheap (one
 //      Blob list), so the client can ask on open to decide whether to offer
 //      "Download" or "Play downloaded". Who may read the project may probe.
-//  GET …/video          → the mp4 itself, streamed from Blob with the client's
-//      Range header passed through so a `<video>` can seek. Same reader gate as
-//      the clip export — the stored copy is a whole recording, so unlike the
-//      Drive proxy it is NOT public; the proxy fetches the object's unguessable
-//      URL server-side and never hands it out. 404 until it has been downloaded.
+//  GET …/video          → a 302 to a presigned link (12 h) on the private
+//      Sydney cache store, which the `<video>` then plays and seeks against
+//      directly. Same reader gate as the clip export — the stored copy is a
+//      whole recording, so unlike the Drive proxy it is NOT public; no lasting
+//      URL to it is ever handed out. 404 until it has been downloaded.
 //  POST …/video         → download it. Heavy (minutes of yt-dlp + a merge + a
 //      Blob write of hundreds of MB), and it hosts video bytes, so it is the
 //      owner's (or an admin's) call alone — not a guest, not a link editor.
@@ -26,6 +26,7 @@ import {
   MediaError,
   storeVideo,
   VIDEO_QUALITY_HEIGHTS,
+  videoLink,
 } from '../../_lib/media.js'
 import { rmSync } from 'node:fs'
 import { err, json } from '../../_lib/respond.js'
@@ -34,6 +35,10 @@ import { shareRoleFor } from '../../_lib/shares.js'
 // A cold instance copies ~120 MB of binaries out of the bundle and mints a PO
 // token before the download even starts; a long video then takes minutes.
 export const maxDuration = 300
+
+/** How long a playback link works. Long enough for a lesson or a school day
+ *  in one tab; a fresh load asks again and is checked again. */
+const VIDEO_LINK_TTL_MS = 12 * 60 * 60 * 1000
 
 interface Source {
   type?: string
@@ -83,35 +88,23 @@ export async function GET(request: Request): Promise<Response> {
   if (probe) return json({ available: !!stored, size: stored?.size })
   if (!stored) return err(404, 'No downloaded copy yet')
 
-  // Pass the client's Range straight through to the Blob object, so the
-  // `<video>` seeks against our origin exactly as it would against the store —
-  // but through us, so the unguessable URL never reaches the browser.
-  const range = request.headers.get('range')
-  let upstream: Response
+  // Send the player straight to the store with a link that lapses: the bytes
+  // go Blob → reader in one hop, from Sydney, instead of through this function
+  // (which paid origin transfer on every byte and read each one from Blob
+  // first — the app's largest cost, measured Nov 2026). The `<video>` follows
+  // the redirect and seeks by Range against the store itself. The link outlives
+  // a school day so a tab left open keeps playing; access is still decided
+  // here, per request, so a trashed or unshared track's next load is refused.
   try {
-    upstream = await fetch(stored.url, {
-      headers: range ? { Range: range } : {},
-      signal: request.signal,
+    const link = await videoLink(stored, VIDEO_LINK_TTL_MS)
+    return new Response(null, {
+      status: 302,
+      headers: { Location: link, 'Cache-Control': 'private, no-store' },
     })
-  } catch {
-    // Includes the player hanging up mid-buffer, which aborts this fetch.
+  } catch (e) {
+    console.error('[video] link failed:', e)
     return err(502, 'The stored video could not be read')
   }
-  if (!upstream.ok && upstream.status !== 206) {
-    void upstream.body?.cancel()
-    return err(502, `The store answered ${upstream.status}`)
-  }
-  const out = new Headers({
-    'Content-Type': stored.contentType,
-    // Seeking depends on this being true of us.
-    'Accept-Ranges': 'bytes',
-    'Cache-Control': 'private, max-age=3600',
-  })
-  for (const h of ['content-length', 'content-range', 'etag', 'last-modified']) {
-    const v = upstream.headers.get(h)
-    if (v) out.set(h, v)
-  }
-  return new Response(upstream.body, { status: upstream.status, headers: out })
 }
 
 export async function POST(request: Request): Promise<Response> {

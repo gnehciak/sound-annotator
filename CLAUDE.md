@@ -41,7 +41,21 @@ the paths `api/blobs/upload.ts` accepts, alongside the ephemeral
 never written). The SPA calls Vercel Functions in `/api`
 (Web signature), which enforce all authorization — owner-only access,
 share-by-unguessable-id for `?view=` links, link-editor field clipping, and
-the server-stamped edit lock (see `api/projects/[id]/index.ts`).
+the server-stamped edit lock (see `api/projects/[id]/index.ts`). The lock's
+client poll (`src/lib/editLock.ts`) reads `GET …/:id?lock=1` — the lock, the
+owner/link/role fields and `updatedAt`, ~130 bytes — every 15 s, fetches the
+whole row only when `updatedAt` moved and the session isn't the holder, and
+stops while the tab is hidden; its every-5-s full fetch was ~95% of the app's
+function calls (Nov 2026). The heartbeat is a *conditional* renewal
+(`action: 'heartbeat'` on `…/lock`): it renews only a lock this session still
+holds and answers with whoever holds it, so a take-over can't be undone by the
+loser's next beat. **Everything runs in Sydney**: functions (`vercel.json`
+`regions`), Neon (ap-southeast-2) and both Blob stores since 14 Nov 2026 —
+`sound-annotator-files` (public, `BLOB_READ_WRITE_TOKEN`) and
+`sound-annotator-cache` (private, `BLOB_CACHE_READ_WRITE_TOKEN`, the YouTube
+audio and video caches). The original iad1 store `sound-annotator-media` is
+disconnected but kept until the move is settled; `scripts/migrate-blob-store.mjs`
+and `scripts/rewrite-blob-host.mjs` did the copy and the link rewrite.
 
 **The library listing carries cues, not notes** (`GET /api/projects`, since
 2026-09-14). A home page that shipped every note of every track cost the
@@ -261,11 +275,15 @@ menu at 720p): re-encoded to H.264/AAC no taller than the height asked, so the
 cut lands on the frame and a VP9/AV1 source still plays in any slide deck;
 stems are ignored, and it is capped at 5 minutes (`VIDEO_CLIP_MAX_SECONDS`) so
 the encode fits the route's 300 s. Its picture comes from the stored
-whole-video copy when the owner has downloaded one (read by Range, no YouTube
-fetch), else a Drive origin, else yt-dlp pulls the whole video once at that
+whole-video copy when the owner has downloaded one (read through a ten-minute
+presigned link, no YouTube fetch), else a Drive origin, else yt-dlp pulls the whole video once at that
 height into `/tmp` for the warm instance — **never into the store**, since
 keeping a whole video is the owner's `POST …/video`, not a side effect of a
-reader's clip. Streamed back from a temp file, which is removed on close. Locally the binaries on PATH are used
+reader's clip. Streamed back from a temp file, which is removed on close.
+**The downloaded copy itself plays straight from the private cache store**:
+`GET …/video` checks read access and answers 302 to a 12-hour presigned link
+(`videoLink`), which the `<video>` seeks against directly — it used to stream
+every byte through the function, the app's largest cost. Locally the binaries on PATH are used
 (`YTDLP_PATH` / `FFMPEG_PATH` override), without cookies or the plugin: a
 residential address is served the plain streams.
 

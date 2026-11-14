@@ -15,12 +15,10 @@ export const MEDIA_CACHE_PREFIX = 'cache/youtube/'
  * and then played from our own origin. Its own prefix for the same reason — no
  * project owns it, so no project's purge may sweep it; the cron ages it out.
  *
- * Unlike the audio cache it is **not** served from the private store: a
- * `<video>` element seeks by Range, which the proxy answers by fetching the
- * object's own URL with the client's Range header, so the object needs a
- * fetchable (public, random-suffix) URL. That URL is unguessable — the same
- * credential every share link and note image already rests on — and the proxy
- * never hands it to the client, gating playback by project read-access instead.
+ * It lives in the same store as the audio cache — the private Sydney cache
+ * store (`BLOB_CACHE_READ_WRITE_TOKEN`) — and a `<video>` plays it from a
+ * short-lived presigned link that `GET …/video` redirects to, so no lasting URL
+ * to a whole video exists and the bytes never pass through a function.
  */
 export const VIDEO_CACHE_PREFIX = 'cache/youtube-video/'
 /** A cached recording older than this is dropped by the cron; the next clip

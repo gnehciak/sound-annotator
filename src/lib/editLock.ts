@@ -10,8 +10,14 @@
 // is editing.
 //
 // Postgres has no push channel to the browser, so live lock state is a poll
-// (POLL_MS): each tick fetches the project with its lock and re-runs the same
-// state machine. A closed tab holds its lock
+// (POLL_MS): each tick fetches the lock alone (`?lock=1` — the owner, link and
+// role fields plus `updatedAt`) and re-runs the same state machine; the whole
+// project is fetched only when this session needs the remote copy *and*
+// `updatedAt` has moved since it last looked. Nothing polls while the tab is
+// hidden (the heartbeat still runs) — it picks up again, at once, when the tab
+// comes back. Measured
+// Nov 2026: the old every-5-s full fetch was ~95% of the app's function calls,
+// mostly tabs left open through a lesson. A closed tab holds its lock
 // until the TTL lapses (~45s of "ghost lock"), which the "Take over" button
 // papers over. Lock-only writes are last-write-wins by design — a take-over
 // simply claims, and the loser's next poll flips its UI to read-only.
@@ -65,8 +71,9 @@ interface LockData {
 export const LOCK_TTL_MS = 45_000
 const HEARTBEAT_MS = 15_000
 // Poll cadence. Locked-out sessions see the editor's saves at this latency;
-// a freed lock is claimed within one tick.
-const POLL_MS = 5_000
+// a freed lock is claimed within one tick, and a take-over reaches the loser
+// within one. Well inside the TTL, so an expired lock is never missed.
+const POLL_MS = 15_000
 
 /**
  * Poll a project's edit lock and keep this session's claim alive.
@@ -149,8 +156,46 @@ export function useEditLock(opts: {
     }
     takeOverRef.current = writeLock
 
-    const handle = (data: Record<string, unknown>) => {
-      const remote = () => onRemoteDataRef.current?.(toProject(projectId, data))
+    // The heartbeat: renew our claim only while it is still ours. The reply
+    // names whoever holds the lock, so a take-over shows up here at once
+    // rather than being quietly undone by our next renewal.
+    let beating = false
+    const heartbeat = () => {
+      if (beating || disposed) return
+      beating = true
+      api<{ lock: LockData | null }>(lockUrl, {
+        method: 'POST',
+        json: { action: 'heartbeat', sessionId: me.sessionId, name: me.name },
+      })
+        .then(({ lock }) => {
+          if (disposed || stateRef.current !== 'mine') return
+          const at = typeof lock?.at === 'number' ? lock.at : 0
+          if (lock && lock.sessionId !== SESSION_ID && Date.now() - at < LOCK_TTL_MS) {
+            // Taken over: go read-only now, and fetch what they have.
+            setBoth('other')
+            setHolder({ uid: lock.uid ?? '', name: lock.name ?? 'Someone' })
+            void poll()
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          beating = false
+        })
+    }
+
+    // Whether the lock in a poll is this session's own, live claim.
+    const holdsOwnLock = (data: Record<string, unknown>) => {
+      const lock = (data.lock ?? null) as LockData | null
+      const at = typeof lock?.at === 'number' ? lock.at : 0
+      return lock != null && Date.now() - at < LOCK_TTL_MS && lock.sessionId === SESSION_ID
+    }
+
+    // `hasContent`: `data` is the whole row rather than the lock-only reply,
+    // so it can stand in for the local copy.
+    const handle = (data: Record<string, unknown>, hasContent: boolean) => {
+      const remote = () => {
+        if (hasContent) onRemoteDataRef.current?.(toProject(projectId, data))
+      }
 
       // The owner switched link editing off under us — read-only, stop
       // claiming. An email invite survives that (it names this person, not the
@@ -188,12 +233,29 @@ export function useEditLock(opts: {
       }
     }
 
+    const projectUrl = `/api/projects/${encodeURIComponent(projectId)}`
+    // The `updatedAt` this session has already seen, so the full row is only
+    // fetched when it carries something new. Null until the first poll: the
+    // first remote copy is always taken, as before.
+    let seenUpdatedAt: number | null = null
+    let polling = false
     const poll = async () => {
+      if (polling || disposed || document.hidden) return
+      polling = true
       try {
-        const data = await api<Record<string, unknown>>(
-          `/api/projects/${encodeURIComponent(projectId)}`,
-        )
-        if (!disposed) handle(data)
+        const slim = await api<Record<string, unknown>>(`${projectUrl}?lock=1`)
+        if (disposed) return
+        const updatedAt = typeof slim.updatedAt === 'number' ? slim.updatedAt : 0
+        const fresh = seenUpdatedAt == null || updatedAt !== seenUpdatedAt
+        seenUpdatedAt = updatedAt
+        // `handle` only reaches for the remote copy when this session isn't
+        // the holder; fetch it then, and only when it has moved.
+        let full: Record<string, unknown> | null = null
+        if (fresh && !holdsOwnLock(slim)) {
+          full = await api<Record<string, unknown>>(projectUrl)
+          if (disposed) return
+        }
+        handle(full ?? slim, full != null)
       } catch (err) {
         if (disposed) return
         if (err instanceof ApiError && err.status === 404) return // no row yet — the first save creates it
@@ -204,6 +266,8 @@ export function useEditLock(opts: {
           return
         }
         // Network blips: keep the current state; the next tick retries.
+      } finally {
+        polling = false
       }
     }
 
@@ -211,11 +275,20 @@ export function useEditLock(opts: {
     const pollTimer = window.setInterval(() => void poll(), POLL_MS)
 
     // Keep the claim warm. Saves also refresh it; this covers idle listening.
-    // (Hidden tabs get throttled, so a backgrounded session naturally cedes
-    // the lock to an active claimant — returning shows the take-over banner.)
+    // It keeps running while the tab is hidden (a tiny lock-only write), since
+    // a lapsed claim makes the return trip re-take the remote copy, which
+    // resets undo history — a teacher checking another tab mustn't lose it.
+    // (The browser still throttles a long-hidden tab, so one left for good
+    // cedes the lock to an active claimant, as it always did.)
     const hb = window.setInterval(() => {
-      if (stateRef.current === 'mine') writeLock()
+      if (stateRef.current === 'mine') heartbeat()
     }, HEARTBEAT_MS)
+
+    // Back in view: look at once rather than up to a whole interval later.
+    const onVisible = () => {
+      if (!document.hidden) void poll()
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     // Best-effort release when the tab goes away; the TTL covers crashes.
     // Fired from pagehide, so it can't await anything — but it doesn't need
@@ -236,6 +309,7 @@ export function useEditLock(opts: {
       disposed = true
       window.clearInterval(pollTimer)
       window.clearInterval(hb)
+      document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('pagehide', release)
       release()
       takeOverRef.current = () => {}
